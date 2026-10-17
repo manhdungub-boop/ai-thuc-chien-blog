@@ -2,7 +2,7 @@ name: Verify Website Health
 
 on:
   workflow_run:
-    workflows: ["Deploy Cloudflare Workers"]
+    workflows: ["Deploy Cloudflare Pages"]
     types: [completed]
     branches: [main]
   schedule:
