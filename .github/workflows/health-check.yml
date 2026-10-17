@@ -2,7 +2,7 @@ name: Verify Website Health
 
 on:
   workflow_run:
-    workflows: ["Deploy Cloudflare Pages"]
+    workflows: ["Deploy Cloudflare Workers"]
     types: [completed]
     branches: [main]
   schedule:
@@ -19,6 +19,8 @@ jobs:
     steps:
       - name: Check out site source
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
       - name: Validate HTML metadata and sitemap
         run: |
@@ -26,6 +28,12 @@ jobs:
           import json, re
           import xml.etree.ElementTree as ET
           from pathlib import Path
+
+          worker_config = json.loads(Path("wrangler.jsonc").read_text(encoding="utf-8"))
+          assert worker_config.get("name") == "ai-thuc-chien-blog", "Worker deploy target must be the existing production Worker"
+          assert worker_config.get("assets", {}).get("directory") == "./dist", "Worker must deploy the prepared dist directory"
+          assert "main" not in worker_config, "This site is static-only; do not add a Worker code entrypoint accidentally"
+          print("Worker deployment config PASS: production target and static-only assets")
 
           pages = [
               Path("index.html"),
