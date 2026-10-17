@@ -39,15 +39,15 @@
 <li>Mở trang chủ, từng bài viết, <code>robots.txt</code>, <code>sitemap.xml</code> và RSS trên địa chỉ công khai chính.</li>
 <li>Trang cần xuất hiện trong kết quả tìm kiếm phải trả về HTTP 200, không phải trang lỗi hoặc trang yêu cầu đăng nhập.</li>
 <li>Kiểm tra các đường dẫn nội bộ, liên kết điều hướng, tài nguyên CSS/JavaScript và trang 404.</li>
-<li>Nếu có nhiều bản triển khai, quyết định rõ một https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/seo-ky-thuat-blog-moi chính. Bản dự phòng không nên vô tình trở thành https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/seo-ky-thuat-blog-moi chuẩn khác nhau cho cùng nội dung.</li>
+<li>Nếu có nhiều bản triển khai, quyết định rõ một URL chính. Bản dự phòng không nên vô tình trở thành URL chuẩn khác nhau cho cùng nội dung.</li>
 </ul>
 <h2 style="margin-top:36px">2. Đồng bộ canonical, robots.txt và sitemap</h2>
-<p>Mỗi trang quan trọng nên có https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/seo-ky-thuat-blog-moi chuẩn nhất quán với địa chỉ được đưa vào sitemap. <code>robots.txt</code> nên cho phép trình thu thập dữ liệu truy cập những trang cần lập chỉ mục và chỉ tới sitemap đúng. Sitemap chỉ nên liệt kê https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/seo-ky-thuat-blog-moi chuẩn mà bạn thực sự muốn xuất hiện trong tìm kiếm.</p>
+<p>Mỗi trang quan trọng nên có URL chuẩn nhất quán với địa chỉ được đưa vào sitemap. <code>robots.txt</code> nên cho phép trình thu thập dữ liệu truy cập những trang cần lập chỉ mục và chỉ tới sitemap đúng. Sitemap chỉ nên liệt kê URL chuẩn mà bạn thực sự muốn xuất hiện trong tìm kiếm.</p>
 <ul style="padding-left:24px;line-height:2">
-<li>Không thêm https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/seo-ky-thuat-blog-moi thử nghiệm, bản sao hoặc trang lỗi vào sitemap.</li>
+<li>Không thêm URL thử nghiệm, bản sao hoặc trang lỗi vào sitemap.</li>
 <li>Cập nhật <code>lastmod</code> khi nội dung chính, dữ liệu có cấu trúc hoặc liên kết thay đổi đáng kể; đừng đổi ngày chỉ vì chạy build hay đổi năm bản quyền.</li>
 <li>Không dựa vào thẻ <code>priority</code> để kỳ vọng Google xếp hạng cao hơn; tài liệu Google cho biết Google bỏ qua <code>priority</code> và <code>changefreq</code>.</li>
-<li>Kiểm tra XML hợp lệ và đảm bảo mọi https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/seo-ky-thuat-blog-moi trong sitemap truy cập được.</li>
+<li>Kiểm tra XML hợp lệ và đảm bảo mọi URL trong sitemap truy cập được.</li>
 </ul>
 <h2 style="margin-top:36px">3. Đặt metadata và dữ liệu có cấu trúc đúng mức</h2>
 <p>Đặt tiêu đề trang mô tả chính xác nội dung, mô tả meta hữu ích, một tiêu đề H1 rõ ràng và canonical thống nhất. Với bài viết, dữ liệu có cấu trúc như <code>BlogPosting</code> có thể giúp máy hiểu nội dung, nhưng không phải cam kết được hiển thị dạng kết quả đặc biệt.</p>
@@ -56,8 +56,8 @@
 <ol style="padding-left:24px;line-height:2">
 <li>Xác minh đúng thuộc tính website và gửi sitemap một lần.</li>
 <li>Theo dõi trạng thái xử lý, lỗi và cảnh báo của sitemap; trạng thái đang chờ không có nghĩa là đã lỗi, nhưng cũng không chứng minh Google đã lập chỉ mục.</li>
-<li>Dùng https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/seo-ky-thuat-blog-moi Inspection cho trang chủ và một số bài viết quan trọng. Đọc trạng thái lập chỉ mục cùng lý do thu thập dữ liệu, robots và canonical nếu được trả về.</li>
-<li>Nếu https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/seo-ky-thuat-blog-moi chưa được biết đến, kiểm tra liên kết nội bộ và sitemap; chỉ yêu cầu lập chỉ mục khi trang công khai, đã hoàn thiện và có thể truy cập.</li>
+<li>Dùng URL Inspection cho trang chủ và một số bài viết quan trọng. Đọc trạng thái lập chỉ mục cùng lý do thu thập dữ liệu, robots và canonical nếu được trả về.</li>
+<li>Nếu URL chưa được biết đến, kiểm tra liên kết nội bộ và sitemap; chỉ yêu cầu lập chỉ mục khi trang công khai, đã hoàn thiện và có thể truy cập.</li>
 <li>Đợi dữ liệu cập nhật rồi kiểm tra lại. Gửi yêu cầu không bảo đảm trang sẽ được lập chỉ mục hay xuất hiện ở vị trí cụ thể.</li>
 </ol>
 <p>Trang chưa có dữ liệu hiệu suất không nhất thiết là lỗi: website mới có thể chưa có lượt hiển thị hoặc dữ liệu chưa kịp cập nhật. Hãy báo đúng điều đã quan sát, không tự suy ra thứ hạng từ việc gửi sitemap.</p>
@@ -68,7 +68,7 @@
 <ul style="padding-left:24px;line-height:2">
 <li>Trang chủ và bài viết trả về HTTP 200; trang lỗi trả về nội dung 404 phù hợp.</li>
 <li>Tiêu đề, mô tả, H1, canonical và dữ liệu có cấu trúc được kiểm tra tự động.</li>
-<li>Sitemap hợp lệ, https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/seo-ky-thuat-blog-moi không trùng và đường dẫn đều mở được.</li>
+<li>Sitemap hợp lệ, URL không trùng và đường dẫn đều mở được.</li>
 <li>Liên kết nội bộ, RSS và tài nguyên giao diện hoạt động trên bản chính.</li>
 <li>CI kiểm tra cả mã nguồn lẫn nội dung được triển khai thực tế.</li>
 <li>Search Console và Analytics được kiểm tra bằng trạng thái trong bảng điều khiển, không chỉ bằng mã nguồn.</li>
@@ -77,7 +77,7 @@
 <h2 style="margin-top:36px">Nguồn tham khảo chính thức</h2>
 <ul style="padding-left:24px;line-height:2">
 <li><a href="https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap" target="_blank" rel="noopener noreferrer" style="color:var(--mint);text-decoration:underline">Google Search Central — Build and submit a sitemap</a>: cấu trúc sitemap và cách dùng <code>lastmod</code>.</li>
-<li><a href="https://support.google.com/webmasters/answer/9012289" target="_blank" rel="noopener noreferrer" style="color:var(--mint);text-decoration:underline">Google Search Console Help — https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/seo-ky-thuat-blog-moi Inspection tool</a>: kiểm tra trạng thái chỉ mục và thử nghiệm https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/seo-ky-thuat-blog-moi trực tiếp.</li>
+<li><a href="https://support.google.com/webmasters/answer/9012289" target="_blank" rel="noopener noreferrer" style="color:var(--mint);text-decoration:underline">Google Search Console Help — URL Inspection tool</a>: kiểm tra trạng thái chỉ mục và thử nghiệm URL trực tiếp.</li>
 <li><a href="https://developers.google.com/search/docs/essentials/technical" target="_blank" rel="noopener noreferrer" style="color:var(--mint);text-decoration:underline">Google Search Central — Technical requirements</a>: yêu cầu kỹ thuật cơ bản để đủ điều kiện xuất hiện trên Google.</li>
 <li><a href="https://developers.cloudflare.com/web-analytics/about/" target="_blank" rel="noopener noreferrer" style="color:var(--mint);text-decoration:underline">Cloudflare — Web Analytics</a>: cách hoạt động của công cụ đo lường website.</li>
 </ul>

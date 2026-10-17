@@ -51,6 +51,10 @@ jobs:
               assert re.search(r'<meta name="description" content="[^"]+"', text, re.I), f"{path}: missing description"
               assert len(re.findall(r"<h1\b", text, re.I)) == 1, f"{path}: expected exactly one H1"
               assert len(re.findall(r'<link rel="canonical" href="[^"]+"', text, re.I)) == 1, f"{path}: expected one canonical"
+              body = re.sub(r"<head\b.*?</head>", "", text, flags=re.I | re.S)
+              visible_body = re.sub(r"<script\b.*?</script>|<style\b.*?</style>", "", body, flags=re.I | re.S)
+              visible_body = re.sub(r"<[^>]+>", " ", visible_body)
+              assert "ai-thuc-chien-blog.manhdungub.workers.dev/articles/" not in visible_body, f"{path}: production article URL leaked into visible copy"
               for block in re.findall(r'<script type="application/ld\+json">(.*?)</script>', text, re.I | re.S):
                   json.loads(block)
               print(f"SEO/HTML PASS: {path}")

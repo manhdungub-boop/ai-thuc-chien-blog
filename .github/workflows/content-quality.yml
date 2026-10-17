@@ -1,0 +1,28 @@
+name: Content Quality Gate
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "articles/**/*.html"
+      - "sitemap.xml"
+      - "feed.xml"
+      - "scripts/validate_content_pr.py"
+      - ".github/workflows/content-quality.yml"
+permissions:
+  contents: read
+jobs:
+  validate-content:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out pull request
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - name: Validate changed articles
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: python scripts/validate_content_pr.py
