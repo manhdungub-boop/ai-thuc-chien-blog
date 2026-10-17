@@ -45,6 +45,63 @@ jobs:
                   json.loads(block)
               print(f"SEO/HTML PASS: {path}")
 
+          from collections import Counter
+          from html.parser import HTMLParser
+          from urllib.parse import unquote, urlsplit
+          import posixpath
+
+          class LinkParser(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.hrefs = []
+                  self.ids = []
+              def handle_starttag(self, tag, attrs):
+                  attrs = dict(attrs)
+                  if tag == "a" and attrs.get("href") is not None:
+                      self.hrefs.append(attrs["href"])
+                  if attrs.get("id"):
+                      self.ids.append(attrs["id"])
+
+          link_pages = pages + [Path("404.html")]
+          parsed_pages = {}
+          for path in link_pages:
+              parser = LinkParser()
+              parser.feed(path.read_text(encoding="utf-8"))
+              duplicates = [value for value, count in Counter(parser.ids).items() if count > 1]
+              assert not duplicates, f"{path}: duplicate HTML IDs: {duplicates}"
+              parsed_pages[str(path)] = {"parser": parser, "ids": set(parser.ids)}
+
+          checked_links = 0
+          for source_path in link_pages:
+              parser = parsed_pages[str(source_path)]["parser"]
+              for href in parser.hrefs:
+                  target_url = urlsplit(href)
+                  if target_url.scheme or target_url.netloc or href.startswith("//"):
+                      continue
+                  local_path = unquote(target_url.path)
+                  if not local_path:
+                      destination = str(source_path)
+                  else:
+                      if local_path.startswith("/"):
+                          candidate = local_path.lstrip("/")
+                      else:
+                          candidate = posixpath.join(posixpath.dirname(str(source_path)), local_path)
+                      if local_path.endswith("/") or candidate in ("", "."):
+                          candidate = posixpath.join(candidate, "index.html")
+                      destination = posixpath.normpath(candidate)
+                      if destination == "ve-chung-toi":
+                          destination += ".html"
+                      elif destination.startswith("articles/") and not posixpath.splitext(destination)[1]:
+                          destination += ".html"
+                      elif destination in ("", "."):
+                          destination = "index.html"
+                  assert Path(destination).is_file(), f"{source_path}: broken local link {href!r} -> {destination}"
+                  if target_url.fragment and destination in parsed_pages:
+                      fragment = unquote(target_url.fragment)
+                      assert fragment in parsed_pages[destination]["ids"], f"{source_path}: missing fragment #{fragment} in {destination}"
+                  checked_links += 1
+          print(f"LOCAL LINK PASS: {checked_links} links checked across {len(link_pages)} HTML pages")
+
           tree = ET.parse("sitemap.xml")
           locs = [node.text for node in tree.getroot().iter() if node.tag.endswith("loc")]
           assert len(locs) == 6, f"expected home, four articles and the about page; found {len(locs)} URLs"
