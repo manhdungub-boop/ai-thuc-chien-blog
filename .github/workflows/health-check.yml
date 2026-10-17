@@ -34,6 +34,7 @@ jobs:
               Path("articles/quy-trinh-ai-co-kiem-duyet.html"),
               Path("articles/ban-do-cong-cu-blog-ai.html"),
               Path("articles/kiem-chung-noi-dung-ai.html"),
+              Path("articles/workflow-ai-airtable-activepieces.html"),
           ]
           for path in pages:
               text = path.read_text(encoding="utf-8")
@@ -104,9 +105,10 @@ jobs:
 
           tree = ET.parse("sitemap.xml")
           locs = [node.text for node in tree.getroot().iter() if node.tag.endswith("loc")]
-          assert len(locs) == 6, f"expected home, four articles and the about page; found {len(locs)} URLs"
+          assert len(locs) == 7, f"expected home, five articles and the about page; found {len(locs)} URLs"
           assert len(set(locs)) == len(locs), "duplicate sitemap URLs"
-          assert any("kiem-chung-noi-dung-ai" in url for url in locs), "new article missing from sitemap"
+          assert any("kiem-chung-noi-dung-ai" in url for url in locs), "existing article missing from sitemap"
+          assert any("workflow-ai-airtable-activepieces" in url for url in locs), "workflow article missing from sitemap"
           assert any("ve-chung-toi" in url for url in locs), "about page missing from sitemap"
           print(f"SITEMAP PASS: {len(locs)} unique URLs")
 
@@ -115,7 +117,7 @@ jobs:
           channel = feed_root.find("channel")
           assert channel is not None, "RSS channel missing"
           items = channel.findall("item")
-          assert len(items) == 4, f"expected four article items in RSS; found {len(items)}"
+          assert len(items) == 5, f"expected five article items in RSS; found {len(items)}"
           item_links = [item.findtext("link") for item in items]
           assert all(item_links) and len(set(item_links)) == len(item_links), "RSS links missing or duplicated"
           assert all(url.startswith("https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/") for url in item_links), "unexpected RSS item URL"
@@ -139,12 +141,14 @@ jobs:
             "articles/quy-trinh-ai-co-kiem-duyet.html"
             "articles/ban-do-cong-cu-blog-ai.html"
             "articles/kiem-chung-noi-dung-ai.html"
+            "articles/workflow-ai-airtable-activepieces.html"
           )
           slugs=(
             "bat-dau-voi-ai"
             "quy-trinh-ai-co-kiem-duyet"
             "ban-do-cong-cu-blog-ai"
             "kiem-chung-noi-dung-ai"
+            "workflow-ai-airtable-activepieces"
           )
           for host in "${hosts[@]}"; do
             echo "Checking ${host}"
@@ -197,5 +201,5 @@ jobs:
               echo "FAIL: $host/feed.xml returned HTTP $feed_code"
               exit 1
             fi
-            echo "PASS: four article routes, about route, and RSS feed at $host"
+            echo "PASS: five article routes, about route, and RSS feed at $host"
           done

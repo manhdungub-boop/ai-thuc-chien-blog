@@ -7,6 +7,12 @@
     <language>vi-VN</language>
     <atom:link href="https://ai-thuc-chien-blog.manhdungub.workers.dev/feed.xml" rel="self" type="application/rss+xml"/>
     <item>
+      <title>Xây dựng workflow AI có kiểm duyệt với Airtable và Activepieces | AI Thực Chiến</title>
+      <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/workflow-ai-airtable-activepieces</link>
+      <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/workflow-ai-airtable-activepieces</guid>
+      <description>Thiết kế quy trình từ bản ghi Airtable đến bản nháp AI chờ con người duyệt, kèm bộ lọc, chống chạy lặp và kiểm thử.</description>
+    </item>
+    <item>
       <title>Checklist kiểm chứng nội dung AI trước khi xuất bản | AI Thực Chiến</title>
       <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/kiem-chung-noi-dung-ai</link>
       <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/kiem-chung-noi-dung-ai</guid>
