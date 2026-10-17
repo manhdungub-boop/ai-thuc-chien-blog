@@ -1,44 +1,44 @@
 # Deployment and maintenance
 
-## Live endpoints
+## Public URLs
 
-- Primary: https://ai-thuc-chien-blog.manhdungub.workers.dev/
+- Primary website: https://ai-thuc-chien-blog.manhdungub.workers.dev/
 - Cloudflare Pages: https://ai-thuc-chien-blog.pages.dev/
 - GitHub Pages backup: https://manhdungub-boop.github.io/ai-thuc-chien-blog/
+- RSS feed: https://ai-thuc-chien-blog.manhdungub.workers.dev/feed.xml
+- Repository: https://github.com/manhdungub-boop/ai-thuc-chien-blog
 
-## Cloudflare Pages automatic deployment
+## Automatic deployment
 
-The workflow `.github/workflows/deploy-cloudflare-pages.yml` runs on every push to `main` and can also be run manually from GitHub Actions.
+The workflow .github/workflows/deploy-cloudflare-pages.yml runs for each push to main, and can also be started manually from GitHub Actions. It stages only the static site files into dist/ and uses Wrangler to deploy the Cloudflare Pages Direct Upload project.
 
-The workflow copies only the intended static website files into `dist/`, then runs `wrangler pages deploy`. This is intentional because the Pages project uses Direct Upload; this workflow provides automated deployments from GitHub without changing the project type.
+The GitHub Actions repository secret CLOUDFLARE_API_TOKEN is required. It is scoped to Pages Read/Write for the intended Cloudflare account and expires on 18 April 2027. Rotate it before expiry and update the GitHub repository secret; never commit credentials into the repository.
 
-Required GitHub Actions repository secret: `CLOUDFLARE_API_TOKEN`.
+GitHub Pages also builds from main. Cloudflare Workers has its own build integration. Keep these endpoints intact unless a deliberate migration has been tested.
 
-The token is limited to Pages Read and Pages Write for the intended Cloudflare account. Its current expiry is 2027-04-18; rotate it before that date and update the repository secret.
+## Automatic health checks
 
-## Verification checklist
+The workflow .github/workflows/health-check.yml runs after a successful Cloudflare Pages deploy, every Monday at 02:00 UTC (09:00 Vietnam time), and on manual request. It validates page metadata, JSON-LD, sitemap uniqueness, RSS XML/items, public HTTP routes, and byte-for-byte matching for the intended static files on all three hosting endpoints.
 
-1. Open the Pages URL and confirm the homepage is HTTP 200.
-2. Verify feed.xml, styles.css, script.js, robots.txt, sitemap.xml, favicon.svg, 404.html, the About page, and all four article files return HTTP 200.
-3. Inspect the latest `Deploy Cloudflare Pages` workflow run and confirm every step succeeds.
-4. Compare the deployed static files to the matching files on the `main` branch when troubleshooting.
+Open the latest runs:
+- https://github.com/manhdungub-boop/ai-thuc-chien-blog/actions/workflows/deploy-cloudflare-pages.yml
+- https://github.com/manhdungub-boop/ai-thuc-chien-blog/actions/workflows/health-check.yml
+
+## Current content inventory
+
+- index.html — homepage and four-article library.
+- ve-chung-toi.html — editorial transparency, content principles and issue-reporting path.
+- articles/bat-dau-voi-ai.html — practical introduction to AI at work.
+- articles/quy-trinh-ai-co-kiem-duyet.html — human review gates for automation.
+- articles/ban-do-cong-cu-blog-ai.html — low-cost tool map for an AI blog.
+- articles/kiem-chung-noi-dung-ai.html — checklist for verifying AI-assisted content.
+- feed.xml — RSS 2.0 feed for the four articles.
+- sitemap.xml and robots.txt — crawler discovery.
+- styles.css, script.js, favicon.svg, 404.html — presentation, navigation, site icon and error page.
 
 ## Safe operating rules
 
-- Do not delete the production Workers deployment; it remains the primary endpoint.
-- Keep canonical and sitemap URLs pointed at the primary Workers hostname until an explicit SEO migration is planned.
-- Do not commit API tokens, passwords, or other secrets to the repository.
-
-
-## Current article library
-
-- articles/bat-dau-voi-ai.html — nhập môn AI trong công việc.
-- articles/quy-trinh-ai-co-kiem-duyet.html — quy trình có người kiểm duyệt.
-- articles/ban-do-cong-cu-blog-ai.html — bản đồ công cụ cho blog AI.
-- articles/kiem-chung-noi-dung-ai.html — checklist xác minh trước khi xuất bản.
-
-
-Editorial transparency page: ve-chung-toi.html. The weekly health check validates its metadata, sitemap entry, deployed file parity, and extensionless route.
-
-
-RSS subscription feed: feed.xml (RSS 2.0). The health-check workflow validates its XML, four unique article entries, deployed file parity, and public route.
+- Do not delete or overwrite the production Workers service as part of routine Pages maintenance.
+- Keep canonical URLs and sitemap entries pointed at the Workers hostname until an intentional SEO migration updates every relevant reference together.
+- Distinguish approved from published in any future content workflow.
+- Verify external integrations and posting permissions before enabling actions that send messages or publish content.
