@@ -1,0 +1,120 @@
+name: Verify Website Health
+
+on:
+  workflow_run:
+    workflows: ["Deploy Cloudflare Pages"]
+    types: [completed]
+    branches: [main]
+  schedule:
+    - cron: "0 2 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out site source
+        uses: actions/checkout@v4
+
+      - name: Validate HTML metadata and sitemap
+        run: |
+          python - <<'PY'
+          import json, re
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          pages = [
+              Path("index.html"),
+              Path("articles/bat-dau-voi-ai.html"),
+              Path("articles/quy-trinh-ai-co-kiem-duyet.html"),
+              Path("articles/ban-do-cong-cu-blog-ai.html"),
+              Path("articles/kiem-chung-noi-dung-ai.html"),
+          ]
+          for path in pages:
+              text = path.read_text(encoding="utf-8")
+              assert re.search(r"<title>\s*.+?\s*</title>", text, re.I | re.S), f"{path}: missing title"
+              assert re.search(r'<meta name="description" content="[^"]+"', text, re.I), f"{path}: missing description"
+              assert len(re.findall(r"<h1\b", text, re.I)) == 1, f"{path}: expected exactly one H1"
+              assert len(re.findall(r'<link rel="canonical" href="[^"]+"', text, re.I)) == 1, f"{path}: expected one canonical"
+              for block in re.findall(r'<script type="application/ld\+json">(.*?)</script>', text, re.I | re.S):
+                  json.loads(block)
+              print(f"SEO/HTML PASS: {path}")
+
+          tree = ET.parse("sitemap.xml")
+          locs = [node.text for node in tree.getroot().iter() if node.tag.endswith("loc")]
+          assert len(locs) == 5, f"expected home plus four articles; found {len(locs)} URLs"
+          assert len(set(locs)) == len(locs), "duplicate sitemap URLs"
+          assert any("kiem-chung-noi-dung-ai" in url for url in locs), "new article missing from sitemap"
+          print(f"SITEMAP PASS: {len(locs)} unique URLs")
+          PY
+
+      - name: Verify deployed files and article routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          hosts=(
+            "https://ai-thuc-chien-blog.manhdungub.workers.dev"
+            "https://ai-thuc-chien-blog.pages.dev"
+            "https://manhdungub-boop.github.io/ai-thuc-chien-blog"
+          )
+          files=(
+            "index.html" "styles.css" "script.js" "robots.txt" "sitemap.xml"
+            "favicon.svg" "404.html"
+            "articles/bat-dau-voi-ai.html"
+            "articles/quy-trinh-ai-co-kiem-duyet.html"
+            "articles/ban-do-cong-cu-blog-ai.html"
+            "articles/kiem-chung-noi-dung-ai.html"
+          )
+          slugs=(
+            "bat-dau-voi-ai"
+            "quy-trinh-ai-co-kiem-duyet"
+            "ban-do-cong-cu-blog-ai"
+            "kiem-chung-noi-dung-ai"
+          )
+          for host in "${hosts[@]}"; do
+            echo "Checking ${host}"
+            passed=0
+            for attempt in 1 2 3 4 5 6; do
+              ok=1
+              for path in "${files[@]}"; do
+                tmp="$(mktemp)"
+                if ! curl --fail --silent --show-error --location --max-time 20 "${host}/${path}" -o "$tmp"; then
+                  echo "HTTP failure: ${host}/${path}"
+                  ok=0
+                  rm -f "$tmp"
+                  break
+                fi
+                if ! cmp --silent "$path" "$tmp"; then
+                  echo "Content mismatch: ${host}/${path}"
+                  ok=0
+                  rm -f "$tmp"
+                  break
+                fi
+                rm -f "$tmp"
+              done
+              if [ "$ok" -eq 1 ]; then
+                passed=1
+                break
+              fi
+              echo "Retry ${attempt}/6 after deployment propagation delay"
+              sleep 10
+            done
+            if [ "$passed" -ne 1 ]; then
+              echo "FAIL: deployed files do not match the main-branch source at ${host}"
+              exit 1
+            fi
+            echo "PASS: all ${#files[@]} files match at ${host}"
+
+            for slug in "${slugs[@]}"; do
+              code="$(curl --silent --show-error --location --max-time 20 -o /dev/null -w "%{http_code}" "${host}/articles/${slug}")"
+              if [ "$code" != "200" ]; then
+                echo "FAIL: ${host}/articles/${slug} returned HTTP ${code}"
+                exit 1
+              fi
+            done
+            echo "PASS: all extensionless article routes at ${host}"
+          done
