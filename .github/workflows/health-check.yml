@@ -76,7 +76,6 @@ jobs:
             "quy-trinh-ai-co-kiem-duyet"
             "ban-do-cong-cu-blog-ai"
             "kiem-chung-noi-dung-ai"
-            "ve-chung-toi"
           )
           for host in "${hosts[@]}"; do
             echo "Checking ${host}"
@@ -119,5 +118,10 @@ jobs:
                 exit 1
               fi
             done
-            echo "PASS: all extensionless content routes at ${host}"
+            about_code="$(curl --silent --show-error --location --max-time 20 -o /dev/null -w "%{http_code}" "${host}/ve-chung-toi")"
+            if [ "$about_code" != "200" ]; then
+              echo "FAIL: ${host}/ve-chung-toi returned HTTP ${about_code}"
+              exit 1
+            fi
+            echo "PASS: four article routes and the about route at ${host}"
           done
