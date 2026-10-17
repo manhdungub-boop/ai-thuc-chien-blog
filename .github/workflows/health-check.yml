@@ -29,6 +29,7 @@ jobs:
 
           pages = [
               Path("index.html"),
+              Path("ve-chung-toi.html"),
               Path("articles/bat-dau-voi-ai.html"),
               Path("articles/quy-trinh-ai-co-kiem-duyet.html"),
               Path("articles/ban-do-cong-cu-blog-ai.html"),
@@ -46,9 +47,10 @@ jobs:
 
           tree = ET.parse("sitemap.xml")
           locs = [node.text for node in tree.getroot().iter() if node.tag.endswith("loc")]
-          assert len(locs) == 5, f"expected home plus four articles; found {len(locs)} URLs"
+          assert len(locs) == 6, f"expected home, four articles and the about page; found {len(locs)} URLs"
           assert len(set(locs)) == len(locs), "duplicate sitemap URLs"
           assert any("kiem-chung-noi-dung-ai" in url for url in locs), "new article missing from sitemap"
+          assert any("ve-chung-toi" in url for url in locs), "about page missing from sitemap"
           print(f"SITEMAP PASS: {len(locs)} unique URLs")
           PY
 
@@ -63,7 +65,7 @@ jobs:
           )
           files=(
             "index.html" "styles.css" "script.js" "robots.txt" "sitemap.xml"
-            "favicon.svg" "404.html"
+            "favicon.svg" "404.html" "ve-chung-toi.html"
             "articles/bat-dau-voi-ai.html"
             "articles/quy-trinh-ai-co-kiem-duyet.html"
             "articles/ban-do-cong-cu-blog-ai.html"
@@ -74,6 +76,7 @@ jobs:
             "quy-trinh-ai-co-kiem-duyet"
             "ban-do-cong-cu-blog-ai"
             "kiem-chung-noi-dung-ai"
+            "ve-chung-toi"
           )
           for host in "${hosts[@]}"; do
             echo "Checking ${host}"
@@ -116,5 +119,5 @@ jobs:
                 exit 1
               fi
             done
-            echo "PASS: all extensionless article routes at ${host}"
+            echo "PASS: all extensionless content routes at ${host}"
           done

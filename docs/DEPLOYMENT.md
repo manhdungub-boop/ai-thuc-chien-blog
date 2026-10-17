@@ -36,3 +36,6 @@ The token is limited to Pages Read and Pages Write for the intended Cloudflare a
 - articles/quy-trinh-ai-co-kiem-duyet.html — quy trình có người kiểm duyệt.
 - articles/ban-do-cong-cu-blog-ai.html — bản đồ công cụ cho blog AI.
 - articles/kiem-chung-noi-dung-ai.html — checklist xác minh trước khi xuất bản.
+
+
+Editorial transparency page: ve-chung-toi.html. The weekly health check validates its metadata, sitemap entry, deployed file parity, and extensionless route.

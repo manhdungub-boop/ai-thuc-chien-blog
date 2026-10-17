@@ -15,6 +15,7 @@ Mở index.html trong trình duyệt. Website không cần bước build. Google
 ## Cấu trúc
 
 - index.html: trang chủ.
+- ve-chung-toi.html: mục tiêu, nguyên tắc biên tập và cách gửi phản hồi.
 - styles.css: giao diện responsive và hiệu ứng.
 - script.js: menu di động và hiệu ứng cuộn.
 - articles/: bốn bài viết nền tảng.
