@@ -19,7 +19,7 @@ The token is limited to Pages Read and Pages Write for the intended Cloudflare a
 ## Verification checklist
 
 1. Open the Pages URL and confirm the homepage is HTTP 200.
-2. Verify `styles.css`, `script.js`, `robots.txt`, `sitemap.xml`, `favicon.svg`, `404.html`, and the three article files return HTTP 200.
+2. Verify feed.xml, styles.css, script.js, robots.txt, sitemap.xml, favicon.svg, 404.html, the About page, and all four article files return HTTP 200.
 3. Inspect the latest `Deploy Cloudflare Pages` workflow run and confirm every step succeeds.
 4. Compare the deployed static files to the matching files on the `main` branch when troubleshooting.
 
@@ -39,3 +39,6 @@ The token is limited to Pages Read and Pages Write for the intended Cloudflare a
 
 
 Editorial transparency page: ve-chung-toi.html. The weekly health check validates its metadata, sitemap entry, deployed file parity, and extensionless route.
+
+
+RSS subscription feed: feed.xml (RSS 2.0). The health-check workflow validates its XML, four unique article entries, deployed file parity, and public route.

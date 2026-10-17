@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/</link>
+    <description>Hướng dẫn AI dễ áp dụng, công cụ miễn phí và quy trình tự động hóa cho công việc thực tế.</description>
+    <language>vi-VN</language>
+    <atom:link href="https://ai-thuc-chien-blog.manhdungub.workers.dev/feed.xml" rel="self" type="application/rss+xml"/>
+    <item>
+      <title>Checklist kiểm chứng nội dung AI trước khi xuất bản | AI Thực Chiến</title>
+      <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/kiem-chung-noi-dung-ai</link>
+      <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/kiem-chung-noi-dung-ai</guid>
+      <description>Checklist thực tế để kiểm chứng thông tin, nguồn dẫn, số liệu và rủi ro trước khi xuất bản nội dung do AI hỗ trợ.</description>
+    </item>
+    <item>
+      <title>Quy trình AI có kiểm duyệt | AI Thực Chiến</title>
+      <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/quy-trinh-ai-co-kiem-duyet</link>
+      <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/quy-trinh-ai-co-kiem-duyet</guid>
+      <description>Thiết kế quy trình AI có bước kiểm duyệt của con người trước khi xuất bản hoặc gửi đi.</description>
+    </item>
+    <item>
+      <title>5 cách bắt đầu dùng AI trong công việc | AI Thực Chiến</title>
+      <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/bat-dau-voi-ai</link>
+      <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/bat-dau-voi-ai</guid>
+      <description>5 cách thực tế để bắt đầu dùng AI trong công việc mà không cần biết lập trình.</description>
+    </item>
+    <item>
+      <title>Bản đồ công cụ xây dựng blog AI | AI Thực Chiến</title>
+      <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/ban-do-cong-cu-blog-ai</link>
+      <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/ban-do-cong-cu-blog-ai</guid>
+      <description>Bản đồ công cụ để xây dựng blog AI với website tĩnh, GitHub và bộ máy tự động hóa.</description>
+    </item>
+  </channel>
+</rss>

@@ -19,7 +19,7 @@ jobs:
       - name: Prepare static site files
         run: |
           mkdir -p dist/articles
-          cp index.html ve-chung-toi.html styles.css script.js robots.txt sitemap.xml favicon.svg 404.html dist/
+          cp index.html ve-chung-toi.html feed.xml styles.css script.js robots.txt sitemap.xml favicon.svg 404.html dist/
           cp articles/*.html dist/articles/
 
       - name: Deploy to Cloudflare Pages

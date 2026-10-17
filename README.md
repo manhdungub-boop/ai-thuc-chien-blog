@@ -6,6 +6,7 @@ Blog tiếng Việt về ứng dụng AI, công cụ miễn phí và tự độn
 
 - Bản chính: https://ai-thuc-chien-blog.manhdungub.workers.dev/
 - Bản dự phòng GitHub Pages: https://manhdungub-boop.github.io/ai-thuc-chien-blog/
+- RSS: https://ai-thuc-chien-blog.manhdungub.workers.dev/feed.xml
 - Mã nguồn: https://github.com/manhdungub-boop/ai-thuc-chien-blog
 
 ## Chạy thử
@@ -20,6 +21,7 @@ Mở index.html trong trình duyệt. Website không cần bước build. Google
 - script.js: menu di động và hiệu ứng cuộn.
 - articles/: bốn bài viết nền tảng.
 - sitemap.xml: danh sách URL chính dành cho công cụ tìm kiếm.
+- feed.xml: RSS 2.0 để người đọc theo dõi bài viết mới.
 - robots.txt: cho phép trình thu thập thông tin truy cập và trỏ đến sitemap.
 - favicon.svg: biểu tượng website.
 - 404.html: trang thông báo đường dẫn không tồn tại.
