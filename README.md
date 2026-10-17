@@ -17,7 +17,7 @@ Mở index.html trong trình duyệt. Website không cần bước build. Google
 - index.html: trang chủ.
 - styles.css: giao diện responsive và hiệu ứng.
 - script.js: menu di động và hiệu ứng cuộn.
-- articles/: ba bài viết nền tảng.
+- articles/: bốn bài viết nền tảng.
 - sitemap.xml: danh sách URL chính dành cho công cụ tìm kiếm.
 - robots.txt: cho phép trình thu thập thông tin truy cập và trỏ đến sitemap.
 - favicon.svg: biểu tượng website.

@@ -28,3 +28,11 @@ The token is limited to Pages Read and Pages Write for the intended Cloudflare a
 - Do not delete the production Workers deployment; it remains the primary endpoint.
 - Keep canonical and sitemap URLs pointed at the primary Workers hostname until an explicit SEO migration is planned.
 - Do not commit API tokens, passwords, or other secrets to the repository.
+
+
+## Current article library
+
+- articles/bat-dau-voi-ai.html — nhập môn AI trong công việc.
+- articles/quy-trinh-ai-co-kiem-duyet.html — quy trình có người kiểm duyệt.
+- articles/ban-do-cong-cu-blog-ai.html — bản đồ công cụ cho blog AI.
+- articles/kiem-chung-noi-dung-ai.html — checklist xác minh trước khi xuất bản.
