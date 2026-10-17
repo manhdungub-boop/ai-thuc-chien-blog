@@ -19,7 +19,7 @@ Mở index.html trong trình duyệt. Website không cần bước build. Google
 - ve-chung-toi.html: mục tiêu, nguyên tắc biên tập và cách gửi phản hồi.
 - styles.css: giao diện responsive và hiệu ứng.
 - script.js: menu di động và hiệu ứng cuộn.
-- articles/: bốn bài viết nền tảng.
+- articles/: sáu bài viết hướng dẫn, gồm AI cơ bản, workflow có kiểm duyệt, kiểm chứng nội dung và SEO kỹ thuật.
 - sitemap.xml: danh sách URL chính dành cho công cụ tìm kiếm.
 - feed.xml: RSS 2.0 để người đọc theo dõi bài viết mới.
 - robots.txt: cho phép trình thu thập thông tin truy cập và trỏ đến sitemap.
