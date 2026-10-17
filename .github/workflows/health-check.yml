@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out site source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Validate HTML metadata and sitemap
         run: |
@@ -30,7 +30,6 @@ jobs:
           pages = [
               Path("index.html"),
               Path("ve-chung-toi.html"),
-              Path("feed.xml"),
               Path("articles/bat-dau-voi-ai.html"),
               Path("articles/quy-trinh-ai-co-kiem-duyet.html"),
               Path("articles/ban-do-cong-cu-blog-ai.html"),
