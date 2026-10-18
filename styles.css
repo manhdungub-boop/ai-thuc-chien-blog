@@ -32,3 +32,13 @@
 .related-article span{color:var(--muted);font-size:13px;line-height:1.55}
 .related-article:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 @media(max-width:700px){.related-articles-grid{grid-template-columns:1fr}.related-article{padding:15px}}
+
+/* Reusable prompt templates and accessible copy controls */
+.prompt-template{display:block;width:100%;min-height:210px;resize:vertical;margin:12px 0 10px;padding:15px 16px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);font:13px/1.7 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap}
+.prompt-template:focus-visible{outline:2px solid var(--mint);outline-offset:3px}
+.prompt-copy-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:10px 0 28px}
+.prompt-copy-button{appearance:none;border:1px solid var(--mint);border-radius:9px;padding:10px 14px;background:rgba(139,240,206,.1);color:var(--mint);font:inherit;font-weight:700;cursor:pointer;transition:background .2s,border-color .2s}
+.prompt-copy-button:hover{background:rgba(139,240,206,.18)}
+.prompt-copy-button:focus-visible{outline:2px solid var(--mint);outline-offset:3px}
+.prompt-copy-button:disabled{opacity:.6;cursor:not-allowed}
+.prompt-copy-status{min-height:1em;color:var(--muted);font-size:12px;line-height:1.5}

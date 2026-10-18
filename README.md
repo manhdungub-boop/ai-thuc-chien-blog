@@ -20,9 +20,10 @@ Mở index.html trong trình duyệt. Website không cần bước build. Google
 - styles.css: giao diện responsive và hiệu ứng.
 - script.js: menu di động, hiệu ứng cuộn và tìm kiếm bài viết theo từ khóa (hỗ trợ tìm tiếng Việt không dấu).
 - scripts/test_homepage_search.cjs: kiểm thử hồi quy cho tìm kiếm có/không dấu, chữ Đ hoa, kết quả rỗng và xóa từ khóa; bộ kiểm thử tự lấy thẻ bài viết từ trang chủ nên không khóa vào một số lượng cố định.
+- scripts/test_copy_prompt.cjs: kiểm thử thao tác sao chép prompt, trạng thái thành công và thông báo dự phòng khi API clipboard không khả dụng.
 - scripts/test_article_navigation.cjs: tự phát hiện toàn bộ tệp bài viết và kiểm tra mục bài viết liên quan, tối thiểu ba liên kết duy nhất, đích tồn tại và bố cục đáp ứng.
 - scripts/test_homepage_article_coverage.cjs: so sánh URL bài viết trong sitemap với liên kết trên trang chủ; CI báo lỗi nếu có bài đã xuất bản nhưng không được khám phá từ trang chủ.
-- articles/: các bài viết hướng dẫn về AI cơ bản, workflow có kiểm duyệt, kiểm chứng nội dung, SEO kỹ thuật và đo lường hiệu quả blog. Danh sách được CI tự phát hiện từ các tệp HTML trong thư mục này.
+- articles/: các bài viết hướng dẫn về AI cơ bản, prompt thực hành có thể sao chép, workflow có kiểm duyệt, kiểm chứng nội dung, SEO kỹ thuật và đo lường hiệu quả blog. Danh sách được CI tự phát hiện từ các tệp HTML trong thư mục này.
 - sitemap.xml: danh sách URL chính dành cho công cụ tìm kiếm.
 - feed.xml: RSS 2.0 để người đọc theo dõi bài viết mới.
 - robots.txt: cho phép trình thu thập thông tin truy cập và trỏ đến sitemap.
