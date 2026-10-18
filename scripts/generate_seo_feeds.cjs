@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const SITE = 'https://ai-thuc-chien-blog.manhdungub-boop.workers.dev';
+const SITE = 'https://ai-thuc-chien-blog.manhdungub.workers.dev';
 
 function escapeXml(value) {
   return String(value)
@@ -17,9 +17,10 @@ function getMetaContent(html, key) {
   for (const tag of tags) {
     const name = tag.match(/\bname\s*=\s*["']([^"']+)["']/i);
     const property = tag.match(/\bproperty\s*=\s*["']([^"']+)["']/i);
-    const attr = (name && name[1].toLowerCase() === key.toLowerCase()) ||
+    const matchesKey =
+      (name && name[1].toLowerCase() === key.toLowerCase()) ||
       (property && property[1].toLowerCase() === key.toLowerCase());
-    if (!attr) continue;
+    if (!matchesKey) continue;
     const content = tag.match(/\bcontent\s*=\s*["']([^"']*)["']/i);
     if (content) return content[1].trim();
   }
@@ -52,8 +53,7 @@ function generate(outputDir) {
     if (!title || !description) {
       throw new Error('Missing title or meta description in ' + file);
     }
-
-    return { canonical, title, description, file };
+    return { canonical, title, description };
   });
 
   const today = new Date().toISOString().slice(0, 10);
