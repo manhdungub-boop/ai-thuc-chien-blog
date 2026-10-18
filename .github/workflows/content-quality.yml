@@ -24,6 +24,9 @@ on:
       - ".github/workflows/deploy-cloudflare-workers.yml"
       - ".github/workflows/health-check.yml"
       - ".github/workflows/content-quality.yml"
+      - ".github/workflows/configure-cloudflare-worker-builds.yml"
+      - "scripts/configure_cloudflare_worker_builds.py"
+      - "scripts/test_configure_cloudflare_worker_builds.py"
       - ".github/workflows/health-check.yml"
 permissions:
   contents: read

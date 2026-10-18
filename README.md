@@ -35,6 +35,16 @@ Mở index.html trong trình duyệt để xem bản nguồn. Quy trình triển
 - _headers: chính sách header cho Cloudflare Pages và static assets; worker.mjs cũng gắn header trực tiếp vào mọi phản hồi đi qua binding ASSETS.
 - 404.html: trang thông báo đường dẫn không tồn tại.
 
+## Đồng bộ cấu hình Cloudflare Workers Builds
+Hai trigger production của Worker chính và bản phụ cần dùng chung lệnh npm run build; hiện chúng vẫn dùng lệnh copy tệp cũ trong cấu hình ngoài repository. Workflow [Configure Cloudflare Workers Builds](https://github.com/manhdungub-boop/ai-thuc-chien-blog/actions/workflows/configure-cloudflare-worker-builds.yml) sẽ cập nhật lệnh build qua Cloudflare API và tự xác minh lại hai trigger.
+
+Thiết lập một lần:
+1. Tạo user-scoped Cloudflare API token với quyền Workers Builds Configuration Edit / Workers CI Write tại https://dash.cloudflare.com/profile/api-tokens. Không dùng build token UUID và không dán token vào cuộc trò chuyện.
+2. Lưu token trong [GitHub Actions secrets](https://github.com/manhdungub-boop/ai-thuc-chien-blog/settings/secrets/actions) với tên chính xác CLOUDFLARE_WORKERS_BUILDS_API_TOKEN.
+3. Chạy workflow ở liên kết trên. Script chỉ sửa build_command sau khi xác nhận đúng hai Worker, repository, trigger production và lệnh deploy hiện tại; sau đó đọc lại cấu hình để kiểm tra.
+
+Tài liệu Cloudflare: https://developers.cloudflare.com/workers/ci-cd/builds/api-reference/ và https://developers.cloudflare.com/api/resources/workers_builds/subresources/triggers/methods/update/
+
 ## Triển khai
 
 ### GitHub Pages
