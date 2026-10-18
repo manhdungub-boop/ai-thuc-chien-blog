@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Checklist thực tế giúp cá nhân và doanh nghiệp nhỏ phân loại dữ liệu, đánh giá công cụ AI, giảm thông tin nhạy cảm và thiết kế bước duyệt an toàn.">
+<meta name="theme-color" content="#0b1020"><meta name="robots" content="index,follow,max-image-preview:large"><meta name="author" content="AI Thực Chiến">
+<link rel="canonical" href="https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/danh-gia-rui-ro-du-lieu-khi-dung-ai">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<meta property="og:type" content="article"><meta property="og:locale" content="vi_VN"><meta property="og:site_name" content="AI Thực Chiến">
+<meta property="og:title" content="Trước khi đưa dữ liệu vào AI: checklist đánh giá rủi ro | AI Thực Chiến">
+<meta property="og:description" content="Phân loại dữ liệu, kiểm tra điều khoản công cụ, giảm thông tin nhạy cảm và đặt điểm dừng trước khi tự động hóa.">
+<meta property="og:url" content="https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/danh-gia-rui-ro-du-lieu-khi-dung-ai">
+<meta name="twitter:card" content="summary"><meta name="twitter:title" content="Trước khi đưa dữ liệu vào AI: checklist đánh giá rủi ro"><meta name="twitter:description" content="Checklist thực hành để giảm rủi ro khi dùng AI với dữ liệu công việc.">
+<script type="application/ld+json">
+{
+  "@context":"https://schema.org",
+  "@type":"BlogPosting",
+  "headline":"Trước khi đưa dữ liệu vào AI: checklist đánh giá rủi ro",
+  "description":"Checklist thực tế giúp cá nhân và doanh nghiệp nhỏ phân loại dữ liệu, đánh giá công cụ AI, giảm thông tin nhạy cảm và thiết kế bước duyệt an toàn.",
+  "url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/danh-gia-rui-ro-du-lieu-khi-dung-ai",
+  "mainEntityOfPage":{"@type":"WebPage","@id":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/danh-gia-rui-ro-du-lieu-khi-dung-ai"},
+  "datePublished":"2026-10-18","dateModified":"2026-10-18","inLanguage":"vi-VN","articleSection":"AI an toàn",
+  "author":{"@type":"Organization","name":"AI Thực Chiến","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/"},
+  "publisher":{"@type":"Organization","name":"AI Thực Chiến","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/"}
+}
+</script>
+<title>Trước khi đưa dữ liệu vào AI: checklist đánh giá rủi ro | AI Thực Chiến</title>
+<link rel="alternate" type="application/rss+xml" title="AI Thực Chiến RSS" href="../feed.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles.css">
+<!-- Cloudflare Web Analytics: primary host only --><script>(function(){if(window.location.hostname==="ai-thuc-chien-blog.manhdungub.workers.dev"){var s=document.createElement("script");s.type="module";s.src="https://static.cloudflareinsights.com/beacon.min.js";s.setAttribute("data-cf-beacon",'{"token":"f6ac034ab044496e8246fb13481a409e"}');document.head.appendChild(s);}})();</script><!-- End Cloudflare Web Analytics -->
+</head>
+<body>
+<a class="skip-link" href="#main-content">Bỏ qua đến nội dung chính</a>
+<header class="site-header"><a class="brand" href="../"><span class="brand-mark">AI</span><span>AI <b>Thực Chiến</b></span></a><a class="header-cta" href="../#bai-viet">← Tất cả bài viết</a></header>
+<main class="section" style="max-width:900px;margin:auto" id="main-content">
+<div class="section-kicker">AI AN TOÀN · QUYỀN RIÊNG TƯ · CHECKLIST</div>
+<h1 style="font-size:clamp(32px,5vw,54px);line-height:1.2;letter-spacing:-1.6px;margin:18px 0">Trước khi đưa dữ liệu vào AI: checklist đánh giá rủi ro</h1>
+<p style="color:var(--muted);font-size:15px;line-height:1.9">Một hướng dẫn thực hành cho cá nhân, người làm nội dung và doanh nghiệp nhỏ: kiểm tra dữ liệu, công cụ và quyền hạn trước khi sao chép thông tin vào AI hoặc đưa AI vào quy trình tự động.</p>
+<p style="font-size:12px;color:#8993ab">Cập nhật ngày <time datetime="2026-10-18">18/10/2026</time> · Thời gian đọc khoảng 9 phút</p>
+
+<h2 style="margin-top:36px">Vì sao cần kiểm tra trước?</h2>
+<p>Rủi ro không chỉ nằm ở việc mô hình trả lời sai. Khi đưa tài liệu, bảng khách hàng hoặc nội dung nội bộ vào một dịch vụ AI, bạn còn cần biết dữ liệu được xử lý theo điều khoản nào, ai có quyền truy cập, có lưu lịch sử hay không và kết quả sẽ đi đâu tiếp theo. Với workflow có kết nối ứng dụng, rủi ro còn tăng nếu AI được phép gửi email, đăng bài, sửa hồ sơ hoặc gọi công cụ mà không có bước xác nhận.</p>
+<p>OWASP đưa các vấn đề như prompt injection, lộ thông tin nhạy cảm, quyền tự hành quá mức và xử lý đầu ra không an toàn vào danh sách rủi ro của ứng dụng AI tạo sinh. Điều này không có nghĩa mọi công cụ đều nguy hiểm; nó có nghĩa là cần đánh giá theo dữ liệu, quyền hạn và tình huống sử dụng cụ thể.</p>
+
+<h2 style="margin-top:36px">Bước 1. Phân loại dữ liệu trước khi sao chép</h2>
+<ul style="padding-left:24px;line-height:2">
+<li><strong>Công khai:</strong> thông tin đã được phép công bố, như nội dung trên website của chính bạn. Vẫn cần kiểm tra bản quyền và độ chính xác.</li>
+<li><strong>Nội bộ thông thường:</strong> quy trình làm việc, bản nháp chưa công bố, ghi chú dự án. Chỉ sử dụng khi chính sách tổ chức và điều khoản dịch vụ cho phép.</li>
+<li><strong>Bí mật thương mại:</strong> giá vốn, chiến lược chưa công bố, hợp đồng, mã nguồn riêng hoặc dữ liệu khách hàng. Không tải lên công cụ chưa được đánh giá và phê duyệt.</li>
+<li><strong>Dữ liệu cá nhân hoặc nhạy cảm:</strong> số định danh, thông tin tài chính, hồ sơ nhân sự, dữ liệu sức khỏe, mật khẩu, token và khóa API. Mặc định không đưa vào prompt; nếu có nhu cầu hợp pháp, cần quy trình được tổ chức phê duyệt, biện pháp bảo vệ và kiểm tra nghĩa vụ pháp lý phù hợp.</li>
+</ul>
+<p>Đây là cách phân loại vận hành gợi ý, không thay thế chính sách bảo mật của tổ chức hay tư vấn pháp lý. Nếu không chắc dữ liệu thuộc nhóm nào, hãy dừng và hỏi người chịu trách nhiệm dữ liệu.</p>
+
+<h2 style="margin-top:36px">Bước 2. Kiểm tra dịch vụ AI bằng 6 câu hỏi</h2>
+<ol style="padding-left:24px;line-height:2">
+<li><strong>Điều khoản nào áp dụng?</strong> Dùng đúng trang điều khoản và chính sách quyền riêng tư của sản phẩm, gói tài khoản và khu vực bạn đang dùng. Không suy ra rằng mọi gói có cùng cách xử lý dữ liệu.</li>
+<li><strong>Dữ liệu có thể được dùng để cải thiện mô hình không?</strong> Tìm cài đặt và điều khoản chính thức; lưu ý khác biệt giữa tài khoản cá nhân, gói doanh nghiệp và API.</li>
+<li><strong>Dữ liệu được lưu bao lâu?</strong> Kiểm tra lịch sử trò chuyện, thời hạn lưu, xóa dữ liệu, sao lưu và khả năng quản trị của tổ chức. Không đồng nhất “ẩn khỏi lịch sử” với “xóa ngay khỏi mọi hệ thống”.</li>
+<li><strong>Ai có thể truy cập?</strong> Xem quyền thành viên, chia sẻ liên kết, quyền quản trị, nhật ký truy cập và cách nhà cung cấp mô tả việc xử lý dữ liệu.</li>
+<li><strong>Công cụ kết nối có quyền gì?</strong> Chỉ cấp quyền tối thiểu. Nếu một workflow chỉ cần đọc một bảng, không cấp quyền sửa hoặc gửi dữ liệu sang dịch vụ khác nếu không cần.</li>
+<li><strong>Có cách kiểm tra và rời đi không?</strong> Xác minh xuất dữ liệu, thu hồi token, xóa kết nối và quy trình xử lý sự cố trước khi đưa dữ liệu quan trọng vào.</li>
+</ol>
+<p>Ví dụ: tài liệu chính thức của ChatGPT mô tả cách quản lý tùy chọn “Cải thiện mô hình cho mọi người” trong mục Kiểm soát dữ liệu. Đây là hướng dẫn cho ChatGPT; không nên mặc nhiên áp dụng nó cho sản phẩm AI khác. Hãy kiểm tra tài liệu hiện hành của chính công cụ bạn sử dụng.</p>
+
+<h2 style="margin-top:36px">Bước 3. Giảm dữ liệu trước khi gửi</h2>
+<p>Ngay cả khi một dịch vụ được phép dùng, đừng gửi toàn bộ tệp nếu nhiệm vụ chỉ cần một phần nhỏ. Hãy xóa hoặc thay thế thông tin nhận dạng, bỏ cột không liên quan, chỉ trích đoạn cần xử lý và giữ bản gốc ở nơi có kiểm soát quyền truy cập.</p>
+<ul style="padding-left:24px;line-height:2">
+<li>Thay tên khách hàng bằng mã giả lập như <code>KH_001</code>; không gửi bảng đối chiếu mã nếu không cần.</li>
+<li>Xóa email, số điện thoại, địa chỉ, mã đơn hàng, token và thông tin đăng nhập.</li>
+<li>Thử quy trình với dữ liệu giả trước; chỉ mở rộng khi đã kiểm tra đầu ra và quyền truy cập.</li>
+<li>Không coi yêu cầu “hãy giữ bí mật” trong prompt là một biện pháp bảo mật. Bảo vệ phải nằm ở chính sách, quyền truy cập và cách hệ thống xử lý dữ liệu.</li>
+</ul>
+
+<h2 style="margin-top:36px">Bước 4. Nếu xây workflow AI, thêm hàng rào an toàn</h2>
+<ol style="padding-left:24px;line-height:2">
+<li><strong>Đầu vào có kiểm soát:</strong> chỉ đọc nguồn và bản ghi được phép; coi nội dung từ web, email, tệp và người dùng là dữ liệu chưa đáng tin.</li>
+<li><strong>Đầu ra được kiểm tra:</strong> kiểm tra định dạng, đường dẫn, người nhận, số liệu và nội dung trước khi chuyển sang bước tiếp theo. Không thực thi mã hoặc truy vấn chỉ vì AI tạo ra.</li>
+<li><strong>Quyền hạn tối thiểu:</strong> tách quyền đọc khỏi quyền ghi; không để mô hình tự quyết định cấp thêm quyền.</li>
+<li><strong>Con người duyệt hành động quan trọng:</strong> dừng trước khi đăng bài, gửi tin nhắn, xóa dữ liệu, mua hàng hoặc chia sẻ thông tin ra ngoài.</li>
+<li><strong>Ghi nhật ký và đường lui:</strong> lưu mã bản ghi, thời gian chạy, phiên bản prompt, lỗi và quyết định duyệt; có cách dừng flow và thu hồi kết nối.</li>
+</ol>
+<p>Prompt injection có thể xuất hiện trong nội dung bên ngoài mà AI được yêu cầu đọc. Vì vậy, câu lệnh trong prompt có ích nhưng không thay thế kiểm soát kỹ thuật. Tài liệu OWASP về bảo mật AI tạo sinh là điểm bắt đầu tốt để lập mô hình đe dọa và kiểm tra thiết kế.</p>
+
+<h2 style="margin-top:36px">Bảng quyết định nhanh</h2>
+<div style="overflow-x:auto">
+<table style="width:100%;border-collapse:collapse;line-height:1.7">
+<thead><tr><th style="text-align:left;padding:10px;border-bottom:1px solid var(--line)">Tình huống</th><th style="text-align:left;padding:10px;border-bottom:1px solid var(--line)">Quyết định khởi đầu</th><th style="text-align:left;padding:10px;border-bottom:1px solid var(--line)">Điều kiện để tiếp tục</th></tr></thead>
+<tbody>
+<tr><td style="padding:10px;border-bottom:1px solid var(--line)">Viết lại nội dung công khai</td><td style="padding:10px;border-bottom:1px solid var(--line)">Có thể thử</td><td style="padding:10px;border-bottom:1px solid var(--line)">Kiểm tra bản quyền, sự thật và đầu ra.</td></tr>
+<tr><td style="padding:10px;border-bottom:1px solid var(--line)">Tóm tắt tài liệu nội bộ</td><td style="padding:10px;border-bottom:1px solid var(--line)">Đánh giá trước</td><td style="padding:10px;border-bottom:1px solid var(--line)">Điều khoản, quyền truy cập và chính sách nội bộ cho phép.</td></tr>
+<tr><td style="padding:10px;border-bottom:1px solid var(--line)">Bảng khách hàng hoặc nhân sự</td><td style="padding:10px;border-bottom:1px solid var(--line)">Dừng mặc định</td><td style="padding:10px;border-bottom:1px solid var(--line)">Có phê duyệt phù hợp, giảm thiểu dữ liệu và kiểm soát được ghi nhận.</td></tr>
+<tr><td style="padding:10px;border-bottom:1px solid var(--line)">Mật khẩu, API key, token</td><td style="padding:10px;border-bottom:1px solid var(--line)">Không đưa vào prompt</td><td style="padding:10px;border-bottom:1px solid var(--line)">Dùng kho bí mật và cơ chế xác thực của hệ thống; nếu đã lộ, thu hồi và xoay vòng.</td></tr>
+<tr><td style="padding:10px">AI có thể tự gửi hoặc xóa</td><td style="padding:10px">Không bật tự động ngay</td><td style="padding:10px">Quyền tối thiểu, kiểm thử, nhật ký và bước xác nhận thực thi.</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2 style="margin-top:36px">Mẫu ghi nhận đánh giá trước khi triển khai</h2>
+<pre style="white-space:pre-wrap;overflow-wrap:anywhere;padding:16px 18px;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:12px;line-height:1.8">Mục đích sử dụng:
+Loại dữ liệu đầu vào:
+Dữ liệu nào đã loại bỏ/ẩn danh:
+Tên dịch vụ, gói và tài liệu điều khoản đã kiểm tra:
+Quyền ứng dụng được cấp:
+Rủi ro còn lại:
+Người chịu trách nhiệm:
+Điều kiện dừng/thu hồi:
+Quyết định: THỬ VỚI DỮ LIỆU GIẢ / CHỜ DUYỆT / KHÔNG TRIỂN KHAI</pre>
+<p>Ghi lại ngày kiểm tra và đường dẫn tài liệu chính thức vì điều khoản, tính năng và giao diện có thể thay đổi. Với dữ liệu có yêu cầu pháp lý hoặc hợp đồng, hãy nhờ người có thẩm quyền xác nhận trước khi dùng dịch vụ.</p>
+
+<h2 style="margin-top:36px">Nguồn tham khảo chính thức</h2>
+<ul style="padding-left:24px;line-height:2">
+<li><a href="https://help.openai.com/vi-vn/articles/7730893-data-controls-in-chatgpt" target="_blank" rel="noopener noreferrer" style="color:var(--mint);text-decoration:underline">OpenAI Help Center — Kiểm soát dữ liệu trong ChatGPT</a>: cách xem và quản lý cài đặt dữ liệu trong ChatGPT; chỉ áp dụng cho sản phẩm và bối cảnh được tài liệu mô tả.</li>
+<li><a href="https://github.com/GenAI-Security-Project/GenAI-LLM-Top10/blob/main/2026/README.md" target="_blank" rel="noopener noreferrer" style="color:var(--mint);text-decoration:underline">OWASP GenAI Security Project — Top 10 for LLM Applications 2026</a>: danh mục rủi ro như prompt injection, lộ thông tin nhạy cảm, quyền tự hành quá mức và thông tin sai lệch.</li>
+<li><a href="https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.600-1.pdf" target="_blank" rel="noopener noreferrer" style="color:var(--mint);text-decoration:underline">NIST — Artificial Intelligence Risk Management Framework: Generative AI Profile</a>: khung tham khảo để tổ chức nhận diện, đánh giá và quản lý rủi ro AI trong vòng đời hệ thống.</li>
+</ul>
+<p style="color:var(--muted);font-size:13px">Checklist này là hướng dẫn vận hành tổng quát, không phải bảo đảm an toàn tuyệt đối hay tư vấn pháp lý. Mức rủi ro thực tế phụ thuộc dữ liệu, nhà cung cấp, cấu hình, quyền được cấp và quy định áp dụng.</p>
+
+<section class="related-articles" aria-labelledby="related-articles-title">
+<div class="related-articles-heading"><p class="section-kicker">ĐỌC TIẾP</p><h2 id="related-articles-title">Bài viết liên quan</h2><p>Tiếp tục xây dựng quy trình AI có kiểm soát từ dữ liệu đầu vào đến bước xuất bản.</p></div>
+<nav class="related-articles-grid" aria-label="Bài viết liên quan">
+<a class="related-article" href="../articles/nhan-biet-prompt-injection-ai.html"><strong>Prompt Injection và phòng vệ</strong><span>Nhận diện chỉ dẫn độc hại và giới hạn quyền của workflow.</span></a>
+<a class="related-article" href="../articles/quy-trinh-ai-co-kiem-duyet.html"><strong>Quy trình AI có kiểm duyệt</strong><span>Đặt điểm dừng và quyền phê duyệt trước hành động quan trọng.</span></a>
+<a class="related-article" href="../articles/kiem-chung-noi-dung-ai.html"><strong>Checklist kiểm chứng nội dung AI</strong><span>Đối chiếu nguồn và rà soát điều chưa xác minh.</span></a>
+</nav>
+</section>
+</main>
+<footer><a class="brand" href="../"><span class="brand-mark">AI</span><span>AI <b>Thực Chiến</b></span></a><span>Học thật · Thử thật · Tối ưu từng bước · <a href="../feed.xml" aria-label="Đăng ký RSS">RSS</a> · <a href="../ve-chung-toi.html" aria-label="Đọc nguyên tắc biên tập">Nguyên tắc biên tập</a></span><span>© <span id="year"></span> AI Thực Chiến</span></footer>
+<script src="../script.js"></script>
+</body>
+</html>
