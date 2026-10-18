@@ -123,6 +123,8 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
 
 // Site-wide AI reader assistant. Conversation stays in this tab and is not persisted.
 (() => {
+  // Keep non-browser test harnesses and partial DOM environments unaffected.
+  if (!document.body || typeof document.createElement !== 'function' || typeof document.getElementById !== 'function') return;
   if (document.getElementById('reader-ai-chat')) return;
   const apiUrl = 'https://ai-thuc-chien-blog.manhdungub.workers.dev/api/chat';
   const root = document.createElement('div');
