@@ -98,7 +98,8 @@ const filterArticles = () => {
   if (!query && !selectedTopic) {
     articleSearchStatus.textContent = `Hiển thị tất cả ${searchableArticles.length} bài viết.`;
   } else if (visibleCount) {
-    articleSearchStatus.textContent = `${topicPrefix}Hiển thị ${visibleCount}/${searchableArticles.length} bài viết phù hợp${query ? ' với từ khóa tìm kiếm' : ''}.`;
+    const earningNote = selectedTopic === 'earning' ? ' Đây là các bài nền tảng vận hành, không phải cam kết thu nhập.' : '';
+    articleSearchStatus.textContent = `${topicPrefix}Hiển thị ${visibleCount}/${searchableArticles.length} bài viết phù hợp${query ? ' với từ khóa tìm kiếm' : ''}.${earningNote}`;
   } else if (selectedTopic === 'earning' && !query) {
     articleSearchStatus.textContent = 'Chưa có bài chuyên biệt về tạo doanh thu bằng AI. Các bài đang hiển thị sẽ được bổ sung khi có nội dung phù hợp; hãy chọn chủ đề khác để tiếp tục đọc.';
   } else {
