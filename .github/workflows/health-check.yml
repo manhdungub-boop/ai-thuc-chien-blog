@@ -1,6 +1,8 @@
 name: Verify Website Health
 
 on:
+  pull_request:
+    branches: [main]
   workflow_run:
     workflows: ["Deploy Cloudflare Pages", "Deploy Cloudflare Workers"]
     types: [completed]
