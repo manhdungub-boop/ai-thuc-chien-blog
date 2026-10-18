@@ -48,3 +48,47 @@ jobs:
 
       - name: Test homepage discovery for every published article
         run: node scripts/test_homepage_article_coverage.cjs
+
+      - name: Smoke-test live Workers and Pages deployments
+        shell: bash
+        run: |
+          set -euo pipefail
+          hosts=(
+            "https://ai-thuc-chien-blog.manhdungub.workers.dev"
+            "https://ai-thuc-chien-blog.pages.dev"
+          )
+          paths=(
+            "/"
+            "/articles/do-luong-hieu-qua-blog"
+            "/sitemap.xml"
+            "/feed.xml"
+            "/google4e45ddcf8facb122.html"
+          )
+          for host in "${hosts[@]}"; do
+            echo "Checking live host: $host"
+            headers="$(mktemp)"
+            body="$(mktemp)"
+            trap 'rm -f "$headers" "$body"' EXIT
+            curl --fail --silent --show-error --location --max-time 25 -D "$headers" -o "$body" "$host/"
+            for expected in \
+              'X-Content-Type-Options: nosniff' \
+              'X-Frame-Options: DENY' \
+              'Referrer-Policy: strict-origin-when-cross-origin'; do
+              if ! grep -Fqi "$expected" "$headers"; then
+                echo "FAIL: $host is missing security header: $expected"
+                cat "$headers"
+                exit 1
+              fi
+            done
+            for path in "${paths[@]:1}"; do
+              code="$(curl --silent --show-error --location --max-time 25 -o /dev/null -w "%{http_code}" "$host$path")"
+              if [ "$code" != "200" ]; then
+                echo "FAIL: $host$path returned HTTP $code"
+                exit 1
+              fi
+              echo "PASS: $host$path returned HTTP 200"
+            done
+            rm -f "$headers" "$body"
+            trap - EXIT
+          done
+          echo "LIVE SMOKE TEST PASS: both production hosts and key routes responded successfully."
