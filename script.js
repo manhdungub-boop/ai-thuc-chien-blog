@@ -157,6 +157,278 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
 }
 
 
+// Member registration and persistent topic discussion rooms.
+(() => {
+  if (!document.body || typeof document.createElement !== 'function') return;
+  const root = document.getElementById('cong-dong');
+  if (!root) return;
+  const primaryHost = 'ai-thuc-chien-blog.manhdungub.workers.dev';
+  const authPanel = root.querySelector('#community-auth-panel');
+  const memberPanel = root.querySelector('#community-member-panel');
+  const authForm = root.querySelector('#community-auth-form');
+  const authTitle = root.querySelector('#community-auth-title');
+  const authDescription = root.querySelector('#community-auth-description');
+  const authSubmit = root.querySelector('#community-auth-submit');
+  const authStatus = root.querySelector('#community-auth-status');
+  const switchCopy = root.querySelector('#community-switch-copy');
+  const switchModeButton = root.querySelector('#community-switch-mode');
+  const usernameWrap = root.querySelector('#community-username-wrap');
+  const usernameInput = root.querySelector('#community-username');
+  const displayWrap = root.querySelector('#community-display-wrap');
+  const displayInput = root.querySelector('#community-display-name');
+  const emailInput = root.querySelector('#community-email');
+  const passwordInput = root.querySelector('#community-password');
+  const memberName = root.querySelector('#community-member-name');
+  const memberStatus = root.querySelector('#community-member-status');
+  const logoutButton = root.querySelector('#community-logout');
+  const roomTitle = root.querySelector('#community-room-title');
+  const roomDescription = root.querySelector('#community-room-description');
+  const roomTabs = Array.from(root.querySelectorAll('[data-community-topic]'));
+  const loginPrompt = root.querySelector('#community-login-prompt');
+  const messageList = root.querySelector('#community-messages');
+  const roomStatus = root.querySelector('#community-room-status');
+  const chatForm = root.querySelector('#community-chat-form');
+  const messageInput = root.querySelector('#community-message-input');
+  const sendButton = root.querySelector('#community-send');
+  const roomInfo = {
+    tools: { title: 'Công cụ AI', description: 'Hỏi đáp và chia sẻ cách chọn, sử dụng công cụ AI.' },
+    automation: { title: 'Tự động hóa', description: 'Trao đổi workflow, tích hợp ứng dụng và xử lý lỗi.' },
+    content: { title: 'AI sáng tạo', description: 'Chia sẻ prompt, quy trình viết và kiểm chứng nội dung.' },
+    earning: { title: 'AI kiếm tiền', description: 'Thảo luận thử nghiệm mô hình, đo nhu cầu và hiệu quả thực tế.' }
+  };
+  let authMode = 'register';
+  let currentMember = null;
+  let currentTopic = 'tools';
+  let sending = false;
+  let loading = false;
+
+  const setStatus = (node, text, kind = '') => {
+    if (!node) return;
+    node.textContent = text || '';
+    node.dataset.kind = kind;
+  };
+  const api = async (path, options = {}) => {
+    const response = await fetch(`/api/community${path}`, {
+      credentials: 'same-origin',
+      ...options,
+      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }
+    });
+    let payload = {};
+    try { payload = await response.json(); } catch (_error) { /* Keep a safe fallback for non-JSON responses. */ }
+    if (!response.ok) {
+      const error = new Error(payload.error || `Yêu cầu thất bại (${response.status}).`);
+      error.status = response.status;
+      throw error;
+    }
+    return payload;
+  };
+  const setAuthMode = (mode) => {
+    authMode = mode;
+    const registering = mode === 'register';
+    authTitle.textContent = registering ? 'Tham gia cộng đồng' : 'Chào mừng trở lại';
+    authDescription.textContent = registering ? 'Đăng ký miễn phí để tham gia các phòng thảo luận theo chủ đề.' : 'Đăng nhập để tiếp tục các cuộc thảo luận của bạn.';
+    usernameWrap.hidden = !registering;
+    usernameInput.hidden = !registering;
+    usernameInput.required = registering;
+    displayWrap.hidden = !registering;
+    displayInput.hidden = !registering;
+    displayInput.required = false;
+    passwordInput.autocomplete = registering ? 'new-password' : 'current-password';
+    passwordInput.minLength = registering ? 10 : 1;
+    authSubmit.innerHTML = registering ? 'Đăng ký thành viên <span>→</span>' : 'Đăng nhập <span>→</span>';
+    switchCopy.textContent = registering ? 'Đã có tài khoản?' : 'Chưa có tài khoản?';
+    switchModeButton.textContent = registering ? 'Đăng nhập' : 'Đăng ký miễn phí';
+    setStatus(authStatus, '');
+  };
+  const showMember = (member) => {
+    currentMember = member || null;
+    authPanel.hidden = Boolean(currentMember);
+    memberPanel.hidden = !currentMember;
+    loginPrompt.hidden = Boolean(currentMember);
+    chatForm.hidden = !currentMember;
+    if (currentMember) {
+      memberName.textContent = `${currentMember.displayName || currentMember.username} (@${currentMember.username})`;
+      setStatus(authStatus, '');
+      setStatus(memberStatus, '');
+    }
+  };
+  const formatDate = (value) => {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '' : date.toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  };
+  const renderMessages = (messages) => {
+    messageList.replaceChildren();
+    if (!messages.length) {
+      const empty = document.createElement('p');
+      empty.className = 'community-empty';
+      empty.textContent = 'Chưa có tin nhắn trong phòng này. Hãy là người mở đầu cuộc trò chuyện nhé!';
+      messageList.appendChild(empty);
+      return;
+    }
+    messages.forEach((message) => {
+      const item = document.createElement('article');
+      item.className = `community-message${message.own ? ' own' : ''}`;
+      const meta = document.createElement('div');
+      meta.className = 'community-message-meta';
+      const author = document.createElement('strong');
+      author.textContent = message.displayName || message.username || 'Thành viên';
+      const time = document.createElement('time');
+      time.textContent = formatDate(message.createdAt);
+      if (message.createdAt) time.dateTime = message.createdAt;
+      meta.append(author, time);
+      const body = document.createElement('p');
+      body.textContent = message.body;
+      item.append(meta, body);
+      if (message.own) {
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'community-delete-message';
+        remove.textContent = 'Xóa tin nhắn của tôi';
+        remove.addEventListener('click', async () => {
+          if (!window.confirm('Bạn muốn xóa tin nhắn này?')) return;
+          remove.disabled = true;
+          try {
+            await api(`/messages/${encodeURIComponent(message.id)}`, { method: 'DELETE' });
+            await loadMessages();
+          } catch (error) {
+            setStatus(roomStatus, error.message, 'error');
+            remove.disabled = false;
+          }
+        });
+        item.appendChild(remove);
+      }
+      messageList.appendChild(item);
+    });
+    messageList.scrollTop = messageList.scrollHeight;
+  };
+  async function loadMessages() {
+    if (!currentMember || loading) return;
+    loading = true;
+    try {
+      const payload = await api(`/messages?topic=${encodeURIComponent(currentTopic)}`, { method: 'GET', headers: {} });
+      renderMessages(payload.messages || []);
+      setStatus(roomStatus, 'Đã cập nhật tin nhắn. Phòng tự làm mới khoảng 15 giây khi bạn đang xem.', 'success');
+    } catch (error) {
+      if (error.status === 401) {
+        showMember(null);
+        setStatus(roomStatus, 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.', 'error');
+      } else {
+        setStatus(roomStatus, error.message, 'error');
+      }
+    } finally {
+      loading = false;
+    }
+  }
+  const selectTopic = (topic) => {
+    if (!roomInfo[topic]) return;
+    currentTopic = topic;
+    roomTabs.forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.communityTopic === topic)));
+    roomTitle.textContent = roomInfo[topic].title;
+    roomDescription.textContent = roomInfo[topic].description;
+    setStatus(roomStatus, '');
+    if (currentMember) loadMessages();
+    else {
+      messageList.replaceChildren();
+      const prompt = document.createElement('p');
+      prompt.className = 'community-empty';
+      prompt.textContent = 'Đăng nhập để xem và tham gia cuộc thảo luận trong phòng này.';
+      messageList.appendChild(prompt);
+    }
+  };
+
+  if (window.location.hostname !== primaryHost) {
+    authPanel.hidden = true;
+    memberPanel.hidden = true;
+    loginPrompt.hidden = true;
+    chatForm.hidden = true;
+    const link = document.createElement('a');
+    link.href = `https://${primaryHost}/#cong-dong`;
+    link.textContent = 'Mở cộng đồng trên website chính';
+    link.className = 'community-primary-link';
+    messageList.replaceChildren();
+    const note = document.createElement('p');
+    note.className = 'community-empty';
+    note.textContent = 'Để bảo vệ phiên đăng nhập, hãy sử dụng tên miền chính của blog.';
+    messageList.append(note, link);
+    return;
+  }
+
+  switchModeButton.addEventListener('click', () => setAuthMode(authMode === 'register' ? 'login' : 'register'));
+  authForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    authSubmit.disabled = true;
+    setStatus(authStatus, authMode === 'register' ? 'Đang tạo tài khoản an toàn…' : 'Đang đăng nhập…');
+    const payload = { email: emailInput.value.trim(), password: passwordInput.value };
+    if (authMode === 'register') {
+      payload.username = usernameInput.value.trim().toLowerCase();
+      payload.displayName = displayInput.value.trim() || payload.username;
+    }
+    try {
+      const result = await api(authMode === 'register' ? '/register' : '/login', { method: 'POST', body: JSON.stringify(payload) });
+      showMember(result.member);
+      passwordInput.value = '';
+      setStatus(roomStatus, 'Đăng nhập thành công. Đang tải phòng thảo luận…', 'success');
+      await loadMessages();
+    } catch (error) {
+      setStatus(authStatus, error.message, 'error');
+    } finally {
+      authSubmit.disabled = false;
+    }
+  });
+  logoutButton.addEventListener('click', async () => {
+    logoutButton.disabled = true;
+    try {
+      await api('/logout', { method: 'POST', body: '{}' });
+      showMember(null);
+      messageList.replaceChildren();
+      const prompt = document.createElement('p');
+      prompt.className = 'community-empty';
+      prompt.textContent = 'Bạn đã đăng xuất. Đăng nhập để tiếp tục thảo luận.';
+      messageList.appendChild(prompt);
+      setStatus(roomStatus, 'Bạn đã đăng xuất.', 'success');
+    } catch (error) {
+      setStatus(memberStatus, error.message, 'error');
+    } finally {
+      logoutButton.disabled = false;
+    }
+  });
+  roomTabs.forEach((button) => button.addEventListener('click', () => selectTopic(button.dataset.communityTopic)));
+  chatForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const body = messageInput.value.trim();
+    if (!body || sending || !currentMember) return;
+    sending = true;
+    sendButton.disabled = true;
+    setStatus(roomStatus, 'Đang gửi tin nhắn…');
+    try {
+      await api('/messages', { method: 'POST', body: JSON.stringify({ topic: currentTopic, body }) });
+      messageInput.value = '';
+      await loadMessages();
+      messageInput.focus();
+    } catch (error) {
+      setStatus(roomStatus, error.message, 'error');
+    } finally {
+      sending = false;
+      sendButton.disabled = false;
+    }
+  });
+
+  setAuthMode('register');
+  selectTopic('tools');
+  api('/me', { method: 'GET', headers: {} }).then((result) => {
+    showMember(result.member);
+    if (result.member) loadMessages();
+  }).catch((error) => {
+    setStatus(authStatus, error.status === 503 ? 'Cộng đồng đang chờ cấu hình cơ sở dữ liệu. Tài khoản và tin nhắn chưa thể lưu cho đến khi quản trị viên hoàn tất thiết lập.' : error.message, 'error');
+    authSubmit.disabled = error.status === 503;
+    switchModeButton.disabled = error.status === 503;
+    roomTabs.forEach((button) => { button.disabled = error.status === 503; });
+  });
+  window.setInterval(() => {
+    if (currentMember && document.visibilityState === 'visible') loadMessages();
+  }, 15000);
+})();
+
 // Site-wide AI reader assistant. Conversation stays in this tab and is not persisted.
 (() => {
   // Keep non-browser test harnesses and partial DOM environments unaffected.

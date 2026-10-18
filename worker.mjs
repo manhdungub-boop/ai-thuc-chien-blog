@@ -175,6 +175,229 @@ async function handleChat(request, env) {
   }
 }
 
+const COMMUNITY_ALLOWED_ORIGINS = new Set([
+  "https://ai-thuc-chien-blog.manhdungub.workers.dev",
+  "https://ai-thuc-chien-blog.pages.dev",
+]);
+const COMMUNITY_TOPICS = Object.freeze({
+  tools: "Công cụ AI",
+  automation: "Tự động hóa",
+  content: "AI sáng tạo",
+  earning: "AI kiếm tiền",
+});
+const COMMUNITY_SESSION_COOKIE = "__Host-ai_community";
+const COMMUNITY_SESSION_SECONDS = 60 * 60 * 24 * 30;
+const COMMUNITY_PASSWORD_ITERATIONS = 210000;
+const COMMUNITY_ENCODER = new TextEncoder();
+
+function communityJson(data, status, request, extraHeaders = {}) {
+  const headers = new Headers({
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "X-Content-Type-Options": "nosniff",
+    ...extraHeaders,
+  });
+  const origin = request.headers.get("Origin");
+  if (origin && COMMUNITY_ALLOWED_ORIGINS.has(origin)) {
+    headers.set("Access-Control-Allow-Origin", origin);
+    headers.set("Access-Control-Allow-Credentials", "true");
+    headers.set("Vary", "Origin");
+    headers.set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+    headers.set("Access-Control-Allow-Headers", "Content-Type");
+    headers.set("Access-Control-Max-Age", "86400");
+  }
+  return new Response(JSON.stringify(data), { status, headers });
+}
+function communityCookie(token, maxAge = COMMUNITY_SESSION_SECONDS) {
+  return `${COMMUNITY_SESSION_COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
+}
+function readCommunityCookie(request) {
+  const cookies = request.headers.get("Cookie") || "";
+  const prefix = `${COMMUNITY_SESSION_COOKIE}=`;
+  const item = cookies.split(";").map((value) => value.trim()).find((value) => value.startsWith(prefix));
+  return item ? item.slice(prefix.length) : "";
+}
+function bytesToBase64Url(bytes) {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+function base64UrlToBytes(value) {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const binary = atob(normalized + "=".repeat((4 - normalized.length % 4) % 4));
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+async function sha256Base64Url(value) {
+  return bytesToBase64Url(new Uint8Array(await crypto.subtle.digest("SHA-256", COMMUNITY_ENCODER.encode(value))));
+}
+async function hashCommunityPassword(password, saltBytes) {
+  const key = await crypto.subtle.importKey("raw", COMMUNITY_ENCODER.encode(password), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", salt: saltBytes, iterations: COMMUNITY_PASSWORD_ITERATIONS, hash: "SHA-256" }, key, 256);
+  return bytesToBase64Url(new Uint8Array(bits));
+}
+function safeCommunityMember(row) {
+  return row ? { id: row.id, username: row.username, displayName: row.display_name, createdAt: row.created_at } : null;
+}
+async function communityRateLimit(db, bucket, limit, windowMs) {
+  const now = Date.now();
+  const windowStart = Math.floor(now / windowMs) * windowMs;
+  await db.prepare(`INSERT INTO community_rate_limits (bucket, count, window_start) VALUES (?, 1, ?)
+    ON CONFLICT(bucket) DO UPDATE SET count = CASE WHEN community_rate_limits.window_start = excluded.window_start THEN community_rate_limits.count + 1 ELSE 1 END,
+    window_start = excluded.window_start`).bind(bucket, windowStart).run();
+  const row = await db.prepare("SELECT count FROM community_rate_limits WHERE bucket = ?").bind(bucket).first();
+  return Number(row?.count || 0) <= limit;
+}
+async function communityMemberFromRequest(request, db) {
+  const token = readCommunityCookie(request);
+  if (!token || token.length > 200) return null;
+  const tokenHash = await sha256Base64Url(token);
+  const now = new Date().toISOString();
+  return db.prepare(`SELECT m.id, m.username, m.display_name, m.created_at
+    FROM community_sessions s JOIN community_members m ON m.id = s.member_id
+    WHERE s.token_hash = ? AND s.expires_at > ? LIMIT 1`).bind(tokenHash, now).first();
+}
+async function createCommunitySession(db, memberId) {
+  await db.prepare("DELETE FROM community_sessions WHERE expires_at <= ?").bind(new Date().toISOString()).run();
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  const token = bytesToBase64Url(bytes);
+  const tokenHash = await sha256Base64Url(token);
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + COMMUNITY_SESSION_SECONDS * 1000).toISOString();
+  await db.prepare("INSERT INTO community_sessions (id, member_id, token_hash, created_at, expires_at) VALUES (?, ?, ?, ?, ?)")
+    .bind(crypto.randomUUID(), memberId, tokenHash, now.toISOString(), expiresAt).run();
+  return token;
+}
+async function readJsonPayload(request, maxBytes = 6000) {
+  const length = Number(request.headers.get("Content-Length") || 0);
+  if (length > maxBytes) return { ok: false, status: 413, error: "Nội dung gửi quá lớn." };
+  const raw = await request.text();
+  if (raw.length > maxBytes) return { ok: false, status: 413, error: "Nội dung gửi quá lớn." };
+  try {
+    const value = JSON.parse(raw);
+    if (!value || typeof value !== "object" || Array.isArray(value)) return { ok: false, status: 400, error: "Dữ liệu gửi không hợp lệ." };
+    return { ok: true, value };
+  } catch (_error) { return { ok: false, status: 400, error: "Dữ liệu gửi không hợp lệ." }; }
+}
+async function handleCommunityApi(request, env) {
+  const origin = request.headers.get("Origin");
+  if (origin && !COMMUNITY_ALLOWED_ORIGINS.has(origin)) return communityJson({ error: "Nguồn yêu cầu không được phép." }, 403, request);
+  if (request.method === "OPTIONS") return communityJson({ ok: true }, 200, request);
+  if (!env.DB || typeof env.DB.prepare !== "function") {
+    return communityJson({ error: "Cộng đồng chưa được cấu hình cơ sở dữ liệu. Quản trị viên cần hoàn tất thiết lập D1." }, 503, request);
+  }
+  const url = new URL(request.url);
+  const route = url.pathname.replace(/^\/api\/community\/?/, "");
+  const db = env.DB;
+  const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+  const now = new Date().toISOString();
+
+  try {
+    if (route === "register" && request.method === "POST") {
+      const parsed = await readJsonPayload(request);
+      if (!parsed.ok) return communityJson({ error: parsed.error }, parsed.status, request);
+      const payload = parsed.value;
+      const username = String(payload.username || "").trim().toLowerCase();
+      const displayName = String(payload.displayName || payload.username || "").trim();
+      const email = String(payload.email || "").trim().toLowerCase();
+      const password = String(payload.password || "");
+      if (!/^[a-z0-9_]{3,24}$/.test(username)) return communityJson({ error: "Tên thành viên cần 3–24 ký tự: chữ thường, số hoặc dấu gạch dưới." }, 400, request);
+      if (displayName.length < 2 || displayName.length > 40) return communityJson({ error: "Tên hiển thị cần từ 2 đến 40 ký tự." }, 400, request);
+      if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return communityJson({ error: "Vui lòng nhập email hợp lệ." }, 400, request);
+      if (password.length < 10 || password.length > 128) return communityJson({ error: "Mật khẩu cần từ 10 đến 128 ký tự." }, 400, request);
+      const ipHash = await sha256Base64Url(ip);
+      if (!await communityRateLimit(db, `register:${ipHash}`, 5, 60 * 60 * 1000)) return communityJson({ error: "Bạn đã thử đăng ký quá nhiều lần. Vui lòng thử lại sau một giờ." }, 429, request);
+      const salt = crypto.getRandomValues(new Uint8Array(16));
+      const passwordHash = await hashCommunityPassword(password, salt);
+      const memberId = crypto.randomUUID();
+      try {
+        await db.prepare(`INSERT INTO community_members (id, username, email, display_name, password_salt, password_hash, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)`).bind(memberId, username, email, displayName, bytesToBase64Url(salt), passwordHash, now).run();
+      } catch (error) {
+        if (/unique|constraint/i.test(String(error?.message || error))) {
+          return communityJson({ error: "Email hoặc tên thành viên đã được sử dụng." }, 409, request);
+        }
+        throw error;
+      }
+      const token = await createCommunitySession(db, memberId);
+      return communityJson({ member: { id: memberId, username, displayName, createdAt: now } }, 201, request, { "Set-Cookie": communityCookie(token) });
+    }
+
+    if (route === "login" && request.method === "POST") {
+      const parsed = await readJsonPayload(request);
+      if (!parsed.ok) return communityJson({ error: parsed.error }, parsed.status, request);
+      const payload = parsed.value;
+      const email = String(payload.email || "").trim().toLowerCase();
+      const password = String(payload.password || "");
+      if (!email || email.length > 254 || !password || password.length > 128) return communityJson({ error: "Vui lòng kiểm tra email và mật khẩu." }, 400, request);
+      const ipHash = await sha256Base64Url(ip);
+      const emailHash = await sha256Base64Url(email);
+      if (!await communityRateLimit(db, `login-ip:${ipHash}`, 20, 15 * 60 * 1000) || !await communityRateLimit(db, `login-account:${emailHash}:${ipHash}`, 8, 15 * 60 * 1000)) {
+        return communityJson({ error: "Bạn đăng nhập quá nhiều lần. Vui lòng thử lại sau ít phút." }, 429, request);
+      }
+      const row = await db.prepare("SELECT id, username, email, display_name, password_salt, password_hash, created_at FROM community_members WHERE email = ? LIMIT 1").bind(email).first();
+      let valid = false;
+      if (row) {
+        try { valid = (await hashCommunityPassword(password, base64UrlToBytes(row.password_salt))) === row.password_hash; } catch (_error) { valid = false; }
+      }
+      if (!valid) return communityJson({ error: "Email hoặc mật khẩu chưa chính xác." }, 401, request);
+      const token = await createCommunitySession(db, row.id);
+      return communityJson({ member: safeCommunityMember(row) }, 200, request, { "Set-Cookie": communityCookie(token) });
+    }
+
+    if (route === "logout" && request.method === "POST") {
+      const token = readCommunityCookie(request);
+      if (token) await db.prepare("DELETE FROM community_sessions WHERE token_hash = ?").bind(await sha256Base64Url(token)).run();
+      return communityJson({ ok: true }, 200, request, { "Set-Cookie": communityCookie("", 0) });
+    }
+
+    if (route === "me" && request.method === "GET") {
+      const row = await communityMemberFromRequest(request, db);
+      return communityJson({ member: safeCommunityMember(row) }, 200, request);
+    }
+
+    if (route === "messages" && request.method === "GET") {
+      const member = await communityMemberFromRequest(request, db);
+      if (!member) return communityJson({ error: "Hãy đăng nhập để xem phòng thảo luận." }, 401, request);
+      const topic = String(url.searchParams.get("topic") || "");
+      if (!Object.hasOwn(COMMUNITY_TOPICS, topic)) return communityJson({ error: "Chủ đề thảo luận không hợp lệ." }, 400, request);
+      const result = await db.prepare(`SELECT cm.id, cm.topic, cm.body, cm.created_at, m.username, m.display_name, cm.member_id
+        FROM community_messages cm JOIN community_members m ON m.id = cm.member_id
+        WHERE cm.topic = ? ORDER BY cm.created_at DESC LIMIT 50`).bind(topic).all();
+      const messages = (result.results || []).reverse().map((row) => ({ id: row.id, topic: row.topic, body: row.body, createdAt: row.created_at, username: row.username, displayName: row.display_name, own: row.member_id === member.id }));
+      return communityJson({ topic, topicLabel: COMMUNITY_TOPICS[topic], messages }, 200, request);
+    }
+
+    if (route === "messages" && request.method === "POST") {
+      const member = await communityMemberFromRequest(request, db);
+      if (!member) return communityJson({ error: "Hãy đăng nhập trước khi gửi tin nhắn." }, 401, request);
+      const parsed = await readJsonPayload(request, 3000);
+      if (!parsed.ok) return communityJson({ error: parsed.error }, parsed.status, request);
+      const payload = parsed.value;
+      const topic = String(payload.topic || "");
+      const body = String(payload.body || "").trim();
+      if (!Object.hasOwn(COMMUNITY_TOPICS, topic)) return communityJson({ error: "Chủ đề thảo luận không hợp lệ." }, 400, request);
+      if (!body || body.length > 800) return communityJson({ error: "Tin nhắn cần từ 1 đến 800 ký tự." }, 400, request);
+      if (!await communityRateLimit(db, `message:${member.id}`, 8, 60 * 1000)) return communityJson({ error: "Bạn đang gửi tin quá nhanh. Hãy chờ một phút rồi thử lại." }, 429, request);
+      const id = crypto.randomUUID();
+      await db.prepare("INSERT INTO community_messages (id, topic, member_id, body, created_at) VALUES (?, ?, ?, ?, ?)").bind(id, topic, member.id, body, now).run();
+      return communityJson({ message: { id, topic, body, createdAt: now, username: member.username, displayName: member.display_name, own: true } }, 201, request);
+    }
+
+    const deleteMatch = route.match(/^messages\/([0-9a-f-]{36})$/i);
+    if (deleteMatch && request.method === "DELETE") {
+      const member = await communityMemberFromRequest(request, db);
+      if (!member) return communityJson({ error: "Hãy đăng nhập để thực hiện thao tác này." }, 401, request);
+      const result = await db.prepare("DELETE FROM community_messages WHERE id = ? AND member_id = ?").bind(deleteMatch[1], member.id).run();
+      if (!result.meta?.changes) return communityJson({ error: "Không tìm thấy tin nhắn hoặc bạn không có quyền xóa." }, 404, request);
+      return communityJson({ ok: true }, 200, request);
+    }
+
+    return communityJson({ error: "Không tìm thấy API cộng đồng." }, 404, request);
+  } catch (_error) {
+    return communityJson({ error: "Tạm thời không xử lý được yêu cầu cộng đồng. Vui lòng thử lại sau." }, 500, request);
+  }
+}
+
 function resolveAssetRequest(request) {
   const url = new URL(request.url);
   // With html_handling="none", explicitly map the site root to its index file.
@@ -197,8 +420,10 @@ function resolveAssetRequest(request) {
 export default {
   async fetch(request, env) {
     try {
-      if (new URL(request.url).pathname === "/api/chat") {
-        return withSecurityHeaders(await handleChat(request, env), request);
+      const pathname = new URL(request.url).pathname;
+      if (pathname === "/api/chat") return withSecurityHeaders(await handleChat(request, env), request);
+      if (pathname === "/api/community" || pathname.startsWith("/api/community/")) {
+        return withSecurityHeaders(await handleCommunityApi(request, env), request);
       }
       return withSecurityHeaders(
         await env.ASSETS.fetch(resolveAssetRequest(request)),
