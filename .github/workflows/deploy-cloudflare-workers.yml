@@ -18,6 +18,8 @@ on:
       - "404.html"
       - "google4e45ddcf8facb122.html"
       - "wrangler.jsonc"
+      - "worker.mjs"
+      - "scripts/test_worker_security_headers.cjs"
       - ".github/workflows/deploy-cloudflare-workers.yml"
   workflow_dispatch:
 
@@ -50,14 +52,19 @@ jobs:
           assert config.get("name") == "ai-thuc-chien-blog", "Refusing to deploy to an unexpected Worker"
           assert config.get("account_id") == "92cf091bbac8b4879ec65feb30b4715b", "Unexpected Cloudflare account"
           assert config.get("assets", {}).get("directory") == "./dist", "Worker assets must come from dist/"
-          assert "main" not in config, "This site should remain static-only"
+          assert config.get("main") == "./worker.mjs", "Unexpected Worker entrypoint"
+          assert config.get("assets", {}).get("binding") == "ASSETS", "Static asset binding must be ASSETS"
+          assert config.get("assets", {}).get("run_worker_first") is True, "Worker wrapper must run before static asset serving"
+          assert Path("worker.mjs").is_file(), "Worker entrypoint file is missing"
           assert Path("dist/_headers").is_file(), "Security headers file was not packaged"
           assert Path("dist/google4e45ddcf8facb122.html").is_file(), "Search Console verification file was not packaged"
           assert list(Path("dist/articles").glob("*.html")), "No article pages were packaged"
           for required in ["X-Content-Type-Options: nosniff", "X-Frame-Options: DENY", "Referrer-Policy: strict-origin-when-cross-origin", "Permissions-Policy:", "Strict-Transport-Security: max-age=31536000"]:
               assert required in Path("dist/_headers").read_text(encoding="utf-8"), f"Missing expected header rule: {required}"
-          print("WORKER ASSET PACKAGE PASS: static-only config, Search Console file, articles, and _headers")
+          print("WORKER ASSET PACKAGE PASS: wrapper config, Search Console file, articles, and _headers")
           PY
+          node --check worker.mjs
+          node scripts/test_worker_security_headers.cjs
 
       - name: Check for dedicated Worker deployment token
         id: token

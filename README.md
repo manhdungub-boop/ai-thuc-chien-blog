@@ -18,7 +18,9 @@ Mở index.html trong trình duyệt. Website không cần bước build. Google
 - index.html: trang chủ.
 - ve-chung-toi.html: mục tiêu, nguyên tắc biên tập và cách gửi phản hồi.
 - styles.css: giao diện responsive và hiệu ứng.
-- script.js: menu di động, hiệu ứng cuộn và tìm kiếm bài viết theo từ khóa (hỗ trợ tìm tiếng Việt không dấu).
+- script.js: menu di động, hiệu ứng cuộn và tìm kiếm bài viết theo từ khóa (hỗ trợ tìm tiếng Việt không dấu). 
+- worker.mjs: lớp bọc Worker để thêm HTTP security headers cho phản hồi tài sản tĩnh và 404; giữ nguyên body, trạng thái và Content-Type, chỉ gửi HSTS qua HTTPS.
+- scripts/test_worker_security_headers.cjs: kiểm tra header, status/body, header gốc, nhánh 404 và HTTP bằng Request/Response của Node.
 - scripts/test_homepage_search.cjs: kiểm thử hồi quy cho tìm kiếm có/không dấu, chữ Đ hoa, kết quả rỗng và xóa từ khóa; bộ kiểm thử tự lấy thẻ bài viết từ trang chủ nên không khóa vào một số lượng cố định.
 - scripts/test_copy_prompt.cjs: kiểm thử nút sao chép prompt, trạng thái thành công và thông báo dự phòng khi API clipboard không khả dụng.
 - scripts/test_article_navigation.cjs: tự phát hiện toàn bộ tệp bài viết và kiểm tra mục bài viết liên quan, tối thiểu ba liên kết duy nhất, đích tồn tại và bố cục đáp ứng.
@@ -28,9 +30,9 @@ Mở index.html trong trình duyệt. Website không cần bước build. Google
 - feed.xml: RSS 2.0 để người đọc theo dõi bài viết mới.
 - robots.txt: cho phép trình thu thập thông tin truy cập và trỏ đến sitemap.
 - .github/workflows/health-check.yml: kiểm tra HTML/SEO, liên kết nội bộ, dữ liệu sitemap/RSS khớp canonical, tuyến bài viết và tính đồng nhất của các bản triển khai.
-- .github/workflows/deploy-cloudflare-workers.yml: đóng gói các tệp website tĩnh cùng `_headers`, chỉ phát hành Worker khi có token triển khai riêng, rồi xác minh năm header bảo mật và các tuyến quan trọng.
+- .github/workflows/deploy-cloudflare-workers.yml: đóng gói tài sản cùng _headers, kiểm tra Worker wrapper và chỉ phát hành khi có token triển khai riêng; sau triển khai xác minh năm header bảo mật và các tuyến quan trọng.
 - favicon.svg: biểu tượng website.
-- _headers: chính sách HTTP security headers cho Cloudflare Workers Static Assets và Cloudflare Pages; không thay thế việc kiểm tra cấu hình runtime sau triển khai.
+- _headers: chính sách HTTP security headers cho Cloudflare Workers Static Assets và Cloudflare Pages. Worker wrapper bổ sung header tương đương cho phản hồi qua mã Worker; vẫn cần kiểm tra runtime sau triển khai.
 - 404.html: trang thông báo đường dẫn không tồn tại.
 
 ## Triển khai
@@ -39,14 +41,7 @@ Mở index.html trong trình duyệt. Website không cần bước build. Google
 Repository được cấu hình để phục vụ từ nhánh main, thư mục /. Mỗi lần cập nhật lên main, GitHub Pages sẽ tự build lại. Kiểm tra mục Settings → Pages nếu trạng thái build bị lỗi.
 
 ### Cloudflare Workers (bản chính hiện tại)
-Worker đang phục vụ website tĩnh. URL công khai ở phần đầu tài liệu. Quy trình triển khai chuẩn nằm tại [GitHub Actions — Deploy Cloudflare Workers](https://github.com/manhdungub-boop/ai-thuc-chien-blog/actions/workflows/deploy-cloudflare-workers.yml); quy trình đóng gói cả `_headers` để Cloudflare Workers Static Assets áp dụng header trên nội dung tĩnh, đồng thời giữ nguyên kiến trúc không cần Worker entrypoint.
-
-Thiết lập một lần để bật triển khai tự động:
-1. Trong [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens), tạo token phù hợp với quyền chỉnh sửa Workers Scripts trong đúng tài khoản Cloudflare của website. Ưu tiên mẫu **Edit Cloudflare Workers** hoặc token tùy chỉnh giới hạn vào tài khoản này.
-2. Trong [GitHub Actions secrets của repository](https://github.com/manhdungub-boop/ai-thuc-chien-blog/settings/secrets/actions), thêm repository secret tên chính xác `CLOUDFLARE_WORKERS_API_TOKEN` và dán token vào trường Value. Không đưa token vào mã nguồn, issue, log hoặc cuộc trò chuyện.
-3. Mở [Deploy Cloudflare Workers](https://github.com/manhdungub-boop/ai-thuc-chien-blog/actions/workflows/deploy-cloudflare-workers.yml) và chọn **Run workflow** trên nhánh `main` để phát hành và kiểm tra ngay.
-
-Nếu secret chưa có, workflow chỉ kiểm tra gói tĩnh rồi bỏ qua phát hành; Worker live không bị thay đổi. Sau khi phát hành, workflow yêu cầu đủ cả năm header bảo mật và HTTP 200 tại bài viết, sitemap, RSS và tệp xác minh Search Console.
+Worker phục vụ tài sản tĩnh thông qua worker.mjs và binding ASSETS. Cấu hình run_worker_first cho phép lớp bọc áp dụng security headers cho mọi phản hồi tài sản và trang lỗi. Tệp _headers vẫn được giữ để cấu hình tĩnh ở Pages và Assets; Worker wrapper bảo đảm header cũng có mặt trên đường đi mã Worker. Quy trình triển khai chuẩn nằm tại [GitHub Actions — Deploy Cloudflare Workers](https://github.com/manhdungub-boop/ai-thuc-chien-blog/actions/workflows/deploy-cloudflare-workers.yml).
 
 ### Cloudflare Pages
 Có thể kết nối repository tại https://dash.cloudflare.com/ → Workers & Pages → Create → Pages → Connect to Git. Dùng branch main, framework preset None, để trống build command và đặt output directory là dấu chấm. Nếu giao diện báo lỗi GitHub integration, không xóa Worker đang hoạt động; hãy kiểm tra quyền cài đặt ứng dụng Cloudflare trong GitHub trước.

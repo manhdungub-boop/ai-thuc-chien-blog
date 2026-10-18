@@ -7,6 +7,11 @@ on:
       - "sitemap.xml"
       - "feed.xml"
       - "scripts/validate_content_pr.py"
+      - "scripts/test_worker_security_headers.cjs"
+      - "worker.mjs"
+      - "wrangler.jsonc"
+      - ".github/workflows/health-check.yml"
+      - ".github/workflows/deploy-cloudflare-workers.yml"
       - "scripts/test_copy_prompt.cjs"
       - "scripts/test_homepage_search.cjs"
       - "scripts/test_article_navigation.cjs"
@@ -38,6 +43,10 @@ jobs:
         run: node --check script.js
       - name: Test copy-to-clipboard interactions
         run: node scripts/test_copy_prompt.cjs
+      - name: Check Worker syntax
+        run: node --check worker.mjs
+      - name: Test Worker security headers
+        run: node scripts/test_worker_security_headers.cjs
       - name: Test homepage search behavior
         run: node scripts/test_homepage_search.cjs
       - name: Test contextual article navigation

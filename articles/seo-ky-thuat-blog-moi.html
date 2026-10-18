@@ -73,7 +73,7 @@
 <li><code>Permissions-Policy</code> có thể giới hạn các tính năng trình duyệt mà website không sử dụng.</li>
 <li><code>Strict-Transport-Security</code> yêu cầu trình duyệt ưu tiên HTTPS sau khi đã nhận chính sách qua HTTPS. Chỉ bật khi website thực sự sẵn sàng phục vụ HTTPS ổn định.</li>
 </ul>
-<p><strong>Lưu ý quan trọng:</strong> quy tắc trong <code>_headers</code> áp dụng cho phản hồi tài sản tĩnh, không tự động thêm header vào phản hồi do mã Worker tạo ra. Nếu sau này thêm API hoặc logic trả response riêng, cần xử lý và kiểm tra header tại đường đi đó. Sau mỗi lần triển khai, kiểm tra header HTTP trên hostname công khai bằng DevTools hoặc lệnh <code>curl -I</code>; đừng chỉ đọc file cấu hình.</p>
+<p><strong>Lưu ý quan trọng:</strong> quy tắc trong <code>_headers</code> áp dụng cho phản hồi tài sản tĩnh, không tự động thêm header vào phản hồi do mã Worker tạo ra. Vì vậy dự án dùng lớp bọc nhỏ <code>worker.mjs</code> với binding <code>ASSETS</code> và <code>run_worker_first</code> để gắn header trực tiếp sau khi lấy tài sản, đồng thời giữ nguyên mã trạng thái, nội dung và Content-Type. Nếu bổ sung API hoặc logic trả response riêng, cần kiểm tra lại các nhánh response mới. Sau mỗi lần triển khai, kiểm tra header HTTP trên hostname công khai bằng DevTools hoặc lệnh <code>curl -I</code>; đừng chỉ đọc file cấu hình.</p>
 <p><a href="https://developers.cloudflare.com/workers/static-assets/headers/" target="_blank" rel="noopener noreferrer" style="color:var(--mint);text-decoration:underline">Tài liệu Cloudflare Workers — Custom headers cho Static Assets</a>.</p>
 <h2 style="margin-top:36px">7. Checklist trước khi coi website đã sẵn sàng</h2>
 <ul style="padding-left:24px;line-height:2">
