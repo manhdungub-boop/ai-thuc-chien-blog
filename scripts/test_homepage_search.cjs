@@ -58,8 +58,8 @@ assert.equal(tools.hidden, false, 'toolbar should show once the handler is ready
 assert.deepEqual(visibleIndexes(), allIndexes(), 'initial state should show every homepage article');
 assert.equal(status.textContent, `Hiển thị tất cả ${cards.length} bài viết.`);
 
-search('kiem chung');
-assert.deepEqual(visibleIndexes(), [cardIndex('Checklist kiểm chứng nội dung AI')], 'Vietnamese query without diacritics should match');
+search('ra soat nguon');
+assert.deepEqual(visibleIndexes(), [cardIndex('Rà soát nguồn')], 'Vietnamese query without diacritics should match');
 search('ĐO LƯỜNG THỰC TẾ');
 assert.deepEqual(visibleIndexes(), [cardIndex('ĐO LƯỜNG THỰC TẾ')], 'uppercase Đ and diacritics should normalize correctly');
 search('SEO');
