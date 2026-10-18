@@ -27,6 +27,7 @@ Mở index.html trong trình duyệt. Website không cần bước build. Google
 - robots.txt: cho phép trình thu thập thông tin truy cập và trỏ đến sitemap.
 - .github/workflows/health-check.yml: kiểm tra HTML/SEO, liên kết nội bộ, dữ liệu sitemap/RSS khớp canonical, tuyến bài viết và tính đồng nhất của các bản triển khai.
 - favicon.svg: biểu tượng website.
+- _headers: chính sách HTTP security headers cho Cloudflare Workers Static Assets và Cloudflare Pages; không thay thế việc kiểm tra cấu hình runtime sau triển khai.
 - 404.html: trang thông báo đường dẫn không tồn tại.
 
 ## Triển khai
@@ -39,6 +40,10 @@ Worker đang phục vụ website tĩnh. URL công khai ở phần đầu tài li
 
 ### Cloudflare Pages
 Có thể kết nối repository tại https://dash.cloudflare.com/ → Workers & Pages → Create → Pages → Connect to Git. Dùng branch main, framework preset None, để trống build command và đặt output directory là dấu chấm. Nếu giao diện báo lỗi GitHub integration, không xóa Worker đang hoạt động; hãy kiểm tra quyền cài đặt ứng dụng Cloudflare trong GitHub trước.
+
+## Bảo vệ trình duyệt
+
+Tệp `_headers` bật `nosniff`, chống nhúng trang bằng iframe, chính sách referrer giới hạn, vô hiệu hóa một số quyền trình duyệt và HSTS trên HTTPS. Content Security Policy chưa được bật để tránh vô tình chặn script inline, Google Fonts hoặc Cloudflare Web Analytics; chỉ bổ sung sau khi kiểm thử đầy đủ.
 
 ## Kiểm tra sau mỗi lần xuất bản
 

@@ -48,6 +48,17 @@ jobs:
           assert "main" not in worker_config, "This site is static-only; do not add a Worker code entrypoint accidentally"
           print("Worker deployment config PASS: production target and static-only assets")
 
+          header_policy = Path("_headers").read_text(encoding="utf-8")
+          for required_header in (
+              "X-Content-Type-Options: nosniff",
+              "X-Frame-Options: DENY",
+              "Referrer-Policy: strict-origin-when-cross-origin",
+              "Permissions-Policy: camera=(), geolocation=(), microphone=(), payment=()",
+              "Strict-Transport-Security: max-age=31536000",
+          ):
+              assert required_header in header_policy, f"_headers: missing security policy {required_header}"
+          print("SECURITY HEADER POLICY PASS: baseline browser protections are present")
+
           article_paths = sorted(Path("articles").glob("*.html"))
           assert article_paths, "expected at least one article HTML file"
           pages = [Path("index.html"), Path("ve-chung-toi.html"), *article_paths]
