@@ -4,6 +4,7 @@ const SECURITY_HEADERS = Object.freeze({
   "Referrer-Policy": "strict-origin-when-cross-origin",
   "Permissions-Policy": "camera=(), geolocation=(), microphone=(), payment=()",
 });
+
 function withSecurityHeaders(response, request) {
   const headers = new Headers(response.headers);
   for (const [name, value] of Object.entries(SECURITY_HEADERS)) headers.set(name, value);
@@ -11,10 +12,22 @@ function withSecurityHeaders(response, request) {
   else headers.delete("Strict-Transport-Security");
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
+
+function resolveAssetRequest(request) {
+  const url = new URL(request.url);
+  // Canonical article URLs are extensionless, while static files are stored as .html.
+  // Rewrite only article slugs; keep assets and all other routes unchanged.
+  if (/^\/articles\/[a-z0-9-]+$/i.test(url.pathname)) {
+    url.pathname += ".html";
+    return new Request(url, request);
+  }
+  return request;
+}
+
 export default {
   async fetch(request, env) {
     try {
-      return withSecurityHeaders(await env.ASSETS.fetch(request), request);
+      return withSecurityHeaders(await env.ASSETS.fetch(resolveAssetRequest(request)), request);
     } catch (_error) {
       const failure = new Response("Internal Server Error\n", {
         status: 500,
