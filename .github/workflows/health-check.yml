@@ -35,6 +35,9 @@ jobs:
       - name: Test contextual article navigation
         run: node scripts/test_article_navigation.cjs
 
+      - name: Test homepage discovery for every published article
+        run: node scripts/test_homepage_article_coverage.cjs
+
       - name: Validate HTML metadata and sitemap
         run: |
           python - <<'PY'
