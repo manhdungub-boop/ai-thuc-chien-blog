@@ -84,12 +84,14 @@ console.log('PASS: security headers on 200/404/500, root and article routing, as
 const chatRequest = new Request('https://example.test/api/chat', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json', 'Origin': 'https://ai-thuc-chien-blog.manhdungub.workers.dev', 'CF-Connecting-IP': '198.51.100.44' },
-  body: JSON.stringify({ messages: [{ role: 'user', content: 'Tôi nên bắt đầu học AI từ đâu?' }] }),
+  body: JSON.stringify({ messages: [{ role: 'user', content: 'Tôi nên bắt đầu học AI từ đâu?' }], page: { title: 'Bắt đầu với AI', path: '/articles/bat-dau-voi-ai' } }),
 });
 const chat = await worker.fetch(chatRequest, {
   AI: { run: async (model, input) => {
     assert.equal(model, '@cf/meta/llama-3.1-8b-instruct-fast');
     assert.equal(input.messages.at(-1).content, 'Tôi nên bắt đầu học AI từ đâu?');
+    assert.match(input.messages[0].content, /Bắt đầu với AI: hướng dẫn thực hành cho người mới/);
+    assert.match(input.messages[0].content, /tiêu đề=Bắt đầu với AI; đường dẫn=\/articles\/bat-dau-voi-ai/);
     return { response: 'Hãy bắt đầu với một tác vụ nhỏ và kiểm chứng kết quả.' };
   } },
   ASSETS: { fetch: async () => new Response('unexpected asset fetch', { status: 500 }) },
