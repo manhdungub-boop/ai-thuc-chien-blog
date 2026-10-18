@@ -64,7 +64,18 @@
 <h2 style="margin-top:36px">5. Đo lường thay vì phỏng đoán</h2>
 <p>Thiết lập công cụ đo lường trước khi đánh giá tăng trưởng. Với Cloudflare Web Analytics, kiểm tra mã beacon có mặt trên trang, đúng token và được tải trên hostname dự kiến; sau đó mở dashboard, chọn khoảng thời gian phù hợp và xác nhận có lượt xem thực tế. Mã có trong HTML chỉ chứng minh đã cài mã, không chứng minh dữ liệu đã được ghi nhận.</p>
 <p>Ghi nhận đường cơ sở theo tuần: người truy cập, lượt xem, trang được xem, nguồn truy cập và dữ liệu hiệu suất tìm kiếm khi có. Đừng so sánh các khoảng thời gian khác độ dài hoặc kết luận từ một vài lượt truy cập.</p>
-<h2 style="margin-top:36px">6. Checklist trước khi coi website đã sẵn sàng</h2>
+<h2 style="margin-top:36px">6. Thiết lập và xác minh security headers</h2>
+<p>Với website tĩnh chạy bằng Cloudflare Workers Static Assets, có thể đặt tệp văn bản <code>_headers</code> ngay trong thư mục tài sản được triển khai. Cloudflare áp dụng các quy tắc phù hợp lên phản hồi tài sản tĩnh; chỉ việc có tệp trong repository chưa chứng minh bản live đã nhận cấu hình.</p>
+<ul style="padding-left:24px;line-height:2">
+<li><code>X-Content-Type-Options: nosniff</code> giúp trình duyệt không tự diễn giải nội dung thành kiểu MIME khác.</li>
+<li><code>X-Frame-Options: DENY</code> ngăn trang bị nhúng trong frame; chỉ dùng khi website không cần được nhúng hợp lệ vào website khác.</li>
+<li><code>Referrer-Policy</code> kiểm soát thông tin referrer được gửi khi điều hướng sang nơi khác.</li>
+<li><code>Permissions-Policy</code> có thể giới hạn các tính năng trình duyệt mà website không sử dụng.</li>
+<li><code>Strict-Transport-Security</code> yêu cầu trình duyệt ưu tiên HTTPS sau khi đã nhận chính sách qua HTTPS. Chỉ bật khi website thực sự sẵn sàng phục vụ HTTPS ổn định.</li>
+</ul>
+<p><strong>Lưu ý quan trọng:</strong> quy tắc trong <code>_headers</code> áp dụng cho phản hồi tài sản tĩnh, không tự động thêm header vào phản hồi do mã Worker tạo ra. Nếu sau này thêm API hoặc logic trả response riêng, cần xử lý và kiểm tra header tại đường đi đó. Sau mỗi lần triển khai, kiểm tra header HTTP trên hostname công khai bằng DevTools hoặc lệnh <code>curl -I</code>; đừng chỉ đọc file cấu hình.</p>
+<p><a href="https://developers.cloudflare.com/workers/static-assets/headers/" target="_blank" rel="noopener noreferrer" style="color:var(--mint);text-decoration:underline">Tài liệu Cloudflare Workers — Custom headers cho Static Assets</a>.</p>
+<h2 style="margin-top:36px">7. Checklist trước khi coi website đã sẵn sàng</h2>
 <ul style="padding-left:24px;line-height:2">
 <li>Trang chủ và bài viết trả về HTTP 200; trang lỗi trả về nội dung 404 phù hợp.</li>
 <li>Tiêu đề, mô tả, H1, canonical và dữ liệu có cấu trúc được kiểm tra tự động.</li>
@@ -80,6 +91,7 @@
 <li><a href="https://support.google.com/webmasters/answer/9012289" target="_blank" rel="noopener noreferrer" style="color:var(--mint);text-decoration:underline">Google Search Console Help — URL Inspection tool</a>: kiểm tra trạng thái chỉ mục và thử nghiệm URL trực tiếp.</li>
 <li><a href="https://developers.google.com/search/docs/essentials/technical" target="_blank" rel="noopener noreferrer" style="color:var(--mint);text-decoration:underline">Google Search Central — Technical requirements</a>: yêu cầu kỹ thuật cơ bản để đủ điều kiện xuất hiện trên Google.</li>
 <li><a href="https://developers.cloudflare.com/web-analytics/about/" target="_blank" rel="noopener noreferrer" style="color:var(--mint);text-decoration:underline">Cloudflare — Web Analytics</a>: cách hoạt động của công cụ đo lường website.</li>
+<li><a href="https://developers.cloudflare.com/workers/static-assets/headers/" target="_blank" rel="noopener noreferrer" style="color:var(--mint);text-decoration:underline">Cloudflare Workers — Headers cho Static Assets</a>: cú pháp <code>_headers</code> và giới hạn áp dụng.</li>
 </ul>
 <p style="color:var(--muted);font-size:13px">Tài liệu được tham khảo ngày 18/10/2026. Các chỉ số và trạng thái tìm kiếm có thể cập nhật chậm; luôn ưu tiên trạng thái mới nhất trong dashboard của chính website.</p>
 <div style="border-top:1px solid var(--line);margin-top:38px;padding-top:22px"><p><strong>Bước tiếp theo:</strong> chạy checklist này trên bản chính, lưu kết quả và xử lý từng lỗi có bằng chứng.</p><a class="article-link" href="../#bai-viet" style="max-width:260px">← Quay lại thư viện bài viết <span>→</span></a></div>
