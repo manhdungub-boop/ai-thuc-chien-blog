@@ -5,8 +5,8 @@
 2. **Nghiên cứu:** ưu tiên tài liệu chính thức và nguồn gốc; đặt liên kết cạnh nhận định liên quan.
 3. **Soạn nháp:** vấn đề → từng bước thực hiện → ví dụ → giới hạn/rủi ro → checklist.
 4. **Kiểm chứng:** mở nguồn, kiểm tra phiên bản công cụ; phân biệt dữ kiện, suy luận và điều chưa xác minh.
-5. **Tạo pull request:** thêm bài HTML; khi thêm bài, cập nhật `sitemap.xml` và `feed.xml`; hoàn thành checklist pull request.
-6. **Kiểm tra tự động:** `Content Quality Gate` rà soát metadata, H1, canonical, JSON-LD, nguồn HTTPS, văn bản hiển thị và sự hiện diện trong sitemap/RSS.
+5. **Tạo pull request:** thêm bài HTML; cập nhật thẻ bài viết trên trang chủ, `sitemap.xml`, `feed.xml` và mục bài viết liên quan; hoàn thành checklist pull request.
+6. **Kiểm tra tự động:** `Content Quality Gate` rà soát metadata, H1, canonical, JSON-LD, nguồn HTTPS, văn bản hiển thị và sự hiện diện trong sitemap/RSS. `Verify Website Health` tự phát hiện các tệp `articles/*.html`, kiểm tra điều hướng, xác nhận sitemap khớp tất cả canonical và RSS khớp toàn bộ bài viết; không khóa theo số lượng bài cố định.
 7. **Duyệt người thật:** đọc toàn bài trên điện thoại, thử liên kết, kiểm tra quyền sử dụng hình ảnh và quyết định có merge hay không. CI xanh không có nghĩa mọi thông tin đều đúng.
 8. **Xuất bản:** chỉ merge vào `main` sau khi duyệt; sau triển khai, kiểm tra URL công khai, HTTP, sitemap/RSS và các bản dự phòng.
 9. **Theo dõi:** chỉ báo trạng thái lập chỉ mục và analytics khi đã nhìn thấy bằng chứng trong dashboard tương ứng.
