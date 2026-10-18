@@ -95,3 +95,12 @@ jobs:
             trap - EXIT
           done
           echo "LIVE SMOKE TEST PASS: both production hosts and key routes responded successfully."
+
+      - name: Verify deployed article-library and sitemap coverage
+        if: github.event_name != 'pull_request'
+        env:
+          WORKERS_URL: https://ai-thuc-chien-blog.manhdungub.workers.dev
+          PAGES_URL: https://ai-thuc-chien-blog.pages.dev
+        run: |
+          SITE_URL="$WORKERS_URL" node scripts/test_deployed_routes.cjs
+          SITE_URL="$PAGES_URL" node scripts/test_deployed_routes.cjs
