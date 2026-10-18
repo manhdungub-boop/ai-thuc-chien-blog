@@ -1,0 +1,9 @@
+{
+  "name": "ai-thuc-chien-blog",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build-static.mjs",
+    "test:worker": "node scripts/test_worker_security_headers.cjs"
+  }
+}

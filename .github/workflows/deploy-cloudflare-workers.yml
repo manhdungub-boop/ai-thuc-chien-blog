@@ -18,6 +18,9 @@ on:
       - "404.html"
       - "google4e45ddcf8facb122.html"
       - "wrangler.jsonc"
+      - "worker.mjs"
+      - "package.json"
+      - "scripts/build-static.mjs"
       - ".github/workflows/deploy-cloudflare-workers.yml"
   workflow_dispatch:
 
@@ -41,16 +44,18 @@ jobs:
           set -euo pipefail
           rm -rf dist
           mkdir -p dist/articles
-          cp index.html ve-chung-toi.html feed.xml styles.css script.js robots.txt sitemap.xml favicon.svg 404.html google4e45ddcf8facb122.html _headers dist/
-          cp articles/*.html dist/articles/
+          npm run build
           python - <<'PY'
           import json
           from pathlib import Path
           config = json.loads(Path("wrangler.jsonc").read_text(encoding="utf-8"))
           assert config.get("name") == "ai-thuc-chien-blog", "Refusing to deploy to an unexpected Worker"
           assert config.get("account_id") == "92cf091bbac8b4879ec65feb30b4715b", "Unexpected Cloudflare account"
+          assert config.get("main") == "./worker.mjs", "Worker entrypoint must be the reviewed security wrapper"
           assert config.get("assets", {}).get("directory") == "./dist", "Worker assets must come from dist/"
-          assert "main" not in config, "This site should remain static-only"
+          assert config.get("assets", {}).get("binding") == "ASSETS", "Worker must use the ASSETS binding"
+          assert config.get("assets", {}).get("run_worker_first") is True, "Worker must run before static assets"
+          assert Path("worker.mjs").is_file(), "Worker entrypoint is missing"
           assert Path("dist/_headers").is_file(), "Security headers file was not packaged"
           assert Path("dist/google4e45ddcf8facb122.html").is_file(), "Search Console verification file was not packaged"
           assert list(Path("dist/articles").glob("*.html")), "No article pages were packaged"

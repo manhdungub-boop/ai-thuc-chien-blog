@@ -20,6 +20,9 @@ Mở index.html trong trình duyệt. Website không cần bước build. Google
 - styles.css: giao diện responsive và hiệu ứng.
 - script.js: menu di động, hiệu ứng cuộn và tìm kiếm bài viết theo từ khóa (hỗ trợ tìm tiếng Việt không dấu).
 - scripts/test_homepage_search.cjs: kiểm thử hồi quy cho tìm kiếm có/không dấu, chữ Đ hoa, kết quả rỗng và xóa từ khóa; bộ kiểm thử tự lấy thẻ bài viết từ trang chủ nên không khóa vào một số lượng cố định.
+- worker.mjs: lớp phản hồi HTTP cho Worker chính, thêm năm security headers mà vẫn giữ status/body/header của tài sản.
+- scripts/build-static.mjs: build tĩnh lặp lại được cho Cloudflare Workers Builds và GitHub Actions. scripts/test_worker_security_headers.cjs kiểm tra response 200/404.
+- package.json: lệnh npm run build tạo dist/ để Workers Builds triển khai cùng assets.
 - scripts/test_copy_prompt.cjs: kiểm thử nút sao chép prompt, trạng thái thành công và thông báo dự phòng khi API clipboard không khả dụng.
 - scripts/test_article_navigation.cjs: tự phát hiện toàn bộ tệp bài viết và kiểm tra mục bài viết liên quan, tối thiểu ba liên kết duy nhất, đích tồn tại và bố cục đáp ứng.
 - scripts/test_homepage_article_coverage.cjs: so sánh URL bài viết trong sitemap với liên kết trên trang chủ; CI báo lỗi nếu có bài đã xuất bản nhưng không được khám phá từ trang chủ.
@@ -46,7 +49,7 @@ Thiết lập một lần để bật triển khai tự động:
 2. Trong [GitHub Actions secrets của repository](https://github.com/manhdungub-boop/ai-thuc-chien-blog/settings/secrets/actions), thêm repository secret tên chính xác `CLOUDFLARE_WORKERS_API_TOKEN` và dán token vào trường Value. Không đưa token vào mã nguồn, issue, log hoặc cuộc trò chuyện.
 3. Mở [Deploy Cloudflare Workers](https://github.com/manhdungub-boop/ai-thuc-chien-blog/actions/workflows/deploy-cloudflare-workers.yml) và chọn **Run workflow** trên nhánh `main` để phát hành và kiểm tra ngay.
 
-Nếu secret chưa có, workflow chỉ kiểm tra gói tĩnh rồi bỏ qua phát hành; Worker live không bị thay đổi. Sau khi phát hành, workflow yêu cầu đủ cả năm header bảo mật và HTTP 200 tại bài viết, sitemap, RSS và tệp xác minh Search Console.
+Nếu secret chưa có, workflow chỉ build/kiểm tra gói rồi bỏ qua phát hành; Worker live không bị thay đổi. Sau khi phát hành, workflow yêu cầu đủ cả năm header bảo mật và HTTP 200 tại bài viết, sitemap, RSS và tệp xác minh Search Console. Nếu dùng Cloudflare Workers Builds, đặt Build command là npm run build, Deploy command là npx wrangler deploy, và Preview command tương ứng với dự án; cấu hình build nằm trong Cloudflare Dashboard → Worker → Settings → Build.
 
 ### Cloudflare Pages
 Có thể kết nối repository tại https://dash.cloudflare.com/ → Workers & Pages → Create → Pages → Connect to Git. Dùng branch main, framework preset None, để trống build command và đặt output directory là dấu chấm. Nếu giao diện báo lỗi GitHub integration, không xóa Worker đang hoạt động; hãy kiểm tra quyền cài đặt ứng dụng Cloudflare trong GitHub trước.

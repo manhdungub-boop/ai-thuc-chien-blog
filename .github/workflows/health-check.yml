@@ -32,6 +32,12 @@ jobs:
           node --check script.js
           node scripts/test_homepage_search.cjs
 
+      - name: Test Worker security headers
+        run: node scripts/test_worker_security_headers.cjs
+
+      - name: Build public static assets
+        run: npm run build
+
       - name: Test copy-to-clipboard interactions
         run: node scripts/test_copy_prompt.cjs
 
@@ -51,8 +57,11 @@ jobs:
           worker_config = json.loads(Path("wrangler.jsonc").read_text(encoding="utf-8"))
           assert worker_config.get("name") == "ai-thuc-chien-blog", "Worker deploy target must be the existing production Worker"
           assert worker_config.get("assets", {}).get("directory") == "./dist", "Worker must deploy the prepared dist directory"
-          assert "main" not in worker_config, "This site is static-only; do not add a Worker code entrypoint accidentally"
-          print("Worker deployment config PASS: production target and static-only assets")
+          assert worker_config.get("main") == "./worker.mjs", "Worker must use the reviewed security-header wrapper"
+          assert worker_config.get("assets", {}).get("binding") == "ASSETS", "Worker must use the static assets binding"
+          assert worker_config.get("assets", {}).get("run_worker_first") is True, "Worker must execute before static asset responses"
+          assert Path("worker.mjs").is_file(), "Worker entrypoint is missing"
+          print("Worker deployment config PASS: production target, reviewed wrapper, and static assets binding")
 
           article_paths = sorted(Path("articles").glob("*.html"))
           assert article_paths, "expected at least one article HTML file"
