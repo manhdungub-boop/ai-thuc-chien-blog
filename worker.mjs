@@ -22,8 +22,13 @@ function withSecurityHeaders(response, request) {
 
 function resolveAssetRequest(request) {
   const url = new URL(request.url);
-  // Canonical article URLs are extensionless, while static files are stored as .html.
-  // Rewrite only GET/HEAD article slugs; leave mutations, assets, and other routes unchanged.
+  // With html_handling="none", explicitly map the site root to its index file.
+  // Canonical article URLs are extensionless while the deployed files are .html.
+  // Rewrite only safe GET/HEAD requests; leave mutations and all other paths untouched.
+  if ((request.method === "GET" || request.method === "HEAD") && url.pathname === "/") {
+    url.pathname = "/index.html";
+    return new Request(url, request);
+  }
   if (
     (request.method === "GET" || request.method === "HEAD") &&
     /^\/articles\/[a-z0-9-]+$/i.test(url.pathname)
