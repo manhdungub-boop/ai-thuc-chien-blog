@@ -42,7 +42,9 @@ assert.equal(ok.status, 200);
 assert.equal(await ok.text(), '<h1>OK</h1>');
 assertSecurityHeaders(ok);
 assert.equal(ok.headers.get('content-type'), 'text/html; charset=utf-8');
-assert.equal(ok.headers.get('cache-control'), 'public, max-age=60');
+assert.equal(ok.headers.get('cache-control'), 'no-store, max-age=0');
+assert.equal(ok.headers.get('pragma'), 'no-cache');
+assert.equal(ok.headers.get('expires'), '0');
 assert.equal(ok.headers.get('etag'), '"abc123"');
 
 const article = await worker.fetch(new Request('https://example.test/articles/sample-article'), {
