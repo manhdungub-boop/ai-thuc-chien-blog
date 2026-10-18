@@ -156,10 +156,16 @@ async function handleChat(request, env) {
     });
     const answer = typeof result?.response === "string" ? result.response.trim() : "";
     if (!answer) return chatJson({ error: "AI chưa tạo được câu trả lời. Vui lòng thử lại." }, 502, request);
-    const sourceLinks = [...retrievedContext.matchAll(/^Bài: (.+)\nURL: (https:\/\/ai-thuc-chien-blog\.manhdungub\.workers\.dev\/articles\/[a-z0-9-]+)/gm)]
-      .filter((match) => !answer.includes(match[2]))
-      .slice(0, 2)
-      .map((match) => "- [" + match[1] + "](" + match[2] + ")");
+    const sourceLinks = [];
+    const contextLines = retrievedContext.split("\n");
+    for (let index = 0; index < contextLines.length - 1 && sourceLinks.length < 2; index += 1) {
+      if (!contextLines[index].startsWith("Bài: ")) continue;
+      const title = contextLines[index].slice(5).trim();
+      const url = contextLines[index + 1].startsWith("URL: ") ? contextLines[index + 1].slice(5).trim() : "";
+      if (!/^https:\/\/ai-thuc-chien-blog\.manhdungub\.workers\.dev\/articles\/[a-z0-9-]+$/.test(url)) continue;
+      if (answer.includes(url)) continue;
+      sourceLinks.push("- [" + title + "](" + url + ")");
+    }
     const finalAnswer = sourceLinks.length
       ? answer + "\n\n**Bài viết tham khảo:**\n" + sourceLinks.join("\n")
       : answer;
