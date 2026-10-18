@@ -1,5 +1,8 @@
 name: Content Quality Gate
 on:
+  push:
+    branches:
+      - "feature/**"
   pull_request:
     branches: [main]
     paths:
@@ -20,7 +23,6 @@ on:
       - ".github/workflows/deploy-cloudflare-workers.yml"
       - ".github/workflows/health-check.yml"
       - ".github/workflows/content-quality.yml"
-      - ".github/workflows/health-check.yml"
 permissions:
   contents: read
 jobs:
@@ -45,6 +47,14 @@ jobs:
           node --check worker.mjs
       - name: Test Worker security headers
         run: node scripts/test_worker_headers.mjs
+      - name: Prepare static assets for Wrangler dry-run
+        run: |
+          rm -rf dist
+          mkdir -p dist/articles
+          cp index.html ve-chung-toi.html feed.xml styles.css script.js robots.txt sitemap.xml favicon.svg 404.html google4e45ddcf8facb122.html _headers dist/
+          cp articles/*.html dist/articles/
+      - name: Compile Worker and asset bundle without deploying
+        run: npx --yes wrangler@4 deploy --dry-run --config wrangler.jsonc
       - name: Test copy-to-clipboard interactions
         run: node scripts/test_copy_prompt.cjs
       - name: Test homepage search behavior

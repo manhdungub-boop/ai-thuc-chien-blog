@@ -28,7 +28,7 @@ Mở index.html trong trình duyệt. Website không cần bước build. Google
 - feed.xml: RSS 2.0 để người đọc theo dõi bài viết mới.
 - robots.txt: cho phép trình thu thập thông tin truy cập và trỏ đến sitemap.
 - .github/workflows/health-check.yml: kiểm tra HTML/SEO, liên kết nội bộ, dữ liệu sitemap/RSS khớp canonical, tuyến bài viết và tính đồng nhất của các bản triển khai.
-- .github/workflows/deploy-cloudflare-workers.yml: đóng gói asset tĩnh, xác thực entrypoint bảo mật và kiểm tra header/route sau triển khai khi token được cấu hình.
+- .github/workflows/deploy-cloudflare-workers.yml: đóng gói tài sản cùng _headers, kiểm tra Worker wrapper và chỉ phát hành khi có token triển khai riêng; sau triển khai xác minh năm header bảo mật và các tuyến quan trọng.
 - favicon.svg: biểu tượng website.
 - _headers: chính sách header cho Cloudflare Pages và static assets; worker.mjs cũng gắn header trực tiếp vào mọi phản hồi đi qua binding ASSETS.
 - 404.html: trang thông báo đường dẫn không tồn tại.

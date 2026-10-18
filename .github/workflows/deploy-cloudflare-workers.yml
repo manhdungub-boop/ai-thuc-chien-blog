@@ -61,8 +61,10 @@ jobs:
           assert list(Path("dist/articles").glob("*.html")), "No article pages were packaged"
           for required in ["X-Content-Type-Options: nosniff", "X-Frame-Options: DENY", "Referrer-Policy: strict-origin-when-cross-origin", "Permissions-Policy:", "Strict-Transport-Security: max-age=31536000"]:
               assert required in Path("dist/_headers").read_text(encoding="utf-8"), f"Missing expected header rule: {required}"
-          print("WORKER ASSET PACKAGE PASS: static-only config, Search Console file, articles, and _headers")
+          print("WORKER ASSET PACKAGE PASS: wrapper config, Search Console file, articles, and _headers")
           PY
+          node --check worker.mjs
+          node scripts/test_worker_headers.mjs
 
       - name: Check for dedicated Worker deployment token
         id: token
