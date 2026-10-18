@@ -22,6 +22,45 @@ if (menuButton && nav) {
 const year = document.querySelector('#year');
 if (year) year.textContent = String(new Date().getFullYear());
 
+// Lightweight client-side article search. It also matches Vietnamese without diacritics.
+const articleSearch = document.querySelector('#article-search');
+const articleSearchStatus = document.querySelector('#article-search-status');
+const searchableArticles = Array.from(document.querySelectorAll('#article-grid .article-card'));
+const articleTools = document.querySelector('.article-tools');
+
+if (articleSearch && articleSearchStatus && articleTools && searchableArticles.length) {
+  const normalizeSearchText = (value) => value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .toLowerCase()
+    .trim();
+
+  const filterArticles = () => {
+    const query = normalizeSearchText(articleSearch.value);
+    let visibleCount = 0;
+
+    searchableArticles.forEach((article) => {
+      const searchableText = normalizeSearchText(article.textContent || '');
+      const matches = !query || searchableText.includes(query);
+      article.hidden = !matches;
+      if (matches) visibleCount += 1;
+    });
+
+    if (!query) {
+      articleSearchStatus.textContent = `Hiển thị tất cả ${searchableArticles.length} bài viết.`;
+    } else if (visibleCount) {
+      articleSearchStatus.textContent = `Tìm thấy ${visibleCount}/${searchableArticles.length} bài viết phù hợp.`;
+    } else {
+      articleSearchStatus.textContent = 'Không tìm thấy bài viết phù hợp. Thử từ khóa khác.';
+    }
+  };
+
+  articleSearch.addEventListener('input', filterArticles);
+  articleTools.hidden = false;
+  filterArticles();
+}
+
 const revealItems = document.querySelectorAll('.topic-card, .article-card, .intro-grid');
 const reduceMotion = window.matchMedia &&
   window.matchMedia('(prefers-reduced-motion: reduce)').matches;
