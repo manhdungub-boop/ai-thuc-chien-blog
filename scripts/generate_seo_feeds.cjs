@@ -59,7 +59,7 @@ function generate(outputDir) {
   const today = new Date().toISOString().slice(0, 10);
   const sitemapEntries = [
     '  <url>',
-    '    <loc>' + escapeXml(SITE + '/')</loc>',
+    '    <loc>' + escapeXml(SITE + '/') + '</loc>',
     '    <lastmod>' + today + '</lastmod>',
     '  </url>'
   ];
@@ -95,7 +95,7 @@ function generate(outputDir) {
     '  <channel>',
     '    <title>AI Thực Chiến</title>',
     '    <link>' + escapeXml(SITE + '/') + '</link>',
-    '    <description>Kiến thức AI thực hành, tự động hóa và công nghệ.</description>',
+    '    <description>Kiến thức AI thực hành, tự động hóa và công nghệ cho người Việt.</description>',
     ...rssItems,
     '  </channel>',
     '</rss>',
