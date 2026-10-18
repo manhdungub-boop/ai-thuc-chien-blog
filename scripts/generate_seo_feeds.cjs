@@ -51,10 +51,31 @@ function validatePageMetadata(html, file) {
   return { canonical: getCanonical(html, file), title, description };
 }
 
+function getPublishedArticleFiles(outputDir) {
+  const homepagePath = path.join(outputDir, 'index.html');
+  const homepage = fs.readFileSync(homepagePath, 'utf8');
+  const links = [...homepage.matchAll(/href=["'](?:\.\/)?articles\/([^"'#?]+\.html)(?:#[^"']*)?["']/gi)]
+    .map((match) => match[1]);
+  const unique = [...new Set(links)];
+  for (const file of unique) {
+    if (file.includes('/') || file.includes('\\')) {
+      throw new Error('Invalid homepage article path: ' + file);
+    }
+    if (!fs.existsSync(path.join(outputDir, 'articles', file))) {
+      throw new Error('Homepage links to missing article: ' + file);
+    }
+  }
+  if (unique.length === 0) {
+    throw new Error('Homepage has no published article links');
+  }
+  return new Set(unique);
+}
+
 function generate(outputDir) {
   const articlesDir = path.join(outputDir, 'articles');
+  const publishedFiles = getPublishedArticleFiles(outputDir);
   const files = fs.readdirSync(articlesDir)
-    .filter((name) => name.endsWith('.html'))
+    .filter((name) => name.endsWith('.html') && publishedFiles.has(name))
     .sort();
 
   const articles = files.map((file) => {
@@ -120,7 +141,7 @@ function generate(outputDir) {
 
   fs.writeFileSync(path.join(outputDir, 'sitemap.xml'), sitemap, 'utf8');
   fs.writeFileSync(path.join(outputDir, 'feed.xml'), feed, 'utf8');
-  console.log('SEO FEEDS GENERATED: ' + articles.length + ' articles + homepage + about page.');
+  console.log('SEO FEEDS GENERATED: ' + articles.length + ' homepage-linked articles + homepage + about page.');
 }
 
 module.exports = generate;

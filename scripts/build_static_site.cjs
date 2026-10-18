@@ -15,6 +15,11 @@ if (articles.length === 0) fail('No article HTML files found');
 const headerRules = fs.readFileSync(path.join(root, '_headers'), 'utf8');
 const requiredHeaders = ['X-Content-Type-Options: nosniff', 'X-Frame-Options: DENY', 'Referrer-Policy: strict-origin-when-cross-origin', 'Permissions-Policy: camera=(), geolocation=(), microphone=(), payment=()', 'Strict-Transport-Security: max-age=31536000'];
 for (const rule of requiredHeaders) if (!headerRules.includes(rule)) fail('_headers is missing rule: ' + rule);
+
+// Keep the tracked fallback feeds current before copying them into the deployment bundle.
+// The same generator is run again against dist/ after assets are staged.
+require('./generate_seo_feeds.cjs')(root);
+
 fs.rmSync(output, { recursive: true, force: true });
 const outputArticles = path.join(output, 'articles');
 fs.mkdirSync(outputArticles, { recursive: true });
