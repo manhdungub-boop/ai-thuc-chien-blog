@@ -21,6 +21,7 @@ on:
       - "worker.mjs"
       - "package.json"
       - "scripts/build_static_site.cjs"
+      - "scripts/generate_seo_feeds.cjs"
       - "scripts/test_worker_headers.mjs"
       - ".github/workflows/deploy-cloudflare-workers.yml"
   workflow_dispatch:
@@ -85,7 +86,7 @@ jobs:
             echo "::warning::Worker deploy skipped: add the scoped CLOUDFLARE_WORKERS_API_TOKEN repository secret, then run this workflow again. The existing live Worker is not changed by this run."
             {
               echo "## Cloudflare Worker deployment skipped"
-              echo "The package was validated, but the production Worker was not changed because the repository secret \`CLOUDFLARE_WORKERS_API_TOKEN\` is not configured. Add it under [GitHub Actions secrets](https://github.com/manhdungub-boop/ai-thuc-chien-blog/settings/secrets/actions), then run [Deploy Cloudflare Workers](https://github.com/manhdungub-boop/ai-thuc-chien-blog/actions/workflows/deploy-cloudflare-workers.yml). Do not paste the token into source code or chat."
+              echo "The package was validated, but the production Worker was not changed because the repository secret CLOUDFLARE_WORKERS_API_TOKEN is not configured. Add it under [GitHub Actions secrets](https://github.com/manhdungub-boop/ai-thuc-chien-blog/settings/secrets/actions), then run [Deploy Cloudflare Workers](https://github.com/manhdungub-boop/ai-thuc-chien-blog/actions/workflows/deploy-cloudflare-workers.yml). Do not paste the token into source code or chat."
             } >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
