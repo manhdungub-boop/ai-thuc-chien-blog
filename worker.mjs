@@ -156,7 +156,14 @@ async function handleChat(request, env) {
     });
     const answer = typeof result?.response === "string" ? result.response.trim() : "";
     if (!answer) return chatJson({ error: "AI chưa tạo được câu trả lời. Vui lòng thử lại." }, 502, request);
-    return chatJson({ answer }, 200, request);
+    const sourceLinks = [...retrievedContext.matchAll(/^Bài: (.+)\nURL: (https:\/\/ai-thuc-chien-blog\.manhdungub\.workers\.dev\/articles\/[a-z0-9-]+)/gm)]
+      .filter((match) => !answer.includes(match[2]))
+      .slice(0, 2)
+      .map((match) => "- [" + match[1] + "](" + match[2] + ")");
+    const finalAnswer = sourceLinks.length
+      ? answer + "\n\n**Bài viết tham khảo:**\n" + sourceLinks.join("\n")
+      : answer;
+    return chatJson({ answer: finalAnswer }, 200, request);
   } catch (_error) {
     return chatJson({ error: "Trợ lý đang bận hoặc đã chạm giới hạn sử dụng miễn phí. Vui lòng thử lại sau." }, 503, request);
   }
