@@ -11,7 +11,7 @@ Blog tiếng Việt về ứng dụng AI, công cụ miễn phí và tự độn
 
 ## Chạy thử
 
-Mở index.html trong trình duyệt. Website không cần bước build. Google Fonts là tùy chọn; CSS có font dự phòng.
+Mở index.html trong trình duyệt để xem bản nguồn. Quy trình triển khai tạo thư mục dist bằng npm run build để Workers và Pages dùng cùng một gói tài nguyên. Google Fonts là tùy chọn; CSS có font dự phòng.
 
 ## Cấu trúc
 
@@ -19,6 +19,8 @@ Mở index.html trong trình duyệt. Website không cần bước build. Google
 - ve-chung-toi.html: mục tiêu, nguyên tắc biên tập và cách gửi phản hồi.
 - styles.css: giao diện responsive và hiệu ứng.
 - script.js: menu di động, hiệu ứng cuộn, tìm kiếm tiếng Việt không dấu và nút sao chép mẫu prompt.
+- scripts/build_static_site.cjs: build dùng chung cho Workers, Pages và CI; kiểm tra các tệp bắt buộc, năm header, tệp xác minh Search Console và toàn bộ bài viết trước khi tạo dist/.
+- package.json: cung cấp lệnh npm run build cho Cloudflare Workers Builds và GitHub Actions.
 - scripts/test_homepage_search.cjs: kiểm thử hồi quy cho tìm kiếm có/không dấu, chữ Đ hoa, kết quả rỗng và xóa từ khóa; bộ kiểm thử tự lấy thẻ bài viết từ trang chủ nên không khóa vào một số lượng cố định.
 - scripts/test_copy_prompt.cjs: kiểm thử nút sao chép prompt, trạng thái thành công và thông báo dự phòng khi API clipboard không khả dụng.
 - scripts/test_article_navigation.cjs: tự phát hiện toàn bộ tệp bài viết và kiểm tra mục bài viết liên quan, tối thiểu ba liên kết duy nhất, đích tồn tại và bố cục đáp ứng.
@@ -37,6 +39,15 @@ Mở index.html trong trình duyệt. Website không cần bước build. Google
 
 ### GitHub Pages
 Repository được cấu hình để phục vụ từ nhánh main, thư mục /. Mỗi lần cập nhật lên main, GitHub Pages sẽ tự build lại. Kiểm tra mục Settings → Pages nếu trạng thái build bị lỗi.
+
+### Cloudflare Workers Builds — cấu hình dashboard
+Trong Cloudflare Dashboard → Workers & Pages → chọn từng Worker đang kết nối GitHub → Settings → Build:
+- Build command: npm run build
+- Deploy command: npx wrangler deploy
+- Preview command: npx wrangler preview
+- Root directory: để trống (repository root)
+
+Workers Builds lấy các lệnh Build/Deploy/Preview từ Settings của từng Worker. Không dựa vào trường build.command trong wrangler.jsonc; cài đặt dashboard phải được lưu cho từng Worker. Tài liệu chính thức: https://developers.cloudflare.com/workers/ci-cd/builds/configuration/
 
 ### Cloudflare Workers (bản chính hiện tại)
 Nội dung vẫn là HTML/CSS/JS tĩnh; worker.mjs là lớp runtime mỏng, gọi ASSETS.fetch() và gắn security headers lên phản hồi 200/404/lỗi, không chứa API nghiệp vụ hay dữ liệu động.

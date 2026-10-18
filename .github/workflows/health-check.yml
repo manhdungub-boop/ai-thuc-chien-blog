@@ -27,6 +27,9 @@ jobs:
         with:
           node-version: 22
 
+      - name: Build and validate static assets
+        run: npm run build
+
       - name: Check worker runtime and test security headers
         run: |
           node --check script.js
