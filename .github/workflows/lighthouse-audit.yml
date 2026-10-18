@@ -1,0 +1,47 @@
+name: Lighthouse Performance Audit
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekly baseline check; GitHub Actions cron uses UTC.
+    - cron: "30 2 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lighthouse-audit
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: Mobile Lighthouse — production and backup
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out audit configuration
+        uses: actions/checkout@v4
+
+      - name: Run Lighthouse on live deployments
+        uses: treosh/lighthouse-ci-action@v12
+        with:
+          configPath: .github/lighthouse/lighthouserc.json
+          urls: |
+            https://ai-thuc-chien-blog.manhdungub.workers.dev/
+            https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/do-luong-hieu-qua-blog
+            https://ai-thuc-chien-blog.pages.dev/
+            https://ai-thuc-chien-blog.pages.dev/articles/do-luong-hieu-qua-blog
+          uploadArtifacts: true
+          temporaryPublicStorage: false
+          runs: 3
+
+      - name: Summarize audit limits
+        if: always()
+        run: |
+          {
+            echo "## Lighthouse audit"
+            echo "- Audits the primary Worker and Pages backup on mobile emulation."
+            echo "- Uses three runs per URL to reduce single-run noise."
+            echo "- Reports are stored as workflow artifacts; no public report link is created."
+            echo "- This workflow establishes a measured baseline. Performance thresholds should be set after reviewing real results, not guessed in advance."
+          } >> "$GITHUB_STEP_SUMMARY"

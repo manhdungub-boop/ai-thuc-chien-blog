@@ -5,8 +5,9 @@ Blog tiếng Việt về ứng dụng AI, công cụ miễn phí và tự độn
 ## Website đang hoạt động
 
 - Bản chính: https://ai-thuc-chien-blog.manhdungub.workers.dev/
-- Bản dự phòng GitHub Pages: https://manhdungub-boop.github.io/ai-thuc-chien-blog/
+- Bản dự phòng Cloudflare Pages: https://ai-thuc-chien-blog.pages.dev/
 - RSS: https://ai-thuc-chien-blog.manhdungub.workers.dev/feed.xml
+- Sitemap: https://ai-thuc-chien-blog.manhdungub.workers.dev/sitemap.xml
 - Mã nguồn: https://github.com/manhdungub-boop/ai-thuc-chien-blog
 
 ## Chạy thử
@@ -19,68 +20,52 @@ Mở index.html trong trình duyệt để xem bản nguồn. Quy trình triển
 - ve-chung-toi.html: mục tiêu, nguyên tắc biên tập và cách gửi phản hồi.
 - styles.css: giao diện responsive và hiệu ứng.
 - script.js: menu di động, hiệu ứng cuộn, tìm kiếm tiếng Việt không dấu và nút sao chép mẫu prompt.
-- scripts/build_static_site.cjs: build dùng chung cho Workers, Pages và CI; kiểm tra các tệp bắt buộc, năm header, tệp xác minh Search Console và toàn bộ bài viết trước khi tạo dist/.
-- package.json: cung cấp lệnh npm run build cho Cloudflare Workers Builds và GitHub Actions.
-- scripts/test_homepage_search.cjs: kiểm thử hồi quy cho tìm kiếm có/không dấu, chữ Đ hoa, kết quả rỗng và xóa từ khóa; bộ kiểm thử tự lấy thẻ bài viết từ trang chủ nên không khóa vào một số lượng cố định.
-- scripts/test_copy_prompt.cjs: kiểm thử nút sao chép prompt, trạng thái thành công và thông báo dự phòng khi API clipboard không khả dụng.
-- scripts/test_article_navigation.cjs: tự phát hiện toàn bộ tệp bài viết và kiểm tra mục bài viết liên quan, tối thiểu ba liên kết duy nhất, đích tồn tại và bố cục đáp ứng.
-- scripts/test_homepage_article_coverage.cjs: so sánh URL bài viết trong sitemap với liên kết trên trang chủ; CI báo lỗi nếu có bài đã xuất bản nhưng không được khám phá từ trang chủ.
-- articles/: các bài hướng dẫn về AI cơ bản, prompt sao chép, workflow có kiểm duyệt, kiểm chứng nội dung, SEO kỹ thuật và đo lường hiệu quả.
-- sitemap.xml: danh sách URL chính dành cho công cụ tìm kiếm.
-- feed.xml: RSS 2.0 để người đọc theo dõi bài viết mới.
-- robots.txt: cho phép trình thu thập thông tin truy cập và trỏ đến sitemap.
-- .github/workflows/health-check.yml: kiểm tra HTML/SEO, liên kết nội bộ, dữ liệu sitemap/RSS khớp canonical, tuyến bài viết và tính đồng nhất của các bản triển khai.
-- .github/workflows/deploy-cloudflare-workers.yml: đóng gói asset tĩnh, xác thực entrypoint bảo mật và kiểm tra header/route sau triển khai khi token được cấu hình.
-- favicon.svg: biểu tượng website.
-- _headers: chính sách header cho Cloudflare Pages và static assets; worker.mjs cũng gắn header trực tiếp vào mọi phản hồi đi qua binding ASSETS.
+- scripts/build_static_site.cjs: build dùng chung cho Workers, Pages và CI; kiểm tra tệp bắt buộc, năm header, tệp xác minh Search Console và bài viết trước khi tạo dist/.
+- package.json: lệnh npm run build cho Cloudflare Workers Builds và GitHub Actions.
+- scripts/test_homepage_search.cjs: kiểm thử tìm kiếm có/không dấu, chữ Đ hoa, kết quả rỗng và xóa từ khóa.
+- scripts/test_copy_prompt.cjs: kiểm thử nút sao chép prompt và thông báo dự phòng.
+- scripts/test_article_navigation.cjs: kiểm tra liên kết bài viết liên quan, đích tồn tại và bố cục.
+- scripts/test_homepage_article_coverage.cjs: xác nhận mọi bài đã xuất bản đều có liên kết khám phá từ trang chủ.
+- scripts/test_seo_consistency.cjs: kiểm tra canonical, metadata, JSON-LD, sitemap/RSS và đầu ra build.
+- articles/: bài hướng dẫn thực hành AI và tự động hóa.
+- sitemap.xml, feed.xml, robots.txt: tài nguyên cho công cụ tìm kiếm và người đọc RSS.
+- .github/workflows/ci-quality.yml: kiểm thử mã nguồn khi push, pull request và chạy thủ công.
+- .github/workflows/health-check.yml: kiểm tra nội dung và các tuyến trên cả hai bản triển khai sau khi deploy.
+- .github/workflows/lighthouse-audit.yml: đo hiệu năng mobile trên website chính, bản dự phòng và một trang bài viết; lưu báo cáo thành GitHub Actions artifacts.
+- worker.mjs: lớp runtime mỏng gắn security headers vào phản hồi từ tài nguyên tĩnh.
+- _headers: chính sách header cho Cloudflare Pages/static assets.
 - 404.html: trang thông báo đường dẫn không tồn tại.
 
-## Đồng bộ cấu hình Cloudflare Workers Builds
-Hai trigger production của Worker chính và bản phụ cần dùng chung lệnh npm run build; hiện chúng vẫn dùng lệnh copy tệp cũ trong cấu hình ngoài repository. Workflow [Configure Cloudflare Workers Builds](https://github.com/manhdungub-boop/ai-thuc-chien-blog/actions/workflows/configure-cloudflare-worker-builds.yml) sẽ cập nhật lệnh build qua Cloudflare API và tự xác minh lại hai trigger.
+## Kiểm thử hiệu năng
 
-Thiết lập một lần:
-1. Tạo user-scoped Cloudflare API token với quyền Workers Builds Configuration Edit / Workers CI Write tại https://dash.cloudflare.com/profile/api-tokens. Không dùng build token UUID và không dán token vào cuộc trò chuyện.
-2. Lưu token trong [GitHub Actions secrets](https://github.com/manhdungub-boop/ai-thuc-chien-blog/settings/secrets/actions) với tên chính xác CLOUDFLARE_WORKERS_BUILDS_API_TOKEN.
-3. Chạy workflow ở liên kết trên. Script chỉ sửa build_command sau khi xác nhận đúng hai Worker, repository, trigger production và lệnh deploy hiện tại; sau đó đọc lại cấu hình để kiểm tra.
+Mở https://github.com/manhdungub-boop/ai-thuc-chien-blog/actions/workflows/lighthouse-audit.yml và chọn Run workflow để đo ngay, hoặc chờ lịch chạy hằng tuần. Báo cáo được lưu trong mục Artifacts của lần chạy.
 
-Tài liệu Cloudflare: https://developers.cloudflare.com/workers/ci-cd/builds/api-reference/ và https://developers.cloudflare.com/api/resources/workers_builds/subresources/triggers/methods/update/
+Audit chạy ba lần mỗi URL trên cấu hình mô phỏng thiết bị di động, gồm trang chủ và một bài viết của cả Worker lẫn Pages. Đây là số đo phòng thí nghiệm, không thay thế dữ liệu Core Web Vitals thực tế của người dùng trong Search Console/CrUX. Chưa đặt ngưỡng làm build thất bại cho đến khi có baseline đủ tin cậy.
+
+## Đồng bộ Cloudflare Workers Builds
+
+Hai trigger production của Worker chính và bản phụ cần dùng chung lệnh npm run build. Nếu thay đổi cấu hình build ngoài repository, dùng workflow Configure Cloudflare Workers Builds và secret CLOUDFLARE_WORKERS_BUILDS_API_TOKEN đã được cấu hình trong GitHub Actions. Không đưa token vào mã nguồn hoặc cuộc trò chuyện.
 
 ## Triển khai
 
-### GitHub Pages
-Repository được cấu hình để phục vụ từ nhánh main, thư mục /. Mỗi lần cập nhật lên main, GitHub Pages sẽ tự build lại. Kiểm tra mục Settings → Pages nếu trạng thái build bị lỗi.
+### Cloudflare Workers — bản chính
 
-### Cloudflare Workers Builds — cấu hình dashboard
-Trong Cloudflare Dashboard → Workers & Pages → chọn từng Worker đang kết nối GitHub → Settings → Build:
-- Build command: npm run build
-- Deploy command: npx wrangler deploy
-- Preview command: npx wrangler preview
-- Root directory: để trống (repository root)
+Workflow Deploy Cloudflare Workers build tài nguyên, kiểm tra lớp bảo mật và xác minh các tuyến sau khi triển khai. Secret CLOUDFLARE_WORKERS_API_TOKEN phải được lưu trong GitHub Actions secrets. Nếu secret chưa được cấu hình, workflow sẽ không thay đổi Worker đang hoạt động.
 
-Workers Builds lấy các lệnh Build/Deploy/Preview từ Settings của từng Worker. Không dựa vào trường build.command trong wrangler.jsonc; cài đặt dashboard phải được lưu cho từng Worker. Tài liệu chính thức: https://developers.cloudflare.com/workers/ci-cd/builds/configuration/
+### Cloudflare Pages — bản dự phòng
 
-### Cloudflare Workers (bản chính hiện tại)
-Nội dung vẫn là HTML/CSS/JS tĩnh; worker.mjs là lớp runtime mỏng, gọi ASSETS.fetch() và gắn security headers lên phản hồi 200/404/lỗi, không chứa API nghiệp vụ hay dữ liệu động.
-
-Thiết lập một lần để bật triển khai tự động:
-1. Trong [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens), tạo token phù hợp với quyền chỉnh sửa Workers Scripts trong đúng tài khoản Cloudflare của website. Ưu tiên mẫu **Edit Cloudflare Workers** hoặc token tùy chỉnh giới hạn vào tài khoản này.
-2. Trong [GitHub Actions secrets của repository](https://github.com/manhdungub-boop/ai-thuc-chien-blog/settings/secrets/actions), thêm repository secret tên chính xác `CLOUDFLARE_WORKERS_API_TOKEN` và dán token vào trường Value. Không đưa token vào mã nguồn, issue, log hoặc cuộc trò chuyện.
-3. Mở [Deploy Cloudflare Workers](https://github.com/manhdungub-boop/ai-thuc-chien-blog/actions/workflows/deploy-cloudflare-workers.yml) và chọn **Run workflow** trên nhánh `main` để phát hành và kiểm tra ngay.
-
-Nếu secret chưa có, workflow chỉ kiểm tra gói tĩnh rồi bỏ qua phát hành; Worker live không bị thay đổi. Sau khi phát hành, workflow yêu cầu đủ cả năm header bảo mật và HTTP 200 tại bài viết, sitemap, RSS và tệp xác minh Search Console.
-
-### Cloudflare Pages
-Có thể kết nối repository tại https://dash.cloudflare.com/ → Workers & Pages → Create → Pages → Connect to Git. Dùng branch main, framework preset None, để trống build command và đặt output directory là dấu chấm. Nếu giao diện báo lỗi GitHub integration, không xóa Worker đang hoạt động; hãy kiểm tra quyền cài đặt ứng dụng Cloudflare trong GitHub trước.
+Bản dự phòng là https://ai-thuc-chien-blog.pages.dev/. Kiểm tra workflow Deploy Cloudflare Pages và trạng thái deploy sau mỗi lần thay đổi.
 
 ## Bảo vệ trình duyệt
 
-Tệp _headers giữ chính sách cho Cloudflare Pages và static assets. Do quy tắc đó không áp dụng cho response do Worker code tạo ra, worker.mjs chủ động gắn header trực tiếp sau khi gọi binding ASSETS. Content Security Policy chưa được bật để tránh vô tình chặn script inline, Google Fonts hoặc Cloudflare Web Analytics; chỉ bổ sung sau khi kiểm thử đầy đủ.
+Tệp _headers giữ chính sách cho Cloudflare Pages và static assets. Vì quy tắc đó không tự áp dụng cho mọi phản hồi do Worker code tạo ra, worker.mjs chủ động gắn header trực tiếp sau khi gọi binding ASSETS. Content Security Policy chưa được bật để tránh vô tình chặn script inline, Google Fonts hoặc Cloudflare Web Analytics; chỉ bổ sung sau khi kiểm thử đầy đủ.
 
 ## Kiểm tra sau mỗi lần xuất bản
 
-- Health check tự dò tất cả `articles/*.html`; khi thêm bài, vẫn phải thêm thẻ bài viết trên trang chủ, canonical vào sitemap, mục RSS và ít nhất ba liên kết đọc tiếp phù hợp.
-- Sitemap phải khớp chính xác các canonical của trang chủ, trang giới thiệu và toàn bộ bài viết; RSS phải khớp toàn bộ canonical bài viết.
-- Kiểm tra trạng thái Google Search Console và Cloudflare Web Analytics trong dashboard; HTTP 200 hoặc sitemap không lỗi không chứng minh Google đã lập chỉ mục hay analytics đang nhận dữ liệu.
+- Health check tự dò các bài viết và kiểm tra tuyến chính trên cả hai bản triển khai.
+- Sitemap phải khớp canonical của trang chủ, trang giới thiệu và toàn bộ bài viết; RSS phải khớp các canonical bài viết.
+- Kiểm tra trạng thái Google Search Console và Cloudflare Web Analytics trong dashboard. HTTP 200 hoặc sitemap không lỗi không chứng minh Google đã lập chỉ mục hay analytics đang nhận dữ liệu.
+- Chạy Lighthouse audit định kỳ để phát hiện xu hướng chậm đi. Chỉ thay đổi hiệu năng sau khi xác định được nguyên nhân bằng báo cáo.
 
 ## Quy trình biên tập an toàn
 
@@ -90,4 +75,4 @@ Chủ đề → nghiên cứu nguồn → bản nháp AI → kiểm tra sự th�
 
 - Đây là website tĩnh; chưa có CMS, lịch tự động hoặc tích hợp mạng xã hội.
 - Các bài viết nền tảng là nội dung nhập môn; cần kiểm chứng lại nguồn và cập nhật trước khi dùng làm tư vấn chuyên môn.
-- URL workers.dev đang là địa chỉ chính thức được dùng cho canonical và sitemap. Khi chuyển sang tên miền riêng, cần cập nhật canonical, Open Graph URL, sitemap và robots.txt đồng bộ.
+- URL workers.dev đang là địa chỉ chính thức dùng cho canonical và sitemap. Khi chuyển sang tên miền riêng, cần cập nhật canonical, Open Graph URL, sitemap và robots.txt đồng bộ.
