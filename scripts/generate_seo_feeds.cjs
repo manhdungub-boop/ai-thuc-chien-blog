@@ -8,20 +8,24 @@ module.exports = function generateSeoFeeds(outputDir, baseUrl = 'https://ai-thuc
   const articleFiles = fs.readdirSync(articlesDir).filter((name) => name.endsWith('.html')).sort();
   const escapeXml = (value) => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;').replace(/'/g, '&apos;');
   const getMeta = (html, name) => {
-    const pattern = new RegExp('<meta\\s+name=[\"\\']' + name + '[\"\\']\\s+content=[\"\\']([^\"\\']*)[\"\\']', 'i');
-    const match = html.match(pattern);
-    return match ? match[1] : '';
+    const tags = html.match(/<meta\\b[^>]*>/gi) || [];
+    for (const tag of tags) {
+      const nameMatch = tag.match(/\\bname\\s*=\\s*[\"']([^\"']+)[\"']/i);
+      const contentMatch = tag.match(/\\bcontent\\s*=\\s*[\"']([^\"']*)[\"']/i);
+      if (nameMatch && contentMatch && nameMatch[1].toLowerCase() === name.toLowerCase()) return contentMatch[1];
+    }
+    return '';
   };
   const articles = articleFiles.map((file) => {
     const html = fs.readFileSync(path.join(articlesDir, file), 'utf8');
-    const canonicalMatch = html.match(/<link\\s+rel=[\"']canonical[\"']\\s+href=[\"']([^\"']+)[\"']/i);
+    const canonicalMatch = html.match(/<link\\b[^>]*rel\\s*=\\s*[\"']canonical[\"'][^>]*href\\s*=\\s*[\"']([^\"']+)[\"']/i);
     const titleMatch = html.match(/<title>([\\s\\S]*?)<\\/title>/i);
     const canonical = canonicalMatch ? canonicalMatch[1] : '';
     const title = titleMatch ? titleMatch[1].trim() : '';
     const description = getMeta(html, 'description');
     if (!canonical || !canonical.startsWith(baseUrl + '/articles/') || canonical.endsWith('.html')) throw new Error(file + ': canonical URL missing or not extensionless');
     if (!title || !description) throw new Error(file + ': title or meta description is missing');
-    return { url: canonical, title: title, description: description };
+    return { url: canonical, title, description };
   });
   const today = new Date().toISOString().slice(0, 10);
   const urls = [{ url: baseUrl + '/', priority: '1.0' }].concat(articles.map((article) => ({ url: article.url, priority: '0.8' })));
