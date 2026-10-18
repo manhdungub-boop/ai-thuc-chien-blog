@@ -19,7 +19,7 @@ jobs:
       - name: Prepare static site files
         run: |
           mkdir -p dist/articles
-          cp index.html ve-chung-toi.html feed.xml styles.css script.js robots.txt sitemap.xml favicon.svg 404.html google4e45ddcf8facb122.html dist/
+          cp index.html ve-chung-toi.html feed.xml styles.css script.js robots.txt sitemap.xml favicon.svg 404.html google4e45ddcf8facb122.html _headers dist/
           cp articles/*.html dist/articles/
 
       - name: Deploy to Cloudflare Pages
@@ -28,10 +28,3 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: 92cf091bbac8b4879ec65feb30b4715b
           command: pages deploy dist --project-name=ai-thuc-chien-blog --branch=main
-
-      - name: Deploy static assets to the primary Cloudflare Worker
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: 92cf091bbac8b4879ec65feb30b4715b
-          command: deploy --config wrangler.jsonc

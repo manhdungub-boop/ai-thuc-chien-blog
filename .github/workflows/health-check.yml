@@ -227,7 +227,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for host in "https://ai-thuc-chien-blog.manhdungub.workers.dev" "https://ai-thuc-chien-blog.pages.dev"; do
+          for host in "https://ai-thuc-chien-blog.pages.dev"; do
             headers="$(mktemp)"
             curl --fail --silent --show-error --location --max-time 20 -D "$headers" -o /dev/null "$host/"
             for expected in \
