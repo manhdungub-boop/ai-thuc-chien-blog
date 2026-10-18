@@ -41,7 +41,7 @@ function optimizeHtmlResourceLoading(filePath) {
     return preconnect + '<link rel="preload" as="style" href="' + href + '" onload="this.onload=null;this.rel=\'stylesheet\'">' + '<noscript><link rel="stylesheet" href="' + href + '"></noscript>';
   });
   html = html.replace(/<script\b[^>]*\bsrc=[\"'][^\"']*script\.js[\"'][^>]*>/gi, (tag) =>
-    /\bdefer\b/i.test(tag) ? tag : tag.replace(/\s*\?>$/, ' defer>')
+    /\bdefer\b/i.test(tag) ? tag : tag.replace(/>$/, ' defer>')
   );
   fs.writeFileSync(filePath, html);
 }
