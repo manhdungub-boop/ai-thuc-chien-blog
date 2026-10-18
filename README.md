@@ -18,19 +18,19 @@ Mở index.html trong trình duyệt. Website không cần bước build. Google
 - index.html: trang chủ.
 - ve-chung-toi.html: mục tiêu, nguyên tắc biên tập và cách gửi phản hồi.
 - styles.css: giao diện responsive và hiệu ứng.
-- script.js: menu di động, hiệu ứng cuộn và tìm kiếm bài viết theo từ khóa (hỗ trợ tìm tiếng Việt không dấu).
+- script.js: menu di động, hiệu ứng cuộn, tìm kiếm tiếng Việt không dấu và nút sao chép mẫu prompt.
 - scripts/test_homepage_search.cjs: kiểm thử hồi quy cho tìm kiếm có/không dấu, chữ Đ hoa, kết quả rỗng và xóa từ khóa; bộ kiểm thử tự lấy thẻ bài viết từ trang chủ nên không khóa vào một số lượng cố định.
 - scripts/test_copy_prompt.cjs: kiểm thử nút sao chép prompt, trạng thái thành công và thông báo dự phòng khi API clipboard không khả dụng.
 - scripts/test_article_navigation.cjs: tự phát hiện toàn bộ tệp bài viết và kiểm tra mục bài viết liên quan, tối thiểu ba liên kết duy nhất, đích tồn tại và bố cục đáp ứng.
 - scripts/test_homepage_article_coverage.cjs: so sánh URL bài viết trong sitemap với liên kết trên trang chủ; CI báo lỗi nếu có bài đã xuất bản nhưng không được khám phá từ trang chủ.
-- articles/: các bài viết hướng dẫn về AI cơ bản, prompt thực hành có thể sao chép, workflow có kiểm duyệt, kiểm chứng nội dung, SEO kỹ thuật và đo lường hiệu quả blog. Danh sách được CI tự phát hiện từ các tệp HTML trong thư mục này.
+- articles/: các bài hướng dẫn về AI cơ bản, prompt sao chép, workflow có kiểm duyệt, kiểm chứng nội dung, SEO kỹ thuật và đo lường hiệu quả.
 - sitemap.xml: danh sách URL chính dành cho công cụ tìm kiếm.
 - feed.xml: RSS 2.0 để người đọc theo dõi bài viết mới.
 - robots.txt: cho phép trình thu thập thông tin truy cập và trỏ đến sitemap.
 - .github/workflows/health-check.yml: kiểm tra HTML/SEO, liên kết nội bộ, dữ liệu sitemap/RSS khớp canonical, tuyến bài viết và tính đồng nhất của các bản triển khai.
-- .github/workflows/deploy-cloudflare-workers.yml: đóng gói các tệp website tĩnh cùng `_headers`, chỉ phát hành Worker khi có token triển khai riêng, rồi xác minh năm header bảo mật và các tuyến quan trọng.
+- .github/workflows/deploy-cloudflare-workers.yml: đóng gói asset tĩnh, xác thực entrypoint bảo mật và kiểm tra header/route sau triển khai khi token được cấu hình.
 - favicon.svg: biểu tượng website.
-- _headers: chính sách HTTP security headers cho Cloudflare Workers Static Assets và Cloudflare Pages; không thay thế việc kiểm tra cấu hình runtime sau triển khai.
+- _headers: chính sách header cho Cloudflare Pages và static assets; worker.mjs cũng gắn header trực tiếp vào mọi phản hồi đi qua binding ASSETS.
 - 404.html: trang thông báo đường dẫn không tồn tại.
 
 ## Triển khai
@@ -39,7 +39,7 @@ Mở index.html trong trình duyệt. Website không cần bước build. Google
 Repository được cấu hình để phục vụ từ nhánh main, thư mục /. Mỗi lần cập nhật lên main, GitHub Pages sẽ tự build lại. Kiểm tra mục Settings → Pages nếu trạng thái build bị lỗi.
 
 ### Cloudflare Workers (bản chính hiện tại)
-Worker đang phục vụ website tĩnh. URL công khai ở phần đầu tài liệu. Quy trình triển khai chuẩn nằm tại [GitHub Actions — Deploy Cloudflare Workers](https://github.com/manhdungub-boop/ai-thuc-chien-blog/actions/workflows/deploy-cloudflare-workers.yml); quy trình đóng gói cả `_headers` để Cloudflare Workers Static Assets áp dụng header trên nội dung tĩnh, đồng thời giữ nguyên kiến trúc không cần Worker entrypoint.
+Nội dung vẫn là HTML/CSS/JS tĩnh; worker.mjs là lớp runtime mỏng, gọi ASSETS.fetch() và gắn security headers lên phản hồi 200/404/lỗi, không chứa API nghiệp vụ hay dữ liệu động.
 
 Thiết lập một lần để bật triển khai tự động:
 1. Trong [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens), tạo token phù hợp với quyền chỉnh sửa Workers Scripts trong đúng tài khoản Cloudflare của website. Ưu tiên mẫu **Edit Cloudflare Workers** hoặc token tùy chỉnh giới hạn vào tài khoản này.
@@ -53,7 +53,7 @@ Có thể kết nối repository tại https://dash.cloudflare.com/ → Workers 
 
 ## Bảo vệ trình duyệt
 
-Tệp `_headers` bật `nosniff`, chống nhúng trang bằng iframe, chính sách referrer giới hạn, vô hiệu hóa một số quyền trình duyệt và HSTS trên HTTPS. Content Security Policy chưa được bật để tránh vô tình chặn script inline, Google Fonts hoặc Cloudflare Web Analytics; chỉ bổ sung sau khi kiểm thử đầy đủ.
+Tệp _headers giữ chính sách cho Cloudflare Pages và static assets. Do quy tắc đó không áp dụng cho response do Worker code tạo ra, worker.mjs chủ động gắn header trực tiếp sau khi gọi binding ASSETS. Content Security Policy chưa được bật để tránh vô tình chặn script inline, Google Fonts hoặc Cloudflare Web Analytics; chỉ bổ sung sau khi kiểm thử đầy đủ.
 
 ## Kiểm tra sau mỗi lần xuất bản
 

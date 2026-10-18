@@ -18,6 +18,7 @@ on:
       - "404.html"
       - "google4e45ddcf8facb122.html"
       - "wrangler.jsonc"
+      - "worker.mjs"
       - ".github/workflows/deploy-cloudflare-workers.yml"
   workflow_dispatch:
 
@@ -49,9 +50,13 @@ jobs:
           config = json.loads(Path("wrangler.jsonc").read_text(encoding="utf-8"))
           assert config.get("name") == "ai-thuc-chien-blog", "Refusing to deploy to an unexpected Worker"
           assert config.get("account_id") == "92cf091bbac8b4879ec65feb30b4715b", "Unexpected Cloudflare account"
-          assert config.get("assets", {}).get("directory") == "./dist", "Worker assets must come from dist/"
-          assert "main" not in config, "This site should remain static-only"
-          assert Path("dist/_headers").is_file(), "Security headers file was not packaged"
+          assets = config.get("assets", {})
+          assert config.get("main") == "./worker.mjs", "Worker must load the reviewed security-header wrapper"
+          assert assets.get("directory") == "./dist", "Worker assets must come from dist/"
+          assert assets.get("binding") == "ASSETS", "Worker must bind static files to ASSETS"
+          assert assets.get("run_worker_first") is True, "All requests must pass through the Worker security wrapper"
+          assert Path("worker.mjs").is_file(), "Worker entrypoint was not included in source"
+          assert Path("dist/_headers").is_file(), "Security headers file was not packaged for Pages/static-assets handling"
           assert Path("dist/google4e45ddcf8facb122.html").is_file(), "Search Console verification file was not packaged"
           assert list(Path("dist/articles").glob("*.html")), "No article pages were packaged"
           for required in ["X-Content-Type-Options: nosniff", "X-Frame-Options: DENY", "Referrer-Policy: strict-origin-when-cross-origin", "Permissions-Policy:", "Strict-Transport-Security: max-age=31536000"]:

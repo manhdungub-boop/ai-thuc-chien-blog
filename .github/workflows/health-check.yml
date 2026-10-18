@@ -27,9 +27,11 @@ jobs:
         with:
           node-version: 22
 
-      - name: Test homepage search behavior
+      - name: Check worker runtime and test security headers
         run: |
           node --check script.js
+          node --check worker.mjs
+          node scripts/test_worker_headers.mjs
           node scripts/test_homepage_search.cjs
 
       - name: Test copy-to-clipboard interactions
@@ -50,9 +52,13 @@ jobs:
 
           worker_config = json.loads(Path("wrangler.jsonc").read_text(encoding="utf-8"))
           assert worker_config.get("name") == "ai-thuc-chien-blog", "Worker deploy target must be the existing production Worker"
-          assert worker_config.get("assets", {}).get("directory") == "./dist", "Worker must deploy the prepared dist directory"
-          assert "main" not in worker_config, "This site is static-only; do not add a Worker code entrypoint accidentally"
-          print("Worker deployment config PASS: production target and static-only assets")
+          assets_config = worker_config.get("assets", {})
+          assert worker_config.get("main") == "./worker.mjs", "Worker must use the reviewed security-header entrypoint"
+          assert assets_config.get("directory") == "./dist", "Worker must deploy the prepared dist directory"
+          assert assets_config.get("binding") == "ASSETS", "Worker entrypoint must use the expected static assets binding"
+          assert assets_config.get("run_worker_first") is True, "All requests must pass through the security-header wrapper"
+          assert Path("worker.mjs").is_file(), "Worker entrypoint is missing"
+          print("Worker deployment config PASS: security wrapper, static-assets binding and worker-first routing")
 
           article_paths = sorted(Path("articles").glob("*.html"))
           assert article_paths, "expected at least one article HTML file"
@@ -253,32 +259,51 @@ jobs:
             echo "SECURITY HEADERS PASS: $host"
           done
 
-      - name: Audit security headers on the primary Worker
+      - name: Verify security headers on the primary Worker
         shell: bash
         run: |
           set -euo pipefail
           host="https://ai-thuc-chien-blog.manhdungub.workers.dev"
           headers="$(mktemp)"
-          trap 'rm -f "$headers"' EXIT
-          if ! curl --fail --silent --show-error --location --max-time 20 -D "$headers" -o /dev/null "$host/"; then
-            echo "::warning::Worker header audit could not complete; the detailed production-deploy workflow must verify the Worker after deployment."
-            exit 0
-          fi
-          missing=0
-          for expected in \
-            'X-Content-Type-Options: nosniff' \
-            'X-Frame-Options: DENY' \
-            'Referrer-Policy: strict-origin-when-cross-origin' \
-            'Permissions-Policy: camera=(), geolocation=(), microphone=(), payment=()' \
-            'Strict-Transport-Security: max-age=31536000'; do
-            if ! grep -Fqi "$expected" "$headers"; then
-              echo "::warning::Primary Worker is still missing a security header: $expected. Configure CLOUDFLARE_WORKERS_API_TOKEN and run Deploy Cloudflare Workers to publish _headers."
-              missing=1
+          body="$(mktemp)"
+          trap 'rm -f "$headers" "$body"' EXIT
+          passed=0
+          for attempt in 1 2 3 4 5 6; do
+            if curl --fail --silent --show-error --location --max-time 20 -D "$headers" -o "$body" "$host/"; then
+              missing=0
+              for expected in \
+                'X-Content-Type-Options: nosniff' \
+                'X-Frame-Options: DENY' \
+                'Referrer-Policy: strict-origin-when-cross-origin' \
+                'Permissions-Policy: camera=(), geolocation=(), microphone=(), payment=()' \
+                'Strict-Transport-Security: max-age=31536000'; do
+                if ! grep -Fqi "$expected" "$headers"; then
+                  echo "Missing Worker security header: $expected"
+                  missing=1
+                fi
+              done
+              if [ "$missing" -eq 0 ]; then
+                passed=1
+                break
+              fi
+            else
+              echo "Worker homepage request failed on attempt $attempt/6"
+            fi
+            if [ "$attempt" -lt 6 ]; then
+              echo "Retrying Worker header check after deployment propagation delay"
+              sleep 10
             fi
           done
-          if [ "$missing" -eq 0 ]; then
-            echo "SECURITY HEADERS PASS: $host"
-          else
-            echo "Worker security header gap is reported as a warning until the scoped deploy token is configured; the Pages host is checked strictly above."
+          if [ "$passed" -ne 1 ]; then
+            echo "FAIL: required security headers were not verified on $host"
+            cat "$headers"
+            exit 1
           fi
-
+          for path in "/articles/viet-prompt-ai-hieu-qua" "/sitemap.xml" "/feed.xml" "/google4e45ddcf8facb122.html"; do
+            code="$(curl --silent --show-error --location --max-time 20 -o /dev/null -w "%{http_code}" "$host$path")"
+            if [ "$code" != "200" ]; then
+              echo "FAIL: $host$path returned HTTP $code"
+              exit 1
+            fi
+          done
+          echo "WORKER SECURITY PASS: all five headers present; new article, sitemap, RSS, and Search Console verification route return HTTP 200."
