@@ -5,7 +5,7 @@ const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
 const output = path.join(root, 'dist');
-const rootFiles = ['index.html', 've-chung-toi.html', 'feed.xml', 'styles.css', 'script.js', 'robots.txt', 'sitemap.xml', 'favicon.svg', '404.html', 'google4e45ddcf8facb122.html', '_headers'];
+const rootFiles = ['index.html', 'thu-vien.html', 've-chung-toi.html', 'feed.xml', 'styles.css', 'script.js', 'robots.txt', 'sitemap.xml', 'favicon.svg', '404.html', 'google4e45ddcf8facb122.html', '_headers'];
 function fail(message) { console.error('STATIC BUILD FAIL:', message); process.exit(1); }
 for (const name of rootFiles) if (!fs.existsSync(path.join(root, name))) fail('Required source file is missing: ' + name);
 const articlesDir = path.join(root, 'articles');

@@ -52,10 +52,13 @@ function validatePageMetadata(html, file) {
 }
 
 function getPublishedArticleFiles(outputDir) {
-  const homepagePath = path.join(outputDir, 'index.html');
-  const homepage = fs.readFileSync(homepagePath, 'utf8');
-  const links = [...homepage.matchAll(/href=["'](?:\.\/)?articles\/([^"'#?]+\.html)(?:#[^"']*)?["']/gi)]
-    .map((match) => match[1]);
+  const discoveryPages = ['index.html', 'thu-vien.html']
+    .filter((name) => fs.existsSync(path.join(outputDir, name)))
+    .map((name) => fs.readFileSync(path.join(outputDir, name), 'utf8'));
+  const links = discoveryPages.flatMap((page) =>
+    [...page.matchAll(/href=[\"'](?:\.\/)?articles\/([^\"'#?]+\.html)(?:#[^\"']*)?[\"']/gi)]
+      .map((match) => match[1])
+  );
   const unique = [...new Set(links)];
   for (const file of unique) {
     if (file.includes('/') || file.includes('\\')) {
@@ -97,10 +100,18 @@ function generate(outputDir) {
     throw new Error('About page canonical URL does not match the extensionless route');
   }
 
+  const libraryPath = path.join(outputDir, 'thu-vien.html');
+  const libraryHtml = fs.readFileSync(libraryPath, 'utf8');
+  const library = validatePageMetadata(libraryHtml, 'thu-vien.html');
+  if (library.canonical !== SITE + '/thu-vien.html') {
+    throw new Error('Topic library canonical URL does not match /thu-vien.html');
+  }
+
   const today = new Date().toISOString().slice(0, 10);
   const sitemapEntries = [
     { canonical: SITE + '/' },
     about,
+    library,
     ...articles
   ].map((page) => [
     '  <url>',
