@@ -32,6 +32,25 @@ function getTitle(html) {
   return match ? match[1].replace(/<[^>]+>/g, '').trim() : '';
 }
 
+function getCanonical(html, file) {
+  const tag = (html.match(/<link\b[^>]*rel=["']canonical["'][^>]*>/i) || [])[0] || '';
+  const match = tag.match(/\bhref\s*=\s*["']([^"']+)["']/i);
+  const canonical = match ? match[1].trim() : '';
+  if (!canonical || !canonical.startsWith(SITE + '/')) {
+    throw new Error('Missing or invalid canonical URL in ' + file);
+  }
+  return canonical;
+}
+
+function validatePageMetadata(html, file) {
+  const title = getTitle(html);
+  const description = getMetaContent(html, 'description');
+  if (!title || !description) {
+    throw new Error('Missing title or meta description in ' + file);
+  }
+  return { canonical: getCanonical(html, file), title, description };
+}
+
 function generate(outputDir) {
   const articlesDir = path.join(outputDir, 'articles');
   const files = fs.readdirSync(articlesDir)
@@ -40,37 +59,34 @@ function generate(outputDir) {
 
   const articles = files.map((file) => {
     const html = fs.readFileSync(path.join(articlesDir, file), 'utf8');
-    const canonicalMatch = html.match(/<link\b[^>]*rel=["']canonical["'][^>]*>/i);
-    const canonicalTag = canonicalMatch ? canonicalMatch[0] : '';
-    const canonicalValue = canonicalTag.match(/\bhref\s*=\s*["']([^"']+)["']/i);
-    const canonical = canonicalValue ? canonicalValue[1].trim() : '';
-    const title = getTitle(html);
-    const description = getMetaContent(html, 'description');
-
-    if (!canonical || !canonical.startsWith(SITE + '/articles/')) {
-      throw new Error('Missing or invalid canonical URL in ' + file);
+    const metadata = validatePageMetadata(html, 'articles/' + file);
+    if (!metadata.canonical.startsWith(SITE + '/articles/')) {
+      throw new Error('Article canonical must use /articles/ path in ' + file);
     }
-    if (!title || !description) {
-      throw new Error('Missing title or meta description in ' + file);
+    if (metadata.canonical.endsWith('.html')) {
+      throw new Error('Article canonical must remain extensionless in ' + file);
     }
-    return { canonical, title, description };
+    return metadata;
   });
+
+  const aboutPath = path.join(outputDir, 've-chung-toi.html');
+  const aboutHtml = fs.readFileSync(aboutPath, 'utf8');
+  const about = validatePageMetadata(aboutHtml, 've-chung-toi.html');
+  if (about.canonical !== SITE + '/ve-chung-toi') {
+    throw new Error('About page canonical URL does not match the extensionless route');
+  }
 
   const today = new Date().toISOString().slice(0, 10);
   const sitemapEntries = [
+    { canonical: SITE + '/' },
+    about,
+    ...articles
+  ].map((page) => [
     '  <url>',
-    '    <loc>' + escapeXml(SITE + '/') + '</loc>',
+    '    <loc>' + escapeXml(page.canonical) + '</loc>',
     '    <lastmod>' + today + '</lastmod>',
     '  </url>'
-  ];
-  for (const article of articles) {
-    sitemapEntries.push(
-      '  <url>',
-      '    <loc>' + escapeXml(article.canonical) + '</loc>',
-      '    <lastmod>' + today + '</lastmod>',
-      '  </url>'
-    );
-  }
+  ].join('\n'));
 
   const sitemap = [
     '<?xml version="1.0" encoding="UTF-8"?>',
@@ -95,7 +111,7 @@ function generate(outputDir) {
     '  <channel>',
     '    <title>AI Thực Chiến</title>',
     '    <link>' + escapeXml(SITE + '/') + '</link>',
-    '    <description>Kien thuc AI thuc hanh, tu dong hoa va cong nghe cho nguoi Viet.</description>',
+    '    <description>Kiến thức AI thực hành, tự động hóa và công nghệ cho người Việt.</description>',
     ...rssItems,
     '  </channel>',
     '</rss>',
@@ -104,7 +120,7 @@ function generate(outputDir) {
 
   fs.writeFileSync(path.join(outputDir, 'sitemap.xml'), sitemap, 'utf8');
   fs.writeFileSync(path.join(outputDir, 'feed.xml'), feed, 'utf8');
-  console.log('SEO FEEDS GENERATED: ' + articles.length + ' articles.');
+  console.log('SEO FEEDS GENERATED: ' + articles.length + ' articles + homepage + about page.');
 }
 
 module.exports = generate;

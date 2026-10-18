@@ -11,36 +11,69 @@ const articleDir = path.join(root, 'articles');
 const articleFiles = fs.readdirSync(articleDir).filter((name) => name.endsWith('.html')).sort();
 assert.ok(articleFiles.length > 0, 'No article HTML files found');
 
-// Generate the exact deployment artifact before checking sitemap/RSS parity.
+// Build the exact deployment artifact before validating generated SEO files.
 require('./build_static_site.cjs');
 
 const distDir = path.join(root, 'dist');
 const sitemap = fs.readFileSync(path.join(distDir, 'sitemap.xml'), 'utf8');
 const feed = fs.readFileSync(path.join(distDir, 'feed.xml'), 'utf8');
-
 assert.match(sitemap, /<urlset\b[\s\S]*<\/urlset>/, 'dist/sitemap.xml is not a URL set');
 assert.match(feed, /<rss\b[\s\S]*<\/rss>/, 'dist/feed.xml is not an RSS document');
 
 const sitemapUrls = [...sitemap.matchAll(/<loc>\s*([^<]+)\s*<\/loc>/g)].map((m) => m[1].trim());
 const feedUrls = [...feed.matchAll(/<link>\s*(https?:\/\/[^<]+)\s*<\/link>/g)].map((m) => m[1].trim());
 assert.ok(sitemapUrls.includes(baseUrl + '/'), 'Sitemap must include the homepage');
+assert.ok(sitemapUrls.includes(baseUrl + '/ve-chung-toi'), 'Sitemap must include the about/editorial policy page');
 assert.equal(new Set(sitemapUrls).size, sitemapUrls.length, 'Sitemap contains duplicate URLs');
+
+const publicPages = [
+  { file: 'index.html', expected: baseUrl + '/' },
+  { file: 've-chung-toi.html', expected: baseUrl + '/ve-chung-toi' },
+  ...articleFiles.map((file) => ({ file: path.join('articles', file), expected: null }))
+];
+
+const canonicalUrls = [];
+for (const page of publicPages) {
+  const fullPath = path.join(root, page.file);
+  const source = fs.readFileSync(fullPath, 'utf8');
+  const label = page.file;
+  assert.match(source, /<html\b[^>]*lang=["']vi["']/i, label + ': missing Vietnamese document language');
+  const title = source.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  assert.ok(title && title[1].trim(), label + ': missing title');
+  assert.match(source, /<meta\b[^>]*name=["']description["'][^>]*content=["'][^"']{30,}["']/i, label + ': missing or too-short meta description');
+  const canonicalTag = (source.match(/<link\b[^>]*rel=["']canonical["'][^>]*>/i) || [])[0] || '';
+  const canonicalMatch = canonicalTag.match(/\bhref=["']([^"']+)["']/i);
+  assert.ok(canonicalMatch, label + ': missing canonical URL');
+  const canonical = canonicalMatch[1];
+  if (page.expected) assert.equal(canonical, page.expected, label + ': unexpected canonical URL');
+  else {
+    assert.ok(canonical.startsWith(baseUrl + '/articles/'), label + ': article canonical uses unexpected host/path');
+    assert.ok(!canonical.endsWith('.html'), label + ': article canonical should remain extensionless');
+  }
+  assert.ok(!canonical.includes('?'), label + ': canonical URL must not contain tracking/query parameters');
+  canonicalUrls.push(canonical);
+  assert.ok(sitemapUrls.includes(canonical), label + ': canonical URL missing from generated sitemap');
+
+  const jsonLdBlocks = [...source.matchAll(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
+  assert.ok(jsonLdBlocks.length > 0, label + ': missing JSON-LD structured data');
+  for (const block of jsonLdBlocks) {
+    assert.doesNotThrow(() => JSON.parse(block[1].trim()), label + ': invalid JSON-LD structured data');
+  }
+  assert.ok(fs.existsSync(path.join(distDir, page.file)), label + ': page missing from deployment output');
+}
+
+assert.equal(new Set(canonicalUrls).size, canonicalUrls.length, 'Public HTML pages contain duplicate canonical URLs');
 
 for (const file of articleFiles) {
   const source = fs.readFileSync(path.join(articleDir, file), 'utf8');
-  const canonicalMatch = source.match(/<link\s+rel=["']canonical["']\s+href=["']([^"']+)["']/i);
-  assert.ok(canonicalMatch, file + ': missing canonical URL');
-  const canonical = canonicalMatch[1];
-  assert.ok(canonical.startsWith(baseUrl + '/articles/'), file + ': canonical URL uses unexpected host/path');
-  assert.ok(!canonical.endsWith('.html'), file + ': canonical policy should remain extensionless');
-  assert.ok(sitemapUrls.includes(canonical), file + ': canonical URL is missing from generated sitemap.xml');
-  assert.ok(feedUrls.includes(canonical), file + ': canonical URL is missing from generated feed.xml');
-  assert.ok(fs.existsSync(path.join(distDir, 'articles', file)), file + ': article missing from deployment output');
+  const canonical = source.match(/<link\b[^>]*rel=["']canonical["'][^>]*>/i)[0].match(/\bhref=["']([^"']+)["']/i)[1];
+  assert.ok(feedUrls.includes(canonical), file + ': canonical URL missing from generated RSS feed');
 }
 
 const sitemapArticleUrls = sitemapUrls.filter((url) => url.startsWith(baseUrl + '/articles/'));
 const feedArticleUrls = feedUrls.filter((url) => url.startsWith(baseUrl + '/articles/'));
 assert.equal(sitemapArticleUrls.length, articleFiles.length, 'Generated sitemap article count differs from source article count');
 assert.equal(feedArticleUrls.length, articleFiles.length, 'Generated RSS article count differs from source article count');
+assert.equal(sitemapUrls.length, articleFiles.length + 2, 'Sitemap should contain homepage, about page, and every article');
 
-console.log('SEO CONSISTENCY PASS: ' + articleFiles.length + ' articles match canonical URLs, generated sitemap.xml, feed.xml, and dist output.');
+console.log('SEO CONSISTENCY PASS: ' + articleFiles.length + ' articles and 2 static pages have valid metadata, JSON-LD, canonical URLs, sitemap/RSS parity, and deployment output.');
