@@ -119,3 +119,102 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
   // Keep content visible when reveal animations are unavailable or not wanted.
   revealItems.forEach((element) => element.classList.add('visible'));
 }
+
+
+// Site-wide AI reader assistant. Conversation stays in this tab and is not persisted.
+(() => {
+  if (document.getElementById('reader-ai-chat')) return;
+  const apiUrl = 'https://ai-thuc-chien-blog.manhdungub.workers.dev/api/chat';
+  const root = document.createElement('div');
+  root.id = 'reader-ai-chat';
+  root.innerHTML = `
+    <button class="reader-chat-launcher" type="button" aria-label="Mở trợ lý AI" aria-expanded="false" aria-controls="reader-chat-panel"><span aria-hidden="true">✦</span><span class="reader-chat-launcher-label">Hỏi AI</span></button>
+    <section class="reader-chat-panel" id="reader-chat-panel" role="dialog" aria-modal="false" aria-labelledby="reader-chat-title" hidden>
+      <header class="reader-chat-header"><div class="reader-chat-brand"><span class="reader-chat-avatar" aria-hidden="true">AI</span><div><h2 id="reader-chat-title">Trợ lý AI Thực Chiến</h2><p><span class="reader-chat-status-dot"></span> Hỏi về AI và bài viết trên blog</p></div></div><button class="reader-chat-close" type="button" aria-label="Đóng khung chat">×</button></header>
+      <div class="reader-chat-messages" role="log" aria-live="polite" aria-relevant="additions text"><div class="reader-chat-message assistant"><p>Xin chào! 👋 Bạn đang cần giải đáp điều gì về AI, công cụ hoặc tự động hóa?</p></div><div class="reader-chat-quick"><button type="button" data-chat-prompt="Tôi mới bắt đầu dùng AI, nên bắt đầu từ đâu?">Tôi mới dùng AI</button><button type="button" data-chat-prompt="Làm sao kiểm chứng câu trả lời của AI?">Kiểm chứng AI</button><button type="button" data-chat-prompt="Gợi ý một workflow AI miễn phí cho công việc của tôi.">Workflow miễn phí</button></div></div>
+      <p class="reader-chat-error" role="status" hidden></p>
+      <form class="reader-chat-form"><label class="reader-chat-sr-only" for="reader-chat-input">Nhập câu hỏi</label><textarea id="reader-chat-input" rows="1" maxlength="1200" placeholder="Nhập câu hỏi của bạn…" required></textarea><button class="reader-chat-send" type="submit" aria-label="Gửi câu hỏi">➤</button></form>
+      <p class="reader-chat-disclaimer">AI có thể mắc lỗi. Đừng gửi mật khẩu, mã OTP hoặc API key.</p>
+    </section>`;
+  document.body.appendChild(root);
+  const launcher = root.querySelector('.reader-chat-launcher');
+  const panel = root.querySelector('.reader-chat-panel');
+  const close = root.querySelector('.reader-chat-close');
+  const log = root.querySelector('.reader-chat-messages');
+  const form = root.querySelector('.reader-chat-form');
+  const input = root.querySelector('#reader-chat-input');
+  const send = root.querySelector('.reader-chat-send');
+  const error = root.querySelector('.reader-chat-error');
+  const messages = [];
+  let busy = false;
+
+  const setOpen = (open) => {
+    panel.hidden = !open;
+    launcher.setAttribute('aria-expanded', String(open));
+    launcher.querySelector('.reader-chat-launcher-label').textContent = open ? 'Đóng chat' : 'Hỏi AI';
+    if (open) input.focus();
+  };
+  launcher.addEventListener('click', () => setOpen(panel.hidden));
+  close.addEventListener('click', () => { setOpen(false); launcher.focus(); });
+  document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !panel.hidden) setOpen(false); });
+
+  const addMessage = (role, text, extraClass = '') => {
+    const item = document.createElement('div');
+    item.className = `reader-chat-message ${role} ${extraClass}`.trim();
+    const paragraph = document.createElement('p');
+    paragraph.textContent = text;
+    item.appendChild(paragraph);
+    log.appendChild(item);
+    log.scrollTop = log.scrollHeight;
+    return item;
+  };
+  const ask = async (rawText) => {
+    const text = String(rawText || '').trim();
+    if (!text || busy) return;
+    const quick = log.querySelector('.reader-chat-quick');
+    if (quick) quick.remove();
+    error.hidden = true;
+    error.textContent = '';
+    addMessage('user', text);
+    messages.push({ role: 'user', content: text.slice(0, 1200) });
+    input.value = '';
+    busy = true;
+    send.disabled = true;
+    input.disabled = true;
+    const loading = addMessage('assistant', 'Đang tìm câu trả lời…', 'is-loading');
+    try {
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: messages.slice(-8) }),
+      });
+      const data = await response.json().catch(() => ({}));
+      loading.remove();
+      if (!response.ok || typeof data.answer !== 'string' || !data.answer.trim()) {
+        throw new Error(data.error || 'Chưa thể trả lời lúc này. Vui lòng thử lại sau.');
+      }
+      const answer = data.answer.trim().slice(0, 6000);
+      addMessage('assistant', answer);
+      messages.push({ role: 'assistant', content: answer });
+      if (messages.length > 8) messages.splice(0, messages.length - 8);
+    } catch (err) {
+      loading.remove();
+      error.textContent = err instanceof TypeError
+        ? 'Không kết nối được với trợ lý. Hãy kiểm tra mạng hoặc thử lại sau.'
+        : (err.message || 'Có lỗi xảy ra. Vui lòng thử lại.');
+      error.hidden = false;
+    } finally {
+      busy = false;
+      send.disabled = false;
+      input.disabled = false;
+      input.focus();
+    }
+  };
+  form.addEventListener('submit', (event) => { event.preventDefault(); ask(input.value); });
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); form.requestSubmit(); }
+  });
+  root.querySelectorAll('[data-chat-prompt]').forEach((button) => {
+    button.addEventListener('click', () => ask(button.getAttribute('data-chat-prompt')));
+  });
+})();

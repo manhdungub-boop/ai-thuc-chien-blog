@@ -79,3 +79,37 @@ const httpResponse = await worker.fetch(new Request('http://example.test/'), {
 assertSecurityHeaders(httpResponse, false);
 
 console.log('PASS: security headers on 200/404/500, root and article routing, asset metadata preserved, internal error hidden, HSTS HTTPS-only');
+
+
+const chatRequest = new Request('https://example.test/api/chat', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', 'Origin': 'https://ai-thuc-chien-blog.manhdungub.workers.dev', 'CF-Connecting-IP': '198.51.100.44' },
+  body: JSON.stringify({ messages: [{ role: 'user', content: 'Tôi nên bắt đầu học AI từ đâu?' }] }),
+});
+const chat = await worker.fetch(chatRequest, {
+  AI: { run: async (model, input) => {
+    assert.equal(model, '@cf/meta/llama-3.1-8b-instruct');
+    assert.equal(input.messages.at(-1).content, 'Tôi nên bắt đầu học AI từ đâu?');
+    return { response: 'Hãy bắt đầu với một tác vụ nhỏ và kiểm chứng kết quả.' };
+  } },
+  ASSETS: { fetch: async () => new Response('unexpected asset fetch', { status: 500 }) },
+});
+assert.equal(chat.status, 200);
+assert.equal((await chat.json()).answer, 'Hãy bắt đầu với một tác vụ nhỏ và kiểm chứng kết quả.');
+assert.equal(chat.headers.get('cache-control'), 'no-store');
+assert.equal(chat.headers.get('access-control-allow-origin'), 'https://ai-thuc-chien-blog.manhdungub.workers.dev');
+assertSecurityHeaders(chat);
+
+const badOrigin = await worker.fetch(new Request('https://example.test/api/chat', {
+  method: 'POST', headers: { 'Content-Type': 'application/json', 'Origin': 'https://evil.example' },
+  body: JSON.stringify({ messages: [{ role: 'user', content: 'hello' }] }),
+}), { AI: { run: async () => ({ response: 'no' }) }, ASSETS: { fetch: async () => new Response('asset') } });
+assert.equal(badOrigin.status, 403);
+assert.equal((await badOrigin.json()).error, 'Nguồn yêu cầu không được phép.');
+
+const noAi = await worker.fetch(new Request('https://example.test/api/chat', {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ messages: [{ role: 'user', content: 'hello' }] }),
+}), { ASSETS: { fetch: async () => new Response('asset') } });
+assert.equal(noAi.status, 503);
+console.log('PASS: reader chat API validation, model call, same-origin policy, no-store, and graceful missing-binding response');
