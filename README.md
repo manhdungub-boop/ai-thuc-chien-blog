@@ -20,6 +20,7 @@ Mở index.html trong trình duyệt. Website không cần bước build. Google
 - styles.css: giao diện responsive và hiệu ứng.
 - script.js: menu di động, hiệu ứng cuộn và tìm kiếm bài viết theo từ khóa (hỗ trợ tìm tiếng Việt không dấu).
 - scripts/test_homepage_search.cjs: kiểm thử hồi quy cho tìm kiếm có/không dấu, chữ Đ hoa, kết quả rỗng và xóa từ khóa.
+- scripts/test_article_navigation.cjs: kiểm tra mục bài viết liên quan, số lượng liên kết, liên kết gãy và bố cục đáp ứng trên sáu bài viết.
 - articles/: sáu bài viết hướng dẫn, gồm AI cơ bản, workflow có kiểm duyệt, kiểm chứng nội dung và SEO kỹ thuật.
 - sitemap.xml: danh sách URL chính dành cho công cụ tìm kiếm.
 - feed.xml: RSS 2.0 để người đọc theo dõi bài viết mới.

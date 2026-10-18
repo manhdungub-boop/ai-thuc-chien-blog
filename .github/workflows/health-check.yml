@@ -32,6 +32,9 @@ jobs:
           node --check script.js
           node scripts/test_homepage_search.cjs
 
+      - name: Test contextual article navigation
+        run: node scripts/test_article_navigation.cjs
+
       - name: Validate HTML metadata and sitemap
         run: |
           python - <<'PY'
