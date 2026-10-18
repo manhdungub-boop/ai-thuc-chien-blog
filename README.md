@@ -38,6 +38,15 @@ Mở index.html trong trình duyệt. Website không cần bước build. Google
 ### GitHub Pages
 Repository được cấu hình để phục vụ từ nhánh main, thư mục /. Mỗi lần cập nhật lên main, GitHub Pages sẽ tự build lại. Kiểm tra mục Settings → Pages nếu trạng thái build bị lỗi.
 
+### Cloudflare Workers Builds — cấu hình dashboard
+Trong Cloudflare Dashboard → Workers & Pages → chọn từng Worker đang kết nối GitHub → Settings → Build:
+- Build command: npm run build
+- Deploy command: npx wrangler deploy
+- Preview command: npx wrangler preview
+- Root directory: để trống (repository root)
+
+Workers Builds lấy Build/Deploy/Preview command từ Settings của từng Worker. Không dựa vào trường build.command trong wrangler.jsonc; tài liệu Cloudflare ghi Workers Builds không thực thi custom build settings khai báo trong Wrangler config. Lưu các giá trị này cho từng Worker đang dùng cùng repository. Tài liệu: https://developers.cloudflare.com/workers/ci-cd/builds/configuration/
+
 ### Cloudflare Workers (bản chính hiện tại)
 Nội dung vẫn là HTML/CSS/JS tĩnh; worker.mjs là lớp runtime mỏng, gọi ASSETS.fetch() và gắn security headers lên phản hồi 200/404/lỗi, không chứa API nghiệp vụ hay dữ liệu động.
 
@@ -53,7 +62,7 @@ Có thể kết nối repository tại https://dash.cloudflare.com/ → Workers 
 
 ## Bảo vệ trình duyệt
 
-Tệp _headers giữ chính sách cho Cloudflare Pages và static assets. Do quy tắc đó không áp dụng cho response do Worker code tạo ra, worker.mjs chủ động gắn header trực tiếp sau khi gọi binding ASSETS. Content Security Policy chưa được bật để tránh vô tình chặn script inline, Google Fonts hoặc Cloudflare Web Analytics; chỉ bổ sung sau khi kiểm thử đầy đủ.
+Tệp _headers giữ chính sách cho Cloudflare Pages và static assets. Do quy tắc đó không áp dụng cho response do Worker code tạo ra, worker.mjs chủ động gắn header trực tiếp sau khi gọi binding ASSETS. Builder npm run build tạo dist/ và kiểm tra _headers trước khi deploy. Content Security Policy chưa được bật để tránh vô tình chặn script inline, Google Fonts hoặc Cloudflare Web Analytics; chỉ bổ sung sau khi kiểm thử đầy đủ.
 
 ## Kiểm tra sau mỗi lần xuất bản
 

@@ -19,6 +19,9 @@ on:
       - "google4e45ddcf8facb122.html"
       - "wrangler.jsonc"
       - "worker.mjs"
+      - "package.json"
+      - "scripts/build_static_site.cjs"
+      - "scripts/test_worker_headers.mjs"
       - ".github/workflows/deploy-cloudflare-workers.yml"
   workflow_dispatch:
 
@@ -36,14 +39,16 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v7
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - name: Prepare and validate static assets
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf dist
-          mkdir -p dist/articles
-          cp index.html ve-chung-toi.html feed.xml styles.css script.js robots.txt sitemap.xml favicon.svg 404.html google4e45ddcf8facb122.html _headers dist/
-          cp articles/*.html dist/articles/
+          npm run build
           python - <<'PY'
           import json
           from pathlib import Path
@@ -65,6 +70,9 @@ jobs:
           PY
           node --check worker.mjs
           node scripts/test_worker_headers.mjs
+
+      - name: Test Worker security headers
+        run: node scripts/test_worker_headers.mjs
 
       - name: Check for dedicated Worker deployment token
         id: token

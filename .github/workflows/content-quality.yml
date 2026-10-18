@@ -17,6 +17,8 @@ on:
       - "index.html"
       - "script.js"
       - "styles.css"
+      - "package.json"
+      - "scripts/build_static_site.cjs"
       - "worker.mjs"
       - "wrangler.jsonc"
       - "scripts/test_worker_headers.mjs"
@@ -47,12 +49,8 @@ jobs:
           node --check worker.mjs
       - name: Test Worker security headers
         run: node scripts/test_worker_headers.mjs
-      - name: Prepare static assets for Wrangler dry-run
-        run: |
-          rm -rf dist
-          mkdir -p dist/articles
-          cp index.html ve-chung-toi.html feed.xml styles.css script.js robots.txt sitemap.xml favicon.svg 404.html google4e45ddcf8facb122.html _headers dist/
-          cp articles/*.html dist/articles/
+      - name: Build and validate static assets
+        run: npm run build
       - name: Compile Worker and asset bundle without deploying
         run: npx --yes wrangler@4 deploy --dry-run --config wrangler.jsonc
       - name: Test copy-to-clipboard interactions
@@ -63,14 +61,6 @@ jobs:
         run: node scripts/test_article_navigation.cjs
       - name: Test homepage discovery for every published article
         run: node scripts/test_homepage_article_coverage.cjs
-      - name: Prepare static assets for Wrangler dry run
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -rf dist
-          mkdir -p dist/articles
-          cp index.html ve-chung-toi.html feed.xml styles.css script.js robots.txt sitemap.xml favicon.svg 404.html google4e45ddcf8facb122.html _headers dist/
-          cp articles/*.html dist/articles/
       - name: Validate Worker bundle with Wrangler dry run
         run: npx --yes wrangler@4 deploy --dry-run --config wrangler.jsonc
       - name: Validate changed articles
