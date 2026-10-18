@@ -7,6 +7,12 @@
     <language>vi-VN</language>
     <atom:link href="https://ai-thuc-chien-blog.manhdungub.workers.dev/feed.xml" rel="self" type="application/rss+xml"/>
     <item>
+      <title>Prompt Injection là gì? 8 lớp phòng vệ cho workflow AI | AI Thực Chiến</title>
+      <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/nhan-biet-prompt-injection-ai</link>
+      <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/nhan-biet-prompt-injection-ai</guid>
+      <description>Nhận diện prompt injection và áp dụng 8 lớp phòng vệ cho AI agent đọc web, email, tài liệu và sử dụng công cụ.</description>
+    </item>
+    <item>
       <title>Công thức viết prompt AI hiệu quả: 7 phần và 3 mẫu | AI Thực Chiến</title>
       <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/viet-prompt-ai-hieu-qua</link>
       <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/viet-prompt-ai-hieu-qua</guid>
