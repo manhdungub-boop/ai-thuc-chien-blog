@@ -114,3 +114,9 @@
 .community .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 @media(max-width:900px){.community-layout{grid-template-columns:minmax(0,1fr)}.community-account-card{max-width:none}.community-room-card{padding:21px}}
 @media(max-width:640px){.community-layout{gap:13px}.community-account-card,.community-room-card{padding:19px 16px}.community-room-heading{flex-direction:column;gap:8px}.community-room-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.community-room-tabs button{min-height:42px}.community-message{max-width:100%}.community-chat-form{gap:7px}.community-send{padding:0 11px}.community-intro{font-size:12px}}
+
+/* Performance experiment: defer off-screen section rendering until needed. */
+.section {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 560px;
+}
