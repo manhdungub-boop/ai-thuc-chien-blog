@@ -22,6 +22,34 @@ if (menuButton && nav) {
 const year = document.querySelector('#year');
 if (year) year.textContent = String(new Date().getFullYear());
 
+// Accessible copy buttons for reusable prompt templates and other text blocks.
+const copyButtons = document.querySelectorAll('[data-copy-target]');
+copyButtons.forEach((button) => {
+  const targetId = button.getAttribute('data-copy-target');
+  const statusId = button.getAttribute('data-copy-status');
+  const target = targetId ? document.getElementById(targetId) : null;
+  const status = statusId ? document.getElementById(statusId) : null;
+  if (!target) {
+    button.disabled = true;
+    if (status) status.textContent = 'Không tìm thấy nội dung cần sao chép.';
+    return;
+  }
+  button.addEventListener('click', async () => {
+    const text = 'value' in target ? target.value : (target.textContent || '');
+    if (!text.trim()) {
+      if (status) status.textContent = 'Không có nội dung để sao chép.';
+      return;
+    }
+    try {
+      if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') throw new Error('Clipboard API unavailable');
+      await navigator.clipboard.writeText(text);
+      if (status) status.textContent = 'Đã sao chép. Bạn có thể dán vào công cụ AI.';
+    } catch (_error) {
+      if (status) status.textContent = 'Không thể sao chép tự động. Hãy chọn nội dung rồi sao chép thủ công.';
+    }
+  });
+});
+
 // Lightweight client-side article search. It also matches Vietnamese without diacritics.
 const articleSearch = document.querySelector('#article-search');
 const articleSearchStatus = document.querySelector('#article-search-status');
