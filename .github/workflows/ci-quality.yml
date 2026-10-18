@@ -39,6 +39,7 @@ jobs:
       - name: Test Worker runtime and security headers
         run: |
           node scripts/test_worker_headers.mjs
+          node scripts/test_worker_retrieval.mjs
           node scripts/test_homepage_search.cjs
 
       - name: Test article content quality
