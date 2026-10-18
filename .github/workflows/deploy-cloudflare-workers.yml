@@ -1,0 +1,116 @@
+name: Deploy Cloudflare Workers
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "_headers"
+      - "index.html"
+      - "ve-chung-toi.html"
+      - "articles/**"
+      - "styles.css"
+      - "script.js"
+      - "robots.txt"
+      - "sitemap.xml"
+      - "feed.xml"
+      - "favicon.svg"
+      - "404.html"
+      - "google4e45ddcf8facb122.html"
+      - "wrangler.jsonc"
+      - ".github/workflows/deploy-cloudflare-workers.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-cloudflare-workers
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Prepare and validate static assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf dist
+          mkdir -p dist/articles
+          cp index.html ve-chung-toi.html feed.xml styles.css script.js robots.txt sitemap.xml favicon.svg 404.html google4e45ddcf8facb122.html _headers dist/
+          cp articles/*.html dist/articles/
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          config = json.loads(Path("wrangler.jsonc").read_text(encoding="utf-8"))
+          assert config.get("name") == "ai-thuc-chien-blog", "Refusing to deploy to an unexpected Worker"
+          assert config.get("account_id") == "92cf091bbac8b4879ec65feb30b4715b", "Unexpected Cloudflare account"
+          assert config.get("assets", {}).get("directory") == "./dist", "Worker assets must come from dist/"
+          assert "main" not in config, "This site should remain static-only"
+          assert Path("dist/_headers").is_file(), "Security headers file was not packaged"
+          assert Path("dist/google4e45ddcf8facb122.html").is_file(), "Search Console verification file was not packaged"
+          assert list(Path("dist/articles").glob("*.html")), "No article pages were packaged"
+          for required in ["X-Content-Type-Options: nosniff", "X-Frame-Options: DENY", "Referrer-Policy: strict-origin-when-cross-origin", "Permissions-Policy:", "Strict-Transport-Security: max-age=31536000"]:
+              assert required in Path("dist/_headers").read_text(encoding="utf-8"), f"Missing expected header rule: {required}"
+          print("WORKER ASSET PACKAGE PASS: static-only config, Search Console file, articles, and _headers")
+          PY
+
+      - name: Check for dedicated Worker deployment token
+        id: token
+        shell: bash
+        env:
+          CF_WORKERS_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+        run: |
+          if [[ -z "$CF_WORKERS_TOKEN" ]]; then
+            echo "deploy_ready=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Worker deploy skipped: add the scoped CLOUDFLARE_WORKERS_API_TOKEN repository secret, then run this workflow again. The existing live Worker is not changed by this run."
+            {
+              echo "## Cloudflare Worker deployment skipped"
+              echo "The package was validated, but the production Worker was not changed because the repository secret \`CLOUDFLARE_WORKERS_API_TOKEN\` is not configured. Add it under [GitHub Actions secrets](https://github.com/manhdungub-boop/ai-thuc-chien-blog/settings/secrets/actions), then run [Deploy Cloudflare Workers](https://github.com/manhdungub-boop/ai-thuc-chien-blog/actions/workflows/deploy-cloudflare-workers.yml). Do not paste the token into source code or chat."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "deploy_ready=true" >> "$GITHUB_OUTPUT"
+          echo "A Worker deployment token is configured; proceeding with deployment."
+
+      - name: Deploy to the existing production Worker
+        if: steps.token.outputs.deploy_ready == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+          accountId: 92cf091bbac8b4879ec65feb30b4715b
+          command: deploy --config wrangler.jsonc
+
+      - name: Verify live security headers and key routes
+        if: steps.token.outputs.deploy_ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          host="https://ai-thuc-chien-blog.manhdungub.workers.dev"
+          headers="$(mktemp)"
+          trap 'rm -f "$headers"' EXIT
+          curl --fail --silent --show-error --location --max-time 20 -D "$headers" -o /dev/null "$host/"
+          for expected in \
+            'X-Content-Type-Options: nosniff' \
+            'X-Frame-Options: DENY' \
+            'Referrer-Policy: strict-origin-when-cross-origin' \
+            'Permissions-Policy: camera=(), geolocation=(), microphone=(), payment=()' \
+            'Strict-Transport-Security: max-age=31536000'; do
+            if ! grep -Fqi "$expected" "$headers"; then
+              echo "FAIL: missing security header on $host: $expected"
+              cat "$headers"
+              exit 1
+            fi
+          done
+          for path in "/articles/do-luong-hieu-qua-blog" "/sitemap.xml" "/feed.xml" "/google4e45ddcf8facb122.html"; do
+            code="$(curl --silent --show-error --location --max-time 20 -o /dev/null -w "%{http_code}" "$host$path")"
+            if [ "$code" != "200" ]; then
+              echo "FAIL: $host$path returned HTTP $code"
+              exit 1
+            fi
+          done
+          echo "WORKER SECURITY PASS: all five headers present; article, sitemap, RSS, and Search Console verification routes return HTTP 200."

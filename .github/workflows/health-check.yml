@@ -2,7 +2,7 @@ name: Verify Website Health
 
 on:
   workflow_run:
-    workflows: ["Deploy Cloudflare Pages"]
+    workflows: ["Deploy Cloudflare Pages", "Deploy Cloudflare Workers"]
     types: [completed]
     branches: [main]
   schedule:
@@ -249,3 +249,33 @@ jobs:
             rm -f "$headers"
             echo "SECURITY HEADERS PASS: $host"
           done
+
+      - name: Audit security headers on the primary Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          host="https://ai-thuc-chien-blog.manhdungub.workers.dev"
+          headers="$(mktemp)"
+          trap 'rm -f "$headers"' EXIT
+          if ! curl --fail --silent --show-error --location --max-time 20 -D "$headers" -o /dev/null "$host/"; then
+            echo "::warning::Worker header audit could not complete; the detailed production-deploy workflow must verify the Worker after deployment."
+            exit 0
+          fi
+          missing=0
+          for expected in \
+            'X-Content-Type-Options: nosniff' \
+            'X-Frame-Options: DENY' \
+            'Referrer-Policy: strict-origin-when-cross-origin' \
+            'Permissions-Policy: camera=(), geolocation=(), microphone=(), payment=()' \
+            'Strict-Transport-Security: max-age=31536000'; do
+            if ! grep -Fqi "$expected" "$headers"; then
+              echo "::warning::Primary Worker is still missing a security header: $expected. Configure CLOUDFLARE_WORKERS_API_TOKEN and run Deploy Cloudflare Workers to publish _headers."
+              missing=1
+            fi
+          done
+          if [ "$missing" -eq 0 ]; then
+            echo "SECURITY HEADERS PASS: $host"
+          else
+            echo "Worker security header gap is reported as a warning until the scoped deploy token is configured; the Pages host is checked strictly above."
+          fi
+
