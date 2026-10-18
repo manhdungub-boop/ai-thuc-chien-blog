@@ -36,6 +36,8 @@ jobs:
           node-version: 22
       - name: Check JavaScript syntax
         run: node --check script.js
+      - name: Test static asset build and security headers packaging
+        run: node scripts/build_static_site.cjs
       - name: Test copy-to-clipboard interactions
         run: node scripts/test_copy_prompt.cjs
       - name: Test homepage search behavior

@@ -16,11 +16,13 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v7
 
+      - name: Set up Node.js for the shared static asset builder
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - name: Prepare static site files
-        run: |
-          mkdir -p dist/articles
-          cp index.html ve-chung-toi.html feed.xml styles.css script.js robots.txt sitemap.xml favicon.svg 404.html google4e45ddcf8facb122.html _headers dist/
-          cp articles/*.html dist/articles/
+        run: node scripts/build_static_site.cjs
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3

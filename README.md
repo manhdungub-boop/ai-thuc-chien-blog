@@ -21,6 +21,7 @@ Mở index.html trong trình duyệt. Website không cần bước build. Google
 - script.js: menu di động, hiệu ứng cuộn và tìm kiếm bài viết theo từ khóa (hỗ trợ tìm tiếng Việt không dấu).
 - scripts/test_homepage_search.cjs: kiểm thử hồi quy cho tìm kiếm có/không dấu, chữ Đ hoa, kết quả rỗng và xóa từ khóa; bộ kiểm thử tự lấy thẻ bài viết từ trang chủ nên không khóa vào một số lượng cố định.
 - scripts/test_copy_prompt.cjs: kiểm thử nút sao chép prompt, trạng thái thành công và thông báo dự phòng khi API clipboard không khả dụng.
+- scripts/build_static_site.cjs: đóng gói nhất quán tệp website, tất cả bài viết, tệp xác minh Search Console và _headers vào dist cho mọi pipeline.
 - scripts/test_article_navigation.cjs: tự phát hiện toàn bộ tệp bài viết và kiểm tra mục bài viết liên quan, tối thiểu ba liên kết duy nhất, đích tồn tại và bố cục đáp ứng.
 - scripts/test_homepage_article_coverage.cjs: so sánh URL bài viết trong sitemap với liên kết trên trang chủ; CI báo lỗi nếu có bài đã xuất bản nhưng không được khám phá từ trang chủ.
 - articles/: các bài viết hướng dẫn về AI cơ bản, prompt thực hành có thể sao chép, workflow có kiểm duyệt, kiểm chứng nội dung, SEO kỹ thuật và đo lường hiệu quả blog. Danh sách được CI tự phát hiện từ các tệp HTML trong thư mục này.
@@ -39,7 +40,7 @@ Mở index.html trong trình duyệt. Website không cần bước build. Google
 Repository được cấu hình để phục vụ từ nhánh main, thư mục /. Mỗi lần cập nhật lên main, GitHub Pages sẽ tự build lại. Kiểm tra mục Settings → Pages nếu trạng thái build bị lỗi.
 
 ### Cloudflare Workers (bản chính hiện tại)
-Worker đang phục vụ website tĩnh. URL công khai ở phần đầu tài liệu. Quy trình triển khai chuẩn nằm tại [GitHub Actions — Deploy Cloudflare Workers](https://github.com/manhdungub-boop/ai-thuc-chien-blog/actions/workflows/deploy-cloudflare-workers.yml); quy trình đóng gói cả `_headers` để Cloudflare Workers Static Assets áp dụng header trên nội dung tĩnh, đồng thời giữ nguyên kiến trúc không cần Worker entrypoint.
+Worker đang phục vụ website tĩnh. URL công khai ở phần đầu tài liệu. Cấu hình Wrangler gọi node scripts/build_static_site.cjs trước mỗi lần deploy, giúp Workers Builds tạo thư mục dist có chứa _headers; các workflow GitHub Actions cũng dùng đúng cùng script. Quy trình kiểm tra triển khai nằm tại [GitHub Actions — Deploy Cloudflare Workers](https://github.com/manhdungub-boop/ai-thuc-chien-blog/actions/workflows/deploy-cloudflare-workers.yml); quy trình đóng gói cả `_headers` để Cloudflare Workers Static Assets áp dụng header trên nội dung tĩnh, đồng thời giữ nguyên kiến trúc không cần Worker entrypoint.
 
 Thiết lập một lần để bật triển khai tự động:
 1. Trong [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens), tạo token phù hợp với quyền chỉnh sửa Workers Scripts trong đúng tài khoản Cloudflare của website. Ưu tiên mẫu **Edit Cloudflare Workers** hoặc token tùy chỉnh giới hạn vào tài khoản này.

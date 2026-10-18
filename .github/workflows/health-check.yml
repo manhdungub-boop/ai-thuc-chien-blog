@@ -27,6 +27,9 @@ jobs:
         with:
           node-version: 22
 
+      - name: Build static assets and verify _headers packaging
+        run: node scripts/build_static_site.cjs
+
       - name: Test homepage search behavior
         run: |
           node --check script.js
@@ -51,7 +54,9 @@ jobs:
           worker_config = json.loads(Path("wrangler.jsonc").read_text(encoding="utf-8"))
           assert worker_config.get("name") == "ai-thuc-chien-blog", "Worker deploy target must be the existing production Worker"
           assert worker_config.get("assets", {}).get("directory") == "./dist", "Worker must deploy the prepared dist directory"
+          assert worker_config.get("build", {}).get("command") == "node scripts/build_static_site.cjs", "Wrangler must build the static asset directory before every native Worker deploy"
           assert "main" not in worker_config, "This site is static-only; do not add a Worker code entrypoint accidentally"
+          assert Path("scripts/build_static_site.cjs").is_file(), "Shared static asset builder is missing"
           print("Worker deployment config PASS: production target and static-only assets")
 
           article_paths = sorted(Path("articles").glob("*.html"))

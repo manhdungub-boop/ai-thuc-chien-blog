@@ -18,6 +18,7 @@ on:
       - "404.html"
       - "google4e45ddcf8facb122.html"
       - "wrangler.jsonc"
+      - "scripts/build_static_site.cjs"
       - ".github/workflows/deploy-cloudflare-workers.yml"
   workflow_dispatch:
 
@@ -35,14 +36,16 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v7
 
+      - name: Set up Node.js for the shared static asset builder
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - name: Prepare and validate static assets
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf dist
-          mkdir -p dist/articles
-          cp index.html ve-chung-toi.html feed.xml styles.css script.js robots.txt sitemap.xml favicon.svg 404.html google4e45ddcf8facb122.html _headers dist/
-          cp articles/*.html dist/articles/
+          node scripts/build_static_site.cjs
           python - <<'PY'
           import json
           from pathlib import Path
