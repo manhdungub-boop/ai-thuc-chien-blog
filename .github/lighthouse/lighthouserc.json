@@ -3,7 +3,14 @@
     "collect": {
       "numberOfRuns": 3,
       "settings": {
-        "preset": "mobile",
+        "formFactor": "mobile",
+        "screenEmulation": {
+          "mobile": true,
+          "width": 390,
+          "height": 844,
+          "deviceScaleFactor": 3,
+          "disabled": false
+        },
         "throttlingMethod": "simulate"
       }
     },
