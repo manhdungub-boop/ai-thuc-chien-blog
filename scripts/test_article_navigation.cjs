@@ -13,13 +13,15 @@ for (const file of files) {
   assert.match(source, /<nav class="related-articles-grid" aria-label="Bài viết liên quan">/, `${file}: semantic related-links navigation missing`);
   const block = source.match(/<nav class="related-articles-grid"[\s\S]*?<\/nav>/)?.[0];
   assert.ok(block, `${file}: related navigation block missing`);
-  const hrefs = [...block.matchAll(/href="\.\.\/(articles\/[^\"]+\.html)"/g)].map((match) => match[1]);
+  const hrefs = [...block.matchAll(/href="((?:\.\/articles\/)?[^"]+\.html)"/g)].map((match) => match[1]);
   assert.ok(hrefs.length >= 3, `${file}: expected at least three related links, found ${hrefs.length}`);
   assert.equal(new Set(hrefs).size, hrefs.length, `${file}: duplicate related links`);
   for (const href of hrefs) {
-    const target = path.resolve(root, href);
-    assert.ok(fs.existsSync(target), `${file}: broken related link ${href}`);
-    assert.notEqual(path.resolve(target), path.resolve(path.join(articleDir, file)), `${file}: self-link found`);
+    const target = href.startsWith('./articles/')
+      ? path.resolve(root, href.slice(2))
+      : path.resolve(articleDir, href);
+    assert.ok(fs.existsSync(target), `${file}: broken related article link ${href}`);
+    assert.notEqual(path.resolve(target), path.resolve(articleDir, file), `${file}: self-link found`);
   }
   assert.match(source, /<main[\s\S]*?<\/main>\s*<footer>/, `${file}: main/footer structure invalid`);
 }
