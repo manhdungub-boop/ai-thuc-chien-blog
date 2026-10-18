@@ -28,5 +28,28 @@ for (const name of articles) fs.copyFileSync(path.join(articlesDir, name), path.
 if (!fs.existsSync(path.join(output, '_headers'))) fail('_headers was not included in dist/');
 if (!fs.existsSync(path.join(output, 'google4e45ddcf8facb122.html'))) fail('Search Console verification file was not included in dist/');
 if (fs.readdirSync(outputArticles).filter((name) => name.endsWith('.html')).length !== articles.length) fail('The staged article count differs from the source article count');
+// Load non-critical web fonts asynchronously and defer the small site script.
+// This keeps text readable via CSS fallbacks while reducing render-blocking work.
+function optimizeHtmlResourceLoading(filePath) {
+  let html = fs.readFileSync(filePath, 'utf8');
+  html = html.replace(/<link\b[^>]*>/gi, (tag) => {
+    if (!/rel=[\"']stylesheet[\"']/i.test(tag) || !/href=[\"']https:\/\/fonts\.googleapis\.com\/css2\?/i.test(tag)) return tag;
+    const hrefMatch = tag.match(/\bhref=[\"']([^\"']+)[\"']/i);
+    if (!hrefMatch) return tag;
+    const href = hrefMatch[1];
+    const preconnect = html.includes('href="https://fonts.gstatic.com"') ? '' : '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>';
+    return preconnect + '<link rel="preload" as="style" href="' + href + '" onload="this.onload=null;this.rel=\'stylesheet\'">' + '<noscript><link rel="stylesheet" href="' + href + '"></noscript>';
+  });
+  html = html.replace(/<script\b[^>]*\bsrc=[\"'][^\"']*script\.js[\"'][^>]*>/gi, (tag) =>
+    /\bdefer\b/i.test(tag) ? tag : tag.replace(/\s*\?>$/, ' defer>')
+  );
+  fs.writeFileSync(filePath, html);
+}
+const htmlOutputFiles = [
+  ...rootFiles.filter((name) => name.endsWith('.html')).map((name) => path.join(output, name)),
+  ...articles.map((name) => path.join(outputArticles, name))
+];
+for (const filePath of htmlOutputFiles) optimizeHtmlResourceLoading(filePath);
+
 require('./generate_seo_feeds.cjs')(output);
 console.log('STATIC BUILD PASS: ' + rootFiles.length + ' root assets, ' + articles.length + ' articles, and generated SEO feeds packaged in dist/');
