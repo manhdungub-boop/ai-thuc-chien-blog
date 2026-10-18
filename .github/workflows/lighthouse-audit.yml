@@ -69,6 +69,10 @@ jobs:
           temporaryPublicStorage: false
           runs: 3
 
+      - name: Publish Lighthouse metric summary
+        if: success()
+        run: node scripts/summarize_lighthouse.cjs >> "$GITHUB_STEP_SUMMARY"
+
       - name: Summarize audit scope
         if: always()
         run: |
