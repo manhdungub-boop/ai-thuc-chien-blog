@@ -33,7 +33,7 @@ jobs:
           node scripts/test_homepage_search.cjs
 
       - name: Test Worker security headers
-        run: node scripts/test_worker_security_headers.cjs
+        run: node scripts/test_worker_security_headers.mjs
 
       - name: Build public static assets
         run: npm run build
