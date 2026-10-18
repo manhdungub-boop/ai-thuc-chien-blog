@@ -16,7 +16,7 @@ assert.match(home, /id="article-search"[^>]*aria-controls="article-grid"/);
 assert.match(home, /id="article-search-status"[^>]*role="status"[^>]*aria-live="polite"/);
 assert.ok(home.includes('<div class="article-tools" hidden>'), 'search toolbar should start hidden until its handler is ready');
 assert.ok(css.includes('.article-card[hidden]{display:none!important}'), 'filtered cards must be hidden');
-assert.equal((home.match(/<article class="article-card\b/g) || []).length, 6, 'fixture expects six article cards');
+assert.equal((home.match(/<article class="article-card\b/g) || []).length, 7, 'fixture expects seven article cards');
 
 const cards = [
   { textContent: 'AI CƠ BẢN 5 cách bắt đầu dùng AI trong công việc mà không cần biết lập trình Đúng cách', hidden: false },
@@ -25,6 +25,7 @@ const cards = [
   { textContent: 'AI THỰC HÀNH Checklist kiểm chứng nội dung AI trước khi xuất bản', hidden: false },
   { textContent: 'WORKFLOW Xây dựng workflow AI có kiểm duyệt với Airtable và Activepieces', hidden: false },
   { textContent: 'SEO KỸ THUẬT Checklist SEO kỹ thuật cho blog mới', hidden: false },
+  { textContent: 'WEBSITE ĐO LƯỜNG Đo hiệu quả blog bằng Search Console và Web Analytics', hidden: false },
 ];
 const listeners = {};
 const input = { value: '', addEventListener: (name, callback) => { listeners[name] = callback; } };
@@ -47,8 +48,8 @@ const visibleIndexes = () => cards.flatMap((card, index) => card.hidden ? [] : [
 const search = (query) => { input.value = query; listeners.input(); };
 assert.equal(typeof listeners.input, 'function', 'input handler should be registered');
 assert.equal(tools.hidden, false, 'toolbar should show once the handler is ready');
-assert.deepEqual(visibleIndexes(), [0, 1, 2, 3, 4, 5], 'initial state should show every article');
-assert.equal(status.textContent, 'Hiển thị tất cả 6 bài viết.');
+assert.deepEqual(visibleIndexes(), [0, 1, 2, 3, 4, 5, 6], 'initial state should show every article');
+assert.equal(status.textContent, 'Hiển thị tất cả 7 bài viết.');
 
 search('kiem chung');
 assert.deepEqual(visibleIndexes(), [3], 'Vietnamese query without diacritics should match');
@@ -60,6 +61,6 @@ search('khong-co-bai');
 assert.deepEqual(visibleIndexes(), [], 'non-matching query should hide all articles');
 assert.match(status.textContent, /Không tìm thấy/);
 search('');
-assert.deepEqual(visibleIndexes(), [0, 1, 2, 3, 4, 5], 'clearing the query should restore all articles');
-assert.equal(status.textContent, 'Hiển thị tất cả 6 bài viết.');
+assert.deepEqual(visibleIndexes(), [0, 1, 2, 3, 4, 5, 6], 'clearing the query should restore all articles');
+assert.equal(status.textContent, 'Hiển thị tất cả 7 bài viết.');
 console.log('PASS: search markup, accessibility, accented/unaccented Vietnamese, uppercase Đ, no results, reset');
