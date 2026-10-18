@@ -23,12 +23,12 @@ assert.match(feed, /<rss\b[\s\S]*<\/rss>/, 'dist/feed.xml is not an RSS document
 const sitemapUrls = [...sitemap.matchAll(/<loc>\s*([^<]+)\s*<\/loc>/g)].map((m) => m[1].trim());
 const feedUrls = [...feed.matchAll(/<link>\s*(https?:\/\/[^<]+)\s*<\/link>/g)].map((m) => m[1].trim());
 assert.ok(sitemapUrls.includes(baseUrl + '/'), 'Sitemap must include the homepage');
-assert.ok(sitemapUrls.includes(baseUrl + '/ve-chung-toi'), 'Sitemap must include the about/editorial policy page');
+assert.ok(sitemapUrls.includes(baseUrl + '/ve-chung-toi.html'), 'Sitemap must include the about/editorial policy page');
 assert.equal(new Set(sitemapUrls).size, sitemapUrls.length, 'Sitemap contains duplicate URLs');
 
 const publicPages = [
   { file: 'index.html', expected: baseUrl + '/' },
-  { file: 've-chung-toi.html', expected: baseUrl + '/ve-chung-toi' },
+  { file: 've-chung-toi.html', expected: baseUrl + '/ve-chung-toi.html' },
   { file: 'thu-vien.html', expected: baseUrl + '/thu-vien.html' },
   ...articleFiles.map((file) => ({ file: path.join('articles', file), expected: null }))
 ];

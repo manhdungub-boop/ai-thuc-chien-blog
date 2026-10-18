@@ -96,8 +96,8 @@ function generate(outputDir) {
   const aboutPath = path.join(outputDir, 've-chung-toi.html');
   const aboutHtml = fs.readFileSync(aboutPath, 'utf8');
   const about = validatePageMetadata(aboutHtml, 've-chung-toi.html');
-  if (about.canonical !== SITE + '/ve-chung-toi') {
-    throw new Error('About page canonical URL does not match the extensionless route');
+  if (about.canonical !== SITE + '/ve-chung-toi.html') {
+    throw new Error('About page canonical URL must match the deployed /ve-chung-toi.html route');
   }
 
   const libraryPath = path.join(outputDir, 'thu-vien.html');
