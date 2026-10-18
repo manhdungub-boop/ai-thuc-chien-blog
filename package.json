@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "build": "node scripts/build_static_site.cjs",
-    "test:worker": "node scripts/test_worker_headers.mjs"
+    "test:worker": "node scripts/test_worker_headers.mjs",
+    "test:content": "node scripts/test_article_quality.cjs"
   }
 }
