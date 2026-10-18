@@ -40,5 +40,5 @@ jobs:
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: 92cf091bba4cb4879ec65feb30b4715b
+          accountId: 92cf091bbac8b4879ec65feb30b4715b
           command: pages deploy dist --project-name=ai-thuc-chien-blog --branch=main
