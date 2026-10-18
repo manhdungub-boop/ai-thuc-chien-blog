@@ -6,7 +6,7 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const articleDir = path.join(root, 'articles');
 const files = fs.readdirSync(articleDir).filter((name) => name.endsWith('.html'));
-assert.equal(files.length, 7, 'expected the seven published article files');
+assert.ok(files.length > 0, 'expected at least one published article file');
 for (const file of files) {
   const source = fs.readFileSync(path.join(articleDir, file), 'utf8');
   assert.match(source, /<section class="related-articles" aria-labelledby="related-articles-title">/, `${file}: related section missing`);

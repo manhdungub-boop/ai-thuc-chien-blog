@@ -48,17 +48,9 @@ jobs:
           assert "main" not in worker_config, "This site is static-only; do not add a Worker code entrypoint accidentally"
           print("Worker deployment config PASS: production target and static-only assets")
 
-          pages = [
-              Path("index.html"),
-              Path("ve-chung-toi.html"),
-              Path("articles/bat-dau-voi-ai.html"),
-              Path("articles/quy-trinh-ai-co-kiem-duyet.html"),
-              Path("articles/ban-do-cong-cu-blog-ai.html"),
-              Path("articles/kiem-chung-noi-dung-ai.html"),
-              Path("articles/workflow-ai-airtable-activepieces.html"),
-              Path("articles/seo-ky-thuat-blog-moi.html"),
-              Path("articles/do-luong-hieu-qua-blog.html"),
-          ]
+          article_paths = sorted(Path("articles").glob("*.html"))
+          assert article_paths, "expected at least one article HTML file"
+          pages = [Path("index.html"), Path("ve-chung-toi.html"), *article_paths]
           for path in pages:
               text = path.read_text(encoding="utf-8")
               assert re.search(r"<title>\s*.+?\s*</title>", text, re.I | re.S), f"{path}: missing title"
@@ -130,28 +122,32 @@ jobs:
                   checked_links += 1
           print(f"LOCAL LINK PASS: {checked_links} links checked across {len(link_pages)} HTML pages")
 
+          canonical_by_page = {}
+          for path in pages:
+              match = re.search(r'<link rel="canonical" href="([^"]+)"', path.read_text(encoding="utf-8"), re.I)
+              assert match, f"{path}: missing canonical URL for sitemap validation"
+              canonical_by_page[str(path)] = match.group(1)
+
           tree = ET.parse("sitemap.xml")
           locs = [node.text for node in tree.getroot().iter() if node.tag.endswith("loc")]
-          assert len(locs) == 9, f"expected home, seven articles and the about page; found {len(locs)} URLs"
+          expected_sitemap_urls = set(canonical_by_page.values())
+          assert all(locs), "sitemap contains an empty URL"
           assert len(set(locs)) == len(locs), "duplicate sitemap URLs"
-          assert any("kiem-chung-noi-dung-ai" in url for url in locs), "existing article missing from sitemap"
-          assert any("workflow-ai-airtable-activepieces" in url for url in locs), "workflow article missing from sitemap"
-          assert any("seo-ky-thuat-blog-moi" in url for url in locs), "SEO checklist article missing from sitemap"
-          assert any("do-luong-hieu-qua-blog" in url for url in locs), "measurement guide missing from sitemap"
-          assert any("ve-chung-toi" in url for url in locs), "about page missing from sitemap"
-          print(f"SITEMAP PASS: {len(locs)} unique URLs")
+          assert set(locs) == expected_sitemap_urls, f"sitemap URLs do not match page canonicals; missing={expected_sitemap_urls - set(locs)}, extra={set(locs) - expected_sitemap_urls}"
+          print(f"SITEMAP PASS: {len(locs)} unique URLs match homepage, about page, and all {len(article_paths)} articles")
 
           feed_root = ET.parse("feed.xml").getroot()
           assert feed_root.tag == "rss", "feed.xml must have rss root"
           channel = feed_root.find("channel")
           assert channel is not None, "RSS channel missing"
           items = channel.findall("item")
-          assert len(items) == 7, f"expected seven article items in RSS; found {len(items)}"
           item_links = [item.findtext("link") for item in items]
+          expected_article_urls = {canonical_by_page[str(path)] for path in article_paths}
           assert all(item_links) and len(set(item_links)) == len(item_links), "RSS links missing or duplicated"
-          assert all(url.startswith("https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/") for url in item_links), "unexpected RSS item URL"
+          assert set(item_links) == expected_article_urls, f"RSS items do not match all article canonicals; missing={expected_article_urls - set(item_links)}, extra={set(item_links) - expected_article_urls}"
           assert all(item.findtext("title") and item.findtext("description") for item in items), "RSS items require titles and descriptions"
-          print(f"RSS PASS: {len(items)} unique article items")
+          assert all(item.findtext("guid") for item in items), "RSS items require GUIDs"
+          print(f"RSS PASS: {len(items)} unique article items match all {len(article_paths)} article canonicals")
           PY
 
       - name: Verify deployed files and article routes
@@ -166,23 +162,13 @@ jobs:
           files=(
             "index.html" "styles.css" "script.js" "robots.txt" "sitemap.xml" "feed.xml"
             "favicon.svg" "404.html" "ve-chung-toi.html"
-            "articles/bat-dau-voi-ai.html"
-            "articles/quy-trinh-ai-co-kiem-duyet.html"
-            "articles/ban-do-cong-cu-blog-ai.html"
-            "articles/kiem-chung-noi-dung-ai.html"
-            "articles/workflow-ai-airtable-activepieces.html"
-            "articles/seo-ky-thuat-blog-moi.html"
-            "articles/do-luong-hieu-qua-blog.html"
           )
-          slugs=(
-            "bat-dau-voi-ai"
-            "quy-trinh-ai-co-kiem-duyet"
-            "ban-do-cong-cu-blog-ai"
-            "kiem-chung-noi-dung-ai"
-            "workflow-ai-airtable-activepieces"
-            "seo-ky-thuat-blog-moi"
-            "do-luong-hieu-qua-blog"
-          )
+          mapfile -t article_files < <(find articles -maxdepth 1 -type f -name '*.html' -print | sort)
+          files+=("${article_files[@]}")
+          slugs=()
+          for article_path in "${article_files[@]}"; do
+            slugs+=("$(basename "$article_path" .html)")
+          done
           for host in "${hosts[@]}"; do
             echo "Checking ${host}"
             passed=0
@@ -234,5 +220,5 @@ jobs:
               echo "FAIL: $host/feed.xml returned HTTP $feed_code"
               exit 1
             fi
-            echo "PASS: five article routes, about route, and RSS feed at $host"
+            echo "PASS: ${#slugs[@]} article routes, about route, and RSS feed at $host"
           done
