@@ -50,42 +50,77 @@ copyButtons.forEach((button) => {
   });
 });
 
-// Lightweight client-side article search. It also matches Vietnamese without diacritics.
+// Client-side article search and topic filters. Topic cards used to point to the same
+// unfiltered list; this keeps search and topic selection working together.
 const articleSearch = document.querySelector('#article-search');
 const articleSearchStatus = document.querySelector('#article-search-status');
+const articleGrid = document.querySelector('#article-grid');
 const searchableArticles = Array.from(document.querySelectorAll('#article-grid .article-card'));
 const articleTools = document.querySelector('.article-tools');
+const topicCards = Array.from(document.querySelectorAll('.topic-card[data-topic]'));
+const topicLabels = {
+  tools: 'Công cụ AI',
+  automation: 'Tự động hóa',
+  content: 'AI sáng tạo',
+  earning: 'AI kiếm tiền'
+};
+const topicKeywords = {
+  tools: ['công cụ', 'api key', 'rag', 'kiểm thử chất lượng ai', 'json schema', 'bản đồ công cụ'],
+  automation: ['workflow', 'tự động hóa', 'activepieces', 'retry', 'chống trùng', 'schema'],
+  content: ['prompt', 'kiểm chứng nội dung', 'bắt đầu với ai', 'seo kỹ thuật', 'search console', 'prompt injection'],
+  // These are practical building blocks for an AI-powered online business, not promises of income.
+  earning: ['đo hiệu quả blog', 'bản đồ công cụ', 'đo hiệu quả workflow', 'workflow ai có kiểm duyệt', 'seo kỹ thuật', 'activepieces']
+};
+let selectedTopic = '';
 
-if (articleSearch && articleSearchStatus && articleTools && searchableArticles.length) {
-  const normalizeSearchText = (value) => value
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/đ/g, 'd')
-    .trim();
+const normalizeSearchText = (value) => String(value || '')
+  .toLowerCase()
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/đ/g, 'd')
+  .trim();
 
-  const filterArticles = () => {
-    const query = normalizeSearchText(articleSearch.value);
-    let visibleCount = 0;
+const filterArticles = () => {
+  const query = normalizeSearchText(articleSearch ? articleSearch.value : '');
+  const keywords = (topicKeywords[selectedTopic] || []).map(normalizeSearchText);
+  let visibleCount = 0;
 
-    searchableArticles.forEach((article) => {
-      const searchableText = normalizeSearchText(article.textContent || '');
-      const matches = !query || searchableText.includes(query);
-      article.hidden = !matches;
-      if (matches) visibleCount += 1;
+  searchableArticles.forEach((article) => {
+    const searchableText = normalizeSearchText(article.textContent || '');
+    const matchesQuery = !query || searchableText.includes(query);
+    const matchesTopic = !selectedTopic || keywords.some((keyword) => searchableText.includes(keyword));
+    article.hidden = !(matchesQuery && matchesTopic);
+    if (!article.hidden) visibleCount += 1;
+  });
+
+  if (!articleSearchStatus) return;
+  const topicPrefix = selectedTopic ? `Chủ đề: ${topicLabels[selectedTopic]}. ` : '';
+  if (!query && !selectedTopic) {
+    articleSearchStatus.textContent = `Hiển thị tất cả ${searchableArticles.length} bài viết.`;
+  } else if (visibleCount) {
+    articleSearchStatus.textContent = `${topicPrefix}Hiển thị ${visibleCount}/${searchableArticles.length} bài viết phù hợp${query ? ' với từ khóa tìm kiếm' : ''}.`;
+  } else if (selectedTopic === 'earning' && !query) {
+    articleSearchStatus.textContent = 'Chưa có bài chuyên biệt về tạo doanh thu bằng AI. Các bài đang hiển thị sẽ được bổ sung khi có nội dung phù hợp; hãy chọn chủ đề khác để tiếp tục đọc.';
+  } else {
+    articleSearchStatus.textContent = 'Không tìm thấy bài viết phù hợp. Thử từ khóa khác hoặc chọn lại chủ đề đang mở.';
+  }
+};
+
+if (searchableArticles.length) {
+  if (articleSearch) articleSearch.addEventListener('input', filterArticles);
+  if (articleTools) articleTools.hidden = false;
+  topicCards.forEach((card) => {
+    card.addEventListener('click', () => {
+      const topic = card.getAttribute('data-topic') || '';
+      selectedTopic = selectedTopic === topic ? '' : topic;
+      topicCards.forEach((item) => {
+        if (item === card && selectedTopic) item.setAttribute('aria-current', 'true');
+        else item.removeAttribute('aria-current');
+      });
+      if (articleSearch) articleSearch.value = '';
+      filterArticles();
     });
-
-    if (!query) {
-      articleSearchStatus.textContent = `Hiển thị tất cả ${searchableArticles.length} bài viết.`;
-    } else if (visibleCount) {
-      articleSearchStatus.textContent = `Tìm thấy ${visibleCount}/${searchableArticles.length} bài viết phù hợp.`;
-    } else {
-      articleSearchStatus.textContent = 'Không tìm thấy bài viết phù hợp. Thử từ khóa khác.';
-    }
-  };
-
-  articleSearch.addEventListener('input', filterArticles);
-  articleTools.hidden = false;
+  });
   filterArticles();
 }
 
