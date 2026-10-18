@@ -48,17 +48,6 @@ jobs:
           assert "main" not in worker_config, "This site is static-only; do not add a Worker code entrypoint accidentally"
           print("Worker deployment config PASS: production target and static-only assets")
 
-          header_policy = Path("_headers").read_text(encoding="utf-8")
-          for required_header in (
-              "X-Content-Type-Options: nosniff",
-              "X-Frame-Options: DENY",
-              "Referrer-Policy: strict-origin-when-cross-origin",
-              "Permissions-Policy: camera=(), geolocation=(), microphone=(), payment=()",
-              "Strict-Transport-Security: max-age=31536000",
-          ):
-              assert required_header in header_policy, f"_headers: missing security policy {required_header}"
-          print("SECURITY HEADER POLICY PASS: baseline browser protections are present")
-
           article_paths = sorted(Path("articles").glob("*.html"))
           assert article_paths, "expected at least one article HTML file"
           pages = [Path("index.html"), Path("ve-chung-toi.html"), *article_paths]
@@ -232,4 +221,28 @@ jobs:
               exit 1
             fi
             echo "PASS: ${#slugs[@]} article routes, about route, and RSS feed at $host"
+          done
+
+      - name: Verify security headers on primary hosts
+        shell: bash
+        run: |
+          set -euo pipefail
+          for host in "https://ai-thuc-chien-blog.manhdungub.workers.dev" "https://ai-thuc-chien-blog.pages.dev"; do
+            headers="$(mktemp)"
+            curl --fail --silent --show-error --location --max-time 20 -D "$headers" -o /dev/null "$host/"
+            for expected in \
+              'X-Content-Type-Options: nosniff' \
+              'X-Frame-Options: DENY' \
+              'Referrer-Policy: strict-origin-when-cross-origin' \
+              'Permissions-Policy: camera=(), geolocation=(), microphone=(), payment=()' \
+              'Strict-Transport-Security: max-age=31536000'; do
+              if ! grep -Fqi "$expected" "$headers"; then
+                echo "FAIL: missing security header on $host: $expected"
+                cat "$headers"
+                rm -f "$headers"
+                exit 1
+              fi
+            done
+            rm -f "$headers"
+            echo "SECURITY HEADERS PASS: $host"
           done
