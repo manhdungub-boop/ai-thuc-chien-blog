@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Cách xây bộ câu hỏi chuẩn, chấm đầu ra AI, phát hiện hồi quy và kiểm tra lại khi thay prompt hoặc mô hình."><meta name="theme-color" content="#0b1020"><meta name="robots" content="index,follow,max-image-preview:large"><meta name="author" content="AI Thực Chiến">
+<link rel="canonical" href="https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/kiem-thu-chat-luong-dau-ra-ai">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<meta property="og:type" content="article"><meta property="og:locale" content="vi_VN"><meta property="og:site_name" content="AI Thực Chiến"><meta property="og:title" content="Kiểm thử chất lượng AI: tạo bộ test nhỏ trước khi đổi prompt | AI Thực Chiến"><meta property="og:description" content="Cách xây bộ câu hỏi chuẩn, chấm đầu ra AI, phát hiện hồi quy và kiểm tra lại khi thay prompt hoặc mô hình."><meta property="og:url" content="https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/kiem-thu-chat-luong-dau-ra-ai">
+<meta name="twitter:card" content="summary"><meta name="twitter:title" content="Kiểm thử chất lượng AI: tạo bộ test nhỏ trước khi đổi prompt"><meta name="twitter:description" content="Cách xây bộ câu hỏi chuẩn, chấm đầu ra AI, phát hiện hồi quy và kiểm tra lại khi thay prompt hoặc mô hình.">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Kiểm thử chất lượng AI: tạo bộ test nhỏ trước khi đổi prompt","description":"Cách xây bộ câu hỏi chuẩn, chấm đầu ra AI, phát hiện hồi quy và kiểm tra lại khi thay prompt hoặc mô hình.","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/kiem-thu-chat-luong-dau-ra-ai","mainEntityOfPage":{"@type":"WebPage","@id":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/kiem-thu-chat-luong-dau-ra-ai"},"datePublished":"2026-10-18","dateModified":"2026-10-18","inLanguage":"vi-VN","articleSection":"AI THỰC HÀNH · ĐÁNH GIÁ","author":{"@type":"Organization","name":"AI Thực Chiến","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/"},"publisher":{"@type":"Organization","name":"AI Thực Chiến","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/"}}</script>
+<title>Kiểm thử chất lượng AI: tạo bộ test nhỏ trước khi đổi prompt | AI Thực Chiến</title>
+<link rel="alternate" type="application/rss+xml" title="AI Thực Chiến RSS" href="../feed.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+<a class="skip-link" href="#main-content">Bỏ qua đến nội dung chính</a>
+<header class="site-header"><a class="brand" href="../"><span class="brand-mark">AI</span><span>AI <b>Thực Chiến</b></span></a><a class="header-cta" href="../#bai-viet">← Tất cả bài viết</a></header>
+<main class="section" style="max-width:900px;margin:auto" id="main-content">
+<div class="section-kicker">AI THỰC HÀNH · ĐÁNH GIÁ</div>
+<h1 style="font-size:clamp(32px,5vw,54px);line-height:1.2;letter-spacing:-1.6px;margin:18px 0">Kiểm thử chất lượng AI: tạo bộ test nhỏ trước khi đổi prompt</h1>
+<p style="color:var(--muted);font-size:17px;line-height:1.9">Một prompt có vẻ tốt trên vài ví dụ chưa chắc ổn định với công việc thật. Bộ kiểm thử nhỏ giúp so sánh phiên bản, phát hiện lỗi lặp lại và quyết định bằng bằng chứng thay vì cảm giác.</p>
+<p style="font-size:12px;color:#8993ab">Cập nhật ngày <time datetime="2026-10-18">18/10/2026</time> · Thời gian đọc khoảng 7 phút</p>
+<div class="article-content">
+<h2 style="margin-top:36px">Vì sao cần bộ test?</h2><p>Đầu ra AI có thể thay đổi theo cách diễn đạt, dữ liệu đầu vào, mô hình và cấu hình. Khi sửa prompt để khắc phục một lỗi, bạn có thể vô tình làm hỏng một trường hợp khác. Bộ test giữ lại các tình huống quan trọng để chạy lại sau mỗi thay đổi.</p>
+<h2 style="margin-top:36px">Tạo tập mẫu có chủ đích</h2><p>Bắt đầu với khoảng 20–50 ví dụ nếu khối lượng và rủi ro cho phép; đây là điểm khởi đầu thực dụng, không phải con số chuẩn cho mọi dự án. Bao gồm ca thường gặp, đầu vào thiếu, dữ liệu mâu thuẫn, yêu cầu ngoài phạm vi, câu hỏi không có đáp án và trường hợp dễ bị chỉ dẫn độc hại. Dùng dữ liệu đã được phép sử dụng hoặc dữ liệu giả lập.</p>
+<h2 style="margin-top:36px">Viết tiêu chí trước khi xem kết quả</h2><p>Với mỗi mẫu, ghi đầu vào, kết quả mong đợi hoặc rubric, mức độ nghiêm trọng của lỗi và lý do. Chấm các tiêu chí riêng: tính đúng, đủ ý, bám nguồn, định dạng, an toàn và khả năng từ chối. Với câu trả lời mở, không nhất thiết chỉ có một câu chữ đúng; tiêu chí cần mô tả đặc tính của câu trả lời tốt.</p>
+<h2 style="margin-top:36px">So sánh phiên bản công bằng</h2><p>Lưu prompt, tên mô hình, cấu hình, ngày chạy và phiên bản bộ dữ liệu. Chạy bản cũ và bản mới trên cùng một tập mẫu. So sánh tỷ lệ đạt chuẩn tổng thể lẫn từng nhóm rủi ro; đừng chỉ xem điểm trung bình vì một lỗi nghiêm trọng có thể bị che khuất bởi nhiều câu dễ.</p>
+<h2 style="margin-top:36px">Kết hợp chấm tự động và con người</h2><p>Có thể dùng kiểm tra mã cho JSON, trường bắt buộc, giới hạn độ dài hoặc liên kết. Với độ chính xác, sắc thái, tính công bằng và mức độ gây hại, cần rubric rõ và người đánh giá ở những trường hợp quan trọng. Nếu dùng một mô hình khác để chấm, hãy kiểm tra độ nhất quán của bộ chấm bằng một mẫu đã được con người đánh giá.</p>
+<h2 style="margin-top:36px">Quy trình sau mỗi lần thay đổi</h2><p>1) Thêm lỗi mới vào tập hồi quy. 2) Chạy baseline. 3) Sửa một yếu tố. 4) Chạy lại toàn bộ test liên quan. 5) Xem lỗi nghiêm trọng trước điểm trung bình. 6) Ghi quyết định phát hành và điều kiện rollback. Không xóa ca khó chỉ vì phiên bản mới liên tục thất bại.</p>
+</div>
+<h2 style="margin-top:36px">Ví dụ áp dụng</h2><p>Ví dụ giả định: phiên bản B tăng tỷ lệ định dạng đúng từ 90% lên 98% nhưng giảm độ chính xác của câu trả lời dựa trên nguồn. Không nên kết luận B tốt hơn chỉ từ chỉ số định dạng; cần ưu tiên tiêu chí gắn với rủi ro của tác vụ.</p>
+<h2 style="margin-top:36px">Nguồn tham khảo</h2><ul style="padding-left:24px;line-height:2"><li><a href="https://platform.openai.com/docs/guides/evals" target="_blank" rel="noopener noreferrer">OpenAI Platform — Evals guide</a></li>
+<li><a href="https://developers.google.com/search/docs/fundamentals/creating-helpful-content" target="_blank" rel="noopener noreferrer">Google — hướng dẫn nội dung hữu ích, đáng tin cậy</a></li></ul>
+<p style="color:var(--muted);font-size:13px">Bài viết là hướng dẫn thực hành, không thay thế việc kiểm thử trong môi trường của bạn. Hãy xác minh tài liệu, quyền truy cập và kết quả thực tế trước khi triển khai trên dữ liệu hoặc hệ thống quan trọng.</p>
+<div style="border-top:1px solid var(--line);margin-top:38px;padding-top:22px"><a class="article-link" href="../#bai-viet">← Quay lại danh sách bài viết <span>→</span></a></div>
+<section class="related-articles" aria-labelledby="related-articles-title"><div class="related-articles-heading"><p class="section-kicker">ĐỌC TIẾP</p><h2 id="related-articles-title">Bài viết liên quan</h2><p>Tiếp tục xây dựng workflow AI thực tế, có kiểm soát.</p></div><nav class="related-articles-grid" aria-label="Bài viết liên quan"><a class="related-article" href="../articles/bao-ve-api-key-trong-workflow-ai.html"><strong>Bảo vệ API key trong workflow AI: checklist cho người mới</strong><span>Cách lưu bí mật, giới hạn quyền, xoay vòng token và xử lý khi lộ khóa trong công cụ tự động hóa.</span></a>
+<a class="related-article" href="../articles/workflow-ai-chong-loi-va-chay-lai-an-toan.html"><strong>Thiết kế workflow AI chịu lỗi: retry, chống trùng và hàng chờ duyệt</strong><span>Cách phân loại lỗi tạm thời, giới hạn retry, chống chạy trùng và chuyển ngoại lệ sang người xử lý.</span></a>
+<a class="related-article" href="../articles/quy-trinh-ai-co-kiem-duyet.html"><strong>Thiết kế quy trình AI có kiểm duyệt</strong><span>Giữ người phụ trách ở các bước quan trọng.</span></a></nav></section>
+</main>
+<footer><a class="brand" href="../"><span class="brand-mark">AI</span><span>AI <b>Thực Chiến</b></span></a><span>Học thật · Thử thật · Đo lường bằng bằng chứng · <a href="../feed.xml">RSS</a></span><span>© <span id="year">2026</span> AI Thực Chiến</span></footer>
+<script src="../script.js"></script>
+</body></html>

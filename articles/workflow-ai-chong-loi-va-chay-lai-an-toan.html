@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Cách phân loại lỗi tạm thời, giới hạn retry, chống chạy trùng và chuyển ngoại lệ sang người xử lý."><meta name="theme-color" content="#0b1020"><meta name="robots" content="index,follow,max-image-preview:large"><meta name="author" content="AI Thực Chiến">
+<link rel="canonical" href="https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/workflow-ai-chong-loi-va-chay-lai-an-toan">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<meta property="og:type" content="article"><meta property="og:locale" content="vi_VN"><meta property="og:site_name" content="AI Thực Chiến"><meta property="og:title" content="Thiết kế workflow AI chịu lỗi: retry, chống trùng và hàng chờ duyệt | AI Thực Chiến"><meta property="og:description" content="Cách phân loại lỗi tạm thời, giới hạn retry, chống chạy trùng và chuyển ngoại lệ sang người xử lý."><meta property="og:url" content="https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/workflow-ai-chong-loi-va-chay-lai-an-toan">
+<meta name="twitter:card" content="summary"><meta name="twitter:title" content="Thiết kế workflow AI chịu lỗi: retry, chống trùng và hàng chờ duyệt"><meta name="twitter:description" content="Cách phân loại lỗi tạm thời, giới hạn retry, chống chạy trùng và chuyển ngoại lệ sang người xử lý.">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Thiết kế workflow AI chịu lỗi: retry, chống trùng và hàng chờ duyệt","description":"Cách phân loại lỗi tạm thời, giới hạn retry, chống chạy trùng và chuyển ngoại lệ sang người xử lý.","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/workflow-ai-chong-loi-va-chay-lai-an-toan","mainEntityOfPage":{"@type":"WebPage","@id":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/workflow-ai-chong-loi-va-chay-lai-an-toan"},"datePublished":"2026-10-18","dateModified":"2026-10-18","inLanguage":"vi-VN","articleSection":"AI THỰC HÀNH · TỰ ĐỘNG HÓA","author":{"@type":"Organization","name":"AI Thực Chiến","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/"},"publisher":{"@type":"Organization","name":"AI Thực Chiến","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/"}}</script>
+<title>Thiết kế workflow AI chịu lỗi: retry, chống trùng và hàng chờ duyệt | AI Thực Chiến</title>
+<link rel="alternate" type="application/rss+xml" title="AI Thực Chiến RSS" href="../feed.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+<a class="skip-link" href="#main-content">Bỏ qua đến nội dung chính</a>
+<header class="site-header"><a class="brand" href="../"><span class="brand-mark">AI</span><span>AI <b>Thực Chiến</b></span></a><a class="header-cta" href="../#bai-viet">← Tất cả bài viết</a></header>
+<main class="section" style="max-width:900px;margin:auto" id="main-content">
+<div class="section-kicker">AI THỰC HÀNH · TỰ ĐỘNG HÓA</div>
+<h1 style="font-size:clamp(32px,5vw,54px);line-height:1.2;letter-spacing:-1.6px;margin:18px 0">Thiết kế workflow AI chịu lỗi: retry, chống trùng và hàng chờ duyệt</h1>
+<p style="color:var(--muted);font-size:17px;line-height:1.9">Workflow không chỉ cần chạy tốt khi mọi thứ thuận lợi. Mạng có thể chập chờn, API giới hạn tốc độ và trigger có thể chạy lại. Thiết kế chịu lỗi giúp tránh gửi trùng, mất dữ liệu và lặp vô hạn.</p>
+<p style="font-size:12px;color:#8993ab">Cập nhật ngày <time datetime="2026-10-18">18/10/2026</time> · Thời gian đọc khoảng 7 phút</p>
+<div class="article-content">
+<h2 style="margin-top:36px">Phân biệt lỗi tạm thời và lỗi cần sửa</h2><p>Lỗi mạng, timeout hoặc giới hạn tốc độ có thể tạm thời; dữ liệu thiếu trường bắt buộc, quyền bị thu hồi hoặc cấu hình sai thường không tự hết khi chạy lại. Đừng retry mọi lỗi giống nhau. Ghi lại mã lỗi, bước thất bại và một mã công việc để người vận hành hiểu chuyện gì xảy ra.</p>
+<h2 style="margin-top:36px">Retry có giới hạn và khoảng nghỉ</h2><p>Với lỗi tạm thời, dùng số lần thử lại hữu hạn và khoảng nghỉ tăng dần nếu nền tảng hỗ trợ. Tôn trọng thông tin retry-after của dịch vụ khi có. Đặt tổng thời gian và giới hạn chi phí để một công việc không lặp vô tận. Với lỗi xác thực hoặc dữ liệu không hợp lệ, dừng và yêu cầu sửa cấu hình thay vì tiếp tục gọi API.</p>
+<h2 style="margin-top:36px">Chống trùng lặp bằng mã idempotency</h2><p>Một trigger có thể phát lại sau timeout dù bước trước đã thành công. Tạo mã công việc ổn định từ nguồn sự kiện hoặc ID bản ghi, lưu trạng thái xử lý và kiểm tra trước khi tạo tác dụng phụ. Nếu dịch vụ hỗ trợ idempotency key, dùng nó. Nếu không, thiết kế thao tác kiểm tra-tồn-tại và ghi trạng thái cẩn thận; chỉ kiểm tra ở cuối luồng thường không đủ để ngăn hai lần chạy đồng thời.</p>
+<h2 style="margin-top:36px">Tách bước tạo bản nháp khỏi bước xuất bản</h2><p>Với bài viết, tin nhắn hoặc cập nhật dữ liệu quan trọng, hãy lưu bản nháp trước, chạy kiểm tra chất lượng rồi chờ phê duyệt. Chỉ bước cuối mới được quyền xuất bản và cần ghi nhận ai đã duyệt phiên bản nào. Nếu nội dung thay đổi sau khi duyệt, yêu cầu duyệt lại.</p>
+<h2 style="margin-top:36px">Hàng chờ ngoại lệ và khôi phục</h2><p>Khi hết số lần thử, chuyển công việc sang trạng thái NEEDS_REVIEW hoặc FAILED_REVIEW, lưu thông tin chẩn đoán không nhạy cảm và cung cấp thao tác chạy lại có kiểm soát. Người xử lý cần biết chạy lại từ bước nào, bước nào đã thành công và liệu có tác dụng phụ đã xảy ra hay chưa.</p>
+<h2 style="margin-top:36px">Kiểm thử các tình huống xấu</h2><p>Thử timeout sau khi API đã nhận yêu cầu, hai trigger cùng lúc, giới hạn tốc độ, token hết hạn, đầu vào thiếu và lỗi ở bước xuất bản. Xác nhận không tạo bản ghi trùng, không gửi trùng thông điệp và không mất trạng thái. Định nghĩa cách dừng khẩn cấp trước khi đưa vào sử dụng.</p>
+</div>
+<h2 style="margin-top:36px">Ví dụ áp dụng</h2><p>Ví dụ: nếu bước tạo bản nháp thành công nhưng phản hồi bị timeout, chạy lại toàn bộ luồng mà không kiểm tra trạng thái có thể tạo hai bản nháp. Lưu mã công việc và trạng thái đã tạo giúp luồng biết cần tiếp tục hay chuyển cho người kiểm tra.</p>
+<h2 style="margin-top:36px">Nguồn tham khảo</h2><ul style="padding-left:24px;line-height:2"><li><a href="https://developers.cloudflare.com/queues/configuration/dead-letter-queues/" target="_blank" rel="noopener noreferrer">Cloudflare Queues — retry and dead-letter queues</a></li>
+<li><a href="https://genai.owasp.org/llmrisk/llm062025-excessive-agency/" target="_blank" rel="noopener noreferrer">OWASP — excessive agency risk</a></li></ul>
+<p style="color:var(--muted);font-size:13px">Bài viết là hướng dẫn thực hành, không thay thế việc kiểm thử trong môi trường của bạn. Hãy xác minh tài liệu, quyền truy cập và kết quả thực tế trước khi triển khai trên dữ liệu hoặc hệ thống quan trọng.</p>
+<div style="border-top:1px solid var(--line);margin-top:38px;padding-top:22px"><a class="article-link" href="../#bai-viet">← Quay lại danh sách bài viết <span>→</span></a></div>
+<section class="related-articles" aria-labelledby="related-articles-title"><div class="related-articles-heading"><p class="section-kicker">ĐỌC TIẾP</p><h2 id="related-articles-title">Bài viết liên quan</h2><p>Tiếp tục xây dựng workflow AI thực tế, có kiểm soát.</p></div><nav class="related-articles-grid" aria-label="Bài viết liên quan"><a class="related-article" href="../articles/kiem-tra-json-dau-ra-ai-truoc-khi-tu-dong-hoa.html"><strong>Kiểm tra đầu ra AI trước khi tự động hóa: JSON, schema và quy tắc nghiệp vụ</strong><span>Cách biến câu trả lời AI thành dữ liệu có cấu trúc an toàn hơn bằng schema, kiểm tra mã và bước phê duyệt.</span></a>
+<a class="related-article" href="../articles/xay-dung-kho-tri-thuc-ai-co-nguon.html"><strong>Xây kho tri thức AI có nguồn: hướng dẫn RAG thực tế</strong><span>Cách chuẩn bị tài liệu, truy xuất đoạn liên quan, gắn nguồn và xử lý khi kho tri thức không có câu trả lời.</span></a>
+<a class="related-article" href="../articles/nhan-biet-prompt-injection-ai.html"><strong>Nhận biết prompt injection</strong><span>Giới hạn quyền và xử lý nội dung không đáng tin.</span></a></nav></section>
+</main>
+<footer><a class="brand" href="../"><span class="brand-mark">AI</span><span>AI <b>Thực Chiến</b></span></a><span>Học thật · Thử thật · Đo lường bằng bằng chứng · <a href="../feed.xml">RSS</a></span><span>© <span id="year">2026</span> AI Thực Chiến</span></footer>
+<script src="../script.js"></script>
+</body></html>
