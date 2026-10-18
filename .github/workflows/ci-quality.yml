@@ -40,7 +40,11 @@ jobs:
         run: |
           node scripts/test_worker_headers.mjs
           node scripts/test_worker_retrieval.mjs
+          node scripts/test_community_api.mjs
           node scripts/test_homepage_search.cjs
+
+      - name: Test community D1 schema
+        run: python3 scripts/test_community_schema.py
 
       - name: Test article content quality
         run: npm run test:content
