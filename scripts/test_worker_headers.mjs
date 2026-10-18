@@ -88,7 +88,7 @@ const chatRequest = new Request('https://example.test/api/chat', {
 });
 const chat = await worker.fetch(chatRequest, {
   AI: { run: async (model, input) => {
-    assert.equal(model, '@cf/meta/llama-3.1-8b-instruct');
+    assert.equal(model, '@cf/meta/llama-3.1-8b-instruct-fast');
     assert.equal(input.messages.at(-1).content, 'Tôi nên bắt đầu học AI từ đâu?');
     return { response: 'Hãy bắt đầu với một tác vụ nhỏ và kiểm chứng kết quả.' };
   } },
