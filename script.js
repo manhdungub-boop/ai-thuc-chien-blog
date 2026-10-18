@@ -30,10 +30,10 @@ const articleTools = document.querySelector('.article-tools');
 
 if (articleSearch && articleSearchStatus && articleTools && searchableArticles.length) {
   const normalizeSearchText = (value) => value
+    .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/đ/g, 'd')
-    .toLowerCase()
     .trim();
 
   const filterArticles = () => {
