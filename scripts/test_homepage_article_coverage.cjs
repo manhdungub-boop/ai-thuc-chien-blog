@@ -1,6 +1,7 @@
 const fs = require("node:fs");
 const { URL } = require("node:url");
 
+require("./scripts/generate_seo_feeds.cjs")(process.cwd());
 const homepage = fs.readFileSync("index.html", "utf8");
 const library = fs.readFileSync("thu-vien.html", "utf8");
 const sitemap = fs.readFileSync("sitemap.xml", "utf8");
