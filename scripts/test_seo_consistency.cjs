@@ -11,16 +11,20 @@ const articleDir = path.join(root, 'articles');
 const articleFiles = fs.readdirSync(articleDir).filter((name) => name.endsWith('.html')).sort();
 assert.ok(articleFiles.length > 0, 'No article HTML files found');
 
-const sitemap = fs.readFileSync(path.join(root, 'sitemap.xml'), 'utf8');
-const feed = fs.readFileSync(path.join(root, 'feed.xml'), 'utf8');
+// Generate the exact deployment artifact before checking sitemap/RSS parity.
+require('./build_static_site.cjs');
 
-assert.match(sitemap, /<urlset\b[\s\S]*<\/urlset>/, 'sitemap.xml is not a URL set');
-assert.match(feed, /<rss\b[\s\S]*<\/rss>/, 'feed.xml is not an RSS document');
+const distDir = path.join(root, 'dist');
+const sitemap = fs.readFileSync(path.join(distDir, 'sitemap.xml'), 'utf8');
+const feed = fs.readFileSync(path.join(distDir, 'feed.xml'), 'utf8');
+
+assert.match(sitemap, /<urlset\b[\s\S]*<\/urlset>/, 'dist/sitemap.xml is not a URL set');
+assert.match(feed, /<rss\b[\s\S]*<\/rss>/, 'dist/feed.xml is not an RSS document');
 
 const sitemapUrls = [...sitemap.matchAll(/<loc>\s*([^<]+)\s*<\/loc>/g)].map((m) => m[1].trim());
 const feedUrls = [...feed.matchAll(/<link>\s*(https?:\/\/[^<]+)\s*<\/link>/g)].map((m) => m[1].trim());
 assert.ok(sitemapUrls.includes(baseUrl + '/'), 'Sitemap must include the homepage');
-assert.ok(new Set(sitemapUrls).size === sitemapUrls.length, 'Sitemap contains duplicate URLs');
+assert.equal(new Set(sitemapUrls).size, sitemapUrls.length, 'Sitemap contains duplicate URLs');
 
 for (const file of articleFiles) {
   const source = fs.readFileSync(path.join(articleDir, file), 'utf8');
@@ -29,14 +33,14 @@ for (const file of articleFiles) {
   const canonical = canonicalMatch[1];
   assert.ok(canonical.startsWith(baseUrl + '/articles/'), file + ': canonical URL uses unexpected host/path');
   assert.ok(!canonical.endsWith('.html'), file + ': canonical policy should remain extensionless');
-  assert.ok(sitemapUrls.includes(canonical), file + ': canonical URL is missing from sitemap.xml');
-  assert.ok(feedUrls.includes(canonical), file + ': canonical URL is missing from feed.xml');
-  assert.ok(fs.existsSync(path.join(root, 'articles', file)), file + ': source file disappeared');
+  assert.ok(sitemapUrls.includes(canonical), file + ': canonical URL is missing from generated sitemap.xml');
+  assert.ok(feedUrls.includes(canonical), file + ': canonical URL is missing from generated feed.xml');
+  assert.ok(fs.existsSync(path.join(distDir, 'articles', file)), file + ': article missing from deployment output');
 }
 
 const sitemapArticleUrls = sitemapUrls.filter((url) => url.startsWith(baseUrl + '/articles/'));
 const feedArticleUrls = feedUrls.filter((url) => url.startsWith(baseUrl + '/articles/'));
-assert.equal(sitemapArticleUrls.length, articleFiles.length, 'Sitemap article count differs from article HTML count');
-assert.equal(feedArticleUrls.length, articleFiles.length, 'RSS article count differs from article HTML count');
+assert.equal(sitemapArticleUrls.length, articleFiles.length, 'Generated sitemap article count differs from source article count');
+assert.equal(feedArticleUrls.length, articleFiles.length, 'Generated RSS article count differs from source article count');
 
-console.log('SEO CONSISTENCY PASS: ' + articleFiles.length + ' articles match canonical URLs, sitemap.xml, and feed.xml.');
+console.log('SEO CONSISTENCY PASS: ' + articleFiles.length + ' articles match canonical URLs, generated sitemap.xml, feed.xml, and dist output.');
