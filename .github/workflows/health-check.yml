@@ -52,6 +52,7 @@ jobs:
         run: node scripts/test_homepage_article_coverage.cjs
 
       - name: Smoke-test live Workers and Pages deployments
+        if: github.event_name != 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
