@@ -47,6 +47,9 @@ jobs:
       - name: Test SEO consistency
         run: npm run test:seo
 
+      - name: Test accessibility and performance basics
+        run: node scripts/test_accessibility_performance.cjs
+
       - name: Test copy prompt interactions
         run: node scripts/test_copy_prompt.cjs
 
