@@ -187,3 +187,4 @@ jobs:
             fi
           done
           echo "WORKER SECURITY PASS: all five headers present; article, sitemap, RSS, and Search Console verification routes return HTTP 200."
+          SITE_URL="$host" node scripts/test_deployed_routes.cjs
