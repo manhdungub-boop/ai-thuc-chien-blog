@@ -95,7 +95,7 @@ function generate(outputDir) {
     '  <channel>',
     '    <title>AI Thực Chiến</title>',
     '    <link>' + escapeXml(SITE + '/') + '</link>',
-    '    <description>Kiến thức AI thực hành, tự động hóa và công nghệ cho người Việt.</description>',
+    '    <description>Kien thuc AI thuc hanh, tu dong hoa va cong nghe cho nguoi Viet.</description>',
     ...rssItems,
     '  </channel>',
     '</rss>',
