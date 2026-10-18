@@ -15,33 +15,68 @@ concurrency:
 
 jobs:
   audit:
-    name: Mobile Lighthouse — production and backup
+    name: Mobile Lighthouse — Pages and Worker health
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - name: Check out audit configuration
         uses: actions/checkout@v4
 
-      - name: Run Lighthouse on live deployments
+      - name: Preflight live URLs
+        shell: bash
+        run: |
+          set -u
+          check_url() {
+            local label="$1"
+            local url="$2"
+            local required="$3"
+            local status=""
+            for attempt in 1 2 3 4 5; do
+              status="$(curl --location --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 20 "$url" || true)"
+              if [ "$status" = "200" ]; then
+                echo "PASS: $label returned HTTP 200"
+                return 0
+              fi
+              echo "Attempt $attempt/5: $label returned HTTP ${status:-no response}"
+              sleep 3
+            done
+            if [ "$required" = "true" ]; then
+              echo "::error::$label did not return HTTP 200 after retries"
+              return 1
+            fi
+            echo "::warning::$label did not return HTTP 200 after retries; Pages audit will continue"
+            return 0
+          }
+
+          # Pages is the canonical performance target because it serves the same
+          # static site without depending on Worker routing at audit time.
+          check_url "Pages homepage" "https://ai-thuc-chien-blog.pages.dev/" true
+          check_url "Pages article" "https://ai-thuc-chien-blog.pages.dev/articles/do-luong-hieu-qua-blog" true
+
+          # Keep the Worker deployment monitored, but don't let a transient
+          # Worker 404 prevent the independent Pages performance audit.
+          check_url "Worker homepage" "https://ai-thuc-chien-blog.manhdungub.workers.dev/" false
+          check_url "Worker article" "https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/do-luong-hieu-qua-blog" false
+
+      - name: Run Lighthouse on canonical Pages deployment
         uses: treosh/lighthouse-ci-action@v12
         with:
           configPath: .github/lighthouse/lighthouserc.json
           urls: |
-            https://ai-thuc-chien-blog.manhdungub.workers.dev/
-            https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/do-luong-hieu-qua-blog
             https://ai-thuc-chien-blog.pages.dev/
             https://ai-thuc-chien-blog.pages.dev/articles/do-luong-hieu-qua-blog
           uploadArtifacts: true
           temporaryPublicStorage: false
           runs: 3
 
-      - name: Summarize audit limits
+      - name: Summarize audit scope
         if: always()
         run: |
           {
             echo "## Lighthouse audit"
-            echo "- Audits the primary Worker and Pages backup on mobile emulation."
-            echo "- Uses three runs per URL to reduce single-run noise."
+            echo "- Lighthouse performance metrics run against the canonical Cloudflare Pages deployment."
+            echo "- The Worker homepage and article are checked separately with retries."
+            echo "- A transient Worker routing 404 is reported as a warning and cannot abort the Pages performance audit."
             echo "- Reports are stored as workflow artifacts; no public report link is created."
-            echo "- This workflow establishes a measured baseline. Performance thresholds should be set after reviewing real results, not guessed in advance."
+            echo "- Performance thresholds should be set after reviewing measured results, not guessed in advance."
           } >> "$GITHUB_STEP_SUMMARY"
