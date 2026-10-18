@@ -29,13 +29,11 @@ copyButtons.forEach((button) => {
   const statusId = button.getAttribute('data-copy-status');
   const target = targetId ? document.getElementById(targetId) : null;
   const status = statusId ? document.getElementById(statusId) : null;
-
   if (!target) {
     button.disabled = true;
     if (status) status.textContent = 'Không tìm thấy nội dung cần sao chép.';
     return;
   }
-
   button.addEventListener('click', async () => {
     const text = 'value' in target ? target.value : (target.textContent || '');
     if (!text.trim()) {
@@ -43,9 +41,7 @@ copyButtons.forEach((button) => {
       return;
     }
     try {
-      if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
-        throw new Error('Clipboard API unavailable');
-      }
+      if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') throw new Error('Clipboard API unavailable');
       await navigator.clipboard.writeText(text);
       if (status) status.textContent = 'Đã sao chép. Bạn có thể dán vào công cụ AI.';
     } catch (_error) {

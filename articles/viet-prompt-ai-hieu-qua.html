@@ -1,155 +1,112 @@
 <!doctype html>
-<html lang="vi"><head>
+<html lang="vi">
+<head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="description" content="Công thức viết prompt AI theo 7 phần, kèm 3 mẫu có thể sao chép để viết nội dung, kiểm tra sự thật và cải thiện kết quả có hệ thống.">
 <title>Công thức viết prompt AI hiệu quả: 7 phần và 3 mẫu | AI Thực Chiến</title>
 <meta name="theme-color" content="#0b1020"><meta name="robots" content="index,follow,max-image-preview:large"><meta name="author" content="AI Thực Chiến">
 <link rel="canonical" href="https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/viet-prompt-ai-hieu-qua">
 <link rel="icon" type="image/svg+xml" href="../favicon.svg">
-<meta property="og:type" content="article"><meta property="og:locale" content="vi_VN"><meta property="og:site_name" content="AI Thực Chiến">
-<meta property="og:title" content="Công thức viết prompt AI hiệu quả: 7 phần và 3 mẫu"><meta property="og:description" content="Công thức prompt 7 phần, ba mẫu thực hành và cách thử nghiệm để cải thiện kết quả."><meta property="og:url" content="https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/viet-prompt-ai-hieu-qua">
-<meta name="twitter:card" content="summary"><meta name="twitter:title" content="Công thức viết prompt AI hiệu quả: 7 phần và 3 mẫu"><meta name="twitter:description" content="Ba mẫu có thể sao chép để viết nội dung, kiểm tra sự thật và cải thiện kết quả có hệ thống.">
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Công thức viết prompt AI hiệu quả: 7 phần và 3 mẫu","description":"Công thức prompt 7 phần, ba mẫu thực hành và cách thử nghiệm để cải thiện kết quả.","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/viet-prompt-ai-hieu-qua","mainEntityOfPage":{"@type":"WebPage","@id":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/viet-prompt-ai-hieu-qua"},"inLanguage":"vi-VN","author":{"@type":"Organization","name":"AI Thực Chiến","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/"},"publisher":{"@type":"Organization","name":"AI Thực Chiến","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/"}}</script>
+<meta property="og:type" content="article"><meta property="og:locale" content="vi_VN"><meta property="og:site_name" content="AI Thực Chiến"><meta property="og:title" content="Công thức viết prompt AI hiệu quả: 7 phần và 3 mẫu"><meta property="og:description" content="Công thức viết prompt AI theo 7 phần, kèm 3 mẫu có thể sao chép để viết nội dung, kiểm tra sự thật và cải thiện kết quả có hệ thống."><meta property="og:url" content="https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/viet-prompt-ai-hieu-qua">
+<meta name="twitter:card" content="summary"><meta name="twitter:title" content="Công thức viết prompt AI hiệu quả: 7 phần và 3 mẫu"><meta name="twitter:description" content="7 thành phần của một prompt rõ ràng, ba mẫu thực hành và cách thử nghiệm để cải thiện kết quả.">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Công thức viết prompt AI hiệu quả: 7 phần và 3 mẫu","description":"Công thức viết prompt AI theo 7 phần, kèm 3 mẫu có thể sao chép để viết nội dung, kiểm tra sự thật và cải thiện kết quả có hệ thống.","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/viet-prompt-ai-hieu-qua","mainEntityOfPage":{"@type":"WebPage","@id":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/viet-prompt-ai-hieu-qua"},"inLanguage":"vi-VN","author":{"@type":"Organization","name":"AI Thực Chiến","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/"},"publisher":{"@type":"Organization","name":"AI Thực Chiến","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/"}}</script>
 <link rel="alternate" type="application/rss+xml" title="AI Thực Chiến RSS" href="../feed.xml"><link rel="stylesheet" href="../styles.css">
 <!-- Cloudflare Web Analytics: primary host only --><script>(function(){if(window.location.hostname==="ai-thuc-chien-blog.manhdungub.workers.dev"){var s=document.createElement("script");s.type="module";s.src="https://static.cloudflareinsights.com/beacon.min.js";s.setAttribute("data-cf-beacon",'{"token":"f6ac034ab044496e8246fb13481a409e"}');document.head.appendChild(s);}})();</script><!-- End Cloudflare Web Analytics -->
 </head><body>
 <header class="site-header"><a class="brand" href="../"><span class="brand-mark">AI</span><span>AI <b>Thực Chiến</b></span></a><a class="header-cta" href="../#bai-viet">← Tất cả bài viết</a></header>
 <main class="section" style="max-width:900px;margin:auto">
-<div class="section-kicker">AI THỰC HÀNH · MẪU DÙNG NGAY</div>
-<h1 style="font-size:clamp(38px,6vw,64px);letter-spacing:-2px">Công thức viết prompt AI hiệu quả: 7 phần và 3 mẫu dùng ngay</h1>
-<p style="color:var(--muted)">Prompt tốt không nhất thiết phải dài. Điều quan trọng là mô tả đúng việc cần làm, cung cấp bối cảnh, xác định đầu ra và kiểm tra kết quả theo tiêu chí rõ ràng.</p>
-<hr style="border-color:var(--line);margin:32px 0">
-<h2>1. Công thức bảy phần</h2>
-<p>Không có câu lệnh bảo đảm mô hình luôn trả lời đúng. Hãy coi prompt là bản mô tả công việc: nó giảm mơ hồ nhưng không thay thế dữ liệu đầu vào, kiểm chứng hoặc quyết định của bạn. <a href="https://help.openai.com/en/articles/10032626-prompt-engineering-best-practices-for-chatgpt" target="_blank" rel="noopener noreferrer">OpenAI khuyến nghị chỉ dẫn rõ, đủ chi tiết và cải thiện lặp lại</a>. <a href="https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/overview" target="_blank" rel="noopener noreferrer">Anthropic nhấn mạnh việc xác định tiêu chí thành công và thử nghiệm</a>.</p>
-<ol>
-<li><strong>Nhiệm vụ:</strong> hành động cụ thể và kết quả mong muốn.</li>
-<li><strong>Bối cảnh:</strong> tình huống, mục tiêu, đối tượng và lý do cần kết quả.</li>
-<li><strong>Dữ liệu đầu vào:</strong> văn bản, bảng, thông tin và nguồn được phép sử dụng.</li>
-<li><strong>Ràng buộc:</strong> phạm vi, độ dài, giọng điệu, điều cần làm và điều cần tránh.</li>
-<li><strong>Định dạng:</strong> bảng, danh sách, dàn ý, email hoặc cấu trúc rõ ràng.</li>
-<li><strong>Tiêu chí chất lượng:</strong> điều kiện để kết quả hữu ích và có thể dùng được.</li>
-<li><strong>Kiểm chứng:</strong> đánh dấu điều chưa chắc chắn, thiếu nguồn hoặc cần người xem lại.</li>
-</ol>
-<p>Với việc đơn giản, có thể bỏ bớt phần không cần. Với nội dung quan trọng, đừng bỏ nguồn dữ liệu và tiêu chí kiểm tra.</p>
-
+<div class="section-kicker">AI THỰC HÀNH · MẪU DÙNG NGAY</div><h1 style="font-size:clamp(38px,6vw,64px);letter-spacing:-2px">Công thức viết prompt AI hiệu quả: 7 phần và 3 mẫu dùng ngay</h1>
+<p style="color:var(--muted)">Prompt tốt không nhất thiết phải dài. Điều quan trọng là mô tả đúng việc cần làm, cung cấp bối cảnh, xác định đầu ra và kiểm tra kết quả theo tiêu chí rõ ràng. Bài này có các mẫu tiếng Việt để bạn sao chép và điều chỉnh.</p><hr style="border-color:var(--line);margin:32px 0">
+<h2>1. Một prompt tốt cần làm rõ điều gì?</h2>
+<p>Không có câu lệnh nào bảo đảm mô hình luôn trả lời đúng. Prompt giúp giảm mơ hồ nhưng không thay thế dữ liệu đầu vào, kiểm chứng hoặc quyết định của bạn. Hướng dẫn chính thức của <a href="https://help.openai.com/en/articles/10032626-prompt-engineering-best-practices-for-chatgpt" target="_blank" rel="noopener noreferrer">OpenAI về cách viết prompt cho ChatGPT</a> khuyến khích chỉ dẫn rõ ràng và cải thiện lặp lại. Tài liệu <a href="https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/overview" target="_blank" rel="noopener noreferrer">Prompt Engineering Overview của Anthropic</a> nhấn mạnh xác định tiêu chí thành công và thử nghiệm trước khi tối ưu.</p>
+<ol><li><strong>Nhiệm vụ:</strong> hành động cụ thể AI cần thực hiện.</li><li><strong>Bối cảnh:</strong> tình huống, mục tiêu, người đọc và lý do cần kết quả.</li><li><strong>Dữ liệu đầu vào:</strong> văn bản, bảng hoặc nguồn được phép dùng.</li><li><strong>Ràng buộc:</strong> điều cần làm, điều cần tránh, độ dài và phạm vi.</li><li><strong>Định dạng đầu ra:</strong> bảng, danh sách, dàn ý, email hoặc cấu trúc cụ thể.</li><li><strong>Tiêu chí chất lượng:</strong> thế nào là hữu ích, đúng yêu cầu và có thể dùng được.</li><li><strong>Kiểm chứng:</strong> yêu cầu nêu dữ kiện còn thiếu, điểm chưa chắc chắn và cách kiểm tra; đừng coi lời khẳng định của AI là bằng chứng.</li></ol>
 <h2>2. Mẫu 1 — Prompt khung tổng quát</h2>
-<p>Sao chép mẫu, thay phần trong ngoặc vuông bằng thông tin thực tế. Không đưa mật khẩu, dữ liệu khách hàng hoặc thông tin bí mật vào công cụ chưa được phép sử dụng.</p>
-<textarea class="prompt-template" id="prompt-framework" readonly rows="14" aria-label="Mẫu prompt tổng quát">NHIỆM VỤ
-Hãy giúp tôi [việc cụ thể và kết quả mong muốn].
+<p>Sao chép mẫu, thay các phần trong ngoặc vuông. Không đưa mật khẩu, dữ liệu khách hàng hoặc thông tin bí mật vào công cụ chưa được cho phép.</p>
+<textarea class="prompt-template" id="prompt-framework" readonly rows="15" aria-label="Mẫu prompt tổng quát">NHIỆM VỤ
+Hãy giúp tôi [mô tả một việc cụ thể và kết quả mong muốn].
 
 BỐI CẢNH
-Tình huống: [bối cảnh].
+Tình huống: [bối cảnh liên quan].
 Người sẽ dùng kết quả: [đối tượng].
 Mục tiêu cuối cùng: [mục tiêu có thể đánh giá].
 
 DỮ LIỆU ĐẦU VÀO
-Chỉ dùng thông tin tôi cung cấp và nguồn được phép: [nội dung hoặc nguồn].
+Chỉ sử dụng thông tin tôi cung cấp và nguồn được phép truy cập: [dán nội dung hoặc liệt kê nguồn].
 Nếu thiếu dữ kiện quan trọng, hãy hỏi lại trước khi kết luận.
 
 RÀNG BUỘC
 - Ngôn ngữ/giọng điệu: [yêu cầu].
 - Phạm vi và độ dài: [giới hạn].
-- Không được làm: [điều cần tránh].
+- Không được làm: [các điều cần tránh].
 - Không tự tạo số liệu, tên nguồn, trích dẫn hoặc trải nghiệm.
 
 ĐỊNH DẠNG ĐẦU RA
-Trình bày dưới dạng [bảng/danh sách/dàn ý/email] gồm: [các mục].
+Trình bày dưới dạng [bảng/danh sách/dàn ý/email] với các mục: [các trường cần có].
 
 TIÊU CHÍ CHẤT LƯỢNG
-Kết quả phải [tiêu chí 1], [tiêu chí 2] và có thể kiểm tra.
+Kết quả phải [tiêu chí 1], [tiêu chí 2] và có thể kiểm tra được.
+Nếu có nhiều phương án, hãy nêu ưu/nhược điểm và giả định của mỗi phương án.
 
 KIỂM CHỨNG
 Phân biệt dữ kiện có nguồn, suy luận và điều chưa xác minh.
-Đánh dấu điều tôi cần kiểm tra; không khẳng định đã làm việc ngoài cuộc trò chuyện.
+Đánh dấu nội dung cần tôi kiểm tra; không khẳng định đã thực hiện hành động ngoài cuộc trò chuyện.
 Kết thúc bằng checklist ngắn để tôi duyệt trước khi sử dụng.</textarea>
 <div class="prompt-copy-row"><button type="button" class="prompt-copy-button" data-copy-target="prompt-framework" data-copy-status="prompt-framework-status">Sao chép mẫu prompt</button><span class="prompt-copy-status" id="prompt-framework-status" aria-live="polite">Thay nội dung trong ngoặc vuông trước khi dùng.</span></div>
-
-<h2>3. Mẫu 2 — Kiểm chứng trước khi xuất bản</h2>
-<p>Mẫu này giúp tổ chức việc rà soát; nó không tự chứng minh nhận định là đúng.</p>
-<textarea class="prompt-template" id="prompt-fact-check" readonly rows="10" aria-label="Mẫu prompt kiểm chứng thông tin">Rà soát bản nháp dưới đây theo từng nhận định có thể kiểm chứng.
+<h2>3. Mẫu 2 — Kiểm tra thông tin trước khi xuất bản</h2>
+<p>Yêu cầu này giúp sắp xếp việc rà soát; nó không tự chứng minh thông tin là đúng.</p>
+<textarea class="prompt-template" id="prompt-fact-check" readonly rows="11" aria-label="Mẫu prompt kiểm tra thông tin">Hãy rà soát bản nháp dưới đây theo từng nhận định có thể kiểm chứng.
 
 BẢN NHÁP: [dán nội dung]
-MỤC ĐÍCH VÀ ĐỘC GIẢ: [mô tả]
-NGUỒN ĐƯỢC PHÉP DÙNG: [URL hoặc tài liệu gốc]
+ĐỘC GIẢ VÀ MỤC ĐÍCH: [mô tả ngắn]
+NGUỒN ĐƯỢC PHÉP DÙNG: [dán URL hoặc tài liệu gốc]
 
 Trả về bảng gồm:
 1. Nhận định cần kiểm tra.
 2. Loại: dữ kiện, ý kiến hay suy luận.
-3. Nguồn hỗ trợ/phản bác (chỉ khi đã truy cập và đọc được).
+3. Nguồn trực tiếp hỗ trợ hoặc phản bác (nếu đã truy cập và đọc được).
 4. Trạng thái: được hỗ trợ, mâu thuẫn, chưa đủ bằng chứng hoặc chưa kiểm tra.
-5. Đề xuất: giữ, viết lại, bổ sung nguồn hoặc bỏ.
+5. Cách xử lý đề xuất: giữ, viết lại, bổ sung nguồn hoặc bỏ.
 
-Không bịa URL, trích dẫn hay kết quả tra cứu. Nếu không thể mở/đọc nguồn, ghi "chưa xác minh". Kết thúc bằng checklist cho người biên tập.</textarea>
+Không tự bịa URL, trích dẫn hay kết quả tra cứu. Nếu không thể mở/đọc nguồn, ghi rõ "chưa xác minh". Kết thúc bằng các điểm cần người biên tập tự kiểm tra.</textarea>
 <div class="prompt-copy-row"><button type="button" class="prompt-copy-button" data-copy-target="prompt-fact-check" data-copy-status="prompt-fact-check-status">Sao chép mẫu kiểm chứng</button><span class="prompt-copy-status" id="prompt-fact-check-status" aria-live="polite">Tự mở nguồn và đối chiếu trước khi tin kết luận.</span></div>
-
 <h2>4. Mẫu 3 — Lập dàn ý bài viết hữu ích</h2>
-<textarea class="prompt-template" id="prompt-article-plan" readonly rows="10" aria-label="Mẫu prompt lập dàn ý">Lập dàn ý cho bài viết về [chủ đề] dành cho [độc giả cụ thể].
+<textarea class="prompt-template" id="prompt-article-plan" readonly rows="10" aria-label="Mẫu prompt lập dàn ý bài viết">Hãy lập dàn ý cho bài viết về [chủ đề] dành cho [độc giả cụ thể].
 
 Vấn đề người đọc cần giải quyết: [vấn đề].
-Kết quả họ muốn đạt được: [kết quả].
-Phạm vi: [các phần cần có và điều không đề cập].
-Tài liệu tôi có: [liệt kê nguồn].
-Góc nhìn hoặc ví dụ thật tôi cung cấp: [dữ liệu/tình huống].
+Kết quả thực tế họ muốn đạt được: [kết quả].
+Phạm vi bài viết: [các phần cần có và điều không đề cập].
+Bằng chứng hoặc tài liệu tôi có: [liệt kê nguồn].
+Góc nhìn/ví dụ do tôi cung cấp: [kinh nghiệm, dữ liệu hoặc tình huống thật].
 
 Đầu ra:
 - Tiêu đề làm rõ lợi ích, không hứa hẹn quá mức.
 - Mở bài nêu vấn đề và đối tượng.
-- Các mục H2/H3 theo trình tự có thể làm theo.
+- Các mục H2/H3 theo trình tự người đọc có thể làm theo.
 - Ví dụ hoặc checklist gắn với từng bước.
 - Rủi ro, giới hạn và điều cần kiểm chứng.
-- Danh sách nguồn cần đọc trước khi viết bản đầy đủ.
+- Danh sách nguồn cần đọc trước khi viết bản hoàn chỉnh.
 
-Không tạo số liệu, trải nghiệm cá nhân hay trích dẫn không có trong dữ liệu đầu vào. Đánh dấu phần cần bổ sung bằng chứng.</textarea>
-<div class="prompt-copy-row"><button type="button" class="prompt-copy-button" data-copy-target="prompt-article-plan" data-copy-status="prompt-article-plan-status">Sao chép mẫu lập dàn ý</button><span class="prompt-copy-status" id="prompt-article-plan-status" aria-live="polite">Bổ sung ví dụ và dữ liệu thật để tạo giá trị riêng.</span></div>
-<noscript><p>JavaScript đang tắt: bạn vẫn có thể chọn nội dung trong ô văn bản để sao chép thủ công.</p></noscript>
-
-<h2>5. Cải thiện prompt bằng thử nghiệm nhỏ</h2>
-<ol>
-<li><strong>Ghi tiêu chí trước:</strong> chẳng hạn câu trả lời phải đúng nguồn, theo cấu trúc bảng và không suy đoán khi thiếu dữ liệu.</li>
-<li><strong>Chuẩn bị 3 trường hợp:</strong> một tình huống bình thường, một tình huống thiếu thông tin và một tình huống dễ nhầm.</li>
-<li><strong>Chạy và ghi lỗi:</strong> thiếu mục nào, hiểu nhầm yêu cầu gì hay đưa ra khẳng định chưa có bằng chứng?</li>
-<li><strong>Sửa một yếu tố mỗi lần:</strong> làm rõ định dạng, thêm ví dụ hoặc nêu giới hạn rồi chạy lại cùng các trường hợp.</li>
-<li><strong>Lưu phiên bản:</strong> ghi ngày sửa, ví dụ đầu vào, kết quả mong muốn và lỗi còn lại. Khi quy trình thay đổi, chạy lại kiểm thử.</li>
-</ol>
-<p>Đối với tác vụ lặp đi lặp lại, đánh giá trên nhiều ví dụ thay vì chọn prompt chỉ vì một câu trả lời trông hay. <a href="https://developers.openai.com/api/docs/guides/prompt-engineering" target="_blank" rel="noopener noreferrer">Tài liệu prompt engineering của OpenAI</a> giải thích vai trò của việc đo lường và đánh giá đầu ra khi xây dựng ứng dụng đáng tin cậy.</p>
-
-<h2>6. Lỗi thường gặp</h2>
-<ul>
-<li><strong>Yêu cầu mơ hồ:</strong> “viết hay hơn” kém rõ hơn “viết cho người mới, tối đa 120 từ, giữ nguyên số liệu và nêu bước tiếp theo”.</li>
-<li><strong>Chỉ định vai trò nhưng thiếu dữ liệu:</strong> câu “hãy là chuyên gia” không thay cho bối cảnh, nguồn và tiêu chí.</li>
-<li><strong>Gộp quá nhiều mục tiêu:</strong> chia công việc lớn thành bước nhỏ và kiểm tra kết quả giữa các bước.</li>
-<li><strong>Yêu cầu AI tự xác nhận mình đúng:</strong> “đừng bịa” không đủ để xác minh. Hãy mở nguồn gốc và đối chiếu nhận định quan trọng.</li>
-<li><strong>Sản xuất nội dung hàng loạt không có đóng góp riêng:</strong> bổ sung ví dụ, kiểm thử hoặc phân tích thực sự hữu ích. <a href="https://developers.google.com/search/docs/fundamentals/creating-helpful-content" target="_blank" rel="noopener noreferrer">Google Search Central khuyến nghị ưu tiên nội dung hữu ích cho người đọc</a>, thay vì sản xuất hàng loạt chỉ để thao túng thứ hạng.</li>
-</ul>
-
-<h2>7. Checklist trước khi dùng kết quả</h2>
-<ul>
-<li>Nhiệm vụ, người đọc và đầu ra có rõ ràng không?</li>
-<li>AI có tự lấp chỗ trống bằng suy đoán hay không?</li>
-<li>Số liệu, ngày tháng, trích dẫn và liên kết quan trọng đã được đối chiếu nguồn gốc?</li>
-<li>Dữ liệu nhạy cảm đã được loại khỏi đầu vào chưa?</li>
-<li>Một người chịu trách nhiệm đã duyệt trước khi gửi, đăng hoặc dùng kết quả cho quyết định quan trọng?</li>
-</ul>
-<p><strong>Nguyên tắc cốt lõi:</strong> prompt giúp làm rõ yêu cầu chứ không bảo đảm sự thật. Dùng AI để tăng tốc bản nháp, rồi kiểm chứng và giữ quyền quyết định cuối cùng.</p>
-<section class="section" aria-labelledby="nguon-tham-khao" style="padding-left:0;padding-right:0">
-<h2 id="nguon-tham-khao">Nguồn chính thức để đọc thêm</h2>
-<ul>
+Đừng tạo số liệu, trải nghiệm cá nhân hay trích dẫn không có trong dữ liệu đầu vào. Nếu thiếu bằng chứng để viết một phần, hãy đánh dấu phần đó là cần bổ sung.</textarea>
+<div class="prompt-copy-row"><button type="button" class="prompt-copy-button" data-copy-target="prompt-article-plan" data-copy-status="prompt-article-plan-status">Sao chép mẫu lập dàn ý</button><span class="prompt-copy-status" id="prompt-article-plan-status" aria-live="polite">Cung cấp dữ liệu và góc nhìn thật để bài viết có giá trị riêng.</span></div>
+<noscript><p>JavaScript đang tắt: bạn vẫn có thể nhấn giữ hoặc chọn nội dung trong các ô văn bản để sao chép thủ công.</p></noscript>
+<h2>5. Cách cải thiện prompt bằng thử nghiệm nhỏ</h2>
+<ol><li><strong>Ghi tiêu chí trước:</strong> ví dụ, câu trả lời dùng đúng nguồn, đúng cấu trúc và không suy đoán khi thiếu dữ liệu.</li><li><strong>Chuẩn bị ba tình huống:</strong> bình thường, thiếu thông tin và có dữ kiện dễ nhầm.</li><li><strong>Chạy prompt và ghi lỗi:</strong> câu trả lời thiếu mục nào, hiểu nhầm yêu cầu gì, hay có khẳng định chưa được hỗ trợ?</li><li><strong>Sửa một yếu tố mỗi lần:</strong> thêm ví dụ, làm rõ định dạng hoặc nêu giới hạn; sau đó chạy lại cùng bộ tình huống.</li><li><strong>Lưu phiên bản:</strong> ghi tên công việc, ngày sửa, ví dụ đầu vào, kết quả mong muốn và lỗi còn lại.</li></ol>
+<p>Với tác vụ lặp lại, hãy đánh giá nhiều ví dụ thay vì chọn prompt chỉ vì một câu trả lời trông hay. <a href="https://developers.openai.com/api/docs/guides/prompt-engineering" target="_blank" rel="noopener noreferrer">Hướng dẫn prompt engineering của OpenAI</a> khuyến khích dùng kiểm thử và bộ đánh giá để theo dõi kết quả khi prompt hoặc mô hình thay đổi.</p>
+<h2>6. Các lỗi thường gặp cần tránh</h2>
+<ul><li><strong>Yêu cầu mơ hồ:</strong> “viết hay hơn” không rõ bằng “viết cho người mới, tối đa 120 từ, giữ nguyên số liệu và nêu bước tiếp theo”.</li><li><strong>Nhồi quá nhiều mục tiêu:</strong> chia việc lớn thành từng bước và kiểm tra giữa các bước.</li><li><strong>Chỉ định vai trò nhưng thiếu dữ liệu:</strong> “hãy là chuyên gia” không thay cho bối cảnh, nguồn và tiêu chí.</li><li><strong>Yêu cầu AI tự xác nhận mình đúng:</strong> “đừng bịa” không đủ để xác minh. Hãy mở nguồn gốc và đối chiếu nhận định quan trọng.</li><li><strong>Xuất bản hàng loạt mà thiếu đóng góp riêng:</strong> hãy bổ sung ví dụ, kiểm thử, phân tích hoặc hướng dẫn giải quyết vấn đề. Xem <a href="https://developers.google.com/search/docs/fundamentals/creating-helpful-content" target="_blank" rel="noopener noreferrer">hướng dẫn nội dung hữu ích của Google Search Central</a>.</li></ul>
+<h2>7. Checklist trước khi sử dụng kết quả AI</h2>
+<ul><li>Yêu cầu và đối tượng có rõ ràng không?</li><li>AI có chỉ dùng dữ liệu, nguồn được phép không?</li><li>Đầu ra có định dạng dễ kiểm tra không?</li><li>Số liệu, ngày tháng, trích dẫn, liên kết và tuyên bố quan trọng đã được đối chiếu với nguồn gốc?</li><li>Đã loại bỏ dữ liệu nhạy cảm và khẳng định chưa có căn cứ?</li><li>Một người chịu trách nhiệm đã duyệt trước khi gửi, đăng hoặc dùng để ra quyết định?</li></ul>
+<p><strong>Nguyên tắc cốt lõi:</strong> prompt giúp làm rõ yêu cầu, không phải cơ chế bảo đảm sự thật. Hãy dùng nó để tiết kiệm thời gian cho bản nháp, rồi dành thời gian phù hợp cho kiểm chứng và quyết định cuối cùng.</p>
+<section class="section" aria-labelledby="nguon-tham-khao" style="padding-left:0;padding-right:0"><h2 id="nguon-tham-khao">Nguồn chính thức để đọc thêm</h2><ul>
 <li><a href="https://help.openai.com/en/articles/10032626-prompt-engineering-best-practices-for-chatgpt" target="_blank" rel="noopener noreferrer">OpenAI Help Center — Prompt engineering best practices for ChatGPT</a>.</li>
 <li><a href="https://developers.openai.com/api/docs/guides/prompt-engineering" target="_blank" rel="noopener noreferrer">OpenAI API docs — Prompt engineering</a>.</li>
 <li><a href="https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/overview" target="_blank" rel="noopener noreferrer">Anthropic — Prompt engineering overview</a>.</li>
 <li><a href="https://developers.google.com/search/docs/fundamentals/creating-helpful-content" target="_blank" rel="noopener noreferrer">Google Search Central — Creating helpful, reliable, people-first content</a>.</li>
-</ul>
-<p style="color:var(--muted);font-size:12px">Các mẫu là điểm bắt đầu, không bảo đảm cùng kết quả trên mọi công cụ hoặc phiên bản mô hình. Hãy kiểm tra tài liệu chính thức vì tính năng có thể thay đổi.</p>
-</section>
+</ul><p style="color:var(--muted);font-size:12px">Các mẫu là điểm bắt đầu để điều chỉnh, không bảo đảm cùng một kết quả trên mọi công cụ hoặc phiên bản mô hình. Hãy kiểm tra tài liệu chính thức vì khả năng và giao diện công cụ có thể thay đổi.</p></section>
 <a class="button primary" href="../#bai-viet">Quay lại danh sách bài viết →</a>
-<section class="related-articles" aria-labelledby="related-articles-title">
-<div class="related-articles-heading"><p class="section-kicker">ĐỌC TIẾP</p><h2 id="related-articles-title">Bài viết liên quan</h2><p>Đưa prompt vào quy trình thực tế và kiểm tra đầu ra trước khi sử dụng.</p></div>
-<nav class="related-articles-grid" aria-label="Bài viết liên quan">
+<section class="related-articles" aria-labelledby="related-articles-title"><div class="related-articles-heading"><p class="section-kicker">ĐỌC TIẾP</p><h2 id="related-articles-title">Bài viết liên quan</h2><p>Đưa prompt vào quy trình thực tế và kiểm tra đầu ra trước khi sử dụng.</p></div><nav class="related-articles-grid" aria-label="Bài viết liên quan">
 <a class="related-article" href="../articles/bat-dau-voi-ai.html"><strong>5 cách bắt đầu dùng AI</strong><span>Chọn nhiệm vụ đầu tiên phù hợp để thực hành.</span></a>
 <a class="related-article" href="../articles/kiem-chung-noi-dung-ai.html"><strong>Checklist kiểm chứng nội dung AI</strong><span>Đối chiếu nguồn, số liệu và nhận định quan trọng.</span></a>
 <a class="related-article" href="../articles/quy-trinh-ai-co-kiem-duyet.html"><strong>Quy trình AI có kiểm duyệt</strong><span>Giữ người chịu trách nhiệm ở bước duyệt cuối.</span></a>
 </nav></section>
-</main>
-<footer><a class="brand" href="../"><span class="brand-mark">AI</span><span>AI <b>Thực Chiến</b></span></a><span>Học thật · Thử thật · Tối ưu từng bước · <a href="../feed.xml" aria-label="Đăng ký RSS">RSS</a></span><span>© 2026 AI Thực Chiến</span></footer>
-<script src="../script.js"></script>
-</body></html>
+</main><footer><a class="brand" href="../"><span class="brand-mark">AI</span><span>AI <b>Thực Chiến</b></span></a><span>Học thật · Thử thật · Tối ưu từng bước · <a href="../feed.xml" aria-label="Đăng ký RSS">RSS</a></span><span>© 2026 AI Thực Chiến</span></footer><script src="../script.js"></script></body></html>

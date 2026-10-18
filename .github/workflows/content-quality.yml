@@ -7,6 +7,13 @@ on:
       - "sitemap.xml"
       - "feed.xml"
       - "scripts/validate_content_pr.py"
+      - "scripts/test_copy_prompt.cjs"
+      - "scripts/test_homepage_search.cjs"
+      - "scripts/test_article_navigation.cjs"
+      - "scripts/test_homepage_article_coverage.cjs"
+      - "index.html"
+      - "script.js"
+      - "styles.css"
       - ".github/workflows/content-quality.yml"
 permissions:
   contents: read
@@ -22,6 +29,18 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.x"
+      - name: Run browser interaction regression tests
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test copy-to-clipboard interactions
+        run: node scripts/test_copy_prompt.cjs
+      - name: Test homepage search behavior
+        run: node scripts/test_homepage_search.cjs
+      - name: Test contextual article navigation
+        run: node scripts/test_article_navigation.cjs
+      - name: Test homepage discovery for every published article
+        run: node scripts/test_homepage_article_coverage.cjs
       - name: Validate changed articles
         env:
           BASE_REF: ${{ github.base_ref }}
