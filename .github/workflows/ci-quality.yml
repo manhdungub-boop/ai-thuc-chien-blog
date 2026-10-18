@@ -1,0 +1,57 @@
+name: Static CI Quality Gate
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: static-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build static site and SEO feeds
+        run: npm run build
+
+      - name: Check JavaScript syntax
+        run: |
+          node --check script.js
+          node --check worker.mjs
+
+      - name: Test Worker runtime and security headers
+        run: |
+          node scripts/test_worker_headers.mjs
+          node scripts/test_homepage_search.cjs
+
+      - name: Test article content quality
+        run: npm run test:content
+
+      - name: Test SEO consistency
+        run: npm run test:seo
+
+      - name: Test copy prompt interactions
+        run: node scripts/test_copy_prompt.cjs
+
+      - name: Test article navigation
+        run: node scripts/test_article_navigation.cjs
+
+      - name: Test homepage article coverage
+        run: node scripts/test_homepage_article_coverage.cjs
