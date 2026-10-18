@@ -38,6 +38,12 @@ async function get(pathname) {
   assert.match(homepage, /<html\b[^>]*lang=["']vi["']/i, 'Homepage must declare Vietnamese language');
   assert.match(homepage, /<title[^>]*>\s*[^<]+\s*<\/title>/i, 'Homepage must include a non-empty title');
 
+  const about = pages.get('/ve-chung-toi.html');
+  const aboutCanonicalTag = (about.match(/<link\b[^>]*rel=[\"']canonical[\"'][^>]*>/i) || [])[0] || '';
+  const aboutCanonical = aboutCanonicalTag.match(/\bhref=[\"']([^\"']+)[\"']/i);
+  assert.ok(aboutCanonical, 'About page must declare a canonical URL');
+  assert.equal(new URL(aboutCanonical[1]).pathname, '/ve-chung-toi.html', 'About page canonical must point to a deployed route, not a 404');
+
   const library = pages.get('/thu-vien.html');
   assert.match(library, /Thư viện/i, 'Library route did not return library content');
   const declaredLibraryCount = Number((library.match(/THƯ VIỆN THỰC HÀNH[^<]*?(\d+)\s*BÀI/i) || [])[1]);
