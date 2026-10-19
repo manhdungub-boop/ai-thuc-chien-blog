@@ -12,5 +12,12 @@
     "run_worker_first": true
   },
   "main": "./worker.mjs",
-  "ai": { "binding": "AI" }
+  "ai": { "binding": "AI" },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ai-thuc-chien-community",
+      "database_id": "fc2517cb-9543-4d7b-98f4-bcd5f3c013e7"
+    }
+  ]
 }
