@@ -430,19 +430,7 @@ export default {
     try {
       const requestUrl = new URL(request.url);
       const pathname = requestUrl.pathname;
-      // Send root visitors to the known-good canonical homepage file.
-      // A temporary, non-cacheable redirect also bypasses stale root fallback documents.
-      if ((request.method === "GET" || request.method === "HEAD") && pathname === "/") {
-        requestUrl.pathname = "/index.html";
-        return withSecurityHeaders(new Response(null, {
-          status: 302,
-          headers: {
-            "Location": requestUrl.toString(),
-            "Cache-Control": "no-store, max-age=0",
-            "Pragma": "no-cache",
-          },
-        }), request);
-      }
+      // resolveAssetRequest maps / to /index.html internally, keeping the public URL canonical.
       if (pathname === "/api/chat") return withSecurityHeaders(await handleChat(request, env), request);
       if (pathname === "/api/community" || pathname.startsWith("/api/community/")) {
         return withSecurityHeaders(await handleCommunityApi(request, env), request);
