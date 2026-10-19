@@ -22,7 +22,16 @@ function assertSecurityHeaders(response, expectHsts = true) {
   }
 }
 
-const ok = await worker.fetch(new Request('https://example.test/'), {
+const root = await worker.fetch(new Request('https://example.test/'), {
+  ASSETS: { fetch: async () => { throw new Error('Root must redirect before asset lookup'); } },
+});
+assert.equal(root.status, 302);
+assert.equal(root.headers.get('location'), 'https://example.test/index.html');
+assert.equal(root.headers.get('cache-control'), 'no-store, max-age=0');
+assert.equal(root.headers.get('pragma'), 'no-cache');
+assertSecurityHeaders(root);
+
+const ok = await worker.fetch(new Request('https://example.test/index.html'), {
   ASSETS: {
     fetch: async (request) => {
       assert.equal(new URL(request.url).pathname, '/index.html');
@@ -31,7 +40,7 @@ const ok = await worker.fetch(new Request('https://example.test/'), {
         headers: {
           'Content-Type': 'text/html; charset=utf-8',
           'Cache-Control': 'public, max-age=60',
-          'ETag': '"abc123"',
+          'ETag': '\"abc123\"',
           'X-Frame-Options': 'SAMEORIGIN',
         },
       });
@@ -42,10 +51,8 @@ assert.equal(ok.status, 200);
 assert.equal(await ok.text(), '<h1>OK</h1>');
 assertSecurityHeaders(ok);
 assert.equal(ok.headers.get('content-type'), 'text/html; charset=utf-8');
-assert.equal(ok.headers.get('cache-control'), 'no-store, max-age=0');
-assert.equal(ok.headers.get('pragma'), 'no-cache');
-assert.equal(ok.headers.get('expires'), '0');
-assert.equal(ok.headers.get('etag'), '"abc123"');
+assert.equal(ok.headers.get('cache-control'), 'public, max-age=60');
+assert.equal(ok.headers.get('etag'), '\"abc123\"');
 
 const article = await worker.fetch(new Request('https://example.test/articles/sample-article'), {
   ASSETS: {
