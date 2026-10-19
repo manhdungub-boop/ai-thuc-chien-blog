@@ -19,5 +19,14 @@
       "database_name": "ai-thuc-chien-community",
       "database_id": "fc2517cb-9543-4d7b-98f4-bcd5f3c013e7"
     }
-  ]
+  ],
+  "previews": {
+    "d1_databases": [
+      {
+        "binding": "DB",
+        "database_name": "ai-thuc-chien-community-preview",
+        "database_id": "51d814c8-a3fc-4481-a5f1-60bc67617f3c"
+      }
+    ]
+  }
 }
