@@ -80,8 +80,18 @@
           <button class="button primary community-submit" id="community-auth-submit" type="submit">Đăng ký thành viên <span>→</span></button>
         </form>
         <p class="community-status" id="community-auth-status" role="status" aria-live="polite"></p>
+        <section id="community-verification-panel" hidden aria-labelledby="community-verification-title">
+          <h3 id="community-verification-title">Xác minh email</h3>
+          <p class="community-muted" id="community-verification-description">Nhập mã 6 chữ số được gửi tới email của bạn. Mã có hiệu lực trong 10 phút.</p>
+          <form id="community-verification-form" class="community-auth-form">
+            <label for="community-verification-code">Mã xác minh</label>
+            <input id="community-verification-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" placeholder="123456" required>
+            <button class="button primary community-submit" id="community-verification-submit" type="submit">Xác minh email <span>→</span></button>
+          </form>
+          <button type="button" class="community-primary-link" id="community-resend-verification">Gửi lại mã</button>
+        </section>
         <p class="community-auth-switch"><span id="community-switch-copy">Đã có tài khoản?</span> <button type="button" id="community-switch-mode">Đăng nhập</button></p>
-        <p class="community-privacy-note">Email chỉ dùng để đăng nhập, không hiển thị trong phòng. Tên hiển thị và tin nhắn sẽ được các thành viên đọc. Không dùng lại mật khẩu ở nơi khác. Phiên bản đầu chưa xác minh email hoặc hỗ trợ đặt lại mật khẩu.</p>
+        <p class="community-privacy-note">Email dùng để đăng nhập và xác minh tài khoản, không hiển thị trong phòng. Tên hiển thị và tin nhắn sẽ được các thành viên đọc. Không dùng lại mật khẩu ở nơi khác.</p>
       </div>
       <div id="community-member-panel" hidden>
         <div class="community-member-avatar" aria-hidden="true">✦</div>
