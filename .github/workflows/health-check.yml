@@ -8,7 +8,7 @@ on:
     types: [completed]
     branches: [main]
   schedule:
-    - cron: "0 2 * * 1"
+    - cron: "*/15 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -73,6 +73,15 @@ jobs:
             body="$(mktemp)"
             trap 'rm -f "$headers" "$body"' EXIT
             curl --fail --silent --show-error --location --verbose --max-redirs 5 --max-time 25 -D "$headers" -o "$body" "$host/"
+            if grep -Eqi '404[[:space:]]*[-|:]?[[:space:]]*(not found|page not found)|the page you requested could not be found' "$body"; then
+              echo "FAIL: $host homepage appears to contain a branded 404 page"
+              exit 1
+            fi
+            if ! grep -Eqi '<title>[^<]*(AI Thực Chiến|AI Thuc Chien)' "$body"; then
+              echo "FAIL: $host homepage title did not match the expected site"
+              head -c 500 "$body"
+              exit 1
+            fi
             for expected in \
               'X-Content-Type-Options: nosniff' \
               'X-Frame-Options: DENY' \
