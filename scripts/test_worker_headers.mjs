@@ -41,6 +41,38 @@ assert.equal(root.headers.get('pragma'), 'no-cache');
 assert.equal(root.headers.get('expires'), '0');
 assertSecurityHeaders(root);
 
+// If the Worker asset binding returns a 404 for the homepage, recover from the
+// independently hosted Pages copy without redirecting the visitor or touching D1.
+const originalFetch = globalThis.fetch;
+let fallbackCalls = 0;
+globalThis.fetch = async (input, init = {}) => {
+  const fallbackUrl = new URL(typeof input === 'string' ? input : input.url);
+  fallbackCalls += 1;
+  assert.equal(fallbackUrl.hostname, 'ai-thuc-chien-blog.pages.dev');
+  assert.equal(fallbackUrl.pathname, '/');
+  assert.equal(init.method, 'GET');
+  return new Response('<title>AI Thực Chiến — Ứng dụng AI vào việc thật</title>', {
+    status: 200,
+    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+  });
+};
+let recoveredHomepage;
+try {
+  recoveredHomepage = await worker.fetch(new Request('https://example.test/?diag=fallback'), {
+    ASSETS: { fetch: async (request) => {
+      assert.equal(new URL(request.url).pathname, '/index.html');
+      return new Response('<h1>404</h1>', { status: 404, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+    } },
+  });
+} finally {
+  globalThis.fetch = originalFetch;
+}
+assert.equal(recoveredHomepage.status, 200, 'Homepage fallback should recover an asset 404');
+assert.match(await recoveredHomepage.text(), /AI Thực Chiến/);
+assert.equal(fallbackCalls, 1, 'Homepage fallback should run exactly once');
+assert.equal(recoveredHomepage.headers.get('cache-control'), 'no-store, max-age=0');
+assertSecurityHeaders(recoveredHomepage);
+
 const ok = await worker.fetch(new Request('https://example.test/index.html'), {
   ASSETS: {
     fetch: async (request) => {

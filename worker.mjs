@@ -435,10 +435,32 @@ export default {
       if (pathname === "/api/community" || pathname.startsWith("/api/community/")) {
         return withSecurityHeaders(await handleCommunityApi(request, env), request);
       }
-      return withSecurityHeaders(
-        await env.ASSETS.fetch(resolveAssetRequest(request)),
-        request,
-      );
+      const assetResponse = await env.ASSETS.fetch(resolveAssetRequest(request));
+      const isHomepageRead = (request.method === "GET" || request.method === "HEAD") && pathname === "/";
+      if (isHomepageRead && (assetResponse.status === 404 || assetResponse.status >= 500)) {
+        // Keep the canonical Worker URL available if its asset binding temporarily
+        // returns a not-found/server error; Pages is the independently verified static fallback.
+        try {
+          const fallbackUrl = new URL(request.url);
+          fallbackUrl.hostname = "ai-thuc-chien-blog.pages.dev";
+          const fallbackHeaders = new Headers();
+          for (const name of ["Accept", "Accept-Language", "User-Agent"]) {
+            const value = request.headers.get(name);
+            if (value) fallbackHeaders.set(name, value);
+          }
+          const fallbackResponse = await fetch(fallbackUrl.toString(), {
+            method: request.method,
+            headers: fallbackHeaders,
+            redirect: "follow",
+          });
+          if (fallbackResponse.ok && (fallbackResponse.headers.get("Content-Type") || "").toLowerCase().includes("text/html")) {
+            return withSecurityHeaders(fallbackResponse, request);
+          }
+        } catch (_fallbackError) {
+          // Preserve the original Worker asset response if the fallback cannot be reached.
+        }
+      }
+      return withSecurityHeaders(assetResponse, request);
     } catch (_error) {
       const failure = new Response("Internal Server Error\n", {
         status: 500,
