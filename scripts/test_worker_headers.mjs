@@ -22,17 +22,28 @@ function assertSecurityHeaders(response, expectHsts = true) {
   }
 }
 
-const root = await worker.fetch(new Request('https://example.test/'), {
-  ASSETS: {
-    fetch: async (request) => {
-      assert.equal(new URL(request.url).pathname, '/index.html', 'Root must resolve to index.html internally');
-      return new Response('<title>AI Thực Chiến — Ứng dụng AI vào việc thật</title>', {
-        status: 200,
-        headers: { 'Content-Type': 'text/html; charset=utf-8' },
-      });
-    },
-  },
-});
+const beforePrimaryPages = globalThis.fetch;
+let primaryPagesCalls = 0;
+globalThis.fetch = async (input, init = {}) => {
+  const pagesUrl = new URL(typeof input === 'string' ? input : input.url);
+  primaryPagesCalls += 1;
+  assert.equal(pagesUrl.hostname, 'ai-thuc-chien-blog.pages.dev');
+  assert.equal(pagesUrl.pathname, '/');
+  assert.equal(init.method, 'GET');
+  return new Response('<title>AI Thực Chiến — Ứng dụng AI vào việc thật</title>', {
+    status: 200,
+    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+  });
+};
+let root;
+try {
+  root = await worker.fetch(new Request('https://example.test/'), {
+    ASSETS: { fetch: async () => { throw new Error('Root should prefer the verified Pages homepage'); } },
+  });
+} finally {
+  globalThis.fetch = beforePrimaryPages;
+}
+assert.equal(primaryPagesCalls, 1, 'Homepage should prefer the Pages origin exactly once');
 assert.equal(root.status, 200);
 assert.equal(await root.text(), '<title>AI Thực Chiến — Ứng dụng AI vào việc thật</title>');
 assert.equal(root.headers.get('location'), null, 'Root must not redirect to /index.html');
@@ -51,6 +62,7 @@ globalThis.fetch = async (input, init = {}) => {
   assert.equal(fallbackUrl.hostname, 'ai-thuc-chien-blog.pages.dev');
   assert.equal(fallbackUrl.pathname, '/');
   assert.equal(init.method, 'GET');
+  if (fallbackCalls === 1) return new Response('Temporary Pages error', { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
   return new Response('<title>AI Thực Chiến — Ứng dụng AI vào việc thật</title>', {
     status: 200,
     headers: { 'Content-Type': 'text/html; charset=utf-8' },
@@ -69,7 +81,7 @@ try {
 }
 assert.equal(recoveredHomepage.status, 200, 'Homepage fallback should recover an asset 404');
 assert.match(await recoveredHomepage.text(), /AI Thực Chiến/);
-assert.equal(fallbackCalls, 1, 'Homepage fallback should run exactly once');
+assert.equal(fallbackCalls, 2, 'Homepage should retry Pages after its initial request fails');
 assert.equal(recoveredHomepage.headers.get('cache-control'), 'no-store, max-age=0');
 assertSecurityHeaders(recoveredHomepage);
 
@@ -82,6 +94,7 @@ globalThis.fetch = async (input, init = {}) => {
   assert.equal(fallbackUrl.hostname, 'ai-thuc-chien-blog.pages.dev');
   assert.equal(fallbackUrl.pathname, '/');
   assert.equal(init.method, 'GET');
+  if (fallbackCalls === 1) return new Response('Temporary Pages error', { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
   return new Response('<title>AI Thực Chiến — Ứng dụng AI vào việc thật</title>', {
     status: 200,
     headers: { 'Content-Type': 'text/html; charset=utf-8' },
@@ -104,7 +117,7 @@ try {
 assert.equal(recoveredBranded404.status, 200, 'Branded 404 returned as HTTP 200 should recover');
 const recoveredBrandedBody = await recoveredBranded404.text();
 assert.match(recoveredBrandedBody, /AI Thực Chiến/);
-assert.equal(fallbackCalls, 1, 'Branded HTTP 200 404 should invoke Pages fallback exactly once');
+assert.equal(fallbackCalls, 2, 'Branded HTTP 200 404 should retry Pages after initial fetch failure');
 assert.equal(recoveredBranded404.headers.get('cache-control'), 'no-store, max-age=0');
 assertSecurityHeaders(recoveredBranded404);
 

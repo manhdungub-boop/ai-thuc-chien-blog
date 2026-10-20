@@ -435,8 +435,37 @@ export default {
       if (pathname === "/api/community" || pathname.startsWith("/api/community/")) {
         return withSecurityHeaders(await handleCommunityApi(request, env), request);
       }
-      const assetResponse = await env.ASSETS.fetch(resolveAssetRequest(request));
       const isHomepageRead = (request.method === "GET" || request.method === "HEAD") && pathname === "/";
+      if (isHomepageRead) {
+        // Prefer the separately verified Pages copy for the public homepage. This
+        // bypasses a stale/misrouted Worker asset response while keeping the visitor
+        // on the canonical Worker origin so same-origin APIs still work.
+        try {
+          const pagesUrl = new URL(request.url);
+          pagesUrl.hostname = "ai-thuc-chien-blog.pages.dev";
+          const pagesHeaders = new Headers();
+          for (const name of ["Accept", "Accept-Language", "User-Agent"]) {
+            const value = request.headers.get(name);
+            if (value) pagesHeaders.set(name, value);
+          }
+          const pagesResponse = await fetch(pagesUrl.toString(), {
+            method: request.method,
+            headers: pagesHeaders,
+            redirect: "follow",
+          });
+          if (pagesResponse.ok && (pagesResponse.headers.get("Content-Type") || "").toLowerCase().includes("text/html")) {
+            let pagesLooksNotFound = false;
+            if (request.method === "GET") {
+              const pagesBody = await pagesResponse.clone().text();
+              pagesLooksNotFound = /LỖI\s*404|KHÔNG TÌM THẤY TRANG|Có vẻ đường dẫn đã đi lạc/i.test(pagesBody);
+            }
+            if (!pagesLooksNotFound) return withSecurityHeaders(pagesResponse, request);
+          }
+        } catch (_pagesPrimaryError) {
+          // Try the Worker asset binding below if the Pages homepage is unreachable.
+        }
+      }
+      const assetResponse = await env.ASSETS.fetch(resolveAssetRequest(request));
       let looksLikeBrandedNotFound = false;
       if (
         isHomepageRead &&
