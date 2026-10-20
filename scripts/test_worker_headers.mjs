@@ -73,6 +73,41 @@ assert.equal(fallbackCalls, 1, 'Homepage fallback should run exactly once');
 assert.equal(recoveredHomepage.headers.get('cache-control'), 'no-store, max-age=0');
 assertSecurityHeaders(recoveredHomepage);
 
+// Also recover when a fallback layer incorrectly serves the branded 404 document
+// with status 200 (the failure pattern reported on iPhone).
+fallbackCalls = 0;
+globalThis.fetch = async (input, init = {}) => {
+  const fallbackUrl = new URL(typeof input === 'string' ? input : input.url);
+  fallbackCalls += 1;
+  assert.equal(fallbackUrl.hostname, 'ai-thuc-chien-blog.pages.dev');
+  assert.equal(fallbackUrl.pathname, '/');
+  assert.equal(init.method, 'GET');
+  return new Response('<title>AI Thực Chiến — Ứng dụng AI vào việc thật</title>', {
+    status: 200,
+    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+  });
+};
+let recoveredBranded404;
+try {
+  recoveredBranded404 = await worker.fetch(new Request('https://example.test/?diag=branded-404'), {
+    ASSETS: { fetch: async (request) => {
+      assert.equal(new URL(request.url).pathname, '/index.html');
+      return new Response('<h1>LỖI 404 · KHÔNG TÌM THẤY TRANG</h1><p>Có vẻ đường dẫn đã đi lạc.</p>', {
+        status: 200,
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      });
+    } },
+  });
+} finally {
+  globalThis.fetch = originalFetch;
+}
+assert.equal(recoveredBranded404.status, 200, 'Branded 404 returned as HTTP 200 should recover');
+const recoveredBrandedBody = await recoveredBranded404.text();
+assert.match(recoveredBrandedBody, /AI Thực Chiến/);
+assert.equal(fallbackCalls, 1, 'Branded HTTP 200 404 should invoke Pages fallback exactly once');
+assert.equal(recoveredBranded404.headers.get('cache-control'), 'no-store, max-age=0');
+assertSecurityHeaders(recoveredBranded404);
+
 const ok = await worker.fetch(new Request('https://example.test/index.html'), {
   ASSETS: {
     fetch: async (request) => {
