@@ -179,6 +179,20 @@ assert.equal(htmlNotFound.headers.get('location'), 'https://example.test/?source
 assert.equal(htmlNotFound.headers.get('cache-control'), 'no-store, max-age=0');
 assertSecurityHeaders(htmlNotFound);
 
+// Cloudflare's configured 404-page handler can make a missing static file look
+// like an HTML response. Do not redirect file-like requests such as .js to /.
+const missingScript = await worker.fetch(new Request('https://example.test/missing-script.js?source=asset', {
+  headers: { Accept: '*/*' },
+}), {
+  ASSETS: { fetch: async () => new Response('<title>Not found</title>', {
+    status: 404,
+    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+  }) },
+});
+assert.equal(missingScript.status, 404, 'Missing static files should not redirect even if Cloudflare returns an HTML 404 page');
+assert.equal(missingScript.headers.get('location'), null);
+assertSecurityHeaders(missingScript);
+
 const failure = await worker.fetch(new Request('https://example.test/error'), {
   ASSETS: { fetch: async () => { throw new Error('internal secret details'); } },
 });
