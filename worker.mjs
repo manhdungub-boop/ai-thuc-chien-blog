@@ -466,6 +466,25 @@ export default {
         }
       }
       const assetResponse = await env.ASSETS.fetch(resolveAssetRequest(request));
+      // Recover browser navigations that land on an unknown HTML route. Cloudflare
+      // can cache the branded 404 asset, so inspect and replace that response here
+      // instead of letting an old cached not-found page trap visitors. Never apply
+      // this to API calls, POST/PUT/etc., or non-HTML asset requests.
+      const acceptsHtml = (request.headers.get("Accept") || "").toLowerCase().includes("text/html");
+      const isHtmlNavigation = (request.method === "GET" || request.method === "HEAD") && acceptsHtml && !pathname.startsWith("/api/");
+      if (isHtmlNavigation && assetResponse.status === 404) {
+        const homeUrl = new URL(request.url);
+        homeUrl.pathname = "/";
+        homeUrl.hash = "";
+        return withSecurityHeaders(new Response(null, {
+          status: 302,
+          headers: {
+            "Location": homeUrl.toString(),
+            "Cache-Control": "no-store, max-age=0",
+            "Pragma": "no-cache",
+          },
+        }), request);
+      }
       let looksLikeBrandedNotFound = false;
       if (
         isHomepageRead &&
