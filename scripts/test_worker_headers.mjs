@@ -23,12 +23,22 @@ function assertSecurityHeaders(response, expectHsts = true) {
 }
 
 const root = await worker.fetch(new Request('https://example.test/'), {
-  ASSETS: { fetch: async () => { throw new Error('Root must redirect before asset lookup'); } },
+  ASSETS: {
+    fetch: async (request) => {
+      assert.equal(new URL(request.url).pathname, '/index.html', 'Root must resolve to index.html internally');
+      return new Response('<title>AI Thực Chiến — Ứng dụng AI vào việc thật</title>', {
+        status: 200,
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      });
+    },
+  },
 });
-assert.equal(root.status, 302);
-assert.equal(root.headers.get('location'), 'https://example.test/index.html');
+assert.equal(root.status, 200);
+assert.equal(await root.text(), '<title>AI Thực Chiến — Ứng dụng AI vào việc thật</title>');
+assert.equal(root.headers.get('location'), null, 'Root must not redirect to /index.html');
 assert.equal(root.headers.get('cache-control'), 'no-store, max-age=0');
 assert.equal(root.headers.get('pragma'), 'no-cache');
+assert.equal(root.headers.get('expires'), '0');
 assertSecurityHeaders(root);
 
 const ok = await worker.fetch(new Request('https://example.test/index.html'), {

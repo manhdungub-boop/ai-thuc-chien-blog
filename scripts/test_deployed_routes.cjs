@@ -31,12 +31,16 @@ async function get(pathname) {
   for (const pathname of requiredPaths) {
     const result = await get(pathname);
     pages.set(pathname, result.body);
+    if (pathname === '/') {
+      assert.equal(new URL(result.response.url).pathname, '/', 'Homepage root must serve directly without redirecting to /index.html');
+    }
     console.log(`PASS ${pathname}: HTTP ${result.response.status}`);
   }
 
   const homepage = pages.get('/');
   assert.match(homepage, /<html\b[^>]*lang=["']vi["']/i, 'Homepage must declare Vietnamese language');
-  assert.match(homepage, /<title[^>]*>\s*[^<]+\s*<\/title>/i, 'Homepage must include a non-empty title');
+  assert.match(homepage, /<title[^>]*>\s*AI Thực Chiến\s*[—-]\s*Ứng dụng AI vào việc thật\s*<\/title>/i, 'Root route must return the real homepage title');
+  assert.doesNotMatch(homepage, /LỖI 404|Không tìm thấy trang|Có vẻ đường dẫn/i, 'Root route must never return the branded not-found page');
 
   const about = pages.get('/ve-chung-toi.html');
   const aboutCanonicalTag = (about.match(/<link\b[^>]*rel=[\"']canonical[\"'][^>]*>/i) || [])[0] || '';
