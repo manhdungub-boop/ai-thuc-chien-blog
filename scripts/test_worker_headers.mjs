@@ -78,6 +78,7 @@ try {
   });
 } finally {
   globalThis.fetch = originalFetch;
+
 }
 assert.equal(recoveredHomepage.status, 200, 'Homepage fallback should recover an asset 404');
 assert.match(await recoveredHomepage.text(), /AI Thực Chiến/);
@@ -158,9 +159,25 @@ assertSecurityHeaders(article);
 const notFound = await worker.fetch(new Request('https://example.test/missing'), {
   ASSETS: { fetch: async () => new Response('Not found', { status: 404 }) },
 });
+
 assert.equal(notFound.status, 404);
 assert.equal(await notFound.text(), 'Not found');
 assertSecurityHeaders(notFound);
+
+// HTML 404s should recover even when a browser/WebView sends Accept: */* and
+// the invalid route ends in .html. Keep non-HTML/missing static assets as 404.
+const htmlNotFound = await worker.fetch(new Request('https://example.test/missing-page.html?source=webview', {
+  headers: { Accept: '*/*' },
+}), {
+  ASSETS: { fetch: async () => new Response('<title>Không tìm thấy trang</title><h1>LỖI 404</h1>', {
+    status: 404,
+    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+  }) },
+});
+assert.equal(htmlNotFound.status, 302, 'HTML 404 route should redirect independent of Accept and path suffix');
+assert.equal(htmlNotFound.headers.get('location'), 'https://example.test/?source=webview');
+assert.equal(htmlNotFound.headers.get('cache-control'), 'no-store, max-age=0');
+assertSecurityHeaders(htmlNotFound);
 
 const failure = await worker.fetch(new Request('https://example.test/error'), {
   ASSETS: { fetch: async () => { throw new Error('internal secret details'); } },
