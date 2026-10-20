@@ -437,7 +437,22 @@ export default {
       }
       const assetResponse = await env.ASSETS.fetch(resolveAssetRequest(request));
       const isHomepageRead = (request.method === "GET" || request.method === "HEAD") && pathname === "/";
-      if (isHomepageRead && (assetResponse.status === 404 || assetResponse.status >= 500)) {
+      let looksLikeBrandedNotFound = false;
+      if (
+        isHomepageRead &&
+        assetResponse.status === 200 &&
+        (assetResponse.headers.get("Content-Type") || "").toLowerCase().includes("text/html")
+      ) {
+        // Some asset/fallback layers can return a branded 404 document with HTTP 200.
+        // Inspect a clone so the original response remains available if Pages cannot be reached.
+        try {
+          const body = await assetResponse.clone().text();
+          looksLikeBrandedNotFound = /LỖI\s*404|KHÔNG TÌM THẤY TRANG|Có vẻ đường dẫn đã đi lạc/i.test(body);
+        } catch (_bodyCheckError) {
+          looksLikeBrandedNotFound = false;
+        }
+      }
+      if (isHomepageRead && (assetResponse.status === 404 || assetResponse.status >= 500 || looksLikeBrandedNotFound)) {
         // Keep the canonical Worker URL available if its asset binding temporarily
         // returns a not-found/server error; Pages is the independently verified static fallback.
         try {
