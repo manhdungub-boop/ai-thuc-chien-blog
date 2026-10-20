@@ -78,6 +78,7 @@ try {
   });
 } finally {
   globalThis.fetch = originalFetch;
+
 }
 assert.equal(recoveredHomepage.status, 200, 'Homepage fallback should recover an asset 404');
 assert.match(await recoveredHomepage.text(), /AI Thực Chiến/);
@@ -158,6 +159,7 @@ assertSecurityHeaders(article);
 const notFound = await worker.fetch(new Request('https://example.test/missing'), {
   ASSETS: { fetch: async () => new Response('Not found', { status: 404 }) },
 });
+
 assert.equal(notFound.status, 404);
 assert.equal(await notFound.text(), 'Not found');
 assertSecurityHeaders(notFound);
