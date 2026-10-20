@@ -466,13 +466,15 @@ export default {
         }
       }
       const assetResponse = await env.ASSETS.fetch(resolveAssetRequest(request));
-      // Recover browser navigations that land on an unknown HTML route. Cloudflare
-      // can cache the branded 404 asset, so inspect and replace that response here
-      // instead of letting an old cached not-found page trap visitors. Never apply
-      // this to API calls, POST/PUT/etc., or non-HTML asset requests.
-      const acceptsHtml = (request.headers.get("Accept") || "").toLowerCase().includes("text/html");
-      const isHtmlNavigation = (request.method === "GET" || request.method === "HEAD") && acceptsHtml && !pathname.startsWith("/api/");
-      if (isHtmlNavigation && assetResponse.status === 404) {
+      // Recover unknown page routes regardless of the client's Accept header.
+      // Some embedded/mobile browsers send Accept: */*, which must not bypass this
+      // fallback. Only redirect extensionless HTML 404s: APIs and missing static
+      // files (CSS, JavaScript, images, fonts, feeds, etc.) retain their real status.
+      const isPageLikePath = pathname !== "/" && !pathname.startsWith("/api/") && !/\.[a-z0-9]{1,10}$/i.test(pathname);
+      const isHtmlNotFound = (request.method === "GET" || request.method === "HEAD") &&
+        isPageLikePath && assetResponse.status === 404 &&
+        (assetResponse.headers.get("Content-Type") || "").toLowerCase().includes("text/html");
+      if (isHtmlNotFound) {
         const homeUrl = new URL(request.url);
         homeUrl.pathname = "/";
         homeUrl.hash = "";
