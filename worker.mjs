@@ -470,7 +470,7 @@ export default {
       // Some embedded/mobile browsers send Accept: */*, which must not bypass this
       // fallback. Only redirect extensionless HTML 404s: APIs and missing static
       // files (CSS, JavaScript, images, fonts, feeds, etc.) retain their real status.
-      const isPageLikePath = pathname !== "/" && !pathname.startsWith("/api/") && !/\.[a-z0-9]{1,10}$/i.test(pathname);
+      const isPageLikePath = pathname !== "/" && !pathname.startsWith("/api/");
       const isHtmlNotFound = (request.method === "GET" || request.method === "HEAD") &&
         isPageLikePath && assetResponse.status === 404 &&
         (assetResponse.headers.get("Content-Type") || "").toLowerCase().includes("text/html");
