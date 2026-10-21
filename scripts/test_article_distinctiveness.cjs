@@ -47,6 +47,18 @@ const slugs = [
   'nghien-cuu-web-co-nguon-voi-ai',
   'phan-tich-du-lieu-bang-ai',
   'so-sanh-goi-mien-phi-ai',
+  'ban-do-cong-cu-blog-ai',
+  'bat-dau-voi-ai',
+  'bao-ve-api-key-trong-workflow-ai',
+  'bien-y-tuong-thanh-noi-dung-da-kenh',
+  'kiem-chung-noi-dung-ai',
+  'kiem-chung-noi-dung-dung-ai',
+  'kiem-thu-chat-luong-dau-ra-ai',
+  'kiem-tra-json-dau-ra-ai-truoc-khi-tu-dong-hoa',
+  'quy-trinh-ai-co-kiem-duyet',
+  'viet-prompt-ai-hieu-qua',
+  'workflow-ai-chong-loi-va-chay-lai-an-toan',
+  'xay-dung-kho-tri-thuc-ai-co-nguon',
 ];
 function coreTokens(slug) {
   const source = fs.readFileSync(path.join(root, 'articles', `${slug}.html`), 'utf8');
