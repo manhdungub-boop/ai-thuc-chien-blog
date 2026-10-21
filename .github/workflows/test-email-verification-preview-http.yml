@@ -1,0 +1,31 @@
+name: Email verification Preview HTTP smoke test
+on:
+  workflow_dispatch:
+    inputs:
+      preview_url:
+        description: Cloudflare's exact Preview URL (must be the feature Worker host)
+        required: true
+        type: string
+        default: https://feature-required-email-verification-ai-thuc-chien-blog.workers.dev
+permissions:
+  contents: read
+concurrency:
+  group: email-verification-preview-http-smoke
+  cancel-in-progress: false
+jobs:
+  preview-http-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check test syntax
+        run: node --check scripts/test_community_preview_http.mjs
+      - name: Smoke-test Preview endpoints and CORS (read-only)
+        env:
+          PREVIEW_URL: ${{ inputs.preview_url }}
+        run: node scripts/test_community_preview_http.mjs
