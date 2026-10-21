@@ -438,7 +438,7 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
   const root = document.createElement('div');
   root.id = 'reader-ai-chat';
   root.innerHTML = `
-    <button class="reader-chat-launcher" type="button" aria-label="Mở trợ lý AI" aria-expanded="false" aria-controls="reader-chat-panel"><span aria-hidden="true">✦</span><span class="reader-chat-launcher-label">Hỏi AI</span></button>
+    <button class="reader-chat-launcher" type="button" aria-expanded="false" aria-controls="reader-chat-panel"><span aria-hidden="true">✦</span><span class="reader-chat-launcher-label">Hỏi AI</span></button>
     <section class="reader-chat-panel" id="reader-chat-panel" role="dialog" aria-modal="false" aria-labelledby="reader-chat-title" hidden>
       <header class="reader-chat-header"><div class="reader-chat-brand"><span class="reader-chat-avatar" aria-hidden="true">AI</span><div><h2 id="reader-chat-title">Trợ lý AI Thực Chiến</h2><p><span class="reader-chat-status-dot"></span> Hỏi về AI và bài viết trên blog</p></div></div><button class="reader-chat-close" type="button" aria-label="Đóng khung chat">×</button></header>
       <div class="reader-chat-messages" role="log" aria-live="polite" aria-relevant="additions text"><div class="reader-chat-message assistant"><p>Xin chào! 👋 Bạn đang cần giải đáp điều gì về AI, công cụ hoặc tự động hóa?</p></div><div class="reader-chat-quick"><button type="button" data-chat-prompt="Tôi mới bắt đầu dùng AI, nên bắt đầu từ đâu?">Tôi mới dùng AI</button><button type="button" data-chat-prompt="Làm sao kiểm chứng câu trả lời của AI?">Kiểm chứng AI</button><button type="button" data-chat-prompt="Gợi ý một workflow AI miễn phí cho công việc của tôi.">Workflow miễn phí</button></div></div>
