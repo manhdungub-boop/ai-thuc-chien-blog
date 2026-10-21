@@ -1,7 +1,18 @@
 #!/usr/bin/env node
 'use strict';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import worker from '../worker.mjs';
+
+// Local Node may accept PBKDF2 counts that deployed Cloudflare Workers reject.
+// Guard the platform ceiling explicitly so the test suite catches this regression.
+const workerSource = fs.readFileSync(new URL('../worker.mjs', import.meta.url), 'utf8');
+const pbkdf2IterationsMatch = workerSource.match(/const COMMUNITY_PASSWORD_ITERATIONS = (\d+);/);
+assert.ok(pbkdf2IterationsMatch, 'Community PBKDF2 iteration setting must be explicit');
+assert.ok(Number(pbkdf2IterationsMatch[1]) <= 100000,
+  'Cloudflare Workers supports at most 100,000 PBKDF2 iterations per deriveBits call');
+assert.match(workerSource, /iterations:\s*COMMUNITY_PASSWORD_ITERATIONS/,
+  'Password hashing must use the checked PBKDF2 iteration setting');
 class MockD1 {
   constructor() { this.members = []; this.sessions = []; this.messages = []; this.rates = new Map(); }
   prepare(sql) {
