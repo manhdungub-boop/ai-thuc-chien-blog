@@ -63,8 +63,8 @@ function getPublishedArticleFiles(outputDir) {
     .filter((name) => fs.existsSync(path.join(outputDir, name)))
     .map((name) => fs.readFileSync(path.join(outputDir, name), 'utf8'));
   const links = discoveryPages.flatMap((page) =>
-    [...page.matchAll(/href=[\"'](?:\.\/)?articles\/([^\"'#?]+\.html)(?:#[^\"']*)?[\"']/gi)]
-      .map((match) => match[1])
+    [...page.matchAll(/\bhref=["'](?:\/|\.\/|\.\.\/|)?articles\/([^"'#?]+)["']/gi)]
+      .map((match) => match[1].replace(/\.html$/i, '') + '.html')
   );
   const unique = [...new Set(links)];
   for (const file of unique) {

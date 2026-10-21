@@ -53,20 +53,18 @@ for (const file of files) {
   const related = source.match(/<nav\s+class=["']related-articles-grid["'][\s\S]*?<\/nav>/i);
   if (!related) fail('missing semantic related-articles navigation');
 
-  // Links are authored relative to the article URL. Resolve them from articles/,
-  // not the repository root, so both "other-article.html" and
-  // "../articles/other-article.html" are validated correctly.
-  const links = [...related[0].matchAll(/href=["']([^"']+\.html(?:#[^"']*)?)["']/gi)]
-    .map((match) => match[1])
-    .filter((href) => !/^(?:https?:)?\/\//i.test(href) && !href.startsWith('#'));
-  if (links.length < 3) fail('expected at least 3 related article links, found ' + links.length);
+  // Related links must point directly to each article's extensionless canonical URL.
+  // The physical source file remains articles/<slug>.html and is served by the Worker route mapper.
+  const links = [...related[0].matchAll(/href=["\']\/articles\/([a-z0-9-]+)["\']/gi)]
+    .map((match) => match[1]);
+  if (links.length < 3) fail('expected at least 3 canonical related article links, found ' + links.length);
   if (new Set(links).size !== links.length) fail('duplicate related article links');
+  if ((related[0].match(/href=/gi) || []).length !== links.length) fail('related navigation must use extensionless canonical article URLs');
 
-  for (const link of links) {
-    const target = link.split('#')[0];
-    const resolved = path.resolve(articleDir, target);
-    if (!resolved.startsWith(articleDir + path.sep)) fail('related link escapes article directory: ' + link);
-    if (!fs.existsSync(resolved)) fail('broken related article link: ' + link);
+  for (const slug of links) {
+    const resolved = path.resolve(articleDir, slug + '.html');
+    if (!resolved.startsWith(articleDir + path.sep)) fail('related link escapes article directory: /articles/' + slug);
+    if (!fs.existsSync(resolved)) fail('broken related article link: /articles/' + slug);
     if (resolved === path.resolve(articleDir, file)) fail('related navigation links to itself');
   }
 

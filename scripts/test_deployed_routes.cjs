@@ -52,8 +52,12 @@ async function get(pathname) {
   assert.match(library, /Thư viện/i, 'Library route did not return library content');
   const declaredLibraryCount = Number((library.match(/THƯ VIỆN THỰC HÀNH[^<]*?(\d+)\s*BÀI/i) || [])[1]);
   assert.ok(Number.isInteger(declaredLibraryCount) && declaredLibraryCount > 0, 'Library must declare its article count');
-  const libraryLinks = [...library.matchAll(/href=["'](?:\.\/)?articles\/[^"']+\.html["']/gi)];
+  const libraryLinks = [...library.matchAll(/href="\/articles\/[a-z0-9-]+"/gi)];
   assert.equal(libraryLinks.length, declaredLibraryCount, `Library article link count mismatch: declared ${declaredLibraryCount}, got ${libraryLinks.length}`);
+  assert.doesNotMatch(library, new RegExp('href="(?:\\.\\/|\\.\\.\\/|\\/)?articles/[^" ]+\\.html"', 'i'), 'Library article links must use extensionless canonical URLs');
+  assert.doesNotMatch(homepage, new RegExp('href="(?:\\.\\/|\\.\\.\\/|\\/)?articles/[^" ]+\\.html"', 'i'), 'Homepage article links must use extensionless canonical URLs');
+  const sampleArticle = pages.get('/articles/do-luong-hieu-qua-blog');
+  assert.match(sampleArticle, /href="\/articles\/[a-z0-9-]+"/i, 'Article related links must use extensionless canonical URLs');
 
   const sitemap = pages.get('/sitemap.xml');
   assert.match(sitemap, /<urlset\b[\s\S]*<\/urlset>/i, 'Live sitemap is not a valid URL set');
