@@ -8,6 +8,7 @@ on:
       - "_headers"
       - "index.html"
       - "ve-chung-toi.html"
+      - "thu-vien.html"
       - "articles/**"
       - "styles.css"
       - "script.js"

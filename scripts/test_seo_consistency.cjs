@@ -7,6 +7,8 @@ const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
 const baseUrl = 'https://ai-thuc-chien-blog.manhdungub.workers.dev';
+const workerDeployWorkflow = fs.readFileSync(path.join(root, '.github', 'workflows', 'deploy-cloudflare-workers.yml'), 'utf8');
+assert.match(workerDeployWorkflow, /^\s+- "thu-vien\.html"\s*$/m, 'Worker deploy path filter must include the topic library page');
 const articleDir = path.join(root, 'articles');
 const articleFiles = fs.readdirSync(articleDir).filter((name) => name.endsWith('.html')).sort();
 assert.ok(articleFiles.length > 0, 'No article HTML files found');
