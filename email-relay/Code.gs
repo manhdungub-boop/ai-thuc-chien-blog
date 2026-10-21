@@ -9,6 +9,8 @@ function doPost(e) {
     const properties = PropertiesService.getScriptProperties();
     const expected = String(properties.getProperty('COMMUNITY_EMAIL_RELAY_SECRET') || '');
     if (expected.length < 32) return output({ ok: false, code: 'RELAY_NOT_CONFIGURED' });
+    const allowedHosts = String(properties.getProperty('COMMUNITY_EMAIL_ALLOWED_HOSTS') || 'ai-thuc-chien-blog.manhdungub.workers.dev')
+      .split(',').map((host) => host.trim().toLowerCase()).filter(Boolean);
     const raw = e && e.postData && e.postData.contents ? e.postData.contents : '';
     if (!raw || raw.length > 25000) return output({ ok: false, code: 'INVALID_REQUEST' });
     let payload;
@@ -21,9 +23,10 @@ function doPost(e) {
     const textBody = String(payload.textBody || '');
     const htmlBody = String(payload.htmlBody || '');
     const verifyUrl = String(payload.verifyUrl || '');
+    const verifyMatch = verifyUrl.match(/^https:\/\/([^/?#]+)\/\?verify=([A-Za-z0-9_-]{32,80})#cong-dong$/);
+    const verifyHost = verifyMatch ? verifyMatch[1].toLowerCase() : '';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient) || recipient.length > 254 ||
-        !textBody || !htmlBody || !/^https:\/\/ai-thuc-chien-blog\.manhdungub\.workers\.dev\//.test(verifyUrl) ||
-        !/[?]verify=[A-Za-z0-9_-]{32,80}/.test(verifyUrl)) {
+        !textBody || !htmlBody || !verifyMatch || !allowedHosts.includes(verifyHost)) {
       return output({ ok: false, code: 'INVALID_MESSAGE' });
     }
     if (MailApp.getRemainingDailyQuota() < 1) return output({ ok: false, code: 'DAILY_QUOTA_EXHAUSTED' });
