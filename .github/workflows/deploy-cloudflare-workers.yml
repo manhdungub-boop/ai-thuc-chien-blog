@@ -166,7 +166,7 @@ jobs:
           host="https://ai-thuc-chien-blog.manhdungub.workers.dev"
           headers="$(mktemp)"
           trap 'rm -f "$headers"' EXIT
-          curl --fail --silent --show-error --location --max-time 20 -D "$headers" -o /dev/null "$host/"
+          curl --fail --silent --show-error --location --max-time 20 -H 'Sec-Fetch-Mode: navigate' -H 'Sec-Fetch-Dest: document' -H 'Sec-Fetch-Site: none' -D "$headers" -o /dev/null "$host/"
           for expected in \
             'X-Content-Type-Options: nosniff' \
             'X-Frame-Options: DENY' \
@@ -179,6 +179,11 @@ jobs:
               exit 1
             fi
           done
+          article_code="$(curl --silent --show-error --location --max-time 20 -H 'Sec-Fetch-Mode: navigate' -H 'Sec-Fetch-Dest: document' -H 'Sec-Fetch-Site: none' -o /dev/null -w \"%{http_code}\" \"$host/articles/do-luong-hieu-qua-blog\")"
+          if [ \"$article_code\" != \"200\" ]; then
+            echo \"FAIL: browser navigation to $host/articles/do-luong-hieu-qua-blog returned HTTP $article_code\"
+            exit 1
+          fi
           for path in "/articles/do-luong-hieu-qua-blog" "/sitemap.xml" "/feed.xml" "/google4e45ddcf8facb122.html" "/api/community/me"; do
             code="$(curl --silent --show-error --location --max-time 20 -o /dev/null -w "%{http_code}" "$host$path")"
             if [ "$code" != "200" ]; then
