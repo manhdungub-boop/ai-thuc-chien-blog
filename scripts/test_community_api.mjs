@@ -61,6 +61,19 @@ const unconfigured = await worker.fetch(new Request('https://example.test/api/co
 const badOrigin = await call('/register', { method: 'POST', originHeader: 'https://evil.example', body: {} }); assert.equal(badOrigin.status, 403);
 const invalidRegister = await call('/register', { method: 'POST', body: { username: 'x', displayName: 'X', email: 'bad', password: 'short' } }); assert.equal(invalidRegister.status, 400);
 const nullPayload = await call('/register', { method: 'POST', body: null }); assert.equal(nullPayload.status, 400);
+
+// Missing relay config must fail closed before any member, token, or rate-limit write.
+const oldRelayUrl = env.COMMUNITY_EMAIL_RELAY_URL;
+const oldRelaySecret = env.COMMUNITY_EMAIL_RELAY_SECRET;
+const countsBeforeNoRelay = [db.members.length, db.tokens.length, db.rates.size];
+env.COMMUNITY_EMAIL_RELAY_URL = '';
+env.COMMUNITY_EMAIL_RELAY_SECRET = '';
+const noRelay = await call('/register', { method: 'POST', body: { username: 'no_relay_user', displayName: 'No Relay', email: 'no-relay@example.invalid', password: 'Temporary-No-Relay-Password-123!' } });
+assert.equal(noRelay.status, 503);
+assert.match((await noRelay.json()).error, /xác nhận email chưa được cấu hình/i);
+assert.deepEqual([db.members.length, db.tokens.length, db.rates.size], countsBeforeNoRelay);
+env.COMMUNITY_EMAIL_RELAY_URL = oldRelayUrl;
+env.COMMUNITY_EMAIL_RELAY_SECRET = oldRelaySecret;
 const registered = await call('/register', { method: 'POST', body: { username: 'thanhvien_1', displayName: 'Thành viên thử', email: 'member@example.com', password: 'MotMatKhauRieng123!' } }); assert.equal(registered.status, 201);
 const registeredPayload = await registered.json(); assert.equal(registeredPayload.verificationRequired, true); assert.equal(JSON.stringify(registeredPayload).includes('MotMatKhauRieng123!'), false); assert.equal(registered.headers.get('set-cookie'), null); assert.ok(capturedEmail); assert.equal(capturedEmail.to, 'member@example.com');
 const loginBeforeVerification = await call('/login', { method: 'POST', body: { email: 'member@example.com', password: 'MotMatKhauRieng123!' } }); assert.equal(loginBeforeVerification.status, 403); assert.equal((await loginBeforeVerification.json()).code, 'EMAIL_NOT_VERIFIED');
@@ -70,7 +83,7 @@ const login = await call('/login', { method: 'POST', body: { email: 'member@exam
 const setCookie = login.headers.get('set-cookie'); assert.match(setCookie, /HttpOnly/); assert.match(setCookie, /Secure/); assert.match(setCookie, /SameSite=Lax/); assert.match(setCookie, /Path=\//); const cookie = setCookie.split(';')[0];
 const me = await call('/me', { cookie }); assert.equal(me.status, 200); assert.equal((await me.json()).member.username, 'thanhvien_1');
 
-// SMTP2GO can return HTTP 200 with failed > 0; fail closed and remove the pending member/token.
+// The mail relay can reject a message despite HTTP 200; fail closed and remove the pending member/token.
 relayResult = { ok: false, code: 'SEND_FAILED' };
 const failedMail = await call('/register', { method: 'POST', body: { username: 'mail_fail_user', displayName: 'Mail Failure', email: 'mail-failure@example.invalid', password: 'Another-Temporary-Password-123!' } });
 assert.equal(failedMail.status, 503);
