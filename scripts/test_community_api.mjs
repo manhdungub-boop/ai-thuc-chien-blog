@@ -3,14 +3,14 @@
 import assert from 'node:assert/strict';
 import worker from '../worker.mjs';
 class MockD1 {
-  constructor() { this.members = []; this.sessions = []; this.messages = []; this.rates = new Map(); }
+  constructor() { this.members = []; this.sessions = []; this.messages = []; this.rates = new Map(); this.failRateLimit = false; }
   prepare(sql) {
     const db = this; let args = [];
     return {
       bind(...values) { args = values; return this; },
       async run() {
         const q = sql.replace(/\s+/g, ' ').trim();
-        if (q.startsWith('INSERT INTO community_rate_limits')) { const [bucket, windowStart] = args; const old = db.rates.get(bucket); db.rates.set(bucket, { count: old && old.window_start === windowStart ? old.count + 1 : 1, window_start: windowStart }); return { meta: { changes: 1 } }; }
+        if (q.startsWith('INSERT INTO community_rate_limits')) { if (db.failRateLimit) throw new Error('Simulated D1 rate-limit failure for regression test'); const [bucket, windowStart] = args; const old = db.rates.get(bucket); db.rates.set(bucket, { count: old && old.window_start === windowStart ? old.count + 1 : 1, window_start: windowStart }); return { meta: { changes: 1 } }; }
         if (q.startsWith('INSERT INTO community_members')) { const [id, username, email, display_name, password_salt, password_hash, created_at] = args; if (db.members.some((m) => m.email === email || m.username === username)) throw new Error('unique constraint'); db.members.push({ id, username, email, display_name, password_salt, password_hash, created_at }); return { meta: { changes: 1 } }; }
         if (q.startsWith('INSERT INTO community_sessions')) { const [id, member_id, token_hash, created_at, expires_at] = args; db.sessions.push({ id, member_id, token_hash, created_at, expires_at }); return { meta: { changes: 1 } }; }
         if (q.startsWith('INSERT INTO community_messages')) { const [id, topic, member_id, body, created_at] = args; db.messages.push({ id, topic, member_id, body, created_at }); return { meta: { changes: 1 } }; }
@@ -52,5 +52,23 @@ const badTopic = await call('/messages?topic=unknown', { cookie }); assert.equal
 const badMessage = await call('/messages', { method: 'POST', cookie, body: { topic: 'tools', body: '   ' } }); assert.equal(badMessage.status, 400);
 const login = await call('/login', { method: 'POST', body: { email: 'member@example.com', password: 'MotMatKhauRieng123!' } }); assert.equal(login.status, 200); assert.equal((await login.json()).member.username, 'thanhvien_1');
 const wrongPassword = await call('/login', { method: 'POST', body: { email: 'member@example.com', password: 'sai-mat-khau' } }); assert.equal(wrongPassword.status, 401);
+
+// Verify unexpected D1 failures return a correlation ID and a stable stage code,
+// while the response never exposes the internal exception text.
+db.failRateLimit = true;
+const previousConsoleError = console.error;
+let loggedDiagnostic = false;
+console.error = (...args) => { if (args[0] === 'community_api_failure') loggedDiagnostic = true; };
+let failedRegister;
+try {
+  failedRegister = await call('/register', { method: 'POST', body: { username: 'error_probe_1', displayName: 'Error Probe', email: 'probe@example.invalid', password: 'Temporary-NotARealPassword-123!' } });
+} finally { console.error = previousConsoleError; db.failRateLimit = false; }
+assert.equal(failedRegister.status, 500);
+const failurePayload = await failedRegister.json();
+assert.equal(failurePayload.code, 'register-rate-limit');
+assert.match(failurePayload.reference, /^[0-9a-f-]{36}$/i);
+assert.match(failurePayload.error, /Tạm thời không xử lý được/);
+assert.equal(JSON.stringify(failurePayload).includes('Simulated D1 rate-limit failure'), false);
+assert.equal(loggedDiagnostic, true);
 const logout = await call('/logout', { method: 'POST', cookie }); assert.equal(logout.status, 200); assert.match(logout.headers.get('set-cookie'), /Max-Age=0/);
 console.log('PASS: community registration, PBKDF2 login, HttpOnly/Secure cookie, session lookup/logout, topic-specific messages, validation, origin protection, and missing-DB behavior');

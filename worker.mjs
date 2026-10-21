@@ -298,9 +298,12 @@ async function handleCommunityApi(request, env) {
   const db = env.DB;
   const ip = request.headers.get("CF-Connecting-IP") || "unknown";
   const now = new Date().toISOString();
+  let failureStage = "request-routing";
+  const diagnosticId = crypto.randomUUID();
 
   try {
     if (route === "register" && request.method === "POST") {
+      failureStage = "register-parse";
       const parsed = await readJsonPayload(request);
       if (!parsed.ok) return communityJson({ error: parsed.error }, parsed.status, request);
       const payload = parsed.value;
@@ -312,11 +315,14 @@ async function handleCommunityApi(request, env) {
       if (displayName.length < 2 || displayName.length > 40) return communityJson({ error: "Tên hiển thị cần từ 2 đến 40 ký tự." }, 400, request);
       if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return communityJson({ error: "Vui lòng nhập email hợp lệ." }, 400, request);
       if (password.length < 10 || password.length > 128) return communityJson({ error: "Mật khẩu cần từ 10 đến 128 ký tự." }, 400, request);
+      failureStage = "register-rate-limit";
       const ipHash = await sha256Base64Url(ip);
       if (!await communityRateLimit(db, `register:${ipHash}`, 5, 60 * 60 * 1000)) return communityJson({ error: "Bạn đã thử đăng ký quá nhiều lần. Vui lòng thử lại sau một giờ." }, 429, request);
+      failureStage = "register-password-hash";
       const salt = crypto.getRandomValues(new Uint8Array(16));
       const passwordHash = await hashCommunityPassword(password, salt);
       const memberId = crypto.randomUUID();
+      failureStage = "register-insert-member";
       try {
         await db.prepare(`INSERT INTO community_members (id, username, email, display_name, password_salt, password_hash, created_at)
           VALUES (?, ?, ?, ?, ?, ?, ?)`).bind(memberId, username, email, displayName, bytesToBase64Url(salt), passwordHash, now).run();
@@ -326,6 +332,7 @@ async function handleCommunityApi(request, env) {
         }
         throw error;
       }
+      failureStage = "register-create-session";
       const token = await createCommunitySession(db, memberId);
       return communityJson({ member: { id: memberId, username, displayName, createdAt: now } }, 201, request, { "Set-Cookie": communityCookie(token) });
     }
@@ -401,8 +408,25 @@ async function handleCommunityApi(request, env) {
     }
 
     return communityJson({ error: "Không tìm thấy API cộng đồng." }, 404, request);
-  } catch (_error) {
-    return communityJson({ error: "Tạm thời không xử lý được yêu cầu cộng đồng. Vui lòng thử lại sau." }, 500, request);
+  } catch (error) {
+    const rawError = String(error?.message || error || "Unknown error");
+    const safeError = rawError
+      .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[redacted-email]")
+      .replace(/\b[a-f0-9]{32,}\b/gi, "[redacted-token]")
+      .slice(0, 180);
+    console.error("community_api_failure", {
+      reference: diagnosticId,
+      route,
+      method: request.method,
+      stage: failureStage,
+      errorName: String(error?.name || "Error").slice(0, 60),
+      errorMessage: safeError,
+    });
+    return communityJson({
+      error: "Tạm thời không xử lý được yêu cầu cộng đồng. Vui lòng thử lại sau.",
+      code: failureStage,
+      reference: diagnosticId,
+    }, 500, request);
   }
 }
 
