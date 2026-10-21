@@ -49,6 +49,11 @@ jobs:
           printf '%s' "${RELAY_URL}" | npx --yes wrangler@4 preview secret put COMMUNITY_EMAIL_RELAY_URL --name "feature/required-email-verification"
           printf '%s' "${RELAY_SECRET}" | npx --yes wrangler@4 preview secret put COMMUNITY_EMAIL_RELAY_SECRET --name "feature/required-email-verification"
           echo "PREVIEW_RELAY_CONFIG=success (feature Preview only; production untouched)."
+      - name: Verify Apps Script relay endpoint without sending email
+        env:
+          COMMUNITY_EMAIL_RELAY_URL: ${{ secrets.COMMUNITY_EMAIL_RELAY_URL }}
+          COMMUNITY_EMAIL_RELAY_SECRET: ${{ secrets.COMMUNITY_EMAIL_RELAY_SECRET }}
+        run: node scripts/test_email_relay_no_send.mjs
       - name: Read Preview URL flags from Cloudflare API (read-only)
         env:
           CLOUDFLARE_WORKERS_BUILDS_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_BUILDS_API_TOKEN }}
