@@ -195,7 +195,9 @@ const COMMUNITY_TOPICS = Object.freeze({
 });
 const COMMUNITY_SESSION_COOKIE = "__Host-ai_community";
 const COMMUNITY_SESSION_SECONDS = 60 * 60 * 24 * 30;
-const COMMUNITY_PASSWORD_ITERATIONS = 210000;
+// Cloudflare Workers rejects a single PBKDF2 deriveBits call above 100,000 iterations.
+// Use the runtime-supported ceiling so registration and login work in production.
+const COMMUNITY_PASSWORD_ITERATIONS = 100000;
 const COMMUNITY_ENCODER = new TextEncoder();
 
 function communityJson(data, status, request, extraHeaders = {}) {
@@ -401,7 +403,16 @@ async function handleCommunityApi(request, env) {
     }
 
     return communityJson({ error: "Không tìm thấy API cộng đồng." }, 404, request);
-  } catch (_error) {
+  } catch (error) {
+    // Never log credentials, request bodies, cookies, email addresses or IP addresses.
+    // Keep enough sanitized context to diagnose future production failures.
+    const failedRoute = new URL(request.url).pathname.replace(/^\/api\/community\/?/, "").slice(0, 64);
+    console.error("community_api_error", {
+      route: failedRoute || "root",
+      method: request.method,
+      errorName: error instanceof Error ? error.name : "UnknownError",
+      errorMessage: error instanceof Error ? String(error.message).slice(0, 160) : "Non-Error throwable",
+    });
     return communityJson({ error: "Tạm thời không xử lý được yêu cầu cộng đồng. Vui lòng thử lại sau." }, 500, request);
   }
 }
