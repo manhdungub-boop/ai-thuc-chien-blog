@@ -2,6 +2,7 @@
 'use strict';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import vm from 'node:vm';
 const worker = fs.readFileSync(new URL('../worker.mjs', import.meta.url), 'utf8');
 const frontend = fs.readFileSync(new URL('../script.js', import.meta.url), 'utf8');
 const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
@@ -32,3 +33,35 @@ assert.match(migration, /UPDATE community_members SET email_verified_at = create
 assert.match(migration, /CREATE TABLE IF NOT EXISTS community_email_verification_tokens/);
 assert.match(migration, /ON DELETE CASCADE/);
 console.log('PASS: email verification routes, fail-closed configuration, UI controls and additive migration are present.');
+
+
+// Execute the actual Apps Script relay in a sandbox with mocked Google services.
+const relayState = { secret: 'test-secret-that-is-at-least-32-characters', remainingQuota: 10, sent: [] };
+const relaySandbox = {
+  PropertiesService: { getScriptProperties: () => ({ getProperty: (key) => key === 'COMMUNITY_EMAIL_RELAY_SECRET' ? relayState.secret : null }) },
+  ContentService: { MimeType: { JSON: 'application/json' }, createTextOutput: (content) => ({ content, setMimeType() { return this; } }) },
+  MailApp: { getRemainingDailyQuota: () => relayState.remainingQuota, sendEmail: (message) => relayState.sent.push(message) },
+};
+vm.runInNewContext(relay, relaySandbox);
+const relayPayload = {
+  secret: relayState.secret,
+  to: 'member@example.test',
+  subject: 'Xác nhận email — AI Thực Chiến',
+  displayName: 'Tester',
+  verifyUrl: 'https://ai-thuc-chien-blog.manhdungub.workers.dev/?verify=abcdefghijklmnopqrstuvwxyz0123456789_AB-cd#cong-dong',
+  textBody: 'Confirm your email',
+  htmlBody: '<a href="https://ai-thuc-chien-blog.manhdungub.workers.dev/?verify=abcdefghijklmnopqrstuvwxyz0123456789_AB-cd#cong-dong">Confirm</a>',
+};
+const relayCall = (payload) => JSON.parse(relaySandbox.doPost({ postData: { contents: JSON.stringify(payload) } }).content);
+assert.equal(relayCall({ ...relayPayload, secret: 'wrong-secret' }).code, 'UNAUTHORIZED');
+assert.equal(relayState.sent.length, 0, 'invalid relay secret must never send email');
+assert.equal(relayCall({ ...relayPayload, verifyUrl: 'https://evil.example/?verify=abcdefghijklmnopqrstuvwxyz0123456789_AB-cd' }).code, 'INVALID_MESSAGE');
+assert.equal(relayState.sent.length, 0, 'unapproved verification host must never send email');
+assert.deepEqual(relayCall(relayPayload), { ok: true });
+assert.equal(relayState.sent.length, 1);
+assert.equal(relayState.sent[0].to, 'member@example.test');
+assert.equal(relayState.sent[0].htmlBody, relayPayload.htmlBody);
+relayState.remainingQuota = 0;
+assert.equal(relayCall(relayPayload).code, 'DAILY_QUOTA_EXHAUSTED');
+assert.equal(relayState.sent.length, 1, 'exhausted quota must not send email');
+console.log('PASS: Apps Script relay enforces secret, allowed verification origin, sender quota and safe send behavior.');
