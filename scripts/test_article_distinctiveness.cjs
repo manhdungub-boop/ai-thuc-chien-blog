@@ -59,6 +59,11 @@ const slugs = [
   'xay-dung-kho-tri-thuc-ai-co-nguon',
   'viet-prompt-ai-hieu-qua',
   'nhan-biet-prompt-injection-ai',
+  'bao-ve-api-key-trong-workflow-ai',
+  'kiem-chung-noi-dung-dung-ai',
+  'kiem-thu-chat-luong-dau-ra-ai',
+  'quy-trinh-ai-co-kiem-duyet',
+  'workflow-ai-chong-loi-va-chay-lai-an-toan',
 ];
 function coreTokens(slug) {
   const source = fs.readFileSync(path.join(root, 'articles', `${slug}.html`), 'utf8');
