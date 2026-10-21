@@ -28,6 +28,27 @@ jobs:
           node-version: 22
       - name: Check test syntax
         run: node --check scripts/test_community_preview_http.mjs
+      - name: Configure email relay secrets on the feature Preview only
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+          RELAY_URL: ${{ secrets.COMMUNITY_EMAIL_RELAY_URL }}
+          RELAY_SECRET: ${{ secrets.COMMUNITY_EMAIL_RELAY_SECRET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${RELAY_URL:-}" || -z "${RELAY_SECRET:-}" ]]; then
+            echo "PREVIEW_RELAY_CONFIG=skipped (add COMMUNITY_EMAIL_RELAY_URL and COMMUNITY_EMAIL_RELAY_SECRET as repository Actions secrets after the Apps Script Web App is deployed)."
+            exit 0
+          fi
+          echo "::add-mask::${RELAY_URL}"
+          echo "::add-mask::${RELAY_SECRET}"
+          case "${RELAY_URL}" in
+            https://script.google.com/macros/s/*/exec) ;;
+            *) echo "::error::Relay URL must be a Google Apps Script Web App URL ending in /exec."; exit 1 ;;
+          esac
+          printf '%s' "${RELAY_URL}" | npx --yes wrangler@4 preview secret put COMMUNITY_EMAIL_RELAY_URL --name "feature/required-email-verification"
+          printf '%s' "${RELAY_SECRET}" | npx --yes wrangler@4 preview secret put COMMUNITY_EMAIL_RELAY_SECRET --name "feature/required-email-verification"
+          echo "PREVIEW_RELAY_CONFIG=success (feature Preview only; production untouched)."
       - name: Read Preview URL flags from Cloudflare API (read-only)
         env:
           CLOUDFLARE_WORKERS_BUILDS_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_BUILDS_API_TOKEN }}
