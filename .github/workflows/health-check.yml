@@ -72,7 +72,7 @@ jobs:
             headers="$(mktemp)"
             body="$(mktemp)"
             trap 'rm -f "$headers" "$body"' EXIT
-            curl --fail --silent --show-error --location --verbose --max-redirs 5 --max-time 25 -D "$headers" -o "$body" "$host/"
+            curl --fail --silent --show-error --location --verbose --max-redirs 5 --max-time 25 -H 'Sec-Fetch-Mode: navigate' -H 'Sec-Fetch-Dest: document' -H 'Sec-Fetch-Site: none' -D "$headers" -o "$body" "$host/"
             if grep -Eqi '404[[:space:]]*[-|:]?[[:space:]]*(not found|page not found)|the page you requested could not be found' "$body"; then
               echo "FAIL: $host homepage appears to contain a branded 404 page"
               exit 1
@@ -93,7 +93,7 @@ jobs:
               fi
             done
             for path in "${paths[@]:1}"; do
-              code="$(curl --silent --show-error --location --max-redirs 5 --max-time 25 -o /dev/null -w "%{http_code}" "$host$path")"
+              code="$(curl --silent --show-error --location --max-redirs 5 --max-time 25 -H 'Sec-Fetch-Mode: navigate' -H 'Sec-Fetch-Dest: document' -H 'Sec-Fetch-Site: none' -o /dev/null -w "%{http_code}" "$host$path")"
               if [ "$code" != "200" ]; then
                 echo "FAIL: $host$path returned HTTP $code"
                 exit 1
