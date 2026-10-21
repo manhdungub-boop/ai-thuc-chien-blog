@@ -23,6 +23,18 @@ const slugs = [
   'tao-anh-ai-co-brief',
   'kiem-tra-ban-quyen-noi-dung-ai',
   'lich-bien-tap-va-xuat-ban',
+  'affiliate-minh-bach-va-huu-ich',
+  'bao-ve-api-key-automation',
+  'bao-ve-du-lieu-khi-dung-ai',
+  'do-luong-hieu-qua-noi-dung',
+  'ke-hoach-30-ngay-kiem-chung-mo-hinh',
+  'kiem-chung-cau-tra-loi-ai',
+  'kiem-chung-san-pham-truoc-khi-gioi-thieu',
+  'kiem-thu-dau-ra-ai',
+  'kiem-thu-workflow-truoc-khi-bat',
+  'lap-prompt-ai-co-cau-truc',
+  'log-va-giam-sat-workflow',
+  'nghien-cuu-chu-de-noi-dung',
 ];
 function coreTokens(slug) {
   const source = fs.readFileSync(path.join(root, 'articles', `${slug}.html`), 'utf8');
