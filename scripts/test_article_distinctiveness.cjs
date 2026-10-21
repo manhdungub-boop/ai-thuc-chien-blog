@@ -35,6 +35,18 @@ const slugs = [
   'lap-prompt-ai-co-cau-truc',
   'log-va-giam-sat-workflow',
   'nghien-cuu-chu-de-noi-dung',
+  'viet-noi-dung-san-pham-co-bang-chung',
+  'xay-dung-quy-trinh-lead-voi-human-approval',
+  'tim-nhu-cau-thi-truong-cong-khai',
+  'thu-nghiem-thi-truong-voi-ngan-sach-thap',
+  'quan-ly-rui-ro-du-an-kiem-tien-ai',
+  'tinh-loi-nhuan-thuc-tu-affiliate',
+  'tinh-roi-tu-dong-hoa-ai',
+  'tai-su-dung-noi-dung-da-kiem-chung',
+  'xay-dung-thu-vien-prompt',
+  'nghien-cuu-web-co-nguon-voi-ai',
+  'phan-tich-du-lieu-bang-ai',
+  'so-sanh-goi-mien-phi-ai',
 ];
 function coreTokens(slug) {
   const source = fs.readFileSync(path.join(root, 'articles', `${slug}.html`), 'utf8');
