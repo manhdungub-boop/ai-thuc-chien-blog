@@ -4,6 +4,7 @@ import unittest
 from configure_cloudflare_worker_builds import (
     ALLOWED_DEPLOY_COMMANDS,
     EXPECTED_DEPLOY_COMMAND,
+    PRIMARY_BUILD_TOKEN_NAME,
     EXPECTED_PREVIEW_COMMAND,
     PRODUCTION_TRIGGERS,
     REPO_ID,
@@ -11,6 +12,7 @@ from configure_cloudflare_worker_builds import (
     TARGET_BUILD_COMMAND,
     changes_for,
     preview_spec,
+    resolve_primary_build_token,
     validate_trigger,
 )
 
@@ -97,6 +99,38 @@ class TriggerValidationTests(unittest.TestCase):
 
     def test_only_expected_commands_are_allowed(self):
         self.assertEqual(ALLOWED_DEPLOY_COMMANDS, {EXPECTED_DEPLOY_COMMAND, EXPECTED_PREVIEW_COMMAND})
+
+    def test_resolves_exact_known_good_primary_token(self):
+        primary = {"build_token_uuid": "primary-token-uuid"}
+        records = [{"build_token_uuid": "primary-token-uuid", "build_token_name": PRIMARY_BUILD_TOKEN_NAME}]
+        self.assertEqual(resolve_primary_build_token(primary, records), "primary-token-uuid")
+
+    def test_missing_primary_token_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "no build token UUID"):
+            resolve_primary_build_token({}, [])
+
+    def test_missing_or_duplicate_token_record_is_rejected(self):
+        primary = {"build_token_uuid": "primary-token-uuid"}
+        with self.assertRaisesRegex(ValueError, "found 0"):
+            resolve_primary_build_token(primary, [])
+        record = {"build_token_uuid": "primary-token-uuid", "build_token_name": PRIMARY_BUILD_TOKEN_NAME}
+        with self.assertRaisesRegex(ValueError, "found 2"):
+            resolve_primary_build_token(primary, [record, dict(record)])
+
+    def test_unknown_primary_token_name_is_rejected(self):
+        primary = {"build_token_uuid": "primary-token-uuid"}
+        records = [{"build_token_uuid": "primary-token-uuid", "build_token_name": "unexpected token"}]
+        with self.assertRaisesRegex(ValueError, "name did not match"):
+            resolve_primary_build_token(primary, records)
+
+    def test_build_token_patch_is_scoped_to_explicit_preview_spec(self):
+        spec = preview_spec("b" * 32, "00000000-0000-4000-8000-000000000001", "feature/example")
+        trigger = trigger_for(spec, build_command=TARGET_BUILD_COMMAND, deploy_command=EXPECTED_PREVIEW_COMMAND)
+        spec["use_build_token_uuid"] = "primary-token-uuid"
+        self.assertEqual(changes_for(trigger, spec), {"build_token_uuid": "primary-token-uuid"})
+        production = PRODUCTION_TRIGGERS[0]
+        production_trigger = trigger_for(production, build_command=TARGET_BUILD_COMMAND, deploy_command=EXPECTED_DEPLOY_COMMAND)
+        self.assertEqual(changes_for(production_trigger, production), {})
 
 
 if __name__ == "__main__":

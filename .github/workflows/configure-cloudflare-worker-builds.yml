@@ -18,6 +18,11 @@ on:
         description: "Optional 40-character commit SHA to queue a preview build after repair"
         required: false
         type: string
+      preview_reuse_primary_build_token:
+        description: "Opt in to reuse the verified primary Worker build token for this exact preview trigger only"
+        required: false
+        default: false
+        type: boolean
 permissions:
   contents: read
 concurrency:
@@ -42,4 +47,5 @@ jobs:
           PREVIEW_WORKER_TAG: ${{ inputs.preview_worker_tag }}
           PREVIEW_BRANCH: ${{ inputs.preview_branch }}
           PREVIEW_COMMIT_SHA: ${{ inputs.preview_commit_sha }}
+          PREVIEW_REUSE_PRIMARY_BUILD_TOKEN: ${{ inputs.preview_reuse_primary_build_token }}
         run: python scripts/configure_cloudflare_worker_builds.py
