@@ -1,0 +1,27 @@
+#!/usr/bin/env node
+'use strict';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const worker = fs.readFileSync(new URL('../worker.mjs', import.meta.url), 'utf8');
+const frontend = fs.readFileSync(new URL('../script.js', import.meta.url), 'utf8');
+const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const migration = fs.readFileSync(new URL('../migrations/0002_email_verification.sql', import.meta.url), 'utf8');
+assert.match(worker, /COMMUNITY_VERIFICATION_SECONDS = 30 \* 60/);
+assert.match(worker, /RESEND_API_KEY/);
+assert.match(worker, /COMMUNITY_EMAIL_FROM/);
+assert.match(worker, /route === "verify-email"/);
+assert.match(worker, /route === "resend-verification"/);
+assert.match(worker, /EMAIL_NOT_VERIFIED/);
+assert.match(worker, /email_verified_at IS NOT NULL/);
+assert.match(worker, /SHA-256/);
+assert.match(worker, /DELETE FROM community_email_verification_tokens WHERE token_hash = \?/);
+assert.match(frontend, /community-verify-confirm/);
+assert.match(frontend, /community-resend-verification/);
+assert.match(frontend, /verificationRequired/);
+assert.match(html, /id="community-verify-confirm"/);
+assert.match(html, /id="community-resend-verification"/);
+assert.match(migration, /ALTER TABLE community_members ADD COLUMN email_verified_at TEXT/);
+assert.match(migration, /UPDATE community_members SET email_verified_at = created_at/);
+assert.match(migration, /CREATE TABLE IF NOT EXISTS community_email_verification_tokens/);
+assert.match(migration, /ON DELETE CASCADE/);
+console.log('PASS: email verification routes, fail-closed configuration, UI controls and additive migration are present.');

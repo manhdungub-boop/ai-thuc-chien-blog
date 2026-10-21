@@ -264,7 +264,7 @@ async function communityMemberFromRequest(request, db) {
   const now = new Date().toISOString();
   return db.prepare(`SELECT m.id, m.username, m.display_name, m.created_at
     FROM community_sessions s JOIN community_members m ON m.id = s.member_id
-    WHERE s.token_hash = ? AND s.expires_at > ? LIMIT 1`).bind(tokenHash, now).first();
+    WHERE s.token_hash = ? AND s.expires_at > ? AND m.email_verified_at IS NOT NULL LIMIT 1`).bind(tokenHash, now).first();
 }
 async function createCommunitySession(db, memberId) {
   await db.prepare("DELETE FROM community_sessions WHERE expires_at <= ?").bind(new Date().toISOString()).run();
@@ -288,6 +288,39 @@ async function readJsonPayload(request, maxBytes = 6000) {
     return { ok: true, value };
   } catch (_error) { return { ok: false, status: 400, error: "Dữ liệu gửi không hợp lệ." }; }
 }
+const COMMUNITY_VERIFICATION_SECONDS = 30 * 60;
+function escapeCommunityHtml(value) {
+  return String(value || "").replace(/[&<>\"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[char]);
+}
+async function sendCommunityVerificationEmail(env, email, displayName, token, origin) {
+  if (!env.RESEND_API_KEY || !env.COMMUNITY_EMAIL_FROM) throw new Error("Email verification sender is not configured");
+  const verifyUrl = `${origin}/?verify=${encodeURIComponent(token)}#cong-dong`;
+  const safeName = escapeCommunityHtml(displayName || "bạn");
+  const safeUrl = escapeCommunityHtml(verifyUrl);
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      from: env.COMMUNITY_EMAIL_FROM,
+      to: [email],
+      subject: "Xác nhận email — AI Thực Chiến",
+      html: `<div style="font-family:Arial,sans-serif;line-height:1.65;color:#172033;max-width:560px;margin:auto"><h1>Xác nhận email của bạn</h1><p>Chào ${safeName},</p><p>Để hoàn tất đăng ký cộng đồng AI Thực Chiến, hãy bấm nút bên dưới. Liên kết chỉ có hiệu lực trong 30 phút và chỉ dùng một lần.</p><p><a href="${safeUrl}" style="display:inline-block;padding:12px 20px;background:#85efd0;color:#092a2c;border-radius:8px;text-decoration:none;font-weight:bold">Xác nhận email</a></p><p>Nếu nút không hoạt động, sao chép liên kết này vào trình duyệt:</p><p style="overflow-wrap:anywhere">${safeUrl}</p><p>Nếu bạn không yêu cầu đăng ký, hãy bỏ qua email này.</p></div>`,
+      text: `Chào ${displayName || "bạn"}. Xác nhận email để hoàn tất đăng ký AI Thực Chiến bằng liên kết sau (hết hạn sau 30 phút): ${verifyUrl}. Nếu bạn không yêu cầu đăng ký, hãy bỏ qua email này.`,
+    }),
+  });
+  if (!response.ok) throw new Error(`Email provider rejected the message (HTTP ${response.status})`);
+}
+async function createCommunityVerificationToken(db, memberId) {
+  await db.prepare("DELETE FROM community_email_verification_tokens WHERE member_id = ?").bind(memberId).run();
+  const token = bytesToBase64Url(crypto.getRandomValues(new Uint8Array(32)));
+  const tokenHash = await sha256Base64Url(token);
+  const createdAt = new Date();
+  const expiresAt = new Date(createdAt.getTime() + COMMUNITY_VERIFICATION_SECONDS * 1000).toISOString();
+  await db.prepare("INSERT INTO community_email_verification_tokens (token_hash, member_id, created_at, expires_at) VALUES (?, ?, ?, ?)")
+    .bind(tokenHash, memberId, createdAt.toISOString(), expiresAt).run();
+  return token;
+}
+
 async function handleCommunityApi(request, env) {
   const origin = request.headers.get("Origin");
   if (origin && !COMMUNITY_ALLOWED_ORIGINS.has(origin)) return communityJson({ error: "Nguồn yêu cầu không được phép." }, 403, request);
@@ -314,22 +347,71 @@ async function handleCommunityApi(request, env) {
       if (displayName.length < 2 || displayName.length > 40) return communityJson({ error: "Tên hiển thị cần từ 2 đến 40 ký tự." }, 400, request);
       if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return communityJson({ error: "Vui lòng nhập email hợp lệ." }, 400, request);
       if (password.length < 10 || password.length > 128) return communityJson({ error: "Mật khẩu cần từ 10 đến 128 ký tự." }, 400, request);
+      if (!env.RESEND_API_KEY || !env.COMMUNITY_EMAIL_FROM) return communityJson({ error: "Chức năng xác nhận email chưa được cấu hình. Vui lòng thử lại sau." }, 503, request);
       const ipHash = await sha256Base64Url(ip);
       if (!await communityRateLimit(db, `register:${ipHash}`, 5, 60 * 60 * 1000)) return communityJson({ error: "Bạn đã thử đăng ký quá nhiều lần. Vui lòng thử lại sau một giờ." }, 429, request);
       const salt = crypto.getRandomValues(new Uint8Array(16));
       const passwordHash = await hashCommunityPassword(password, salt);
       const memberId = crypto.randomUUID();
       try {
-        await db.prepare(`INSERT INTO community_members (id, username, email, display_name, password_salt, password_hash, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?)`).bind(memberId, username, email, displayName, bytesToBase64Url(salt), passwordHash, now).run();
+        await db.prepare(`INSERT INTO community_members (id, username, email, display_name, password_salt, password_hash, created_at, email_verified_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`).bind(memberId, username, email, displayName, bytesToBase64Url(salt), passwordHash, now).run();
       } catch (error) {
-        if (/unique|constraint/i.test(String(error?.message || error))) {
-          return communityJson({ error: "Email hoặc tên thành viên đã được sử dụng." }, 409, request);
-        }
+        if (/unique|constraint/i.test(String(error?.message || error))) return communityJson({ error: "Email hoặc tên thành viên đã được sử dụng." }, 409, request);
         throw error;
       }
-      const token = await createCommunitySession(db, memberId);
-      return communityJson({ member: { id: memberId, username, displayName, createdAt: now } }, 201, request, { "Set-Cookie": communityCookie(token) });
+      try {
+        const token = await createCommunityVerificationToken(db, memberId);
+        await sendCommunityVerificationEmail(env, email, displayName, token, new URL(request.url).origin);
+      } catch (error) {
+        await db.prepare("DELETE FROM community_email_verification_tokens WHERE member_id = ?").bind(memberId).run();
+        await db.prepare("DELETE FROM community_members WHERE id = ? AND email_verified_at IS NULL").bind(memberId).run();
+        console.error("community_verification_email_failed", { errorName: error instanceof Error ? error.name : "UnknownError" });
+        return communityJson({ error: "Chưa gửi được email xác nhận. Tài khoản chưa được tạo; vui lòng thử lại sau." }, 503, request);
+      }
+      return communityJson({ verificationRequired: true, message: "Đã gửi email xác nhận. Hãy mở hộp thư và bấm liên kết trong vòng 30 phút để kích hoạt tài khoản." }, 201, request);
+    }
+
+    if (route === "verify-email" && request.method === "POST") {
+      const parsed = await readJsonPayload(request);
+      if (!parsed.ok) return communityJson({ error: parsed.error }, parsed.status, request);
+      const token = String(parsed.value.token || "");
+      if (!/^[A-Za-z0-9_-]{32,80}$/.test(token)) return communityJson({ error: "Liên kết xác nhận không hợp lệ hoặc đã hết hạn." }, 400, request);
+      const tokenHash = await sha256Base64Url(token);
+      const row = await db.prepare(`SELECT t.member_id, m.email, m.email_verified_at
+        FROM community_email_verification_tokens t JOIN community_members m ON m.id = t.member_id
+        WHERE t.token_hash = ? AND t.expires_at > ? LIMIT 1`).bind(tokenHash, now).first();
+      if (!row) return communityJson({ error: "Liên kết xác nhận không hợp lệ, đã dùng hoặc đã hết hạn. Hãy gửi lại email xác nhận." }, 400, request);
+      await db.prepare("DELETE FROM community_email_verification_tokens WHERE token_hash = ?").bind(tokenHash).run();
+      await db.prepare("UPDATE community_members SET email_verified_at = ? WHERE id = ? AND email_verified_at IS NULL").bind(now, row.member_id).run();
+      await db.prepare("DELETE FROM community_email_verification_tokens WHERE member_id = ?").bind(row.member_id).run();
+      return communityJson({ ok: true, message: "Email đã được xác nhận. Bây giờ bạn có thể đăng nhập.", email: row.email }, 200, request);
+    }
+
+    if (route === "resend-verification" && request.method === "POST") {
+      const parsed = await readJsonPayload(request);
+      if (!parsed.ok) return communityJson({ error: parsed.error }, parsed.status, request);
+      const email = String(parsed.value.email || "").trim().toLowerCase();
+      if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return communityJson({ error: "Vui lòng nhập email hợp lệ." }, 400, request);
+      const ipHash = await sha256Base64Url(ip);
+      const emailHash = await sha256Base64Url(email);
+      if (!await communityRateLimit(db, `verify-resend-ip:${ipHash}`, 10, 60 * 60 * 1000) || !await communityRateLimit(db, `verify-resend-email:${emailHash}`, 3, 60 * 60 * 1000)) {
+        return communityJson({ error: "Bạn đã yêu cầu gửi lại quá nhiều lần. Vui lòng thử lại sau." }, 429, request);
+      }
+      const member = await db.prepare("SELECT id, email, display_name, email_verified_at FROM community_members WHERE email = ? LIMIT 1").bind(email).first();
+      // Always use the same public response to avoid exposing which email addresses have accounts.
+      const generic = { ok: true, message: "Nếu email này có tài khoản đang chờ xác nhận, chúng tôi sẽ gửi liên kết mới." };
+      if (!member || member.email_verified_at) return communityJson(generic, 200, request);
+      if (!env.RESEND_API_KEY || !env.COMMUNITY_EMAIL_FROM) return communityJson({ error: "Chức năng gửi email chưa được cấu hình. Vui lòng thử lại sau." }, 503, request);
+      try {
+        const token = await createCommunityVerificationToken(db, member.id);
+        await sendCommunityVerificationEmail(env, member.email, member.display_name, token, new URL(request.url).origin);
+      } catch (error) {
+        await db.prepare("DELETE FROM community_email_verification_tokens WHERE member_id = ?").bind(member.id).run();
+        console.error("community_verification_resend_failed", { errorName: error instanceof Error ? error.name : "UnknownError" });
+        return communityJson({ error: "Chưa gửi được email xác nhận. Vui lòng thử lại sau." }, 503, request);
+      }
+      return communityJson(generic, 200, request);
     }
 
     if (route === "login" && request.method === "POST") {
@@ -344,12 +426,13 @@ async function handleCommunityApi(request, env) {
       if (!await communityRateLimit(db, `login-ip:${ipHash}`, 20, 15 * 60 * 1000) || !await communityRateLimit(db, `login-account:${emailHash}:${ipHash}`, 8, 15 * 60 * 1000)) {
         return communityJson({ error: "Bạn đăng nhập quá nhiều lần. Vui lòng thử lại sau ít phút." }, 429, request);
       }
-      const row = await db.prepare("SELECT id, username, email, display_name, password_salt, password_hash, created_at FROM community_members WHERE email = ? LIMIT 1").bind(email).first();
+      const row = await db.prepare("SELECT id, username, email, display_name, password_salt, password_hash, created_at, email_verified_at FROM community_members WHERE email = ? LIMIT 1").bind(email).first();
       let valid = false;
       if (row) {
         try { valid = (await hashCommunityPassword(password, base64UrlToBytes(row.password_salt))) === row.password_hash; } catch (_error) { valid = false; }
       }
       if (!valid) return communityJson({ error: "Email hoặc mật khẩu chưa chính xác." }, 401, request);
+      if (!row.email_verified_at) return communityJson({ code: "EMAIL_NOT_VERIFIED", error: "Bạn cần xác nhận email trước khi đăng nhập. Hãy mở email hoặc gửi lại liên kết xác nhận." }, 403, request);
       const token = await createCommunitySession(db, row.id);
       return communityJson({ member: safeCommunityMember(row) }, 200, request, { "Set-Cookie": communityCookie(token) });
     }

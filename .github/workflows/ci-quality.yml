@@ -41,6 +41,7 @@ jobs:
           node scripts/test_worker_headers.mjs
           node scripts/test_worker_retrieval.mjs
           node scripts/test_community_api.mjs
+          node scripts/test_email_verification.mjs
           node scripts/test_homepage_search.cjs
 
       - name: Test community D1 schema

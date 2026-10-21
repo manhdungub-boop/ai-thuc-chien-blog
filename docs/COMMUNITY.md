@@ -30,3 +30,19 @@ python3 scripts/test_community_schema.py
 - Danh sách phòng cập nhật định kỳ khoảng 15 giây khi người dùng đang xem; đây chưa phải WebSocket/push thời gian thực.
 - Email không hiển thị cho thành viên khác; tên hiển thị và nội dung tin nhắn được chia sẻ trong phòng tương ứng.
 - Trước khi mở rộng công khai, cần bổ sung quy trình kiểm duyệt/báo cáo, điều khoản cộng đồng và chính sách quyền riêng tư đầy đủ.
+
+
+## Required email verification
+
+New registrations remain pending until the member confirms the one-time link sent through Resend. Links expire after 30 minutes; only a SHA-256 hash of each random token is stored in D1. Existing accounts are grandfathered as verified by migration `0002_email_verification.sql` so this feature does not lock out current members.
+
+### Free-first setup
+
+1. Create a free Resend account: https://resend.com/signup (current free plan: 3,000 transactional emails/month, 100/day).
+2. Add a domain you own in Resend and publish the exact SPF/DKIM records it supplies in that domain's DNS. A `workers.dev` hostname is not a sender domain you own.
+3. Verify the domain in Resend and choose a sender such as `AI Thực Chiến <no-reply@your-domain.example>` using your real verified domain.
+4. Create a restricted sending API key and add it to the Cloudflare Worker as secret `RESEND_API_KEY`. Set `COMMUNITY_EMAIL_FROM` to the verified sender address (a non-secret Worker variable is suitable). Never commit either value to Git.
+5. Apply `migrations/0002_email_verification.sql` separately to the production and preview D1 databases before deploying the Worker code.
+6. Verify sending and receiving to a real inbox on a staging deployment before enabling the feature in production.
+
+If either `RESEND_API_KEY` or `COMMUNITY_EMAIL_FROM` is absent, new registration fails closed with HTTP 503 and no pending account is left behind. Resend requests use the same generic public response for known and unknown email addresses.
