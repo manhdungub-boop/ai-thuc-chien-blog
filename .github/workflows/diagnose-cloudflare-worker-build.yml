@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       worker_tag:
-        description: "Worker tag (32 hexadecimal characters) for the failed build target"
+        description: "Worker tag (32 hexadecimal characters) for a Worker to inspect"
         required: true
         type: string
 
@@ -46,7 +46,7 @@ jobs:
           fi
           echo "::add-mask::$CF_API_TOKEN"
 
-      - name: Fetch build, token status, Worker mapping, trigger and logs (read-only)
+      - name: Fetch build record, token status, Worker mapping, trigger and logs (read-only)
         shell: bash
         env:
           BUILD_UUID: ${{ inputs.build_uuid }}
@@ -81,6 +81,11 @@ jobs:
           jq -r '
             "Build UUID: " + (.result.build_uuid // "unknown"),
             "Outcome: " + (.result.build_outcome // "unknown"),
+            "Build result fields: " + ((.result // {}) | keys | join(", ")),
+            "Recorded trigger tag: " + (.result.trigger.external_script_id // .result.trigger_metadata.external_script_id // "not included"),
+            "Recorded trigger name: " + (.result.trigger.trigger_name // .result.trigger_metadata.trigger_name // "not included"),
+            "Recorded trigger UUID: " + (.result.trigger.trigger_uuid // .result.trigger_metadata.trigger_uuid // "not included"),
+            "Recorded trigger deploy command: " + (.result.trigger.deploy_command // .result.trigger_metadata.deploy_command // "not included"),
             "Branch: " + (.result.build_trigger_metadata.branch // "unknown"),
             "Commit: " + (.result.build_trigger_metadata.commit_hash // "unknown"),
             "Build command: " + (.result.build_trigger_metadata.build_command // "unknown"),
