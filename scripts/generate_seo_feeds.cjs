@@ -27,6 +27,13 @@ function getMetaContent(html, key) {
   return '';
 }
 
+function getLastModified(html) {
+  const dates = [...html.matchAll(/"dateModified"\s*:\s*"(\d{4}-\d{2}-\d{2})(?:T[^"]*)?"/gi)]
+    .map((match) => match[1])
+    .filter((date) => !Number.isNaN(Date.parse(date + 'T00:00:00Z')));
+  return dates.sort().pop() || '';
+}
+
 function getTitle(html) {
   const match = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
   return match ? match[1].replace(/<[^>]+>/g, '').trim() : '';
@@ -48,7 +55,7 @@ function validatePageMetadata(html, file) {
   if (!title || !description) {
     throw new Error('Missing title or meta description in ' + file);
   }
-  return { canonical: getCanonical(html, file), title, description };
+  return { canonical: getCanonical(html, file), title, description, lastmod: getLastModified(html) };
 }
 
 function getPublishedArticleFiles(outputDir) {
@@ -107,18 +114,20 @@ function generate(outputDir) {
     throw new Error('Topic library canonical URL does not match /thu-vien.html');
   }
 
-  const today = new Date().toISOString().slice(0, 10);
   const sitemapEntries = [
     { canonical: SITE + '/' },
     about,
     library,
     ...articles
-  ].map((page) => [
-    '  <url>',
-    '    <loc>' + escapeXml(page.canonical) + '</loc>',
-    '    <lastmod>' + today + '</lastmod>',
-    '  </url>'
-  ].join('\n'));
+  ].map((page) => {
+    const lines = [
+      '  <url>',
+      '    <loc>' + escapeXml(page.canonical) + '</loc>'
+    ];
+    if (page.lastmod) lines.push('    <lastmod>' + escapeXml(page.lastmod) + '</lastmod>');
+    lines.push('  </url>');
+    return lines.join('\n');
+  });
 
   const sitemap = [
     '<?xml version="1.0" encoding="UTF-8"?>',
