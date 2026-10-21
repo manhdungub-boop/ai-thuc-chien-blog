@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 import assert from 'node:assert/strict';
+import { randomBytes } from 'node:crypto';
 
 const configured = String(process.env.PREVIEW_URL || '');
 if (!configured) throw new Error('PREVIEW_URL is required.');
@@ -35,6 +36,17 @@ assert.equal(own.headers.get('access-control-allow-credentials'), 'true', 'CORS 
 const ownPayload = await own.json();
 assert.equal(ownPayload.member, null, 'Unauthenticated read must not disclose member data');
 console.log('PASS: Preview /api/community/me returns HTTP 200 with same-origin CORS and an empty unauthenticated member.');
+
+// Read-only schema probe: a random, nonexistent token should yield HTTP 400 after the SQL SELECT.
+// HTTP 500 here means the verification-token table or email_verified_at column is missing.
+const schemaProbe = await requestWithRetry(`${target}/api/community/verify-email`, {
+  method: 'POST',
+  headers: { Origin: target, Referer: `${target}/#cong-dong`, Accept: 'application/json', 'Content-Type': 'application/json' },
+  body: JSON.stringify({ token: randomBytes(32).toString('base64url') }),
+}, 'Read-only email schema probe');
+assert.equal(schemaProbe.status, 400, `Random unknown verification token should return HTTP 400 (schema present), got ${schemaProbe.status}`);
+assert.equal(schemaProbe.headers.get('access-control-allow-origin'), target, 'Schema probe must have same-origin CORS');
+console.log('PASS: Random unknown verification token returns HTTP 400, confirming the Preview token table and email_verified_at column are queryable without writing data.');
 
 // Read-only negative test: an unrelated origin must be rejected by the same endpoint.
 const hostile = await requestWithRetry(`${target}/api/community/me`, {
