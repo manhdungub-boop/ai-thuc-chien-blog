@@ -114,3 +114,20 @@
 .community .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 @media(max-width:900px){.community-layout{grid-template-columns:minmax(0,1fr)}.community-account-card{max-width:none}.community-room-card{padding:21px}}
 @media(max-width:640px){.community-layout{gap:13px}.community-account-card,.community-room-card{padding:19px 16px}.community-room-heading{flex-direction:column;gap:8px}.community-room-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.community-room-tabs button{min-height:42px}.community-message{max-width:100%}.community-chat-form{gap:7px}.community-send{padding:0 11px}.community-intro{font-size:12px}}
+
+/* Email verification controls */
+.community-resend-verification {
+  display: block;
+  width: 100%;
+  margin-top: 0.75rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--line, rgba(148, 163, 184, 0.35));
+  border-radius: 0.75rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+.community-resend-verification:hover { border-color: var(--accent, #85efd0); }
+.community-resend-verification:disabled { opacity: 0.6; cursor: wait; }
