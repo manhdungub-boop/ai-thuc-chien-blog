@@ -18,22 +18,7 @@
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Prompt Injection là gì? 8 lớp phòng vệ cho workflow AI">
 <meta name="twitter:description" content="Checklist thực hành để giới hạn quyền, ngăn hành động ngoài ý muốn và kiểm tra AI workflow.">
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "BlogPosting",
-  "headline": "Prompt Injection là gì? 8 lớp phòng vệ cho workflow AI",
-  "description": "Giải thích prompt injection và checklist phòng vệ theo lớp cho AI agent đọc nội dung bên ngoài và sử dụng công cụ.",
-  "url": "https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/nhan-biet-prompt-injection-ai",
-  "mainEntityOfPage": {"@type": "WebPage", "@id": "https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/nhan-biet-prompt-injection-ai"},
-  "datePublished": "2026-10-18",
-  "dateModified": "2026-10-18",
-  "inLanguage": "vi-VN",
-  "articleSection": "AI thực hành và bảo mật",
-  "author": {"@type": "Organization", "name": "AI Thực Chiến", "url": "https://ai-thuc-chien-blog.manhdungub.workers.dev/"},
-  "publisher": {"@type": "Organization", "name": "AI Thực Chiến", "url": "https://ai-thuc-chien-blog.manhdungub.workers.dev/"}
-}
-</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Prompt Injection là gì? 8 lớp phòng vệ cho workflow AI","description":"Giải thích prompt injection và checklist phòng vệ theo lớp cho AI agent đọc nội dung bên ngoài và sử dụng công cụ.","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/nhan-biet-prompt-injection-ai","mainEntityOfPage":{"@type":"WebPage","@id":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/nhan-biet-prompt-injection-ai"},"datePublished":"2026-10-18","dateModified":"2026-10-21","inLanguage":"vi-VN","articleSection":"AI thực hành và bảo mật","author":{"@type":"Organization","name":"AI Thực Chiến","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/"},"publisher":{"@type":"Organization","name":"AI Thực Chiến","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/"}}</script>
 <title>Prompt Injection là gì? 8 lớp phòng vệ cho workflow AI | AI Thực Chiến</title>
 <link rel="alternate" type="application/rss+xml" title="AI Thực Chiến RSS" href="../feed.xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -52,7 +37,7 @@
 <div class="section-kicker">AI THỰC HÀNH · BẢO MẬT WORKFLOW</div>
 <h1 style="font-size:clamp(32px,5vw,54px);line-height:1.2;letter-spacing:-1.6px;margin:18px 0">Prompt Injection là gì? 8 lớp phòng vệ cho workflow AI</h1>
 <p style="color:var(--muted);font-size:17px;line-height:1.9">Khi một AI agent đọc email, trang web hoặc tài liệu rồi gọi công cụ, nội dung bên ngoài có thể cố điều khiển nó làm việc khác với yêu cầu của bạn. Đây là lý do bảo mật cần được thiết kế vào toàn bộ workflow, không chỉ thêm một câu cảnh báo vào prompt.</p>
-<p style="font-size:12px;color:#8993ab">Cập nhật ngày <time datetime="2026-10-18">18/10/2026</time> · Thời gian đọc khoảng 8 phút</p>
+<p style="font-size:12px;color:#8993ab">Cập nhật ngày <time datetime="2026-10-21">21/10/2026</time> · Thời gian đọc khoảng 8 phút</p>
 
 <h2 style="margin-top:36px">Tóm tắt trong 30 giây</h2>
 <ul style="padding-left:24px;line-height:2">
@@ -109,6 +94,11 @@ Bạn đang phân tích tài liệu để hoàn thành nhiệm vụ do người 
 </blockquote>
 <p><strong>Lưu ý:</strong> mẫu trên giúp nêu rõ ý định, nhưng không phải một cơ chế bảo mật đủ dùng nếu đứng một mình. Những ràng buộc quan trọng như quyền truy cập, danh sách công cụ được phép, kiểm tra người nhận và bước xác nhận phải được thực thi bởi hệ thống bên ngoài mô hình.</p>
 
+
+<h2 style="margin-top:36px">Bộ kiểm thử đối kháng và tiêu chí chặn</h2>
+<p>Tạo ca thử với nội dung yêu cầu bỏ qua quy tắc, giả mạo vai trò quản trị, tìm tài liệu ngoài phạm vi, đổi người nhận, tiết lộ thông tin nhạy cảm hoặc tự gọi công cụ. Dùng dữ liệu giả và môi trường thử nghiệm để những ca này không tạo ra tác dụng phụ thật. Kiểm tra cả tiếng Việt, văn bản được trích dẫn lồng nhau, HTML và kết quả API vì chỉ thử một câu tấn công chuẩn có thể bỏ qua cách diễn đạt khác.</p>
+<p>Với mỗi ca, định nghĩa hành vi mong đợi: chỉ tóm tắt nội dung độc hại như dữ liệu, không truy cập tài nguyên ngoài quyền, không gọi công cụ không được phép và dừng để xin xác nhận trước hành động có tác động. Kiểm tra log truy cập và tham số công cụ, không chỉ đọc câu trả lời cuối. Một thông báo từ chối không chứng minh agent đã không làm gì trước đó.</p>
+<p>Nếu có hành vi bất thường, dừng các lượt chạy có tác dụng phụ, lưu mã tác vụ, kiểm tra những gì đã đọc hoặc gửi và thu hồi quyền hoặc token có nguy cơ. Không retry chỉ để xem có lặp lại hay không. Sau khi xác định nguyên nhân, bổ sung ca đó vào bộ hồi quy và chạy lại sau khi thay prompt, mô hình, connector hoặc phạm vi quyền. Các ràng buộc quan trọng phải được hệ thống bên ngoài mô hình thực thi.</p>
 <h2 style="margin-top:36px">Nguồn tham khảo</h2>
 <ul style="padding-left:24px;line-height:2">
 <li><a href="https://openai.com/safety/prompt-injections/" target="_blank" rel="noopener noreferrer" style="color:var(--mint);text-decoration:underline">OpenAI — Understanding prompt injections</a>: khái niệm, ví dụ và các lớp bảo vệ cùng hướng dẫn xác nhận hành động quan trọng.</li>
