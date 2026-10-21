@@ -1,0 +1,33 @@
+name: Test community registration on isolated preview
+on:
+  workflow_dispatch:
+    inputs:
+      preview_worker_url:
+        description: "Exact Cloudflare Workers preview URL for this PR"
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: community-registration-preview-smoke
+  cancel-in-progress: false
+jobs:
+  test-preview-registration:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out PR branch
+        uses: actions/checkout@v7
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate test script and mock regression suite
+        run: |
+          node --check scripts/test_live_community_registration.mjs
+          node scripts/test_community_api.mjs
+      - name: Test actual signup against preview and clean test identity
+        env:
+          PREVIEW_WORKER_URL: ${{ inputs.preview_worker_url }}
+          CLOUDFLARE_ACCOUNT_ID: 92cf091bbac8b4879ec65feb30b4715b
+          CLOUDFLARE_WORKERS_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+        run: node scripts/test_live_community_registration.mjs
