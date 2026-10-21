@@ -42,6 +42,16 @@ for (const page of publicPages) {
   const title = source.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
   assert.ok(title && title[1].trim(), label + ': missing title');
   assert.match(source, /<meta\b[^>]*name=["']description["'][^>]*content=["'][^"']{30,}["']/i, label + ': missing or too-short meta description');
+  const openGraphTitleTag = (source.match(/<meta\b[^>]*property=["']og:title["'][^>]*>/i) || [])[0] || '';
+  const openGraphTitle = openGraphTitleTag.match(/\bcontent=["']([^"']+)["']/i);
+  assert.ok(openGraphTitle && openGraphTitle[1].trim(), label + ': missing Open Graph title');
+  const openGraphDescriptionTag = (source.match(/<meta\b[^>]*property=["']og:description["'][^>]*>/i) || [])[0] || '';
+  const openGraphDescription = openGraphDescriptionTag.match(/\bcontent=["']([^"']+)["']/i);
+  assert.ok(openGraphDescription && openGraphDescription[1].trim().length >= 30, label + ': missing or too-short Open Graph description');
+  if (page.file === 'thu-vien.html') {
+    assert.match(source, /48 bài thực hành/i, 'Topic library should show its verified 48-article inventory');
+    assert.doesNotMatch(source, /40 hướng dẫn|40 bài thực hành/i, 'Topic library must not retain stale 40-article copy');
+  }
   const canonicalTag = (source.match(/<link\b[^>]*rel=["']canonical["'][^>]*>/i) || [])[0] || '';
   const canonicalMatch = canonicalTag.match(/\bhref=["']([^"']+)["']/i);
   assert.ok(canonicalMatch, label + ': missing canonical URL');
