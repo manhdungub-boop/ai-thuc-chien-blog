@@ -39,6 +39,58 @@ jobs:
           node scripts/test_worker_headers.mjs
           node scripts/test_homepage_search.cjs
 
+      - name: Test isolated D1 configuration for previews
+        run: node scripts/test_d1_preview_config.cjs
+
+      - name: Verify configured production and preview D1 databases (read-only API)
+        if: github.event_name == 'workflow_run' || github.event_name == 'workflow_dispatch'
+        env:
+          CLOUDFLARE_WORKERS_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 92cf091bbac8b4879ec65feb30b4715b
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${CLOUDFLARE_WORKERS_API_TOKEN:-}" ]]; then
+            echo "::error::CLOUDFLARE_WORKERS_API_TOKEN is required for read-only D1 verification."
+            exit 1
+          fi
+          echo "::add-mask::$CLOUDFLARE_WORKERS_API_TOKEN"
+          node <<'NODE'
+          const fs = require('node:fs');
+          const config = JSON.parse(fs.readFileSync('wrangler.jsonc', 'utf8'));
+          const prod = (config.d1_databases || []).find(x => x.binding === 'DB');
+          const preview = ((config.previews || {}).d1_databases || []).find(x => x.binding === 'DB');
+          if (!prod || !preview) throw new Error('Both production and preview DB bindings named DB are required.');
+          if (!prod.database_id || !preview.database_id || prod.database_id === preview.database_id) {
+            throw new Error('Production and preview D1 IDs must both exist and be different.');
+          }
+          if (!prod.database_name || !preview.database_name || prod.database_name === preview.database_name) {
+            throw new Error('Production and preview D1 names must both exist and be different.');
+          }
+          fs.appendFileSync(process.env.GITHUB_ENV,
+            `PRODUCTION_D1_ID=${prod.database_id}\nPRODUCTION_D1_NAME=${prod.database_name}\nPREVIEW_D1_ID=${preview.database_id}\nPREVIEW_D1_NAME=${preview.database_name}\n`);
+          NODE
+          verify_database() {
+            local label="$1" db_id="$2" expected_name="$3" response status
+            response="$(mktemp)"
+            status="$(curl --silent --show-error --max-time 20 \
+              -H "Authorization: Bearer ${CLOUDFLARE_WORKERS_API_TOKEN}" \
+              -o "$response" -w '%{http_code}' \
+              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/d1/database/${db_id}" || true)"
+            if [[ "$status" != "200" ]] || ! jq -e --arg id "$db_id" --arg name "$expected_name" \
+              '.success == true and (.result.uuid == $id or .result.id == $id) and .result.name == $name' "$response" >/dev/null; then
+              echo "::error::Cloudflare did not confirm the configured ${label} D1 database ID/name (HTTP ${status})."
+              jq -r '(.errors[]?.message // empty)' "$response" 2>/dev/null || true
+              rm -f "$response"
+              exit 1
+            fi
+            rm -f "$response"
+            echo "PASS: ${label} D1 database UUID and name verified (name: ${expected_name})."
+          }
+          verify_database "production" "$PRODUCTION_D1_ID" "$PRODUCTION_D1_NAME"
+          verify_database "preview" "$PREVIEW_D1_ID" "$PREVIEW_D1_NAME"
+          echo "PASS: preview D1 is a separate existing database; no SQL or migrations were executed."
+
       - name: Test article content quality
         run: npm run test:content
 

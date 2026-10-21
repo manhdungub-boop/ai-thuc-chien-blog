@@ -46,6 +46,9 @@ jobs:
       - name: Test community D1 schema
         run: python3 scripts/test_community_schema.py
 
+      - name: Test isolated D1 configuration for previews
+        run: node scripts/test_d1_preview_config.cjs
+
       - name: Test article content quality
         run: npm run test:content
 
