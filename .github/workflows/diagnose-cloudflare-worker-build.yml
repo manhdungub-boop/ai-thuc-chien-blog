@@ -81,6 +81,8 @@ jobs:
           jq -r '
             "Build UUID: " + (.result.build_uuid // "unknown"),
             "Outcome: " + (.result.build_outcome // "unknown"),
+            "Preview URL: " + (.result.preview_url // "not available"),
+            "Unique Deployment URL: " + (.result.deployment_url // .result.version_url // "not available"),
             "Build result fields: " + ((.result // {}) | keys | join(", ")),
             "Recorded trigger tag: " + (.result.trigger.external_script_id // .result.trigger_metadata.external_script_id // "not included"),
             "Recorded trigger name: " + (.result.trigger.trigger_name // .result.trigger_metadata.trigger_name // "not included"),
