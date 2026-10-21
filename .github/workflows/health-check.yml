@@ -55,7 +55,7 @@ jobs:
             exit 1
           fi
           echo "::add-mask::$CLOUDFLARE_WORKERS_API_TOKEN"
-          node <<'NODE'
+          config_json="$(node <<'NODE'
           const fs = require('node:fs');
           const config = JSON.parse(fs.readFileSync('wrangler.jsonc', 'utf8'));
           const prod = (config.d1_databases || []).find(x => x.binding === 'DB');
@@ -67,9 +67,13 @@ jobs:
           if (!prod.database_name || !preview.database_name || prod.database_name === preview.database_name) {
             throw new Error('Production and preview D1 names must both exist and be different.');
           }
-          fs.appendFileSync(process.env.GITHUB_ENV,
-            `PRODUCTION_D1_ID=${prod.database_id}\nPRODUCTION_D1_NAME=${prod.database_name}\nPREVIEW_D1_ID=${preview.database_id}\nPREVIEW_D1_NAME=${preview.database_name}\n`);
+          process.stdout.write(JSON.stringify({production:{id:prod.database_id,name:prod.database_name},preview:{id:preview.database_id,name:preview.database_name}}));
           NODE
+          )"
+          PRODUCTION_D1_ID="$(jq -r '.production.id' <<< "$config_json")"
+          PRODUCTION_D1_NAME="$(jq -r '.production.name' <<< "$config_json")"
+          PREVIEW_D1_ID="$(jq -r '.preview.id' <<< "$config_json")"
+          PREVIEW_D1_NAME="$(jq -r '.preview.name' <<< "$config_json")"
           verify_database() {
             local label="$1" db_id="$2" expected_name="$3" response status
             response="$(mktemp)"
