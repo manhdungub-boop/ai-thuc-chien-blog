@@ -70,4 +70,5 @@ for (const file of files) {
 
   console.log('ARTICLE QUALITY PASS: ' + file + ' (' + words.length + ' words, ' + links.length + ' related links)');
 }
+require('./test_article_distinctiveness.cjs');
 console.log('CONTENT QUALITY GATE PASS: ' + files.length + ' articles checked');
