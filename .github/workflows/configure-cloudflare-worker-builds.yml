@@ -23,6 +23,11 @@ on:
         required: false
         default: false
         type: boolean
+      secondary_production_reuse_primary_build_token:
+        description: "Opt in to replace only the secondary test Worker's main-trigger build-token reference with the verified primary token"
+        required: false
+        default: false
+        type: boolean
 permissions:
   contents: read
 concurrency:
@@ -48,4 +53,5 @@ jobs:
           PREVIEW_BRANCH: ${{ inputs.preview_branch }}
           PREVIEW_COMMIT_SHA: ${{ inputs.preview_commit_sha }}
           PREVIEW_REUSE_PRIMARY_BUILD_TOKEN: ${{ inputs.preview_reuse_primary_build_token }}
+          SECONDARY_PRODUCTION_REUSE_PRIMARY_BUILD_TOKEN: ${{ inputs.secondary_production_reuse_primary_build_token }}
         run: python scripts/configure_cloudflare_worker_builds.py

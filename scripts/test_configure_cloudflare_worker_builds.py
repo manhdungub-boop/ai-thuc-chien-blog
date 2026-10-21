@@ -5,6 +5,9 @@ from configure_cloudflare_worker_builds import (
     ALLOWED_DEPLOY_COMMANDS,
     EXPECTED_DEPLOY_COMMAND,
     PRIMARY_BUILD_TOKEN_NAME,
+    SECONDARY_TEST_WORKER_NAME,
+    SECONDARY_TEST_WORKER_TAG,
+    SECONDARY_TEST_WORKER_TRIGGER_UUID,
     EXPECTED_PREVIEW_COMMAND,
     PRODUCTION_TRIGGERS,
     REPO_ID,
@@ -131,6 +134,35 @@ class TriggerValidationTests(unittest.TestCase):
         production = PRODUCTION_TRIGGERS[0]
         production_trigger = trigger_for(production, build_command=TARGET_BUILD_COMMAND, deploy_command=EXPECTED_DEPLOY_COMMAND)
         self.assertEqual(changes_for(production_trigger, production), {})
+
+    def test_secondary_test_worker_token_change_requires_explicit_exact_identity_opt_in(self):
+        spec = dict(PRODUCTION_TRIGGERS[1])
+        self.assertEqual(spec["name"], SECONDARY_TEST_WORKER_NAME)
+        self.assertEqual(spec["tag"], SECONDARY_TEST_WORKER_TAG)
+        self.assertEqual(spec["trigger_uuid"], SECONDARY_TEST_WORKER_TRIGGER_UUID)
+        trigger = trigger_for(spec, build_command=TARGET_BUILD_COMMAND, deploy_command=EXPECTED_DEPLOY_COMMAND, build_token_uuid="stale-token-uuid")
+        spec["use_build_token_uuid"] = "primary-token-uuid"
+        # No allow_token_change flag means production token references remain untouched by default.
+        self.assertEqual(changes_for(trigger, spec), {})
+        spec["allow_token_change"] = True
+        self.assertEqual(changes_for(trigger, spec), {"build_token_uuid": "primary-token-uuid"})
+
+    def test_primary_production_token_cannot_be_changed_even_with_opt_in_flag(self):
+        spec = dict(PRODUCTION_TRIGGERS[0])
+        trigger = trigger_for(spec, build_command=TARGET_BUILD_COMMAND, deploy_command=EXPECTED_DEPLOY_COMMAND, build_token_uuid="primary-current-token")
+        spec["use_build_token_uuid"] = "different-token"
+        spec["allow_token_change"] = True
+        self.assertEqual(changes_for(trigger, spec), {})
+
+    def test_secondary_token_opt_in_rejects_wrong_tag_or_trigger_identity(self):
+        for field, value in [("tag", "wrong-tag"), ("trigger_uuid", "00000000-0000-4000-8000-000000000002"), ("name", "other-worker")]:
+            with self.subTest(field=field):
+                spec = dict(PRODUCTION_TRIGGERS[1])
+                spec[field] = value
+                spec["use_build_token_uuid"] = "primary-token-uuid"
+                spec["allow_token_change"] = True
+                trigger = trigger_for(PRODUCTION_TRIGGERS[1], build_command=TARGET_BUILD_COMMAND, deploy_command=EXPECTED_DEPLOY_COMMAND, build_token_uuid="stale-token-uuid")
+                self.assertEqual(changes_for(trigger, spec), {})
 
 
 if __name__ == "__main__":

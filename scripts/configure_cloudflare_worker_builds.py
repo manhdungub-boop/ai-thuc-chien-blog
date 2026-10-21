@@ -14,6 +14,9 @@ TARGET_BUILD_COMMAND = "npm run build"
 EXPECTED_DEPLOY_COMMAND = "npx wrangler deploy"
 EXPECTED_PREVIEW_COMMAND = "npx wrangler preview"
 PRIMARY_BUILD_TOKEN_NAME = "ai-thuc-chien-blog build token"
+SECONDARY_TEST_WORKER_NAME = "ai-thuc-chien-blog-moi"
+SECONDARY_TEST_WORKER_TAG = "b1481a57488a4839b9a745f93b7dad61"
+SECONDARY_TEST_WORKER_TRIGGER_UUID = "c0af6fef-ce6b-4516-a092-433c59f2c9a6"
 ALLOWED_DEPLOY_COMMANDS = {EXPECTED_DEPLOY_COMMAND, EXPECTED_PREVIEW_COMMAND}
 PRODUCTION_TRIGGERS = (
     {"name": "ai-thuc-chien-blog", "tag": "f0142edba057434191f9d452ba159e00",
@@ -116,8 +119,17 @@ def changes_for(trigger, spec):
         "build_command": TARGET_BUILD_COMMAND,
         "deploy_command": spec["deploy_command"],
     }
-    # Token changes are only allowed when explicitly attached to a preflighted preview spec.
-    if spec.get("kind") == "preview" and spec.get("use_build_token_uuid"):
+    # Token changes are preview-only unless the exact pinned secondary test Worker is explicitly opted in.
+    is_preview = spec.get("kind") == "preview"
+    is_opted_in_secondary = (
+        spec.get("allow_token_change") is True
+        and spec.get("kind") == "production"
+        and spec.get("name") == SECONDARY_TEST_WORKER_NAME
+        and spec.get("tag") == SECONDARY_TEST_WORKER_TAG
+        and spec.get("trigger_uuid") == SECONDARY_TEST_WORKER_TRIGGER_UUID
+        and spec.get("branch") == "main"
+    )
+    if spec.get("use_build_token_uuid") and (is_preview or is_opted_in_secondary):
         desired["build_token_uuid"] = spec["use_build_token_uuid"]
     return {key: value for key, value in desired.items() if trigger.get(key) != value}
 
@@ -137,6 +149,11 @@ def main():
         print("ERROR: preview_reuse_primary_build_token must be true or false.", file=sys.stderr)
         return 2
     reuse_primary_build_token = reuse_raw in {"true", "1", "yes"}
+    secondary_raw = os.environ.get("SECONDARY_PRODUCTION_REUSE_PRIMARY_BUILD_TOKEN", "false").strip().lower()
+    if secondary_raw not in {"", "true", "false", "1", "0", "yes", "no"}:
+        print("ERROR: secondary_production_reuse_primary_build_token must be true or false.", file=sys.stderr)
+        return 2
+    reuse_secondary_production_token = secondary_raw in {"true", "1", "yes"}
     preview_inputs = (preview_uuid, preview_tag, preview_branch)
     if any(preview_inputs) and not all(preview_inputs):
         print("ERROR: preview_trigger_uuid, preview_worker_tag and preview_branch must be supplied together.", file=sys.stderr)
@@ -145,13 +162,14 @@ def main():
         print("ERROR: preview_commit_sha requires all preview trigger inputs.", file=sys.stderr)
         return 2
     if reuse_primary_build_token and not all(preview_inputs):
-        print("ERROR: reusing the primary build token requires an exact preview trigger UUID, Worker tag and branch.", file=sys.stderr)
+        print("ERROR: reusing the primary build token for preview requires an exact preview trigger UUID, Worker tag and branch.", file=sys.stderr)
         return 2
     if preview_sha and not re.fullmatch(r"[0-9a-fA-F]{40}", preview_sha):
         print("ERROR: preview_commit_sha must be a 40-character Git commit SHA.", file=sys.stderr)
         return 2
 
-    specs = list(PRODUCTION_TRIGGERS)
+    # Copy each spec before adding one-off opt-in settings so constants cannot be mutated across invocations.
+    specs = [dict(spec) for spec in PRODUCTION_TRIGGERS]
     if all(preview_inputs):
         specs.append(preview_spec(preview_tag, preview_uuid, preview_branch))
 
@@ -163,17 +181,29 @@ def main():
             trigger = validate_trigger(api_request(endpoint, token) or [], spec)
             current[spec["trigger_uuid"]] = trigger
 
-        # Optional, explicit recovery path: reuse the verified primary build token only on this preview trigger.
-        # The primary production trigger and secondary production trigger are preflighted above and are never patched.
+        # Both recovery options are explicit opt-ins. Resolve the known-good primary token once.
+        # Default behavior changes no token references. The secondary-production option is pinned to one test Worker identity.
+        primary_token_uuid = None
+        if reuse_primary_build_token or reuse_secondary_production_token:
+            token_records = api_request(f"/accounts/{ACCOUNT_ID}/builds/tokens", token) or []
+            primary_trigger = current[PRODUCTION_TRIGGERS[0]["trigger_uuid"]]
+            primary_token_uuid = resolve_primary_build_token(primary_trigger, token_records)
+            print("TOKEN VERIFIED: existing primary Worker build token UUID and name matched current Cloudflare token metadata.")
+
         if reuse_primary_build_token:
             preview = specs[-1]
             if preview.get("kind") != "preview":
                 raise ValueError("Token reuse can only target a non-production preview trigger")
-            token_records = api_request(f"/accounts/{ACCOUNT_ID}/builds/tokens", token) or []
-            primary_trigger = current[PRODUCTION_TRIGGERS[0]["trigger_uuid"]]
-            primary_token_uuid = resolve_primary_build_token(primary_trigger, token_records)
             preview["use_build_token_uuid"] = primary_token_uuid
-            print("TOKEN VERIFIED: reusing the existing primary Worker build token for this preview trigger only.")
+            print("OPT-IN: reusing the primary Worker token on this exact preview trigger only.")
+
+        if reuse_secondary_production_token:
+            secondary_spec = next((spec for spec in specs if spec.get("trigger_uuid") == SECONDARY_TEST_WORKER_TRIGGER_UUID), None)
+            if not secondary_spec or secondary_spec.get("name") != SECONDARY_TEST_WORKER_NAME or secondary_spec.get("tag") != SECONDARY_TEST_WORKER_TAG or secondary_spec.get("kind") != "production" or secondary_spec.get("branch") != "main":
+                raise ValueError("Secondary test Worker identity did not match the pinned name/tag/trigger/branch; refusing token update")
+            secondary_spec["use_build_token_uuid"] = primary_token_uuid
+            secondary_spec["allow_token_change"] = True
+            print("OPT-IN: the verified primary token may be attached to the secondary test Worker's main trigger only; the primary production trigger will not be changed.")
 
         # Apply only the explicitly expected fields; token changes are preview-only and opt-in.
         for spec in specs:
@@ -198,9 +228,14 @@ def main():
             if trigger.get("deploy_command") != spec["deploy_command"]:
                 raise RuntimeError(f"{spec['name']}: deploy command did not persist")
             if spec.get("use_build_token_uuid") and trigger.get("build_token_uuid") != spec["use_build_token_uuid"]:
-                raise RuntimeError(f"{spec['name']}: preview build token did not persist")
+                raise RuntimeError(f"{spec['name']}: opted-in build token UUID did not persist")
             verified[spec["trigger_uuid"]] = trigger
-            extra = " + verified preview token" if spec.get("use_build_token_uuid") else ""
+            if spec.get("use_build_token_uuid") and spec.get("kind") == "preview":
+                extra = " + verified preview token"
+            elif spec.get("use_build_token_uuid") and spec.get("allow_token_change") is True:
+                extra = " + verified secondary test-Worker token"
+            else:
+                extra = ""
             print(f"PASS: {spec['name']} verified ({spec['branch']} -> {spec['deploy_command']}{extra})")
 
         if preview_sha:
