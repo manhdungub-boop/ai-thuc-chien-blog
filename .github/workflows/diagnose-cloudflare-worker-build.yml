@@ -106,6 +106,18 @@ jobs:
           echo "## Cloudflare Worker name-to-tag mapping"
           jq -r '.result[] | select(.id == "ai-thuc-chien-blog" or .id == "ai-thuc-chien-blog-moi") | "Worker name: " + .id + " | tag: " + (.tag // "unknown")' "$tmp/workers.json"
 
+          echo
+          echo "## Association of this build UUID with each Worker's build history"
+          while IFS=$'\t' read -r worker_name worker_tag; do
+            [[ -n "$worker_name" && -n "$worker_tag" ]] || continue
+            fetch_json "${api}/workers/${worker_tag}/builds" "$tmp/history.json"
+            if jq -e --arg uuid "$BUILD_UUID" '[.result[]? | select(.build_uuid == $uuid)] | length > 0' "$tmp/history.json" >/dev/null; then
+              echo "Build UUID is listed under Worker: $worker_name"
+            else
+              echo "Build UUID is not listed under Worker: $worker_name"
+            fi
+          done < <(jq -r '.result[]? | select(.id == "ai-thuc-chien-blog" or .id == "ai-thuc-chien-blog-moi") | [.id, .tag] | @tsv' "$tmp/workers.json")
+
           fetch_json "${api}/workers/${WORKER_TAG}/triggers" "$tmp/triggers.json"
           echo
           echo "## Matching trigger configuration (secret values are not printed)"
