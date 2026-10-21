@@ -63,7 +63,8 @@ jobs:
             for (const [table, columns] of Object.entries(required)) {
               const definition = schema.get(table);
               if (!definition) { missing.push(table); continue; }
-              const absent = columns.filter(col => !new RegExp(`\\\\b${col}\\\\b`, 'i').test(definition));
+              const tokens = new Set(definition.toLowerCase().split(/[^a-z0-9_]+/));
+              const absent = columns.filter(col => !tokens.has(col.toLowerCase()));
               if (absent.length) missingColumns.push(`${table}: ${absent.join(', ')}`);
             }
             console.log('MISSING_TABLES:', missing.join(', ') || '(none)');
