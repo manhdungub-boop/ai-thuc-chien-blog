@@ -36,7 +36,7 @@ console.log('PASS: email verification routes, fail-closed configuration, UI cont
 
 
 // Execute the actual Apps Script relay in a sandbox with mocked Google services.
-const relayState = { secret: 'test-secret-that-is-at-least-32-characters', allowedHosts: 'ai-thuc-chien-blog.manhdungub.workers.dev,feature-required-email-verification-ai-thuc-chien-blog.workers.dev', remainingQuota: 10, sent: [] };
+const relayState = { secret: 'test-secret-that-is-at-least-32-characters', allowedHosts: 'ai-thuc-chien-blog.manhdungub.workers.dev,feature-required-email-verification-ai-thuc-chien-blog.manhdungub.workers.dev', remainingQuota: 10, sent: [] };
 const relaySandbox = {
   PropertiesService: { getScriptProperties: () => ({ getProperty: (key) => key === 'COMMUNITY_EMAIL_RELAY_SECRET' ? relayState.secret : (key === 'COMMUNITY_EMAIL_ALLOWED_HOSTS' ? relayState.allowedHosts : null) }) },
   ContentService: { MimeType: { JSON: 'application/json' }, createTextOutput: (content) => ({ content, setMimeType() { return this; } }) },
@@ -61,13 +61,13 @@ assert.deepEqual(relayCall(relayPayload), { ok: true });
 assert.equal(relayState.sent.length, 1);
 assert.equal(relayState.sent[0].to, 'member@example.test');
 assert.equal(relayState.sent[0].htmlBody, relayPayload.htmlBody);
-const previewUrlPayload = { ...relayPayload, verifyUrl: 'https://feature-required-email-verification-ai-thuc-chien-blog.workers.dev/?verify=abcdefghijklmnopqrstuvwxyz0123456789_AB-cd#cong-dong' };
+const previewUrlPayload = { ...relayPayload, verifyUrl: 'https://feature-required-email-verification-ai-thuc-chien-blog.manhdungub.workers.dev/?verify=abcdefghijklmnopqrstuvwxyz0123456789_AB-cd#cong-dong' };
 assert.deepEqual(relayCall(previewUrlPayload), { ok: true }, 'configured staging hostname should be allowed before production release');
 assert.equal(relayState.sent.length, 2);
 relayState.allowedHosts = 'ai-thuc-chien-blog.manhdungub.workers.dev';
 assert.equal(relayCall(previewUrlPayload).code, 'INVALID_MESSAGE', 'preview hostname must be removed before production release');
 assert.equal(relayState.sent.length, 2);
-relayState.allowedHosts = 'ai-thuc-chien-blog.manhdungub.workers.dev,feature-required-email-verification-ai-thuc-chien-blog.workers.dev';
+relayState.allowedHosts = 'ai-thuc-chien-blog.manhdungub.workers.dev,feature-required-email-verification-ai-thuc-chien-blog.manhdungub.workers.dev';
 relayState.remainingQuota = 0;
 assert.equal(relayCall(relayPayload).code, 'DAILY_QUOTA_EXHAUSTED');
 assert.equal(relayState.sent.length, 2, 'exhausted quota must not send email');

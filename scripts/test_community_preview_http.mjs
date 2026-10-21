@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 const configured = String(process.env.PREVIEW_URL || '');
 if (!configured) throw new Error('PREVIEW_URL is required.');
 const base = new URL(configured);
-const expectedHost = 'feature-required-email-verification-ai-thuc-chien-blog.workers.dev';
+const expectedHost = 'feature-required-email-verification-ai-thuc-chien-blog.manhdungub.workers.dev';
 if (base.protocol !== 'https:' || base.hostname !== expectedHost || base.pathname !== '/' || base.search || base.hash) {
   throw new Error('Safety stop: this smoke test only targets the expected feature Preview hostname.');
 }
