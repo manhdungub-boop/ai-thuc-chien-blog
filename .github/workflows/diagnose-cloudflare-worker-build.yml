@@ -46,7 +46,7 @@ jobs:
           fi
           echo "::add-mask::$CF_API_TOKEN"
 
-      - name: Fetch build metadata, trigger configuration and logs (read-only)
+      - name: Fetch build metadata, Worker name mapping, trigger and logs (read-only)
         shell: bash
         env:
           BUILD_UUID: ${{ inputs.build_uuid }}
@@ -56,6 +56,7 @@ jobs:
           set -euo pipefail
           account_id="92cf091bbac8b4879ec65feb30b4715b"
           api="https://api.cloudflare.com/client/v4/accounts/${account_id}/builds"
+          worker_api="https://api.cloudflare.com/client/v4/accounts/${account_id}/workers/scripts"
           tmp="$(mktemp -d)"
           trap 'rm -rf "$tmp"' EXIT
 
@@ -69,7 +70,7 @@ jobs:
             if [[ "$status" -lt 200 || "$status" -ge 300 ]] || ! jq -e '.success == true' "$out" >/dev/null; then
               echo "::error::Cloudflare API request failed (HTTP $status)."
               jq -r '(.errors[]?.message // empty), (.messages[]? // empty)' "$out" 2>/dev/null || true
-              echo "Ensure this is a user-scoped token with Workers CI: Read (or Workers CI: Write) and Workers Builds Configuration: Read access."
+              echo "Use a user-scoped token with Workers CI: Read/Write, Workers Builds Configuration: Read/Edit, and Workers Scripts: Read permissions as needed."
               exit 1
             fi
           }
@@ -87,6 +88,11 @@ jobs:
             "Created: " + (.result.created_on // .result.created_at // "unknown"),
             "Updated: " + (.result.modified_on // .result.updated_at // "unknown")
           ' "$tmp/build.json"
+
+          fetch_json "$worker_api" "$tmp/workers.json"
+          echo
+          echo "## Cloudflare Worker name-to-tag mapping"
+          jq -r '.result[] | select(.id == "ai-thuc-chien-blog" or .id == "ai-thuc-chien-blog-moi") | "Worker name: " + .id + " | tag: " + (.tag // "unknown")' "$tmp/workers.json"
 
           fetch_json "${api}/workers/${WORKER_TAG}/triggers" "$tmp/triggers.json"
           echo
