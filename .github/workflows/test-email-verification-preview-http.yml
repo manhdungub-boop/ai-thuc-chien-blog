@@ -30,5 +30,5 @@ jobs:
         run: node --check scripts/test_community_preview_http.mjs
       - name: Smoke-test Preview endpoints and CORS (read-only)
         env:
-          PREVIEW_URL: ${{ inputs.preview_url }}
+          PREVIEW_URL: ${{ inputs.preview_url || 'https://feature-required-email-verification-ai-thuc-chien-blog.workers.dev' }}
         run: node scripts/test_community_preview_http.mjs
