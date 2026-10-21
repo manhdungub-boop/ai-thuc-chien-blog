@@ -7,7 +7,7 @@ const frontend = fs.readFileSync(new URL('../script.js', import.meta.url), 'utf8
 const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const migration = fs.readFileSync(new URL('../migrations/0002_email_verification.sql', import.meta.url), 'utf8');
 assert.match(worker, /COMMUNITY_VERIFICATION_SECONDS = 30 \* 60/);
-assert.match(worker, /RESEND_API_KEY/);
+assert.match(worker, /SMTP2GO_API_KEY/);
 assert.match(worker, /COMMUNITY_EMAIL_FROM/);
 assert.match(worker, /route === "verify-email"/);
 assert.match(worker, /route === "resend-verification"/);

@@ -34,15 +34,15 @@ python3 scripts/test_community_schema.py
 
 ## Required email verification
 
-New registrations remain pending until the member confirms the one-time link sent through Resend. Links expire after 30 minutes; only a SHA-256 hash of each random token is stored in D1. Existing accounts are grandfathered as verified by migration `0002_email_verification.sql` so this feature does not lock out current members.
+New registrations remain pending until the member confirms the one-time link sent through SMTP2GO. Links expire after 30 minutes; only a SHA-256 hash of each random token is stored in D1. Existing accounts are grandfathered as verified by migration `0002_email_verification.sql` so this feature does not lock out current members.
 
-### Free-first setup
+### Free-first setup (SMTP2GO)
 
-1. Create a free Resend account: https://resend.com/signup (current free plan: 3,000 transactional emails/month, 100/day).
-2. Add a domain you own in Resend and publish the exact SPF/DKIM records it supplies in that domain's DNS. A `workers.dev` hostname is not a sender domain you own.
-3. Verify the domain in Resend and choose a sender such as `AI Thực Chiến <no-reply@your-domain.example>` using your real verified domain.
-4. Create a restricted sending API key and add it to the Cloudflare Worker as secret `RESEND_API_KEY`. Set `COMMUNITY_EMAIL_FROM` to the verified sender address (a non-secret Worker variable is suitable). Never commit either value to Git.
-5. Apply `migrations/0002_email_verification.sql` separately to the production and preview D1 databases before deploying the Worker code.
-6. Verify sending and receiving to a real inbox on a staging deployment before enabling the feature in production.
+1. Create a free SMTP2GO account: https://www.smtp2go.com/ (free plan: 1,000 emails/month and 200/day; without a verified sender domain, the account is limited to 25 emails/hour).
+2. Open **Sending → Verified Senders → Single sender emails** and try to verify an email address you control. SMTP2GO sends a confirmation link to that inbox. No custom domain is needed if the provider accepts that sender address.
+3. Important limitation: SMTP2GO does not permit single-sender verification when the sender's domain has DMARC configured, and a single-sender identity does not align SPF/DKIM, so delivery to spam or quarantine is more likely. If your existing mailbox is rejected under this rule, there is no safe guarantee of reliable, arbitrary-recipient sending without a sender domain; do not spoof `gmail.com`/`outlook.com`. Use a domain you control (potentially a no-cost subdomain only if its DNS supports the required records and SMTP2GO accepts it), or postpone production enforcement until a valid sender is available.
+4. Create a restricted SMTP2GO API key and add it to the Cloudflare Worker as secret `SMTP2GO_API_KEY`. Set `COMMUNITY_EMAIL_FROM` to the exact verified sender address (a non-secret Worker variable is suitable). Never commit either value to Git.
+5. Apply `migrations/0002_email_verification.sql` separately to production and preview D1 databases before deploying Worker code.
+6. Verify that a message reaches a real inbox (including spam-folder checks) on a staging deployment before enabling email verification in production.
 
-If either `RESEND_API_KEY` or `COMMUNITY_EMAIL_FROM` is absent, new registration fails closed with HTTP 503 and no pending account is left behind. Resend requests use the same generic public response for known and unknown email addresses.
+If either `SMTP2GO_API_KEY` or `COMMUNITY_EMAIL_FROM` is absent, registration fails closed with HTTP 503 and no pending account is left behind. Verification resend requests use the same generic public response for known and unknown email addresses.

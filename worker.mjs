@@ -293,22 +293,33 @@ function escapeCommunityHtml(value) {
   return String(value || "").replace(/[&<>\"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[char]);
 }
 async function sendCommunityVerificationEmail(env, email, displayName, token, origin) {
-  if (!env.RESEND_API_KEY || !env.COMMUNITY_EMAIL_FROM) throw new Error("Email verification sender is not configured");
+  if (!env.SMTP2GO_API_KEY || !env.COMMUNITY_EMAIL_FROM) throw new Error("Email verification sender is not configured");
   const verifyUrl = `${origin}/?verify=${encodeURIComponent(token)}#cong-dong`;
   const safeName = escapeCommunityHtml(displayName || "bạn");
   const safeUrl = escapeCommunityHtml(verifyUrl);
-  const response = await fetch("https://api.resend.com/emails", {
+  const response = await fetch("https://api.smtp2go.com/v3/email/send", {
     method: "POST",
-    headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+    headers: {
+      "X-Smtp2go-Api-Key": env.SMTP2GO_API_KEY,
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+    },
     body: JSON.stringify({
-      from: env.COMMUNITY_EMAIL_FROM,
+      sender: env.COMMUNITY_EMAIL_FROM,
       to: [email],
       subject: "Xác nhận email — AI Thực Chiến",
-      html: `<div style="font-family:Arial,sans-serif;line-height:1.65;color:#172033;max-width:560px;margin:auto"><h1>Xác nhận email của bạn</h1><p>Chào ${safeName},</p><p>Để hoàn tất đăng ký cộng đồng AI Thực Chiến, hãy bấm nút bên dưới. Liên kết chỉ có hiệu lực trong 30 phút và chỉ dùng một lần.</p><p><a href="${safeUrl}" style="display:inline-block;padding:12px 20px;background:#85efd0;color:#092a2c;border-radius:8px;text-decoration:none;font-weight:bold">Xác nhận email</a></p><p>Nếu nút không hoạt động, sao chép liên kết này vào trình duyệt:</p><p style="overflow-wrap:anywhere">${safeUrl}</p><p>Nếu bạn không yêu cầu đăng ký, hãy bỏ qua email này.</p></div>`,
-      text: `Chào ${displayName || "bạn"}. Xác nhận email để hoàn tất đăng ký AI Thực Chiến bằng liên kết sau (hết hạn sau 30 phút): ${verifyUrl}. Nếu bạn không yêu cầu đăng ký, hãy bỏ qua email này.`,
+      html_body: `<div style="font-family:Arial,sans-serif;line-height:1.65;color:#172033;max-width:560px;margin:auto"><h1>Xác nhận email của bạn</h1><p>Chào ${safeName},</p><p>Để hoàn tất đăng ký cộng đồng AI Thực Chiến, hãy bấm nút bên dưới. Liên kết chỉ có hiệu lực trong 30 phút và chỉ dùng một lần.</p><p><a href="${safeUrl}" style="display:inline-block;padding:12px 20px;background:#85efd0;color:#092a2c;border-radius:8px;text-decoration:none;font-weight:bold">Xác nhận email</a></p><p>Nếu nút không hoạt động, sao chép liên kết này vào trình duyệt:</p><p style="overflow-wrap:anywhere">${safeUrl}</p><p>Nếu bạn không yêu cầu đăng ký, hãy bỏ qua email này.</p></div>`,
+      text_body: `Chào ${displayName || "bạn"}. Xác nhận email để hoàn tất đăng ký AI Thực Chiến bằng liên kết sau (hết hạn sau 30 phút): ${verifyUrl}. Nếu bạn không yêu cầu đăng ký, hãy bỏ qua email này.`,
     }),
   });
-  if (!response.ok) throw new Error(`Email provider rejected the message (HTTP ${response.status})`);
+  let result = {};
+  try { result = await response.json(); } catch { throw new Error(`Email provider returned invalid JSON (HTTP ${response.status})`); }
+  // SMTP2GO may return HTTP 200 even if the message was rejected; inspect its result counts too.
+  const succeeded = Number(result?.data?.succeeded || 0);
+  const failed = Number(result?.data?.failed || 0);
+  if (!response.ok || failed > 0 || succeeded < 1) {
+    throw new Error(`Email provider rejected the message (HTTP ${response.status})`);
+  }
 }
 async function createCommunityVerificationToken(db, memberId) {
   await db.prepare("DELETE FROM community_email_verification_tokens WHERE member_id = ?").bind(memberId).run();
@@ -347,7 +358,7 @@ async function handleCommunityApi(request, env) {
       if (displayName.length < 2 || displayName.length > 40) return communityJson({ error: "Tên hiển thị cần từ 2 đến 40 ký tự." }, 400, request);
       if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return communityJson({ error: "Vui lòng nhập email hợp lệ." }, 400, request);
       if (password.length < 10 || password.length > 128) return communityJson({ error: "Mật khẩu cần từ 10 đến 128 ký tự." }, 400, request);
-      if (!env.RESEND_API_KEY || !env.COMMUNITY_EMAIL_FROM) return communityJson({ error: "Chức năng xác nhận email chưa được cấu hình. Vui lòng thử lại sau." }, 503, request);
+      if (!env.SMTP2GO_API_KEY || !env.COMMUNITY_EMAIL_FROM) return communityJson({ error: "Chức năng xác nhận email chưa được cấu hình. Vui lòng thử lại sau." }, 503, request);
       const ipHash = await sha256Base64Url(ip);
       if (!await communityRateLimit(db, `register:${ipHash}`, 5, 60 * 60 * 1000)) return communityJson({ error: "Bạn đã thử đăng ký quá nhiều lần. Vui lòng thử lại sau một giờ." }, 429, request);
       const salt = crypto.getRandomValues(new Uint8Array(16));
@@ -402,7 +413,7 @@ async function handleCommunityApi(request, env) {
       // Always use the same public response to avoid exposing which email addresses have accounts.
       const generic = { ok: true, message: "Nếu email này có tài khoản đang chờ xác nhận, chúng tôi sẽ gửi liên kết mới." };
       if (!member || member.email_verified_at) return communityJson(generic, 200, request);
-      if (!env.RESEND_API_KEY || !env.COMMUNITY_EMAIL_FROM) return communityJson({ error: "Chức năng gửi email chưa được cấu hình. Vui lòng thử lại sau." }, 503, request);
+      if (!env.SMTP2GO_API_KEY || !env.COMMUNITY_EMAIL_FROM) return communityJson({ error: "Chức năng gửi email chưa được cấu hình. Vui lòng thử lại sau." }, 503, request);
       try {
         const token = await createCommunityVerificationToken(db, member.id);
         await sendCommunityVerificationEmail(env, member.email, member.display_name, token, new URL(request.url).origin);
