@@ -11,19 +11,7 @@
 <meta property="og:description" content="Từ bản ghi mới đến bản nháp AI chờ con người duyệt: thiết kế các trạng thái, bộ lọc, kiểm thử và hàng rào an toàn.">
 <meta property="og:url" content="https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/workflow-ai-airtable-activepieces">
 <meta name="twitter:card" content="summary"><meta name="twitter:title" content="Workflow AI có kiểm duyệt với Airtable và Activepieces"><meta name="twitter:description" content="Thiết kế quy trình tạo bản nháp AI có người duyệt, không tự đăng khi chưa được phê duyệt.">
-<script type="application/ld+json">
-{
-  "@context":"https://schema.org",
-  "@type":"BlogPosting",
-  "headline":"Xây dựng workflow AI có kiểm duyệt với Airtable và Activepieces",
-  "description":"Hướng dẫn thiết kế workflow nội dung AI có trạng thái chờ duyệt, chống chạy lặp và kiểm soát trước khi đăng.",
-  "url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/workflow-ai-airtable-activepieces",
-  "mainEntityOfPage":{"@type":"WebPage","@id":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/workflow-ai-airtable-activepieces"},
-  "datePublished":"2026-10-18","dateModified":"2026-10-18","inLanguage":"vi-VN","articleSection":"Tự động hóa",
-  "author":{"@type":"Organization","name":"AI Thực Chiến","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/"},
-  "publisher":{"@type":"Organization","name":"AI Thực Chiến","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/"}
-}
-</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Xây dựng workflow AI có kiểm duyệt với Airtable và Activepieces","description":"Hướng dẫn thiết kế workflow nội dung AI có trạng thái chờ duyệt, chống chạy lặp và kiểm soát trước khi đăng.","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/workflow-ai-airtable-activepieces","mainEntityOfPage":{"@type":"WebPage","@id":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/workflow-ai-airtable-activepieces"},"datePublished":"2026-10-18","dateModified":"2026-10-21","inLanguage":"vi-VN","articleSection":"Tự động hóa","author":{"@type":"Organization","name":"AI Thực Chiến","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/"},"publisher":{"@type":"Organization","name":"AI Thực Chiến","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/"}}</script>
 <title>Xây dựng workflow AI có kiểm duyệt với Airtable và Activepieces | AI Thực Chiến</title>
 <link rel="alternate" type="application/rss+xml" title="AI Thực Chiến RSS" href="../feed.xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -40,7 +28,7 @@
 <div class="section-kicker">TỰ ĐỘNG HÓA · QUY TRÌNH CÓ KIỂM DUYỆT</div>
 <h1 style="font-size:clamp(32px,5vw,54px);line-height:1.2;letter-spacing:-1.6px;margin:18px 0">Xây dựng workflow AI có kiểm duyệt với Airtable và Activepieces</h1>
 <p style="color:var(--muted);font-size:15px;line-height:1.9">Cách thực tế để biến ý tưởng thành bản nháp có cấu trúc mà vẫn giữ quyền quyết định ở con người. Quy trình khởi đầu chỉ tạo bản nháp và cập nhật trạng thái; không tự đăng hoặc gửi tin nhắn.</p>
-<p style="font-size:12px;color:#8993ab">Cập nhật ngày <time datetime="2026-10-18">18/10/2026</time> · Thời gian đọc khoảng 8 phút</p>
+<p style="font-size:12px;color:#8993ab">Cập nhật ngày <time datetime="2026-10-21">21/10/2026</time> · Thời gian đọc khoảng 8 phút</p>
 
 <h2 style="margin-top:36px">1. Kiến trúc đơn giản, dễ kiểm tra</h2>
 <p>Dùng Airtable làm nơi lưu dữ liệu và trạng thái; dùng Activepieces để nối các bước; dùng mô hình AI để tạo bản nháp; dùng người duyệt để quyết định bước tiếp theo. Đây là một kiến trúc tham khảo, không phải xác nhận rằng mọi tài khoản hoặc gói dịch vụ đều có cùng trigger, piece hay giới hạn.</p>
@@ -108,6 +96,11 @@
 </ol>
 <p>Đo kết quả bằng các chỉ số đơn giản: số bản nháp tạo được, tỷ lệ cần sửa, lỗi flow, thời gian từ MỚI đến CHỜ DUYỆT và số lần xử lý trùng. Không suy ra doanh thu hay hiệu quả kinh doanh chỉ từ số lần flow chạy thành công.</p>
 
+
+<h2 style="margin-top:36px">Mẫu sơ đồ trạng thái để chạy an toàn</h2>
+<p>Luồng tạo bản nháp chỉ nhận bản ghi ở trạng thái MỚI, kiểm tra các trường cần thiết, đánh dấu ĐANG XỬ LÝ rồi mới gọi AI. Nếu dữ liệu thiếu, chuyển sang CẦN BỔ SUNG; nếu connector lỗi, ghi LỖI và lưu mã công việc để điều tra. Khi bản nháp được lưu đầy đủ, chuyển sang CHỜ DUYỆT. Không cho luồng này tự đổi sang ĐÃ DUYỆT hoặc ĐÃ ĐĂNG.</p>
+<p>Trước khi thử, xác minh trigger theo dõi đúng base và table, đúng điều kiện tạo/sửa bản ghi, và đúng định dạng trường mà bước kế tiếp nhận được. Tạo một bản ghi thử, chỉnh trường trạng thái rồi quan sát xem trigger chạy khi nào. Nếu nền tảng có thể gửi cùng sự kiện nhiều lần, đặt mã idempotency từ ID bản ghi và phiên bản nội dung, sau đó kiểm tra mã ấy trước khi tạo đầu ra.</p>
+<p>Luồng đăng về sau phải là luồng riêng, kiểm tra ngay trước thực thi rằng trạng thái vẫn là ĐÃ DUYỆT, văn bản cuối khớp bản đã duyệt và tài khoản đích chính xác. Sau khi nền tảng trả xác nhận, lưu URL công khai và mới chuyển sang ĐÃ ĐĂNG. Nếu phản hồi không rõ ràng hoặc timeout, đặt trạng thái cần kiểm tra thay vì tự chạy lại hành động có thể tạo bài trùng.</p>
 <h2 style="margin-top:36px">Nguồn tham khảo</h2>
 <ul style="padding-left:24px;line-height:2">
 <li><a href="https://support.airtable.com/articles/3669392397-getting-started-with-airtable-automations" target="_blank" rel="noopener noreferrer" style="color:var(--mint);text-decoration:underline">Airtable Support — Getting started with Airtable automations</a>: khái niệm trigger và action cùng các lưu ý thiết lập.</li>

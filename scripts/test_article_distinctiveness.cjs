@@ -47,11 +47,23 @@ const slugs = [
   'nghien-cuu-web-co-nguon-voi-ai',
   'phan-tich-du-lieu-bang-ai',
   'so-sanh-goi-mien-phi-ai',
+  'ban-do-cong-cu-blog-ai',
+  'bat-dau-voi-ai',
+  'bien-y-tuong-thanh-noi-dung-da-kenh',
+  'do-luong-hieu-qua-blog',
+  'do-luong-hieu-qua-workflow-ai',
+  'kiem-chung-noi-dung-ai',
+  'kiem-tra-json-dau-ra-ai-truoc-khi-tu-dong-hoa',
+  'seo-ky-thuat-blog-moi',
+  'workflow-ai-airtable-activepieces',
+  'xay-dung-kho-tri-thuc-ai-co-nguon',
+  'viet-prompt-ai-hieu-qua',
+  'nhan-biet-prompt-injection-ai',
 ];
 function coreTokens(slug) {
   const source = fs.readFileSync(path.join(root, 'articles', `${slug}.html`), 'utf8');
   const h1End = source.indexOf('</h1>');
-  const sourcesHeading = /<h2\b[^>]*>\s*Nguồn tham khảo chính thức\s*<\/h2\s*>/i.exec(source);
+  const sourcesHeading = /<h2\b[^>]*>\s*(?:Nguồn(?:\s+tham\s+khảo(?:\s+chính\s+thức)?|\s+chính\s+thức(?:\s+(?:để\s+)?(?:tra\s+cứu|đọc\s+sâu\s+hơn|đọc\s+thêm))?|\s+để\s+tra\s+cứu)|Tài\s+liệu(?:\s+chính\s+thức)?\s+tham\s+khảo)\s*<\/h2\s*>/i.exec(source);
   const sourceStart = sourcesHeading ? sourcesHeading.index : -1;
   assert.ok(h1End >= 0, `${slug}: H1 not found`);
   assert.ok(sourceStart > h1End, `${slug}: article sources section not found after H1`);
