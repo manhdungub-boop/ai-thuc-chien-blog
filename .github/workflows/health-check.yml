@@ -43,7 +43,7 @@ jobs:
         run: node scripts/test_d1_preview_config.cjs
 
       - name: Verify configured production and preview D1 databases (read-only API)
-        if: github.event_name != 'pull_request'
+        if: github.event_name == 'workflow_run' || github.event_name == 'workflow_dispatch'
         env:
           CLOUDFLARE_WORKERS_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 92cf091bbac8b4879ec65feb30b4715b
