@@ -53,4 +53,25 @@ const badMessage = await call('/messages', { method: 'POST', cookie, body: { top
 const login = await call('/login', { method: 'POST', body: { email: 'member@example.com', password: 'MotMatKhauRieng123!' } }); assert.equal(login.status, 200); assert.equal((await login.json()).member.username, 'thanhvien_1');
 const wrongPassword = await call('/login', { method: 'POST', body: { email: 'member@example.com', password: 'sai-mat-khau' } }); assert.equal(wrongPassword.status, 401);
 const logout = await call('/logout', { method: 'POST', cookie }); assert.equal(logout.status, 200); assert.match(logout.headers.get('set-cookie'), /Max-Age=0/);
+const failingDb = {
+  prepare(sql) {
+    return {
+      bind() { return this; },
+      async run() { throw new Error('no such table: community_rate_limits'); },
+      async first() { throw new Error('no such table: community_rate_limits'); },
+      async all() { throw new Error('no such table: community_rate_limits'); },
+    };
+  },
+};
+const failedRegister = await worker.fetch(new Request('https://example.test/api/community/register', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', Origin: origin, 'CF-Connecting-IP': '198.51.100.78' },
+  body: JSON.stringify({ username: 'debug_member', displayName: 'Debug Member', email: 'debug@example.invalid', password: 'TestPassword123!' }),
+}), { DB: failingDb, ASSETS: env.ASSETS });
+assert.equal(failedRegister.status, 500);
+const failedPayload = await failedRegister.json();
+assert.equal(failedPayload.errorCode, 'D1_TABLE_MISSING');
+assert.ok(failedPayload.errorId);
+assert.doesNotMatch(failedPayload.error, /no such table|community_rate_limits/i, 'raw schema details must not be exposed to visitors');
+
 console.log('PASS: community registration, PBKDF2 login, HttpOnly/Secure cookie, session lookup/logout, topic-specific messages, validation, origin protection, and missing-DB behavior');
