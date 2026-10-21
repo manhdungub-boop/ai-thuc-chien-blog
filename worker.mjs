@@ -187,6 +187,16 @@ const COMMUNITY_ALLOWED_ORIGINS = new Set([
   "https://ai-thuc-chien-blog.manhdungub.workers.dev",
   "https://ai-thuc-chien-blog.pages.dev",
 ]);
+function isCommunityOriginAllowed(request) {
+  const origin = request.headers.get("Origin");
+  if (!origin) return true;
+  if (COMMUNITY_ALLOWED_ORIGINS.has(origin)) return true;
+  try {
+    return origin === new URL(request.url).origin;
+  } catch (_error) {
+    return false;
+  }
+}
 const COMMUNITY_TOPICS = Object.freeze({
   tools: "Công cụ AI",
   automation: "Tự động hóa",
@@ -208,7 +218,7 @@ function communityJson(data, status, request, extraHeaders = {}) {
     ...extraHeaders,
   });
   const origin = request.headers.get("Origin");
-  if (origin && COMMUNITY_ALLOWED_ORIGINS.has(origin)) {
+  if (origin && isCommunityOriginAllowed(request)) {
     headers.set("Access-Control-Allow-Origin", origin);
     headers.set("Access-Control-Allow-Credentials", "true");
     headers.set("Vary", "Origin");
@@ -332,7 +342,7 @@ async function createCommunityVerificationToken(db, memberId) {
 
 async function handleCommunityApi(request, env) {
   const origin = request.headers.get("Origin");
-  if (origin && !COMMUNITY_ALLOWED_ORIGINS.has(origin)) return communityJson({ error: "Nguồn yêu cầu không được phép." }, 403, request);
+  if (origin && !isCommunityOriginAllowed(request)) return communityJson({ error: "Nguồn yêu cầu không được phép." }, 403, request);
   if (request.method === "OPTIONS") return communityJson({ ok: true }, 200, request);
   if (!env.DB || typeof env.DB.prepare !== "function") {
     return communityJson({ error: "Cộng đồng chưa được cấu hình cơ sở dữ liệu. Quản trị viên cần hoàn tất thiết lập D1." }, 503, request);

@@ -59,6 +59,11 @@ globalThis.fetch = async (input, init = {}) => { if (String(input) === 'https://
 const call = (path, { method = 'GET', body, cookie, originHeader = origin } = {}) => worker.fetch(new Request(`https://example.test/api/community${path}`, { method, headers: { ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(cookie ? { Cookie: cookie } : {}), ...(originHeader ? { Origin: originHeader } : {}), 'CF-Connecting-IP': '198.51.100.77' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }), env);
 const unconfigured = await worker.fetch(new Request('https://example.test/api/community/me'), {}); assert.equal(unconfigured.status, 503); assert.match((await unconfigured.json()).error, /cơ sở dữ liệu/i);
 const badOrigin = await call('/register', { method: 'POST', originHeader: 'https://evil.example', body: {} }); assert.equal(badOrigin.status, 403);
+const previewOrigin = 'https://feature-required-email-verification-ai-thuc-chien-blog.workers.dev';
+const previewSameOriginResponse = await worker.fetch(new Request(`${previewOrigin}/api/community/me`, { headers: { Origin: previewOrigin } }), env);
+assert.equal(previewSameOriginResponse.status, 200, 'same-origin Preview API calls should be accepted');
+assert.equal(previewSameOriginResponse.headers.get('Access-Control-Allow-Origin'), previewOrigin);
+
 const invalidRegister = await call('/register', { method: 'POST', body: { username: 'x', displayName: 'X', email: 'bad', password: 'short' } }); assert.equal(invalidRegister.status, 400);
 const nullPayload = await call('/register', { method: 'POST', body: null }); assert.equal(nullPayload.status, 400);
 
