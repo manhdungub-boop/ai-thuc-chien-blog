@@ -11,11 +11,24 @@ const slugs = [
   'thiet-ke-workflow-co-diem-khoi-phuc',
   'kiem-chung-anh-va-noi-dung-ai-truoc-khi-dang',
   'kiem-chung-y-tuong-kiem-tien-ai-bang-thu-nghiem-nho',
+  'activepieces-trigger-va-action',
+  'ket-noi-api-webhook-an-toan',
+  'airtable-lam-kho-du-lieu-workflow',
+  'chong-trung-va-idempotency-workflow',
+  'human-in-the-loop-trong-workflow',
+  'xu-ly-loi-retry-workflow',
+  'kiem-tra-chat-luong-bai-truoc-dang',
+  'lap-dan-y-bai-viet-chuyen-sau',
+  'seo-noi-dung-huu-ich',
+  'tao-anh-ai-co-brief',
+  'kiem-tra-ban-quyen-noi-dung-ai',
+  'lich-bien-tap-va-xuat-ban',
 ];
 function coreTokens(slug) {
   const source = fs.readFileSync(path.join(root, 'articles', `${slug}.html`), 'utf8');
   const h1End = source.indexOf('</h1>');
-  const sourceStart = source.indexOf('<section><h2>Nguồn tham khảo chính thức</h2>');
+  const sourcesHeading = /<h2\b[^>]*>\s*Nguồn tham khảo chính thức\s*<\/h2\s*>/i.exec(source);
+  const sourceStart = sourcesHeading ? sourcesHeading.index : -1;
   assert.ok(h1End >= 0, `${slug}: H1 not found`);
   assert.ok(sourceStart > h1End, `${slug}: article sources section not found after H1`);
   let core = source.slice(h1End + 5, sourceStart)
@@ -45,7 +58,7 @@ for (let i = 0; i < slugs.length; i++) {
     const union = a.size + b.size - intersection;
     const score = union ? intersection / union : 0;
     if (score > max) { max = score; maxPair = `${slugs[i]} <> ${slugs[j]}`; }
-    assert.ok(score < 0.30, `priority article cores are too similar (${score.toFixed(3)}): ${slugs[i]} <> ${slugs[j]}`);
+    assert.ok(score < 0.30, `article cores are too similar (${score.toFixed(3)}): ${slugs[i]} <> ${slugs[j]}`);
   }
 }
-console.log(`ARTICLE DISTINCTIVENESS PASS: ${slugs.length} priority articles; max 5-gram Jaccard ${max.toFixed(3)} (${maxPair || 'no pair'})`);
+console.log(`ARTICLE DISTINCTIVENESS PASS: ${slugs.length} targeted articles; max 5-gram Jaccard ${max.toFixed(3)} (${maxPair || 'no pair'})`);
