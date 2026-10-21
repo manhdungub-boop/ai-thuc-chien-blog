@@ -62,15 +62,19 @@ const badOrigin = await call('/register', { method: 'POST', originHeader: 'https
 const invalidRegister = await call('/register', { method: 'POST', body: { username: 'x', displayName: 'X', email: 'bad', password: 'short' } }); assert.equal(invalidRegister.status, 400);
 const nullPayload = await call('/register', { method: 'POST', body: null }); assert.equal(nullPayload.status, 400);
 const registered = await call('/register', { method: 'POST', body: { username: 'thanhvien_1', displayName: 'Thành viên thử', email: 'member@example.com', password: 'MotMatKhauRieng123!' } }); assert.equal(registered.status, 201);
-const registeredPayload = await registered.json(); assert.equal(registeredPayload.member.username, 'thanhvien_1'); assert.equal(JSON.stringify(registeredPayload).includes('MotMatKhauRieng123!'), false);
-const setCookie = registered.headers.get('set-cookie'); assert.match(setCookie, /HttpOnly/); assert.match(setCookie, /Secure/); assert.match(setCookie, /SameSite=Lax/); assert.match(setCookie, /Path=\//); const cookie = setCookie.split(';')[0];
+const registeredPayload = await registered.json(); assert.equal(registeredPayload.verificationRequired, true); assert.equal(JSON.stringify(registeredPayload).includes('MotMatKhauRieng123!'), false); assert.equal(registered.headers.get('set-cookie'), null); assert.ok(capturedEmail); assert.equal(capturedEmail.to[0], 'member@example.com');
+const loginBeforeVerification = await call('/login', { method: 'POST', body: { email: 'member@example.com', password: 'MotMatKhauRieng123!' } }); assert.equal(loginBeforeVerification.status, 403); assert.equal((await loginBeforeVerification.json()).code, 'EMAIL_NOT_VERIFIED');
+const tokenMatch = capturedEmail.html.match(/[?]verify=([A-Za-z0-9_-]{32,80})/); assert.ok(tokenMatch, 'verification email must contain a random one-time token'); const verify = await call('/verify-email', { method: 'POST', body: { token: tokenMatch[1] } }); assert.equal(verify.status, 200); assert.equal((await verify.json()).ok, true); assert.equal(db.tokens.length, 0);
+const replay = await call('/verify-email', { method: 'POST', body: { token: tokenMatch[1] } }); assert.equal(replay.status, 400, 'verification tokens must be single-use');
+const login = await call('/login', { method: 'POST', body: { email: 'member@example.com', password: 'MotMatKhauRieng123!' } }); assert.equal(login.status, 200); assert.equal((await login.json()).member.username, 'thanhvien_1');
+const setCookie = login.headers.get('set-cookie'); assert.match(setCookie, /HttpOnly/); assert.match(setCookie, /Secure/); assert.match(setCookie, /SameSite=Lax/); assert.match(setCookie, /Path=\//); const cookie = setCookie.split(';')[0];
 const me = await call('/me', { cookie }); assert.equal(me.status, 200); assert.equal((await me.json()).member.username, 'thanhvien_1');
 const sent = await call('/messages', { method: 'POST', cookie, body: { topic: 'automation', body: 'Tôi đang thử một workflow có bước duyệt.' } }); assert.equal(sent.status, 201); assert.equal((await sent.json()).message.topic, 'automation');
 const listed = await call('/messages?topic=automation', { cookie }); assert.equal(listed.status, 200); const listedPayload = await listed.json(); assert.equal(listedPayload.messages.length, 1); assert.equal(listedPayload.messages[0].own, true);
 const removed = await call(`/messages/${listedPayload.messages[0].id}`, { method: 'DELETE', cookie }); assert.equal(removed.status, 200); assert.equal(db.messages.length, 0);
 const badTopic = await call('/messages?topic=unknown', { cookie }); assert.equal(badTopic.status, 400);
 const badMessage = await call('/messages', { method: 'POST', cookie, body: { topic: 'tools', body: '   ' } }); assert.equal(badMessage.status, 400);
-const login = await call('/login', { method: 'POST', body: { email: 'member@example.com', password: 'MotMatKhauRieng123!' } }); assert.equal(login.status, 200); assert.equal((await login.json()).member.username, 'thanhvien_1');
+
 const wrongPassword = await call('/login', { method: 'POST', body: { email: 'member@example.com', password: 'sai-mat-khau' } }); assert.equal(wrongPassword.status, 401);
 const logout = await call('/logout', { method: 'POST', cookie }); assert.equal(logout.status, 200); assert.match(logout.headers.get('set-cookie'), /Max-Age=0/);
 globalThis.fetch = originalFetch;
