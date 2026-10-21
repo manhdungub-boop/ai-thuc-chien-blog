@@ -51,8 +51,9 @@ jobs:
           printf 'token=%s\n' "$token" >> "$GITHUB_OUTPUT"
 
       - name: Deploy to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ steps.normalized_token.outputs.token }}
           accountId: 92cf091bbac8b4879ec65feb30b4715b
+          wranglerVersion: "4.151.3"
           command: pages deploy dist --project-name=ai-thuc-chien-blog --branch=main
