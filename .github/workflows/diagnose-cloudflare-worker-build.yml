@@ -46,7 +46,7 @@ jobs:
           fi
           echo "::add-mask::$CF_API_TOKEN"
 
-      - name: Fetch build metadata, Worker name mapping, trigger and logs (read-only)
+      - name: Fetch build, token status, Worker mapping, trigger and logs (read-only)
         shell: bash
         env:
           BUILD_UUID: ${{ inputs.build_uuid }}
@@ -76,6 +76,7 @@ jobs:
           }
 
           fetch_json "${api}/builds/${BUILD_UUID}" "$tmp/build.json"
+          fetch_json "${api}/tokens" "$tmp/tokens.json"
           echo "## Build metadata"
           jq -r '
             "Build UUID: " + (.result.build_uuid // "unknown"),
@@ -84,10 +85,21 @@ jobs:
             "Commit: " + (.result.build_trigger_metadata.commit_hash // "unknown"),
             "Build command: " + (.result.build_trigger_metadata.build_command // "unknown"),
             "Deploy command: " + (.result.build_trigger_metadata.deploy_command // "unknown"),
+            "Recorded build token name: " + (.result.build_trigger_metadata.build_token_name // "unknown"),
+            "Recorded build token UUID present: " + (if ((.result.build_trigger_metadata.build_token_uuid // "") | length) > 0 then "yes" else "no" end),
             "Trigger metadata keys: " + ((.result.build_trigger_metadata // {}) | keys | join(", ")),
             "Created: " + (.result.created_on // .result.created_at // "unknown"),
             "Updated: " + (.result.modified_on // .result.updated_at // "unknown")
           ' "$tmp/build.json"
+
+          historical_token_uuid="$(jq -r '.result.build_trigger_metadata.build_token_uuid // empty' "$tmp/build.json")"
+          if [[ -z "$historical_token_uuid" ]]; then
+            echo "Historical build token status: UUID not present in build metadata."
+          elif jq -e --arg uuid "$historical_token_uuid" '[.result[]? | select(.build_token_uuid == $uuid)] | length > 0' "$tmp/tokens.json" >/dev/null; then
+            echo "Historical build token status: matching record exists in the current token list."
+          else
+            echo "::warning::Historical build token status: no matching record in the current token list (possible removed or rotated token)."
+          fi
 
           fetch_json "$worker_api" "$tmp/workers.json"
           echo
@@ -110,11 +122,23 @@ jobs:
               "Branches excluded: " + ((.branch_excludes // []) | join(", ")),
               "Build command: " + (.build_command // "unknown"),
               "Deploy command: " + (.deploy_command // "unknown"),
+              "Build token name: " + (.build_token_name // "unknown"),
+              "Build token UUID present: " + (if ((.build_token_uuid // "") | length) > 0 then "yes" else "no" end),
               "Root directory: " + (.root_directory // "unknown"),
               "Repository: " + ((.repo_connection.repo_name // "unknown") + " / " + ((.repo_connection.repo_id // "unknown") | tostring)),
               "Environment variable names: " + ((.environment_variables // {} | keys) | join(", "))
             end
           ' "$tmp/triggers.json"
+
+          trigger_token_uuid="$(jq -r --arg tag "$WORKER_TAG" '[.result[]? | select(.external_script_id == $tag)][0].build_token_uuid // empty' "$tmp/triggers.json")"
+          if [[ -z "$trigger_token_uuid" ]]; then
+            echo "Current trigger build token status: UUID not present in trigger configuration."
+          elif jq -e --arg uuid "$trigger_token_uuid" '[.result[]? | select(.build_token_uuid == $uuid)] | length > 0' "$tmp/tokens.json" >/dev/null; then
+            trigger_token_name="$(jq -r --arg uuid "$trigger_token_uuid" '[.result[]? | select(.build_token_uuid == $uuid)][0].build_token_name // "unnamed"' "$tmp/tokens.json")"
+            echo "Current trigger build token status: matching record exists (name: $trigger_token_name)."
+          else
+            echo "::warning::Current trigger build token status: no matching record in the current token list (possible removed or rotated token)."
+          fi
 
           echo
           echo "## Build log (read-only; latest 300 lines)"
