@@ -25,6 +25,7 @@
   "description":"Hướng dẫn xây dựng quy trình AI có kiểm duyệt từ đầu đến cuối: xác định đầu vào, tạo bản nháp, kiểm chứng, duyệt của con người và theo dõi kết quả.",
   "url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/quy-trinh-ai-co-kiem-duyet",
   "mainEntityOfPage":{"@type":"WebPage","@id":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/quy-trinh-ai-co-kiem-duyet"},
+  "dateModified":"2026-10-22",
   "inLanguage":"vi-VN",
   "author":{"@type":"Organization","name":"AI Thực Chiến","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/"},
   "publisher":{"@type":"Organization","name":"AI Thực Chiến","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/"}
@@ -46,7 +47,7 @@
 <div class="section-kicker">WORKFLOW · AI CÓ KIỂM DUYỆT</div>
 <h1 style="font-size:clamp(34px,6vw,58px);letter-spacing:-1.5px">Quy trình AI có kiểm duyệt: từ ý tưởng đến kết quả đáng tin cậy</h1>
 <p style="color:var(--muted)">Một workflow tốt không chỉ tạo nội dung nhanh. Nó phải biết khi nào cần kiểm chứng, khi nào phải dừng và lúc nào cần con người quyết định.</p>
-<p><strong>Cập nhật:</strong> 18/10/2026 · <strong>Thời gian đọc:</strong> 7–9 phút</p>
+<p><strong>Cập nhật:</strong> 22/10/2026 · <strong>Thời gian đọc:</strong> 7–9 phút</p>
 
 <p>Nhiều người bắt đầu tự động hóa bằng cách nối một công cụ AI với email, bảng tính hoặc mạng xã hội. Cách đó có thể tiết kiệm thao tác, nhưng nếu thiếu điểm kiểm soát, một lỗi nhỏ cũng có thể biến thành thông tin sai, tin nhắn gửi nhầm hoặc bài đăng không phù hợp.</p>
 <p>Giải pháp thực tế là thiết kế quy trình theo nguyên tắc <strong>AI chuẩn bị — quy tắc kiểm tra — con người phê duyệt — hệ thống mới thực hiện</strong>. Đây là mô hình phù hợp cho blog, chăm sóc khách hàng, tiếp thị liên kết và nhiều tác vụ vận hành nhỏ.</p>
@@ -110,6 +111,8 @@
 <tr><td><code>checks</code></td><td>Kết quả kiểm tra và cảnh báo.</td></tr>
 <tr><td><code>approval_status</code></td><td>Chờ duyệt, duyệt hoặc từ chối.</td></tr>
 <tr><td><code>approved_version</code></td><td>Phiên bản cụ thể đã được duyệt.</td></tr>
+<tr><td><code>approved_hash</code></td><td>Mã băm của đúng nội dung, nguồn tham chiếu và lời kêu gọi hành động đã được duyệt.</td></tr>
+<tr><td><code>approval_scope</code></td><td>Kênh hoặc tài khoản đích, người nhận/URL đích và hành động được phép thực hiện.</td></tr>
 <tr><td><code>execution_status</code></td><td>Chưa chạy, thành công hoặc thất bại.</td></tr>
 <tr><td><code>result_url</code></td><td>Liên kết kết quả sau khi xác minh.</td></tr>
 </tbody>
@@ -117,7 +120,7 @@
 
 <h2>6. Các lỗi thường gặp cần phòng ngừa</h2>
 <ul>
-<li><strong>Duyệt bản nháp rồi nội dung lại đổi:</strong> lưu phiên bản hoặc mã băm nội dung được duyệt; nếu nội dung thay đổi, yêu cầu duyệt lại.</li>
+<li><strong>Duyệt bản nháp rồi nội dung hoặc đích thực hiện thay đổi:</strong> lưu phiên bản và mã băm của nội dung, nguồn cùng CTA đã duyệt; ràng buộc phê duyệt với kênh/tài khoản, URL đích hoặc người nhận và hành động cụ thể. Nếu nội dung, nguồn, giá, CTA, liên kết, người nhận hoặc đích đăng đổi, chuyển về <code>NEEDS_REVIEW</code> và duyệt lại; không tái sử dụng một cờ <code>approved=true</code> chung.</li>
 <li><strong>Trigger chạy lặp:</strong> dùng mã tác vụ duy nhất và kiểm tra trạng thái trước khi xử lý.</li>
 <li><strong>Không biết đăng thành công hay chưa:</strong> lưu phản hồi nền tảng, URL hoặc mã bài đăng; nếu thiếu bằng chứng, giữ trạng thái chờ xác minh.</li>
 <li><strong>AI tự bịa nguồn:</strong> yêu cầu URL nguồn thật và kiểm tra nguồn; không coi trích dẫn do AI tạo là bằng chứng.</li>
