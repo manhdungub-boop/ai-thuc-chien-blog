@@ -79,16 +79,30 @@ const registeredPayload = await registered.json(); assert.equal(registeredPayloa
 const loginBeforeVerification = await call('/login', { method: 'POST', body: { email: 'member@example.com', password: 'MotMatKhauRieng123!' } }); assert.equal(loginBeforeVerification.status, 403); assert.equal((await loginBeforeVerification.json()).code, 'EMAIL_NOT_VERIFIED');
 const tokenMatch = capturedEmail.htmlBody.match(/[?]verify=([A-Za-z0-9_-]{32,80})/); assert.ok(tokenMatch, 'verification email must contain a random one-time token'); const verify = await call('/verify-email', { method: 'POST', body: { token: tokenMatch[1] } }); assert.equal(verify.status, 200); assert.equal((await verify.json()).ok, true); assert.equal(db.tokens.length, 0);
 const replay = await call('/verify-email', { method: 'POST', body: { token: tokenMatch[1] } }); assert.equal(replay.status, 400, 'verification tokens must be single-use');
+
+// Expired verification tokens must be rejected and must not activate the member.
+const expiredRegistration = await call('/register', { method: 'POST', body: { username: 'expired_user', displayName: 'Expired Token', email: 'expired@example.com', password: 'Expired-Token-Password-123!' } });
+assert.equal(expiredRegistration.status, 201);
+const expiredTokenMatch = capturedEmail.htmlBody.match(/[?]verify=([A-Za-z0-9_-]{32,80})/);
+assert.ok(expiredTokenMatch, 'second verification mail must contain a token');
+const expiredMember = db.members.find((m) => m.email === 'expired@example.com');
+const storedExpiredToken = db.tokens.find((t) => t.member_id === expiredMember.id);
+assert.ok(storedExpiredToken, 'verification token must be stored');
+storedExpiredToken.expires_at = new Date(Date.now() - 1000).toISOString();
+const expiredVerify = await call('/verify-email', { method: 'POST', body: { token: expiredTokenMatch[1] } });
+assert.equal(expiredVerify.status, 400, 'expired token must be rejected');
+assert.equal(expiredMember.email_verified_at, null, 'expired token must not activate the member');
 const login = await call('/login', { method: 'POST', body: { email: 'member@example.com', password: 'MotMatKhauRieng123!' } }); assert.equal(login.status, 200); assert.equal((await login.json()).member.username, 'thanhvien_1');
 const setCookie = login.headers.get('set-cookie'); assert.match(setCookie, /HttpOnly/); assert.match(setCookie, /Secure/); assert.match(setCookie, /SameSite=Lax/); assert.match(setCookie, /Path=\//); const cookie = setCookie.split(';')[0];
 const me = await call('/me', { cookie }); assert.equal(me.status, 200); assert.equal((await me.json()).member.username, 'thanhvien_1');
 
 // The mail relay can reject a message despite HTTP 200; fail closed and remove the pending member/token.
 relayResult = { ok: false, code: 'SEND_FAILED' };
+const tokenCountBeforeFailedMail = db.tokens.length;
 const failedMail = await call('/register', { method: 'POST', body: { username: 'mail_fail_user', displayName: 'Mail Failure', email: 'mail-failure@example.invalid', password: 'Another-Temporary-Password-123!' } });
 assert.equal(failedMail.status, 503);
 assert.equal(db.members.some((m) => m.email === 'mail-failure@example.invalid'), false, 'failed email delivery must not leave a pending member');
-assert.equal(db.tokens.some((t) => db.members.some((m) => m.id === t.member_id)), false, 'failed email delivery must not leave a verification token');
+assert.equal(db.tokens.length, tokenCountBeforeFailedMail, 'failed email delivery must not leave an extra verification token');
 relayResult = { ok: true };
 const sent = await call('/messages', { method: 'POST', cookie, body: { topic: 'automation', body: 'Tôi đang thử một workflow có bước duyệt.' } }); assert.equal(sent.status, 201); assert.equal((await sent.json()).message.topic, 'automation');
 const listed = await call('/messages?topic=automation', { cookie }); assert.equal(listed.status, 200); const listedPayload = await listed.json(); assert.equal(listedPayload.messages.length, 1); assert.equal(listedPayload.messages[0].own, true);
