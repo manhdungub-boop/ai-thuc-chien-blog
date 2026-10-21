@@ -13,6 +13,7 @@ REPO_ID = "1423636651"
 TARGET_BUILD_COMMAND = "npm run build"
 EXPECTED_DEPLOY_COMMAND = "npx wrangler deploy"
 EXPECTED_PREVIEW_COMMAND = "npx wrangler preview"
+PRIMARY_BUILD_TOKEN_NAME = "ai-thuc-chien-blog build token"
 ALLOWED_DEPLOY_COMMANDS = {EXPECTED_DEPLOY_COMMAND, EXPECTED_PREVIEW_COMMAND}
 PRODUCTION_TRIGGERS = (
     {"name": "ai-thuc-chien-blog", "tag": "f0142edba057434191f9d452ba159e00",
@@ -97,11 +98,27 @@ def validate_trigger(triggers, spec):
     return trigger
 
 
+def resolve_primary_build_token(primary_trigger, token_records):
+    """Return only the known-good primary build token UUID after exact metadata checks."""
+    token_uuid = (primary_trigger or {}).get("build_token_uuid")
+    if not token_uuid:
+        raise ValueError("Primary Worker trigger has no build token UUID")
+    matches = [item for item in token_records if item.get("build_token_uuid") == token_uuid]
+    if len(matches) != 1:
+        raise ValueError(f"Primary Worker build token must have one current record; found {len(matches)}")
+    if matches[0].get("build_token_name") != PRIMARY_BUILD_TOKEN_NAME:
+        raise ValueError("Primary Worker build token name did not match the verified token; refusing reuse")
+    return token_uuid
+
+
 def changes_for(trigger, spec):
     desired = {
         "build_command": TARGET_BUILD_COMMAND,
         "deploy_command": spec["deploy_command"],
     }
+    # Token changes are only allowed when explicitly attached to a preflighted preview spec.
+    if spec.get("kind") == "preview" and spec.get("use_build_token_uuid"):
+        desired["build_token_uuid"] = spec["use_build_token_uuid"]
     return {key: value for key, value in desired.items() if trigger.get(key) != value}
 
 
@@ -115,12 +132,20 @@ def main():
     preview_tag = os.environ.get("PREVIEW_WORKER_TAG", "").strip()
     preview_branch = os.environ.get("PREVIEW_BRANCH", "").strip()
     preview_sha = os.environ.get("PREVIEW_COMMIT_SHA", "").strip()
+    reuse_raw = os.environ.get("PREVIEW_REUSE_PRIMARY_BUILD_TOKEN", "false").strip().lower()
+    if reuse_raw not in {"", "true", "false", "1", "0", "yes", "no"}:
+        print("ERROR: preview_reuse_primary_build_token must be true or false.", file=sys.stderr)
+        return 2
+    reuse_primary_build_token = reuse_raw in {"true", "1", "yes"}
     preview_inputs = (preview_uuid, preview_tag, preview_branch)
     if any(preview_inputs) and not all(preview_inputs):
         print("ERROR: preview_trigger_uuid, preview_worker_tag and preview_branch must be supplied together.", file=sys.stderr)
         return 2
     if preview_sha and not all(preview_inputs):
         print("ERROR: preview_commit_sha requires all preview trigger inputs.", file=sys.stderr)
+        return 2
+    if reuse_primary_build_token and not all(preview_inputs):
+        print("ERROR: reusing the primary build token requires an exact preview trigger UUID, Worker tag and branch.", file=sys.stderr)
         return 2
     if preview_sha and not re.fullmatch(r"[0-9a-fA-F]{40}", preview_sha):
         print("ERROR: preview_commit_sha must be a 40-character Git commit SHA.", file=sys.stderr)
@@ -138,7 +163,19 @@ def main():
             trigger = validate_trigger(api_request(endpoint, token) or [], spec)
             current[spec["trigger_uuid"]] = trigger
 
-        # Apply only build_command/deploy_command changes; preserve every other setting.
+        # Optional, explicit recovery path: reuse the verified primary build token only on this preview trigger.
+        # The primary production trigger and secondary production trigger are preflighted above and are never patched.
+        if reuse_primary_build_token:
+            preview = specs[-1]
+            if preview.get("kind") != "preview":
+                raise ValueError("Token reuse can only target a non-production preview trigger")
+            token_records = api_request(f"/accounts/{ACCOUNT_ID}/builds/tokens", token) or []
+            primary_trigger = current[PRODUCTION_TRIGGERS[0]["trigger_uuid"]]
+            primary_token_uuid = resolve_primary_build_token(primary_trigger, token_records)
+            preview["use_build_token_uuid"] = primary_token_uuid
+            print("TOKEN VERIFIED: reusing the existing primary Worker build token for this preview trigger only.")
+
+        # Apply only the explicitly expected fields; token changes are preview-only and opt-in.
         for spec in specs:
             trigger = current[spec["trigger_uuid"]]
             patch = changes_for(trigger, spec)
@@ -160,8 +197,11 @@ def main():
                 raise RuntimeError(f"{spec['name']}: build command did not persist")
             if trigger.get("deploy_command") != spec["deploy_command"]:
                 raise RuntimeError(f"{spec['name']}: deploy command did not persist")
+            if spec.get("use_build_token_uuid") and trigger.get("build_token_uuid") != spec["use_build_token_uuid"]:
+                raise RuntimeError(f"{spec['name']}: preview build token did not persist")
             verified[spec["trigger_uuid"]] = trigger
-            print(f"PASS: {spec['name']} verified ({spec['branch']} -> {spec['deploy_command']})")
+            extra = " + verified preview token" if spec.get("use_build_token_uuid") else ""
+            print(f"PASS: {spec['name']} verified ({spec['branch']} -> {spec['deploy_command']}{extra})")
 
         if preview_sha:
             spec = specs[-1]
