@@ -3,6 +3,7 @@
   "name": "ai-thuc-chien-blog",
   "account_id": "92cf091bbac8b4879ec65feb30b4715b",
   "compatibility_date": "2026-10-12",
+  "compatibility_flags": ["assets_navigation_has_no_effect"],
   "workers_dev": true,
   "assets": {
     "directory": "./dist",
