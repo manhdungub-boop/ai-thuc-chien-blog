@@ -216,7 +216,12 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
     let payload = {};
     try { payload = await response.json(); } catch (_error) { /* Keep a safe fallback for non-JSON responses. */ }
     if (!response.ok) {
-      const error = new Error(payload.error || `Yêu cầu thất bại (${response.status}).`);
+      let message = payload.error || `Yêu cầu thất bại (${response.status}).`;
+      if (response.status >= 500 && typeof payload.code === 'string' && /^[a-z0-9-]{1,64}$/i.test(payload.code)) {
+        const reference = typeof payload.reference === 'string' && /^[0-9a-f-]{36}$/i.test(payload.reference) ? payload.reference : '';
+        message += ` [mã lỗi: ${payload.code}${reference ? `; mã tham chiếu: ${reference}` : ''}]`;
+      }
+      const error = new Error(message);
       error.status = response.status;
       throw error;
     }

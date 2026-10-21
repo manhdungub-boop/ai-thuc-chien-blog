@@ -41,6 +41,7 @@ jobs:
           node scripts/test_worker_headers.mjs
           node scripts/test_worker_retrieval.mjs
           node scripts/test_community_api.mjs
+          node scripts/test_community_client_errors.cjs
           node scripts/test_homepage_search.cjs
 
       - name: Test community D1 schema
@@ -66,11 +67,3 @@ jobs:
 
       - name: Test homepage article coverage
         run: node scripts/test_homepage_article_coverage.cjs
-
-      - name: Test actual community registration on isolated preview (manual dispatch only)
-        if: github.event_name == 'workflow_dispatch'
-        env:
-          PREVIEW_WORKER_URL: https://d39e80df-ai-thuc-chien-blog.workers.dev
-          CLOUDFLARE_ACCOUNT_ID: 92cf091bbac8b4879ec65feb30b4715b
-          CLOUDFLARE_WORKERS_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
-        run: node scripts/test_live_community_registration.mjs
