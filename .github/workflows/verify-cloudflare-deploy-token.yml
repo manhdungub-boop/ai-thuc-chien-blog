@@ -1,0 +1,75 @@
+name: Verify Cloudflare Deploy Token
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Verify existing Cloudflare API tokens (read-only)
+        shell: bash
+        env:
+          CF_WORKERS_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+          CF_BUILDS_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_BUILDS_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          account_id="92cf091bbac8b4879ec65feb30b4715b"
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+
+          verify_token() {
+            local label="$1"
+            local token="$2"
+            local out="$3"
+            if [[ -z "$token" ]]; then
+              echo "::error::$label secret is missing."
+              return 1
+            fi
+            echo "::add-mask::$token"
+            local status
+            status="$(curl --silent --show-error --output "$out" --write-out '%{http_code}' \
+              --header "Authorization: Bearer $token" \
+              --header 'Accept: application/json' \
+              'https://api.cloudflare.com/client/v4/user/tokens/verify')"
+            if [[ "$status" -lt 200 || "$status" -ge 300 ]] || ! jq -e '.success == true' "$out" >/dev/null; then
+              echo "::error::$label token verification failed (HTTP $status)."
+              jq -r '(.errors[]?.message // empty)' "$out" 2>/dev/null || true
+              return 1
+            fi
+            echo "$label token status: $(jq -r '.result.status // "unknown"' "$out")"
+            echo "$label token ID: $(jq -r '.result.id // "not returned"' "$out")"
+          }
+
+          verify_token "Workers deploy" "$CF_WORKERS_TOKEN" "$tmp/deploy-verify.json"
+          verify_token "Workers Builds management" "$CF_BUILDS_TOKEN" "$tmp/builds-verify.json"
+
+          status="$(curl --silent --show-error --output "$tmp/workers.json" --write-out '%{http_code}' \
+            --header "Authorization: Bearer $CF_WORKERS_TOKEN" \
+            --header 'Accept: application/json' \
+            "https://api.cloudflare.com/client/v4/accounts/${account_id}/workers/scripts")"
+          if [[ "$status" -lt 200 || "$status" -ge 300 ]] || ! jq -e '.success == true' "$tmp/workers.json" >/dev/null; then
+            echo "::error::Workers deploy token cannot read Worker scripts (HTTP $status)."
+            jq -r '(.errors[]?.message // empty)' "$tmp/workers.json" 2>/dev/null || true
+            exit 1
+          fi
+          echo
+          echo "## Worker inventory visible to deploy token"
+          jq -r '.result[]? | select(.id == "ai-thuc-chien-blog" or .id == "ai-thuc-chien-blog-moi") | "Worker: " + .id + " | tag: " + (.tag // "unknown")' "$tmp/workers.json"
+
+          status="$(curl --silent --show-error --output "$tmp/build-tokens.json" --write-out '%{http_code}' \
+            --header "Authorization: Bearer $CF_BUILDS_TOKEN" \
+            --header 'Accept: application/json' \
+            "https://api.cloudflare.com/client/v4/accounts/${account_id}/builds/tokens")"
+          if [[ "$status" -lt 200 || "$status" -ge 300 ]] || ! jq -e '.success == true' "$tmp/build-tokens.json" >/dev/null; then
+            echo "::error::Workers Builds token cannot list build tokens (HTTP $status)."
+            jq -r '(.errors[]?.message // empty)' "$tmp/build-tokens.json" 2>/dev/null || true
+            exit 1
+          fi
+          echo
+          echo "## Existing build token metadata (names and identifiers only)"
+          jq -r '.result[]? | "Build token: " + (.build_token_name // "unnamed") + " | build UUID: " + (.build_token_uuid // "unknown") + " | linked Cloudflare API token ID: " + (.cloudflare_token_id // "unknown")' "$tmp/build-tokens.json"
