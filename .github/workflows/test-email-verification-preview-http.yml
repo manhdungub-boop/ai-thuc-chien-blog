@@ -1,5 +1,8 @@
 name: Email verification Preview HTTP smoke test
 on:
+  push:
+    branches:
+      - feature/required-email-verification
   workflow_dispatch:
     inputs:
       preview_url:

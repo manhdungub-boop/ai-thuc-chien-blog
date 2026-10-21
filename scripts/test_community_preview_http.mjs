@@ -13,12 +13,12 @@ const target = base.origin;
 
 async function requestWithRetry(url, init, label) {
   let lastError;
-  for (let attempt = 1; attempt <= 5; attempt += 1) {
+  for (let attempt = 1; attempt <= 12; attempt += 1) {
     try {
       return await fetch(url, { ...init, redirect: 'error', signal: AbortSignal.timeout(15000) });
     } catch (error) {
       lastError = error;
-      if (attempt < 5) await new Promise((resolve) => setTimeout(resolve, 3000));
+      if (attempt < 12) await new Promise((resolve) => setTimeout(resolve, 5000));
     }
   }
   throw new Error(`${label} could not reach the Preview endpoint after retries (${String(lastError?.name || 'network error')}).`);
