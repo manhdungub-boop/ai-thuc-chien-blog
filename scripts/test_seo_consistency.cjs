@@ -23,6 +23,14 @@ assert.match(sitemap, /<urlset\b[\s\S]*<\/urlset>/, 'dist/sitemap.xml is not a U
 assert.match(feed, /<rss\b[\s\S]*<\/rss>/, 'dist/feed.xml is not an RSS document');
 
 const sitemapUrls = [...sitemap.matchAll(/<loc>\s*([^<]+)\s*<\/loc>/g)].map((m) => m[1].trim());
+const sitemapEntries = [...sitemap.matchAll(/<url>\s*([\s\S]*?)<\/url>/g)].map((match) => {
+  const block = match[1];
+  const loc = block.match(/<loc>\s*([^<]+)\s*<\/loc>/);
+  assert.ok(loc, 'Sitemap URL entry is missing its location');
+  const lastmod = block.match(/<lastmod>\s*([^<]+)\s*<\/lastmod>/);
+  return { url: loc[1].trim(), lastmod: lastmod ? lastmod[1].trim() : '' };
+});
+assert.equal(sitemapEntries.length, sitemapUrls.length, 'Sitemap must have one valid entry per URL location');
 const feedUrls = [...feed.matchAll(/<link>\s*(https?:\/\/[^<]+)\s*<\/link>/g)].map((m) => m[1].trim());
 assert.ok(sitemapUrls.includes(baseUrl + '/'), 'Sitemap must include the homepage');
 assert.ok(sitemapUrls.includes(baseUrl + '/ve-chung-toi.html'), 'Sitemap must include the about/editorial policy page');
@@ -66,6 +74,13 @@ for (const page of publicPages) {
   assert.ok(!canonical.includes('?'), label + ': canonical URL must not contain tracking/query parameters');
   canonicalUrls.push(canonical);
   assert.ok(sitemapUrls.includes(canonical), label + ': canonical URL missing from generated sitemap');
+  const sitemapEntry = sitemapEntries.find((entry) => entry.url === canonical);
+  assert.ok(sitemapEntry, label + ': canonical URL missing a sitemap entry');
+  const modifiedDates = [...source.matchAll(/"dateModified"\s*:\s*"(\d{4}-\d{2}-\d{2})(?:T[^"]*)?"/gi)]
+    .map((match) => match[1])
+    .sort();
+  const expectedLastmod = modifiedDates[modifiedDates.length - 1] || '';
+  assert.equal(sitemapEntry.lastmod, expectedLastmod, label + ': sitemap lastmod must match explicit dateModified metadata and be omitted when unknown');
 
   const jsonLdBlocks = [...source.matchAll(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
   assert.ok(jsonLdBlocks.length > 0, label + ': missing JSON-LD structured data');
