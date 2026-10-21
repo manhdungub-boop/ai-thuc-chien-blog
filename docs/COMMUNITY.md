@@ -26,7 +26,7 @@ python3 scripts/test_community_schema.py
 
 ## Giới hạn của bản đầu
 
-- Chưa có xác minh email, đặt lại mật khẩu, công cụ kiểm duyệt quản trị viên, báo cáo tin nhắn hoặc khôi phục tài khoản.
+- Đặt lại mật khẩu, công cụ kiểm duyệt quản trị viên, báo cáo tin nhắn và khôi phục tài khoản vẫn chưa được triển khai.
 - Danh sách phòng cập nhật định kỳ khoảng 15 giây khi người dùng đang xem; đây chưa phải WebSocket/push thời gian thực.
 - Email không hiển thị cho thành viên khác; tên hiển thị và nội dung tin nhắn được chia sẻ trong phòng tương ứng.
 - Trước khi mở rộng công khai, cần bổ sung quy trình kiểm duyệt/báo cáo, điều khoản cộng đồng và chính sách quyền riêng tư đầy đủ.
