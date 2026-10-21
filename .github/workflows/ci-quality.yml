@@ -70,7 +70,7 @@ jobs:
       - name: Test actual community registration on isolated preview (manual dispatch only)
         if: github.event_name == 'workflow_dispatch'
         env:
-          PREVIEW_WORKER_URL: https://fix-diagnose-community-registration-errors-2-ai-thuc-chien-blog.workers.dev
+          PREVIEW_WORKER_URL: https://d39e80df-ai-thuc-chien-blog.workers.dev
           CLOUDFLARE_ACCOUNT_ID: 92cf091bbac8b4879ec65feb30b4715b
           CLOUDFLARE_WORKERS_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
         run: node scripts/test_live_community_registration.mjs
