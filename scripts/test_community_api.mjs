@@ -53,30 +53,30 @@ class MockD1 {
   }
 }
 const origin = 'https://ai-thuc-chien-blog.manhdungub.workers.dev';
-const db = new MockD1(); const env = { DB: db, ASSETS: { fetch: async () => new Response('asset') }, SMTP2GO_API_KEY: 'test-key-not-real', COMMUNITY_EMAIL_FROM: 'AI Test <verify@example.test>' };
-const originalFetch = globalThis.fetch; let capturedEmail = null; let smtp2goResult = { request_id: 'test-request', data: { succeeded: 1, failed: 0, failures: [], email_id: 'test-email-id' } };
-globalThis.fetch = async (input, init = {}) => { if (String(input) === 'https://api.smtp2go.com/v3/email/send') { assert.equal(init.headers['X-Smtp2go-Api-Key'], 'test-key-not-real'); capturedEmail = JSON.parse(init.body); return new Response(JSON.stringify(smtp2goResult), { status: 200, headers: { 'Content-Type': 'application/json' } }); } return originalFetch(input, init); };
+const db = new MockD1(); const env = { DB: db, ASSETS: { fetch: async () => new Response('asset') }, COMMUNITY_EMAIL_RELAY_URL: 'https://mail-relay.example.test/exec', COMMUNITY_EMAIL_RELAY_SECRET: 'test-shared-secret' };
+const originalFetch = globalThis.fetch; let capturedEmail = null; let relayResult = { ok: true };
+globalThis.fetch = async (input, init = {}) => { if (String(input) === 'https://mail-relay.example.test/exec') { capturedEmail = JSON.parse(init.body); assert.equal(capturedEmail.secret, 'test-shared-secret'); return new Response(JSON.stringify(relayResult), { status: 200, headers: { 'Content-Type': 'application/json' } }); } return originalFetch(input, init); };
 const call = (path, { method = 'GET', body, cookie, originHeader = origin } = {}) => worker.fetch(new Request(`https://example.test/api/community${path}`, { method, headers: { ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(cookie ? { Cookie: cookie } : {}), ...(originHeader ? { Origin: originHeader } : {}), 'CF-Connecting-IP': '198.51.100.77' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }), env);
 const unconfigured = await worker.fetch(new Request('https://example.test/api/community/me'), {}); assert.equal(unconfigured.status, 503); assert.match((await unconfigured.json()).error, /cơ sở dữ liệu/i);
 const badOrigin = await call('/register', { method: 'POST', originHeader: 'https://evil.example', body: {} }); assert.equal(badOrigin.status, 403);
 const invalidRegister = await call('/register', { method: 'POST', body: { username: 'x', displayName: 'X', email: 'bad', password: 'short' } }); assert.equal(invalidRegister.status, 400);
 const nullPayload = await call('/register', { method: 'POST', body: null }); assert.equal(nullPayload.status, 400);
 const registered = await call('/register', { method: 'POST', body: { username: 'thanhvien_1', displayName: 'Thành viên thử', email: 'member@example.com', password: 'MotMatKhauRieng123!' } }); assert.equal(registered.status, 201);
-const registeredPayload = await registered.json(); assert.equal(registeredPayload.verificationRequired, true); assert.equal(JSON.stringify(registeredPayload).includes('MotMatKhauRieng123!'), false); assert.equal(registered.headers.get('set-cookie'), null); assert.ok(capturedEmail); assert.equal(capturedEmail.to[0], 'member@example.com');
+const registeredPayload = await registered.json(); assert.equal(registeredPayload.verificationRequired, true); assert.equal(JSON.stringify(registeredPayload).includes('MotMatKhauRieng123!'), false); assert.equal(registered.headers.get('set-cookie'), null); assert.ok(capturedEmail); assert.equal(capturedEmail.to, 'member@example.com');
 const loginBeforeVerification = await call('/login', { method: 'POST', body: { email: 'member@example.com', password: 'MotMatKhauRieng123!' } }); assert.equal(loginBeforeVerification.status, 403); assert.equal((await loginBeforeVerification.json()).code, 'EMAIL_NOT_VERIFIED');
-const tokenMatch = capturedEmail.html_body.match(/[?]verify=([A-Za-z0-9_-]{32,80})/); assert.ok(tokenMatch, 'verification email must contain a random one-time token'); const verify = await call('/verify-email', { method: 'POST', body: { token: tokenMatch[1] } }); assert.equal(verify.status, 200); assert.equal((await verify.json()).ok, true); assert.equal(db.tokens.length, 0);
+const tokenMatch = capturedEmail.htmlBody.match(/[?]verify=([A-Za-z0-9_-]{32,80})/); assert.ok(tokenMatch, 'verification email must contain a random one-time token'); const verify = await call('/verify-email', { method: 'POST', body: { token: tokenMatch[1] } }); assert.equal(verify.status, 200); assert.equal((await verify.json()).ok, true); assert.equal(db.tokens.length, 0);
 const replay = await call('/verify-email', { method: 'POST', body: { token: tokenMatch[1] } }); assert.equal(replay.status, 400, 'verification tokens must be single-use');
 const login = await call('/login', { method: 'POST', body: { email: 'member@example.com', password: 'MotMatKhauRieng123!' } }); assert.equal(login.status, 200); assert.equal((await login.json()).member.username, 'thanhvien_1');
 const setCookie = login.headers.get('set-cookie'); assert.match(setCookie, /HttpOnly/); assert.match(setCookie, /Secure/); assert.match(setCookie, /SameSite=Lax/); assert.match(setCookie, /Path=\//); const cookie = setCookie.split(';')[0];
 const me = await call('/me', { cookie }); assert.equal(me.status, 200); assert.equal((await me.json()).member.username, 'thanhvien_1');
 
 // SMTP2GO can return HTTP 200 with failed > 0; fail closed and remove the pending member/token.
-smtp2goResult = { request_id: 'test-failure', data: { succeeded: 0, failed: 1, failures: [{ error: 'simulated sender rejection' }] } };
+relayResult = { ok: false, code: 'SEND_FAILED' };
 const failedMail = await call('/register', { method: 'POST', body: { username: 'mail_fail_user', displayName: 'Mail Failure', email: 'mail-failure@example.invalid', password: 'Another-Temporary-Password-123!' } });
 assert.equal(failedMail.status, 503);
 assert.equal(db.members.some((m) => m.email === 'mail-failure@example.invalid'), false, 'failed email delivery must not leave a pending member');
 assert.equal(db.tokens.some((t) => db.members.some((m) => m.id === t.member_id)), false, 'failed email delivery must not leave a verification token');
-smtp2goResult = { request_id: 'test-request', data: { succeeded: 1, failed: 0, failures: [], email_id: 'test-email-id' } };
+relayResult = { ok: true };
 const sent = await call('/messages', { method: 'POST', cookie, body: { topic: 'automation', body: 'Tôi đang thử một workflow có bước duyệt.' } }); assert.equal(sent.status, 201); assert.equal((await sent.json()).message.topic, 'automation');
 const listed = await call('/messages?topic=automation', { cookie }); assert.equal(listed.status, 200); const listedPayload = await listed.json(); assert.equal(listedPayload.messages.length, 1); assert.equal(listedPayload.messages[0].own, true);
 const removed = await call(`/messages/${listedPayload.messages[0].id}`, { method: 'DELETE', cookie }); assert.equal(removed.status, 200); assert.equal(db.messages.length, 0);
@@ -86,4 +86,4 @@ const badMessage = await call('/messages', { method: 'POST', cookie, body: { top
 const wrongPassword = await call('/login', { method: 'POST', body: { email: 'member@example.com', password: 'sai-mat-khau' } }); assert.equal(wrongPassword.status, 401);
 const logout = await call('/logout', { method: 'POST', cookie }); assert.equal(logout.status, 200); assert.match(logout.headers.get('set-cookie'), /Max-Age=0/);
 globalThis.fetch = originalFetch;
-console.log('PASS: email verification required before login; one-time token, SMTP2GO mail mock, PBKDF2 login, secure session, messages, validation, origin protection and missing-DB behavior');
+console.log('PASS: email verification required before login; one-time token, Apps Script relay mock, PBKDF2 login, secure session, messages, validation, origin protection and missing-DB behavior');

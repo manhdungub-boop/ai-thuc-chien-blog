@@ -7,8 +7,15 @@ const frontend = fs.readFileSync(new URL('../script.js', import.meta.url), 'utf8
 const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const migration = fs.readFileSync(new URL('../migrations/0002_email_verification.sql', import.meta.url), 'utf8');
 assert.match(worker, /COMMUNITY_VERIFICATION_SECONDS = 30 \* 60/);
-assert.match(worker, /SMTP2GO_API_KEY/);
-assert.match(worker, /COMMUNITY_EMAIL_FROM/);
+assert.match(worker, /COMMUNITY_EMAIL_RELAY_URL/);
+assert.match(worker, /COMMUNITY_EMAIL_RELAY_SECRET/);
+assert.match(worker, /result\?\.ok !== true/);
+const relay = fs.readFileSync(new URL('../email-relay/Code.gs', import.meta.url), 'utf8');
+assert.match(relay, /PropertiesService\.getScriptProperties/);
+assert.match(relay, /MailApp\.sendEmail/);
+assert.match(relay, /COMMUNITY_EMAIL_RELAY_SECRET/);
+assert.match(relay, /getRemainingDailyQuota/);
+assert.doesNotThrow(() => new Function(relay), 'Google Apps Script relay must parse as JavaScript');
 assert.match(worker, /route === "verify-email"/);
 assert.match(worker, /route === "resend-verification"/);
 assert.match(worker, /EMAIL_NOT_VERIFIED/);
