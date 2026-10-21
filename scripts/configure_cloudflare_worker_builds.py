@@ -87,7 +87,7 @@ def validate_trigger(triggers, spec):
             raise ValueError(f"{spec['name']}: production branch validation failed; refusing to update")
     else:
         branch = spec["branch"]
-        if not branch or branch == "main" or branch not in includes:
+        if not branch or branch == "main" or (branch not in includes and "*" not in includes):
             raise ValueError(f"{spec['name']}: preview branch mismatch; refusing to update")
         # A wildcard preview trigger must explicitly exclude main to avoid deploy overlap.
         if "*" in includes and "main" not in excludes:
