@@ -93,7 +93,14 @@ jobs:
           }
           verify_database "production" "$PRODUCTION_D1_ID" "$PRODUCTION_D1_NAME"
           verify_database "preview" "$PREVIEW_D1_ID" "$PREVIEW_D1_NAME"
-          echo "PASS: preview D1 is a separate existing database; no SQL or migrations were executed."
+          echo "PASS: preview D1 is a separate existing database; no schema or user data was changed."
+
+      - name: Diagnose community D1 schema (read-only)
+        if: github.event_name == 'workflow_run' || github.event_name == 'workflow_dispatch'
+        env:
+          CLOUDFLARE_WORKERS_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 92cf091bbac8b4879ec65feb30b4715b
+        run: node scripts/diagnose_community_d1.mjs
 
       - name: Test article content quality
         run: npm run test:content
