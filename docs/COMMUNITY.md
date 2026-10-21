@@ -47,3 +47,11 @@ This relay sends mail from the Google account that owns the script, so no custom
 5. Apply `migrations/0002_email_verification.sql` to the preview D1 first. Test a new registration, email arrival (including Spam), token expiry/replay, and login gating on Preview. After Preview tests pass, change `COMMUNITY_EMAIL_ALLOWED_HOSTS` to only `ai-thuc-chien-blog.manhdungub.workers.dev`, removing the Preview hostname. Only then apply the migration and configure the relay for production as a separate rollout.
 
 The Apps Script endpoint checks the shared secret before sending and returns only a generic error code; the secret is never returned to the browser or logged. A missing relay configuration fails closed with HTTP 503 and removes the newly created pending account. The resend endpoint uses the same generic public response for known and unknown email addresses.
+
+
+### Preview verification milestone — 2026-10-22
+
+- The guarded workflow `Manage Preview D1 Migrations` was run in `apply` mode on `feature/required-email-verification`. It verified the exact Preview database UUID `51d814c8-a3fc-4481-a5f1-60bc67617f3c` and applied `0002_email_verification.sql`. The workflow's post-apply migration list reported `No migrations to apply!`.
+- Read-only live smoke test at `https://feature-required-email-verification-ai-thuc-chien-blog.manhdungub.workers.dev`: `/api/community/me` = HTTP 200 with same-origin CORS; a cryptographically random nonexistent verify token = HTTP 400 (verification schema is queryable); untrusted Origin = HTTP 403 with no CORS permission. No test member was created and no email was sent in these probes.
+- Production D1 UUID `fc2517cb-9543-4d7b-98f4-bcd5f3c013e7`, `main`, and production Worker were not changed.
+- Remaining release gate: deploy and authorize the Google Apps Script `/exec` relay, configure only Preview Worker URL/secret, test delivery to a real mailbox and full confirm/login/expiry/replay/resend flow; then remove Preview hostname from relay allowlist before any production rollout.
