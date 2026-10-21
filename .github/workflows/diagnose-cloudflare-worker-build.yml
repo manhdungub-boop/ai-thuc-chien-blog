@@ -7,6 +7,10 @@ on:
         description: "UUID from the failed Cloudflare Workers Build details URL"
         required: true
         type: string
+      worker_tag:
+        description: "Worker tag (32 hexadecimal characters) for the failed build target"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -24,11 +28,16 @@ jobs:
         shell: bash
         env:
           BUILD_UUID: ${{ inputs.build_uuid }}
+          WORKER_TAG: ${{ inputs.worker_tag }}
           CF_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_BUILDS_API_TOKEN }}
         run: |
           set -euo pipefail
           if [[ ! "$BUILD_UUID" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
             echo "::error::build_uuid must be a valid UUID."
+            exit 1
+          fi
+          if [[ ! "$WORKER_TAG" =~ ^[0-9a-fA-F]{32}$ ]]; then
+            echo "::error::worker_tag must be 32 hexadecimal characters."
             exit 1
           fi
           if [[ -z "$CF_API_TOKEN" ]]; then
@@ -37,10 +46,11 @@ jobs:
           fi
           echo "::add-mask::$CF_API_TOKEN"
 
-      - name: Fetch build metadata and logs (read-only)
+      - name: Fetch build metadata, trigger configuration and logs (read-only)
         shell: bash
         env:
           BUILD_UUID: ${{ inputs.build_uuid }}
+          WORKER_TAG: ${{ inputs.worker_tag }}
           CF_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_BUILDS_API_TOKEN }}
         run: |
           set -euo pipefail
@@ -59,7 +69,7 @@ jobs:
             if [[ "$status" -lt 200 || "$status" -ge 300 ]] || ! jq -e '.success == true' "$out" >/dev/null; then
               echo "::error::Cloudflare API request failed (HTTP $status)."
               jq -r '(.errors[]?.message // empty), (.messages[]? // empty)' "$out" 2>/dev/null || true
-              echo "Ensure this is a user-scoped token with Workers CI: Read (or Workers CI: Write) access."
+              echo "Ensure this is a user-scoped token with Workers CI: Read (or Workers CI: Write) and Workers Builds Configuration: Read access."
               exit 1
             fi
           }
@@ -73,9 +83,32 @@ jobs:
             "Commit: " + (.result.build_trigger_metadata.commit_hash // "unknown"),
             "Build command: " + (.result.build_trigger_metadata.build_command // "unknown"),
             "Deploy command: " + (.result.build_trigger_metadata.deploy_command // "unknown"),
+            "Trigger metadata keys: " + ((.result.build_trigger_metadata // {}) | keys | join(", ")),
             "Created: " + (.result.created_on // .result.created_at // "unknown"),
             "Updated: " + (.result.modified_on // .result.updated_at // "unknown")
           ' "$tmp/build.json"
+
+          fetch_json "${api}/workers/${WORKER_TAG}/triggers" "$tmp/triggers.json"
+          echo
+          echo "## Matching trigger configuration (secret values are not printed)"
+          jq -r --arg tag "$WORKER_TAG" '
+            [.result[] | select(.external_script_id == $tag)] as $matches |
+            if ($matches | length) == 0 then
+              "No trigger matched the supplied worker tag."
+            else
+              $matches[] |
+              "Worker tag: " + (.external_script_id // "unknown"),
+              "Trigger UUID: " + (.trigger_uuid // "unknown"),
+              "Trigger name: " + (.trigger_name // "unknown"),
+              "Branches included: " + ((.branch_includes // []) | join(", ")),
+              "Branches excluded: " + ((.branch_excludes // []) | join(", ")),
+              "Build command: " + (.build_command // "unknown"),
+              "Deploy command: " + (.deploy_command // "unknown"),
+              "Root directory: " + (.root_directory // "unknown"),
+              "Repository: " + ((.repo_connection.repo_name // "unknown") + " / " + ((.repo_connection.repo_id // "unknown") | tostring)),
+              "Environment variable names: " + ((.environment_variables // {} | keys) | join(", "))
+            end
+          ' "$tmp/triggers.json"
 
           echo
           echo "## Build log (read-only; latest 300 lines)"
@@ -84,11 +117,11 @@ jobs:
           while [[ "$page" -le 6 ]]; do
             url="${api}/builds/${BUILD_UUID}/logs"
             if [[ -n "$cursor" ]]; then
-              url="${url}?cursor=${cursor}"
+              encoded_cursor="$(printf '%s' "$cursor" | jq -sRr @uri)"
+              url="${url}?cursor=${encoded_cursor}"
             fi
             fetch_json "$url" "$tmp/logs.json"
-            jq -r '.result.lines[]? | if type == "array" then map(tostring) | join(" ") else tostring end' "$tmp/logs.json" \
-              | tail -n 300
+            jq -r '.result.lines[]? | if type == "array" then map(tostring) | join(" ") else tostring end' "$tmp/logs.json" | tail -n 300
             cursor="$(jq -r '.result.cursor // empty' "$tmp/logs.json")"
             [[ -z "$cursor" ]] && break
             page=$((page + 1))
