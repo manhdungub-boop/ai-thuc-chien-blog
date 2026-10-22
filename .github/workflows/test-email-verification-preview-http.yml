@@ -69,6 +69,7 @@ jobs:
           echo "PREVIEW_RELAY_CONFIG=success (both secrets uploaded in one Preview deployment; production untouched)."
       - name: Verify latest Preview contains both required secret names
         env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
           PREVIEW_URL: ${{ steps.configure_relay.outputs.preview_url }}
         shell: bash
         run: |
