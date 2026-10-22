@@ -257,6 +257,28 @@ async function communityRateLimit(db, bucket, limit, windowMs) {
   const row = await db.prepare("SELECT count FROM community_rate_limits WHERE bucket = ?").bind(bucket).first();
   return Number(row?.count || 0) <= limit;
 }
+async function communityOtpHash(email, code, secret) {
+  return sha256Base64Url(`${email}:${code}:${secret}`);
+}
+function generateCommunityOtp() {
+  const bytes = crypto.getRandomValues(new Uint8Array(4));
+  const value = ((bytes[0] * 0x1000000) + (bytes[1] << 16) + (bytes[2] << 8) + bytes[3]) % 1000000;
+  return String(value).padStart(6, "0");
+}
+async function sendCommunityOtp(env, email, code) {
+  if (typeof env.OTP_GATEWAY_URL !== "string" || !env.OTP_GATEWAY_URL.startsWith("https://script.google.com/macros/s/") || !env.OTP_GATEWAY_URL.endsWith("/exec") || typeof env.OTP_GATEWAY_SECRET !== "string" || env.OTP_GATEWAY_SECRET.length < 32) return false;
+  try {
+    const response = await fetch(env.OTP_GATEWAY_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ secret: env.OTP_GATEWAY_SECRET, email, code }),
+      redirect: "follow",
+    });
+    if (!response.ok) return false;
+    const result = await response.json();
+    return result?.ok === true;
+  } catch (_error) { return false; }
+}
 async function communityMemberFromRequest(request, db) {
   const token = readCommunityCookie(request);
   if (!token || token.length > 200) return null;
@@ -314,22 +336,86 @@ async function handleCommunityApi(request, env) {
       if (displayName.length < 2 || displayName.length > 40) return communityJson({ error: "Tên hiển thị cần từ 2 đến 40 ký tự." }, 400, request);
       if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return communityJson({ error: "Vui lòng nhập email hợp lệ." }, 400, request);
       if (password.length < 10 || password.length > 128) return communityJson({ error: "Mật khẩu cần từ 10 đến 128 ký tự." }, 400, request);
+      if (!env.OTP_GATEWAY_URL || !env.OTP_GATEWAY_SECRET) return communityJson({ error: "Dịch vụ xác minh email chưa được cấu hình đầy đủ." }, 503, request);
       const ipHash = await sha256Base64Url(ip);
-      if (!await communityRateLimit(db, `register:${ipHash}`, 5, 60 * 60 * 1000)) return communityJson({ error: "Bạn đã thử đăng ký quá nhiều lần. Vui lòng thử lại sau một giờ." }, 429, request);
+      const emailHash = await sha256Base64Url(email);
+      if (!await communityRateLimit(db, `register:${ipHash}`, 5, 60 * 60 * 1000) || !await communityRateLimit(db, `register-email:${emailHash}`, 3, 60 * 60 * 1000)) return communityJson({ error: "Bạn đã thử đăng ký quá nhiều lần. Vui lòng thử lại sau." }, 429, request);
+      const existing = await db.prepare("SELECT id FROM community_members WHERE email = ? OR username = ? LIMIT 1").bind(email, username).first();
+      if (existing) return communityJson({ error: "Email hoặc tên thành viên đã được sử dụng." }, 409, request);
+      const pending = await db.prepare("SELECT email, username FROM community_pending_members WHERE email = ? OR username = ? LIMIT 1").bind(email, username).first();
+      if (pending) return communityJson({ error: "Đã có đăng ký đang chờ xác minh. Hãy dùng chức năng gửi lại mã hoặc kiểm tra email." }, 409, request);
       const salt = crypto.getRandomValues(new Uint8Array(16));
       const passwordHash = await hashCommunityPassword(password, salt);
+      const code = generateCommunityOtp();
+      const codeHash = await communityOtpHash(email, code, env.OTP_GATEWAY_SECRET);
       const memberId = crypto.randomUUID();
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
       try {
-        await db.prepare(`INSERT INTO community_members (id, username, email, display_name, password_salt, password_hash, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?)`).bind(memberId, username, email, displayName, bytesToBase64Url(salt), passwordHash, now).run();
+        await db.prepare(`INSERT INTO community_pending_members (id, username, email, display_name, password_salt, password_hash, otp_hash, attempts, created_at, last_sent_at, expires_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`).bind(memberId, username, email, displayName, bytesToBase64Url(salt), passwordHash, codeHash, now, now, expiresAt).run();
       } catch (error) {
-        if (/unique|constraint/i.test(String(error?.message || error))) {
-          return communityJson({ error: "Email hoặc tên thành viên đã được sử dụng." }, 409, request);
-        }
+        if (/unique|constraint/i.test(String(error?.message || error))) return communityJson({ error: "Email hoặc tên thành viên đã có đăng ký đang chờ xác minh." }, 409, request);
         throw error;
       }
-      const token = await createCommunitySession(db, memberId);
-      return communityJson({ member: { id: memberId, username, displayName, createdAt: now } }, 201, request, { "Set-Cookie": communityCookie(token) });
+      if (!await sendCommunityOtp(env, email, code)) {
+        await db.prepare("DELETE FROM community_pending_members WHERE email = ?").bind(email).run();
+        return communityJson({ error: "Chưa gửi được email xác minh. Vui lòng thử lại sau ít phút." }, 502, request);
+      }
+      return communityJson({ pendingVerification: true, email, message: "Mã xác minh đã được gửi. Mã có hiệu lực trong 10 phút." }, 202, request);
+    }
+
+    if (route === "verify-email" && request.method === "POST") {
+      const parsed = await readJsonPayload(request);
+      if (!parsed.ok) return communityJson({ error: parsed.error }, parsed.status, request);
+      const email = String(parsed.value.email || "").trim().toLowerCase();
+      const code = String(parsed.value.code || "").trim();
+      if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !/^\d{6}$/.test(code)) return communityJson({ error: "Vui lòng nhập email và mã xác minh gồm 6 chữ số." }, 400, request);
+      const ipHash = await sha256Base64Url(ip);
+      const emailHash = await sha256Base64Url(email);
+      if (!await communityRateLimit(db, `verify-ip:${ipHash}`, 20, 15 * 60 * 1000) || !await communityRateLimit(db, `verify-email:${emailHash}`, 10, 15 * 60 * 1000)) return communityJson({ error: "Bạn đã thử xác minh quá nhiều lần. Vui lòng thử lại sau." }, 429, request);
+      const pending = await db.prepare("SELECT id, username, email, display_name, password_salt, password_hash, otp_hash, attempts, created_at, expires_at FROM community_pending_members WHERE email = ? LIMIT 1").bind(email).first();
+      if (!pending) return communityJson({ error: "Không tìm thấy đăng ký đang chờ xác minh. Hãy đăng ký lại." }, 404, request);
+      if (Date.parse(pending.expires_at) <= Date.now()) {
+        await db.prepare("DELETE FROM community_pending_members WHERE email = ?").bind(email).run();
+        return communityJson({ error: "Mã đã hết hạn. Vui lòng đăng ký lại." }, 410, request);
+      }
+      if (Number(pending.attempts) >= 5) return communityJson({ error: "Bạn đã nhập sai mã quá nhiều lần. Hãy gửi lại mã xác minh." }, 429, request);
+      const suppliedHash = await communityOtpHash(email, code, env.OTP_GATEWAY_SECRET || "");
+      if (suppliedHash !== pending.otp_hash) {
+        await db.prepare("UPDATE community_pending_members SET attempts = attempts + 1 WHERE email = ?").bind(email).run();
+        return communityJson({ error: "Mã xác minh chưa chính xác." }, 400, request);
+      }
+      try {
+        await db.prepare(`INSERT INTO community_members (id, username, email, display_name, password_salt, password_hash, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)`).bind(pending.id, pending.username, pending.email, pending.display_name, pending.password_salt, pending.password_hash, pending.created_at).run();
+      } catch (error) {
+        if (/unique|constraint/i.test(String(error?.message || error))) return communityJson({ error: "Email hoặc tên thành viên đã được sử dụng." }, 409, request);
+        throw error;
+      }
+      await db.prepare("DELETE FROM community_pending_members WHERE email = ?").bind(email).run();
+      const token = await createCommunitySession(db, pending.id);
+      return communityJson({ member: { id: pending.id, username: pending.username, displayName: pending.display_name, createdAt: pending.created_at } }, 201, request, { "Set-Cookie": communityCookie(token) });
+    }
+
+    if (route === "resend-verification" && request.method === "POST") {
+      const parsed = await readJsonPayload(request);
+      if (!parsed.ok) return communityJson({ error: parsed.error }, parsed.status, request);
+      const email = String(parsed.value.email || "").trim().toLowerCase();
+      if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return communityJson({ error: "Vui lòng nhập email hợp lệ." }, 400, request);
+      if (!env.OTP_GATEWAY_URL || !env.OTP_GATEWAY_SECRET) return communityJson({ error: "Dịch vụ xác minh email chưa được cấu hình đầy đủ." }, 503, request);
+      const pending = await db.prepare("SELECT email, last_sent_at FROM community_pending_members WHERE email = ? LIMIT 1").bind(email).first();
+      if (!pending) return communityJson({ error: "Không tìm thấy đăng ký đang chờ xác minh. Hãy đăng ký lại." }, 404, request);
+      if (Date.now() - Date.parse(pending.last_sent_at) < 60 * 1000) return communityJson({ error: "Vui lòng chờ ít nhất 60 giây trước khi gửi lại mã." }, 429, request);
+      const ipHash = await sha256Base64Url(ip);
+      const emailHash = await sha256Base64Url(email);
+      if (!await communityRateLimit(db, `resend-ip:${ipHash}`, 5, 60 * 60 * 1000) || !await communityRateLimit(db, `resend-email:${emailHash}`, 3, 60 * 60 * 1000)) return communityJson({ error: "Bạn đã yêu cầu gửi lại mã quá nhiều lần. Vui lòng thử lại sau." }, 429, request);
+      const code = generateCommunityOtp();
+      const nowSent = new Date().toISOString();
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+      const codeHash = await communityOtpHash(email, code, env.OTP_GATEWAY_SECRET);
+      await db.prepare("UPDATE community_pending_members SET otp_hash = ?, attempts = 0, last_sent_at = ?, expires_at = ? WHERE email = ?").bind(codeHash, nowSent, expiresAt, email).run();
+      if (!await sendCommunityOtp(env, email, code)) return communityJson({ error: "Chưa gửi được email. Vui lòng đợi 60 giây rồi thử lại." }, 502, request);
+      return communityJson({ ok: true, message: "Đã gửi lại mã xác minh." }, 200, request);
     }
 
     if (route === "login" && request.method === "POST") {

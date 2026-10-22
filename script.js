@@ -170,6 +170,12 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
   const authDescription = root.querySelector('#community-auth-description');
   const authSubmit = root.querySelector('#community-auth-submit');
   const authStatus = root.querySelector('#community-auth-status');
+  const authSwitch = root.querySelector('.community-auth-switch');
+  const verificationPanel = root.querySelector('#community-verification-panel');
+  const verificationForm = root.querySelector('#community-verification-form');
+  const verificationCode = root.querySelector('#community-verification-code');
+  const verificationSubmit = root.querySelector('#community-verification-submit');
+  const resendVerification = root.querySelector('#community-resend-verification');
   const switchCopy = root.querySelector('#community-switch-copy');
   const switchModeButton = root.querySelector('#community-switch-mode');
   const usernameWrap = root.querySelector('#community-username-wrap');
@@ -199,6 +205,7 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
   let authMode = 'register';
   let currentMember = null;
   let currentTopic = 'tools';
+  let pendingVerificationEmail = '';
   let sending = false;
   let loading = false;
 
@@ -224,6 +231,10 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
   };
   const setAuthMode = (mode) => {
     authMode = mode;
+    pendingVerificationEmail = '';
+    verificationPanel.hidden = true;
+    authForm.hidden = false;
+    authSwitch.hidden = false;
     const registering = mode === 'register';
     authTitle.textContent = registering ? 'Tham gia cộng đồng' : 'Chào mừng trở lại';
     authDescription.textContent = registering ? 'Đăng ký miễn phí để tham gia các phòng thảo luận theo chủ đề.' : 'Đăng nhập để tiếp tục các cuộc thảo luận của bạn.';
@@ -365,6 +376,17 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
     }
     try {
       const result = await api(authMode === 'register' ? '/register' : '/login', { method: 'POST', body: JSON.stringify(payload) });
+      if (authMode === 'register' && result.pendingVerification) {
+        pendingVerificationEmail = result.email || payload.email;
+        passwordInput.value = '';
+        authForm.hidden = true;
+        authSwitch.hidden = true;
+        verificationPanel.hidden = false;
+        verificationCode.value = '';
+        setStatus(authStatus, `Mã xác minh đã được gửi tới ${pendingVerificationEmail}. Kiểm tra cả thư mục Spam.`, 'success');
+        verificationCode.focus();
+        return;
+      }
       showMember(result.member);
       passwordInput.value = '';
       setStatus(roomStatus, 'Đăng nhập thành công. Đang tải phòng thảo luận…', 'success');
@@ -373,6 +395,38 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
       setStatus(authStatus, error.message, 'error');
     } finally {
       authSubmit.disabled = false;
+    }
+  });
+  verificationForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!pendingVerificationEmail) return;
+    verificationSubmit.disabled = true;
+    setStatus(authStatus, 'Đang xác minh mã…');
+    try {
+      const result = await api('/verify-email', { method: 'POST', body: JSON.stringify({ email: pendingVerificationEmail, code: verificationCode.value.trim() }) });
+      verificationPanel.hidden = true;
+      authForm.hidden = false;
+      authSwitch.hidden = false;
+      pendingVerificationEmail = '';
+      showMember(result.member);
+      setStatus(roomStatus, 'Xác minh thành công. Đang tải phòng thảo luận…', 'success');
+      await loadMessages();
+    } catch (error) {
+      setStatus(authStatus, error.message, 'error');
+    } finally {
+      verificationSubmit.disabled = false;
+    }
+  });
+  resendVerification.addEventListener('click', async () => {
+    if (!pendingVerificationEmail) return;
+    resendVerification.disabled = true;
+    try {
+      const result = await api('/resend-verification', { method: 'POST', body: JSON.stringify({ email: pendingVerificationEmail }) });
+      setStatus(authStatus, result.message || 'Đã gửi lại mã xác minh.', 'success');
+    } catch (error) {
+      setStatus(authStatus, error.message, 'error');
+    } finally {
+      resendVerification.disabled = false;
     }
   });
   logoutButton.addEventListener('click', async () => {
