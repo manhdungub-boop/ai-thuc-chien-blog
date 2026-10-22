@@ -341,7 +341,12 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
     }
   };
 
-  if (window.location.hostname !== primaryHost) {
+  // Permit the isolated PR Preview for end-to-end email-verification testing.
+  const communityAuthHosts = new Set([
+    primaryHost,
+    'feature-required-email-verification-ai-thuc-chien-blog.manhdungub.workers.dev'
+  ]);
+  if (!communityAuthHosts.has(window.location.hostname)) {
     authPanel.hidden = true;
     memberPanel.hidden = true;
     loginPrompt.hidden = true;

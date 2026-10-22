@@ -26,6 +26,8 @@ assert.match(worker, /DELETE FROM community_email_verification_tokens WHERE toke
 assert.match(frontend, /community-verify-confirm/);
 assert.match(frontend, /community-resend-verification/);
 assert.match(frontend, /verificationRequired/);
+assert.ok(frontend.includes("const communityAuthHosts = new Set([\n    primaryHost,\n    'feature-required-email-verification-ai-thuc-chien-blog.manhdungub.workers.dev'\n  ]);"), 'isolated Preview must expose auth controls for end-to-end email testing');
+assert.match(frontend, /if \(!communityAuthHosts\.has\(window\.location\.hostname\)\)/, 'unrecognized hosts must keep community auth controls hidden');
 assert.match(html, /id="community-verify-confirm"/);
 assert.match(html, /id="community-resend-verification"/);
 assert.match(migration, /ALTER TABLE community_members ADD COLUMN email_verified_at TEXT/);
