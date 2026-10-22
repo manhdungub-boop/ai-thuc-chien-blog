@@ -18,7 +18,7 @@ concurrency:
 jobs:
   preview-http-smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 5
     steps:
       - name: Check out feature branch
         uses: actions/checkout@v4
@@ -29,6 +29,7 @@ jobs:
       - name: Check test syntax
         run: node --check scripts/test_community_preview_http.mjs
       - name: Configure email relay secrets on the feature Preview only
+        id: configure_relay
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
           RELAY_URL: ${{ secrets.COMMUNITY_EMAIL_RELAY_URL }}
@@ -37,8 +38,8 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -z "${RELAY_URL:-}" || -z "${RELAY_SECRET:-}" ]]; then
-            echo "PREVIEW_RELAY_CONFIG=skipped (add COMMUNITY_EMAIL_RELAY_URL and COMMUNITY_EMAIL_RELAY_SECRET as repository Actions secrets after the Apps Script Web App is deployed)."
-            exit 0
+            echo "::error::Required Preview relay secrets are missing. Configure COMMUNITY_EMAIL_RELAY_URL and COMMUNITY_EMAIL_RELAY_SECRET in repository Actions secrets."
+            exit 1
           fi
           echo "::add-mask::${RELAY_URL}"
           echo "::add-mask::${RELAY_SECRET}"
@@ -46,9 +47,46 @@ jobs:
             https://script.google.com/macros/s/*/exec) ;;
             *) echo "::error::Relay URL must be a Google Apps Script Web App URL ending in /exec."; exit 1 ;;
           esac
-          printf '%s' "${RELAY_URL}" | npx --yes wrangler@4 preview secret put COMMUNITY_EMAIL_RELAY_URL --name "feature/required-email-verification"
-          printf '%s' "${RELAY_SECRET}" | npx --yes wrangler@4 preview secret put COMMUNITY_EMAIL_RELAY_SECRET --name "feature/required-email-verification"
-          echo "PREVIEW_RELAY_CONFIG=success (feature Preview only; production untouched)."
+          if [[ "${RELAY_URL}" == *$'\n'* || "${RELAY_SECRET}" == *$'\n'* ]]; then
+            echo "::error::Relay URL and secret must each be a single line."
+            exit 1
+          fi
+          umask 077
+          secret_file="$RUNNER_TEMP/community-email-relay-secrets.env"
+          log_file="$RUNNER_TEMP/preview-secret-bulk.log"
+          trap 'rm -f "$secret_file"' EXIT
+          printf 'COMMUNITY_EMAIL_RELAY_URL=%s\nCOMMUNITY_EMAIL_RELAY_SECRET=%s\n' "${RELAY_URL}" "${RELAY_SECRET}" > "$secret_file"
+          # Bulk upload creates one Preview deployment carrying both secrets.
+          # Separate single-secret uploads create multiple deployments and may leave
+          # the latest deployment missing one of the required secrets.
+          npx --yes wrangler@4 preview secret bulk "$secret_file" --name "feature/required-email-verification" 2>&1 | tee "$log_file"
+          preview_url="$(grep -Eo 'https://[a-zA-Z0-9-]+-ai-thuc-chien-blog\.manhdungub\.workers\.dev' "$log_file" | tail -n 1 || true)"
+          if [[ -z "$preview_url" ]]; then
+            echo "::error::Could not identify the exact Preview deployment URL returned by Wrangler."
+            exit 1
+          fi
+          echo "preview_url=$preview_url" >> "$GITHUB_OUTPUT"
+          echo "PREVIEW_RELAY_CONFIG=success (both secrets uploaded in one Preview deployment; production untouched)."
+      - name: Verify latest Preview contains both required secret names
+        env:
+          PREVIEW_URL: ${{ steps.configure_relay.outputs.preview_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4 preview secret list --name "feature/required-email-verification" --json > "$RUNNER_TEMP/preview-secret-list.json"
+          node --input-type=commonjs - "$RUNNER_TEMP/preview-secret-list.json" <<'NODE'
+          const fs = require('node:fs');
+          const file = process.argv[2];
+          const raw = fs.readFileSync(file, 'utf8');
+          const start = raw.indexOf('{');
+          if (start < 0) throw new Error('Wrangler did not return JSON for the Preview secret list.');
+          const data = JSON.parse(raw.slice(start));
+          const rendered = JSON.stringify(data);
+          for (const name of ['COMMUNITY_EMAIL_RELAY_URL', 'COMMUNITY_EMAIL_RELAY_SECRET']) {
+            if (!rendered.includes(name)) throw new Error(`Latest Preview is missing required secret name: ${name}`);
+          }
+          console.log('PREVIEW_SECRET_NAMES=verified (names only; values not read or printed).');
+          NODE
       - name: Verify Apps Script relay endpoint without sending email
         env:
           COMMUNITY_EMAIL_RELAY_URL: ${{ secrets.COMMUNITY_EMAIL_RELAY_URL }}
