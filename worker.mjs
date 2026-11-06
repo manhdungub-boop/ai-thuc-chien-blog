@@ -925,7 +925,7 @@ async function handleCommunityApi(request, env) {
       return communityJson({ ok: true, message: "Mật khẩu đã được đặt lại. Vui lòng đăng nhập bằng mật khẩu mới." }, 200, request);
     }
 
-    if (route === "login" && request.method === "POST")
+    if (route === "login" && request.method === "POST") {
       const parsed = await readJsonPayload(request);
       if (!parsed.ok) return communityJson({ error: parsed.error }, parsed.status, request);
       const payload = parsed.value;
