@@ -7,7 +7,8 @@ const root = path.resolve(__dirname, '..');
 const output = path.join(root, 'dist');
 const rootFiles = ['index.html', 'thu-vien.html', 'ngan-hang-ai.html', 've-chung-toi.html', 'feed.xml', 'styles.css', 'script.js', 'robots.txt', 'sitemap.xml', 'favicon.svg', '404.html', 'google4e45ddcf8facb122.html', '_headers'];
 function fail(message) { console.error('STATIC BUILD FAIL:', message); process.exit(1); }
-for (const name of rootFiles) if (!fs.existsSync(path.join(root, name))) fail('Required source file is missing: ' + name);\nconst dataFiles = ['data/ai-tools.json'];\nconst illustrationFiles = ['illustrations/agent-loop.svg'];\nfor (const name of [...dataFiles, ...illustrationFiles]) if (!fs.existsSync(path.join(root, name))) fail('Required static data or illustration is missing: ' + name);
+for (const name of rootFiles) if (!fs.existsSync(path.join(root, name))) fail('Required source file is missing: ' + name);
+const dataFiles = ['data/ai-tools.json'];\nconst illustrationFiles = ['illustrations/agent-loop.svg'];\nfor (const name of [...dataFiles, ...illustrationFiles]) if (!fs.existsSync(path.join(root, name))) fail('Required static data or illustration is missing: ' + name);
 const articlesDir = path.join(root, 'articles');
 if (!fs.existsSync(articlesDir) || !fs.statSync(articlesDir).isDirectory()) fail('articles/ source directory is missing');
 const articles = fs.readdirSync(articlesDir).filter((name) => name.endsWith('.html')).sort();
