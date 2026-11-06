@@ -1,38 +1,9 @@
 name: Deploy Cloudflare Workers
 
+# Production deployment is deliberately manual. Merging content or code must never
+# deploy the production Worker or run D1 migrations implicitly.
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "_headers"
-      - "index.html"
-      - "ve-chung-toi.html"
-      - "thu-vien.html"
-      - "ngan-hang-ai.html"
-      - "data/ai-tools.json"
-      - "illustrations/**"
-      - "articles/**"
-      - "styles.css"
-      - "script.js"
-      - "robots.txt"
-      - "sitemap.xml"
-      - "feed.xml"
-      - "favicon.svg"
-      - "404.html"
-      - "google4e45ddcf8facb122.html"
-      - "wrangler.jsonc"
-      - "worker.mjs"
-      - "migrations/**"
-      - "scripts/test_community_api.mjs"
-      - "scripts/test_community_schema.py"
-      - "package.json"
-      - "scripts/build_static_site.cjs"
-      - "scripts/generate_seo_feeds.cjs"
-      - "scripts/test_worker_headers.mjs"
-      - ".github/workflows/deploy-cloudflare-workers.yml"
   workflow_dispatch:
-
 permissions:
   contents: read
 
