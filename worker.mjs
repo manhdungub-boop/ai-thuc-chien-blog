@@ -876,10 +876,15 @@ async function handleCommunityApi(request, env) {
       if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return communityJson({ error: "Vui lòng nhập email hợp lệ." }, 400, request);
       const ipHash = await sha256Base64Url(ip);
       const emailHash = await sha256Base64Url(email);
-      if (!await communityRateLimit(db, `password-reset-ip:${ipHash}`, 5, 60 * 60 * 1000) || !await communityRateLimit(db, `password-reset-email:${emailHash}`, 3, 60 * 60 * 1000)) {
-        return communityJson({ error: "Bạn đã yêu cầu quá nhiều lần. Vui lòng thử lại sau." }, 429, request);
-      }
       const generic = { ok: true, message: "Nếu email này có tài khoản hợp lệ, chúng tôi sẽ gửi hướng dẫn đặt lại mật khẩu." };
+      // IP throttling may return 429 because it applies equally to every email from this client.
+      if (!await communityRateLimit(db, `password-reset-ip:${ipHash}`, 5, 60 * 60 * 1000)) {
+        return communityJson({ error: "Bạn đã gửi quá nhiều yêu cầu từ thiết bị/mạng này. Vui lòng thử lại sau." }, 429, request);
+      }
+      // Email throttling must keep the generic response to avoid revealing whether an account exists.
+      if (!await communityRateLimit(db, `password-reset-email:${emailHash}`, 3, 60 * 60 * 1000)) {
+        return communityJson(generic, 200, request);
+      }
       const member = await db.prepare("SELECT id, email, display_name, email_verified_at FROM community_members WHERE email = ? LIMIT 1").bind(email).first();
       if (!member || !member.email_verified_at) return communityJson(generic, 200, request);
       if (!env.COMMUNITY_EMAIL_RELAY_URL || !env.COMMUNITY_EMAIL_RELAY_SECRET) {
