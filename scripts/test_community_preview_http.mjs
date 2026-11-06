@@ -14,6 +14,27 @@ if (base.protocol !== 'https:' || !(isFeatureAlias || isGeneratedFeaturePreview)
 }
 const target = base.origin;
 
+// Read-only frontend delivery check using a non-existent token; no account or D1 write occurs.
+const fakeToken = randomBytes(32).toString('base64url');
+const page = await requestWithRetry(`${target}/?verify=${fakeToken}#cong-dong`, {
+  method: 'GET',
+  headers: { Accept: 'text/html' },
+}, 'Preview homepage');
+assert.equal(page.status, 200, `Preview homepage must return HTTP 200, got ${page.status}`);
+assert.match(page.headers.get('content-type') || '', /text\/html/i, 'Preview homepage must serve HTML');
+const pageHtml = await page.text();
+assert.match(pageHtml, /community-verify-confirm/, 'Preview homepage must include the email verification control');
+assert.match(pageHtml, /script\.js/, 'Preview homepage must load the community frontend script');
+const scriptResponse = await requestWithRetry(`${target}/script.js`, {
+  method: 'GET',
+  headers: { Accept: 'application/javascript, text/javascript, */*' },
+}, 'Preview frontend script');
+assert.equal(scriptResponse.status, 200, `Preview script.js must return HTTP 200, got ${scriptResponse.status}`);
+const frontendScript = await scriptResponse.text();
+assert.match(frontendScript, /new URLSearchParams\(window\.location\.search\)\.get\('verify'\)/, 'Preview frontend must read the verification token from the query string');
+assert.match(frontendScript, /community-verify-confirm/, 'Preview frontend must wire the verification confirmation control');
+console.log('PASS: Preview homepage and script.js serve the verification UI and read the query-string token.');
+
 async function requestWithRetry(url, init, label) {
   let lastError;
   for (let attempt = 1; attempt <= 12; attempt += 1) {
