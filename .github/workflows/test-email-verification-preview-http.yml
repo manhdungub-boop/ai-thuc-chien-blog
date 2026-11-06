@@ -36,11 +36,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          preview_json="$RUNNER_TEMP/preview-deploy.json"
-          npx --yes wrangler@4 preview --name "feature/required-email-verification" --json > "$preview_json"
-          preview_url="$(jq -er '.preview.urls[0]' "$preview_json")"
-          if [[ "$preview_url" != "https://feature-required-email-verification-ai-thuc-chien-blog.manhdungub.workers.dev" ]]; then
-            echo "::error::Wrangler returned an unexpected feature Preview URL."
+          preview_log="$RUNNER_TEMP/preview-deploy.log"
+          npx --yes wrangler@4 preview --name "feature/required-email-verification" 2>&1 | tee "$preview_log"
+          preview_url="$(grep -Eo 'https://feature-required-email-verification-ai-thuc-chien-blog\.manhdungub\.workers\.dev' "$preview_log" | tail -n 1 || true)"
+          if [[ -z "$preview_url" ]]; then
+            echo "::error::Wrangler did not return the expected isolated feature Preview URL."
             exit 1
           fi
           echo "preview_url=$preview_url" >> "$GITHUB_OUTPUT"
