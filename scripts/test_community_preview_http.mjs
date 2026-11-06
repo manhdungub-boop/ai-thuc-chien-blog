@@ -8,7 +8,7 @@ if (!configured) throw new Error('PREVIEW_URL is required.');
 const base = new URL(configured);
 const expectedHost = 'feature-required-email-verification-ai-thuc-chien-blog.manhdungub.workers.dev';
 const isFeatureAlias = base.hostname === expectedHost;
-const isGeneratedFeaturePreview = /^[a-f0-9]{8}-ai-thuc-chien-blog\\.manhdungub\\.workers\\.dev$/i.test(base.hostname);
+const isGeneratedFeaturePreview = /^[a-f0-9]{8}-ai-thuc-chien-blog\.manhdungub\.workers\.dev$/i.test(base.hostname);
 if (base.protocol !== 'https:' || !(isFeatureAlias || isGeneratedFeaturePreview) || base.pathname !== '/' || base.search || base.hash) {
   throw new Error('Safety stop: this smoke test only targets the named feature Preview alias or a generated 8-hex deployment URL for this Worker.');
 }
