@@ -61,7 +61,7 @@ for (const page of publicPages) {
   const openGraphDescription = openGraphDescriptionTag.match(/\bcontent=["']([^"']+)["']/i);
   assert.ok(openGraphDescription && openGraphDescription[1].trim().length >= 30, label + ': missing or too-short Open Graph description');
   if (page.file === 'thu-vien.html') {
-    assert.match(source, /69 bài thực hành/i, 'Topic library should show its verified 48-article inventory');
+    assert.match(source, /69 bài thực hành/i, 'Topic library should show its curated 52-article inventory');
     assert.doesNotMatch(source, /40 hướng dẫn|40 bài thực hành/i, 'Topic library must not retain stale 40-article copy');
   }
   const canonicalTag = (source.match(/<link\b[^>]*rel=["']canonical["'][^>]*>/i) || [])[0] || '';
@@ -123,4 +123,4 @@ assert.equal(sitemapArticleUrls.length, articleFiles.length, 'Generated sitemap 
 assert.equal(feedArticleUrls.length, articleFiles.length, 'Generated RSS article count differs from source article count');
 assert.equal(sitemapUrls.length, articleFiles.length + 4, 'Sitemap should contain homepage, about page, topic library, AI bank, and every article');
 
-console.log('SEO CONSISTENCY PASS: ' + articleFiles.length + ' articles and 3 static pages have valid metadata, JSON-LD, canonical URLs, sitemap/RSS parity, and deployment output.');
+console.log('SEO CONSISTENCY PASS: ' + articleFiles.length + ' articles and 4 static pages have valid metadata, JSON-LD, canonical URLs, sitemap/RSS parity, and deployment output.');
