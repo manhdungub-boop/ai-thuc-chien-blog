@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 const worker = await readFile(new URL("../worker.mjs", import.meta.url), "utf8");
 const migration = await readFile(new URL("../migrations/0003_community_oauth_accounts.sql", import.meta.url), "utf8");
 
-assert.match(worker, /COMMUNITY_OAUTH_STAGING_ORIGIN\s*=\s*"https:\/\/ai-thuc-chien-blog-auth-app-preview\.manhdungub\.workers\.dev"/);
+assert.match(worker, /COMMUNITY_OAUTH_STAGING_ORIGIN\\s*=\\s*"https:\\/\\/ai-thuc-chien-blog-auth-app-preview\\.manhdungub\\.workers\\.dev"/);
 assert.match(worker, /route === "oauth\/providers"/);
 assert.match(worker, /route\.match\(\/\^oauth\\\/google\\\//);
 assert.match(worker, /code_challenge_method:\s*"S256"/);
