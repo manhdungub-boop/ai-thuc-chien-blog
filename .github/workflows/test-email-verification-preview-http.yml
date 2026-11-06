@@ -41,15 +41,17 @@ jobs:
           preview_log="$RUNNER_TEMP/preview-deploy.log"
           npx --yes wrangler@4 preview --name "feature/required-email-verification" 2>&1 | tee "$preview_log"
           preview_url="$(grep -Eo 'https://feature-required-email-verification-ai-thuc-chien-blog\.manhdungub\.workers\.dev' "$preview_log" | tail -n 1 || true)"
-          if [[ -z "$preview_url" ]]; then
-            echo "::error::Wrangler did not return the expected isolated feature Preview URL."
+          deployment_url="$(grep -Eo 'https://[a-f0-9]{8}-ai-thuc-chien-blog\.manhdungub\.workers\.dev' "$preview_log" | tail -n 1 || true)"
+          if [[ -z "$preview_url" || -z "$deployment_url" ]]; then
+            echo "::error::Wrangler did not return both the stable feature Preview URL and exact deployment URL."
             exit 1
           fi
           echo "preview_url=$preview_url" >> "$GITHUB_OUTPUT"
+          echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
           echo "PREVIEW_CODE_DEPLOY=success (branch source, generated dist assets and isolated Preview bindings)."
       - name: Verify Preview frontend immediately after code deployment
         env:
-          PREVIEW_URL: ${{ steps.deploy_preview.outputs.preview_url }}
+          PREVIEW_URL: ${{ steps.deploy_preview.outputs.deployment_url }}
         run: node scripts/test_community_preview_frontend.mjs
       - name: Configure email relay secrets on the feature Preview only
         id: configure_relay
