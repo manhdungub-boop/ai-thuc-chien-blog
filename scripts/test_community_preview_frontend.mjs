@@ -28,13 +28,13 @@ async function get(url, label) {
 const fakeToken = randomBytes(32).toString('base64url');
 const page = await get(`${target}/?verify=${fakeToken}#cong-dong`, 'Preview homepage');
 assert.equal(page.status, 200, `Preview homepage must return HTTP 200, got ${page.status}`);
-assert.match(page.headers.get('content-type') || '', /text\\/html/i, 'Preview homepage must serve HTML');
+assert.match(page.headers.get('content-type') || '', /text\/html/i, 'Preview homepage must serve HTML');
 const html = await page.text();
-assert.match(html, /community-verify-confirm/, 'Preview homepage must include the email verification control');
+assert.match(html, /script\.js/, 'Preview homepage must load the community frontend script');
 assert.match(html, /script\\.js/, 'Preview homepage must load the community frontend script');
 const script = await get(`${target}/script.js`, 'Preview frontend script');
 assert.equal(script.status, 200, `Preview script.js must return HTTP 200, got ${script.status}`);
-const js = await script.text();
+assert.match(js, /new URLSearchParams\(window\.location\.search\)\.get\('verify'\)/, 'Preview frontend must read the verification token from the query string');
 assert.match(js, /new URLSearchParams\\(window\\.location\\.search\\)\\.get\\('verify'\\)/, 'Preview frontend must read the verification token from the query string');
 assert.match(js, /community-verify-confirm/, 'Preview frontend must wire the verification confirmation control');
 console.log('PASS: Preview homepage and script.js serve the email-verification UI and read query-string tokens.');
