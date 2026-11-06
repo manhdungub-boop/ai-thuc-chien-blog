@@ -38,7 +38,7 @@ const js = await script.text();
 const stylesheet = await get(target + '/styles.css', 'Preview stylesheet');
 assert.equal(stylesheet.status, 200, 'Preview styles.css must return HTTP 200, got ' + stylesheet.status);
 const css = await stylesheet.text();
-assert.match(css, /\\[hidden\\]\\s*\\{\\s*display:\\s*none\\s*!important;\\s*\\}/, 'Hidden HTML controls must remain hidden even when component CSS defines display:grid or display:block');
+assert.ok(css.includes('[hidden] { display: none !important; }'), 'Hidden HTML controls must remain hidden even when component CSS defines display:grid or display:block');
 assert.ok(js.includes("queryParams.get('verify')"), 'Preview frontend must read the verification token from the query string');
 assert.ok(js.includes("queryParams.get('reset')"), 'Preview frontend must read the password reset token from the query string');
 assert.match(js, /community-password-reset-form/, 'Preview frontend must wire the password reset form');
