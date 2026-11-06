@@ -94,5 +94,5 @@ assert.equal(relayState.sent.length, 3);
 relayState.allowedHosts = 'ai-thuc-chien-blog.manhdungub.workers.dev,feature-required-email-verification-ai-thuc-chien-blog.manhdungub.workers.dev';
 relayState.remainingQuota = 0;
 assert.equal(relayCall(relayPayload).code, 'DAILY_QUOTA_EXHAUSTED');
-assert.equal(relayState.sent.length, 2, 'exhausted quota must not send email');
+assert.equal(relayState.sent.length, 3, 'exhausted quota must not send email');
 console.log('PASS: Apps Script relay enforces secret, allowed verification origin, sender quota and safe send behavior.');
