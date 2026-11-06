@@ -549,10 +549,11 @@ export default {
         return withSecurityHeaders(await handleCommunityApi(request, env), request);
       }
       const isHomepageRead = (request.method === "GET" || request.method === "HEAD") && pathname === "/";
-      if (isHomepageRead) {
-        // Prefer the separately verified Pages copy for the public homepage. This
-        // bypasses a stale/misrouted Worker asset response while keeping the visitor
-        // on the canonical Worker origin so same-origin APIs still work.
+      const isPrimaryWorkerHost = requestUrl.hostname === "ai-thuc-chien-blog.manhdungub.workers.dev";
+      if (isHomepageRead && isPrimaryWorkerHost) {
+        // Keep the independently verified Pages fallback for the production hostname.
+        // Branch Previews must serve their own ASSETS so their frontend matches the
+        // branch Worker code and can exercise query-string email verification.
         try {
           const pagesUrl = new URL(request.url);
           pagesUrl.hostname = "ai-thuc-chien-blog.pages.dev";
@@ -615,7 +616,7 @@ export default {
           looksLikeBrandedNotFound = false;
         }
       }
-      if (isHomepageRead && (assetResponse.status === 404 || assetResponse.status >= 500 || looksLikeBrandedNotFound)) {
+      if (isHomepageRead && isPrimaryWorkerHost && (assetResponse.status === 404 || assetResponse.status >= 500 || looksLikeBrandedNotFound)) {
         // Keep the canonical Worker URL available if its asset binding temporarily
         // returns a not-found/server error; Pages is the independently verified static fallback.
         try {
