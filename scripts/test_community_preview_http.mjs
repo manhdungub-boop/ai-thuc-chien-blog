@@ -39,6 +39,28 @@ const ownPayload = await own.json();
 assert.equal(ownPayload.member, null, 'Unauthenticated read must not disclose member data');
 console.log('PASS: Preview /api/community/me returns HTTP 200 with same-origin CORS and an empty unauthenticated member.');
 
+// Read-only provider discovery. Only exact staging hostnames may advertise Google OAuth.
+const providersResponse = await requestWithRetry(target + '/api/community/oauth/providers', {
+  method: 'GET',
+  headers: { Origin: target, Accept: 'application/json' },
+}, 'OAuth provider readiness request');
+assert.equal(providersResponse.status, 200, 'OAuth provider readiness must return HTTP 200, got ' + providersResponse.status);
+assert.equal(providersResponse.headers.get('access-control-allow-origin'), target, 'OAuth provider readiness must have same-origin CORS');
+const providers = await providersResponse.json();
+assert.equal(typeof providers.google, 'boolean', 'Google readiness must be a boolean');
+assert.equal(providers.facebook, false, 'Facebook OAuth must remain disabled');
+if (!isFeatureAlias) assert.equal(providers.google, false, 'Generated per-deployment preview URLs must never advertise OAuth');
+console.log('PASS: OAuth provider readiness is reachable; Google enabled=' + providers.google + '; Facebook remains disabled.');
+
+if (!isFeatureAlias) {
+  const blockedOAuth = await requestWithRetry(target + '/api/community/oauth/google/start', {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+  }, 'Non-allowlisted OAuth start request');
+  assert.equal(blockedOAuth.status, 404, 'Generated preview URL must reject OAuth start with HTTP 404, got ' + blockedOAuth.status);
+  console.log('PASS: Google OAuth start is blocked on generated per-deployment Preview URLs.');
+}
+
 // Read-only schema probe: a random, nonexistent token should yield HTTP 400 after the SQL SELECT.
 // HTTP 500 here means the verification-token table or email_verified_at column is missing.
 const schemaProbe = await requestWithRetry(`${target}/api/community/verify-email`, {
