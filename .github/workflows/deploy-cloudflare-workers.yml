@@ -1,5 +1,7 @@
 name: Deploy Cloudflare Workers
 
+# Production deployment is deliberately manual. Merging content or code must never
+# deploy the production Worker or run D1 migrations implicitly.
 on:
   push:
     branches:
@@ -9,6 +11,9 @@ on:
       - "index.html"
       - "ve-chung-toi.html"
       - "thu-vien.html"
+      - "ngan-hang-ai.html"
+      - "data/ai-tools.json"
+      - "illustrations/**"
       - "articles/**"
       - "styles.css"
       - "script.js"
@@ -29,7 +34,6 @@ on:
       - "scripts/test_worker_headers.mjs"
       - ".github/workflows/deploy-cloudflare-workers.yml"
   workflow_dispatch:
-
 permissions:
   contents: read
 
@@ -39,8 +43,7 @@ concurrency:
 
 jobs:
   deploy:
-    # Merging application code must not deploy production or apply D1 migrations implicitly.
-    # A production release requires an explicit manual workflow dispatch.
+    # Pushes validate the merge but cannot deploy. Only an explicit manual dispatch may deploy production.
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
