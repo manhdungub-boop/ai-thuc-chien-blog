@@ -6,10 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       preview_url:
-        description: Cloudflare's exact Preview URL (must be the feature Worker host)
-        required: true
+        description: Optional legacy override; the workflow uses the exact URL returned by the Preview deployment.
+        required: false
         type: string
-        default: https://feature-required-email-verification-ai-thuc-chien-blog.manhdungub.workers.dev
 permissions:
   contents: read
 concurrency:
@@ -94,5 +93,5 @@ jobs:
         run: node scripts/diagnose_preview_d1_schema.mjs
       - name: Smoke-test Preview endpoints and CORS (read-only)
         env:
-          PREVIEW_URL: ${{ inputs.preview_url || 'https://feature-required-email-verification-ai-thuc-chien-blog.manhdungub.workers.dev' }}
+          PREVIEW_URL: ${{ steps.configure_relay.outputs.preview_url }}
         run: node scripts/test_community_preview_http.mjs
