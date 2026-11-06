@@ -1,0 +1,26 @@
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    - when: never
+
+stages:
+  - validate
+
+static-content-snapshot-validation:
+  stage: validate
+  image: node:22-alpine
+  script:
+    - node --check scripts/verify-static-snapshot.mjs
+    - node scripts/verify-static-snapshot.mjs
+
+production-pages-package-validation:
+  stage: validate
+  image: node:22-alpine
+  script:
+    - node --check scripts/build-pages.mjs
+    - node scripts/build-production-pages.mjs
+    - node scripts/test-production-pages.mjs
+    - CF_PAGES_BRANCH=fix/production-pages-safe-package-20261104 CF_PAGES_URL=https://ci-validation.pages.dev node scripts/build-main-preview.mjs
+    - node scripts/test-preview-pages.mjs
+    - CF_PAGES_BRANCH=main node scripts/build-pages.mjs

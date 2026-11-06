@@ -1,0 +1,6 @@
+[build]
+command = "node scripts/netlify-preview-build.mjs"
+publish = "preview-output"
+
+[build.environment]
+NODE_VERSION = "22"

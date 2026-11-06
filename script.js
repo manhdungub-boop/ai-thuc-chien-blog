@@ -170,6 +170,48 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
   const authDescription = root.querySelector('#community-auth-description');
   const authSubmit = root.querySelector('#community-auth-submit');
   const authStatus = root.querySelector('#community-auth-status');
+  // The currently served Pages HTML may predate the reset UI. Add the controls on staging
+  // when absent so a stale static deployment cannot make the recovery link unusable.
+  if (authForm && authStatus) {
+    if (!root.querySelector('#community-password-reset-form')) {
+      const form = document.createElement('form');
+      form.id = 'community-password-reset-form';
+      form.className = 'community-auth-form';
+      form.hidden = true;
+      form.innerHTML = '<label for="community-new-password">Mật khẩu mới</label>' +
+        '<input id="community-new-password" name="newPassword" type="password" minlength="10" maxlength="128" autocomplete="new-password" placeholder="Ít nhất 10 ký tự" required>' +
+        '<label for="community-confirm-password">Nhập lại mật khẩu mới</label>' +
+        '<input id="community-confirm-password" name="confirmPassword" type="password" minlength="10" maxlength="128" autocomplete="new-password" placeholder="Nhập lại mật khẩu" required>' +
+        '<button class="button primary community-submit" id="community-password-reset-submit" type="submit">Đặt lại mật khẩu <span>→</span></button>' +
+        '<button type="button" class="community-resend-button" id="community-password-reset-back">Quay lại đăng nhập</button>';
+      authStatus.before(form);
+    }
+    if (!root.querySelector('#community-forgot-password')) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'community-resend-button';
+      button.id = 'community-forgot-password';
+      button.hidden = true;
+      button.textContent = 'Quên mật khẩu?';
+      const switchParagraph = root.querySelector('.community-auth-switch');
+      if (switchParagraph) switchParagraph.before(button);
+      else authStatus.before(button);
+    }
+    if (document.head && !document.getElementById('community-password-reset-style')) {
+      const style = document.createElement('style');
+      style.id = 'community-password-reset-style';
+      style.textContent = '#community-password-reset-form[hidden], #community-forgot-password[hidden] { display:none !important; }';
+      document.head.appendChild(style);
+    }
+  }
+  const resendVerificationButton = root.querySelector('#community-resend-verification');
+  const forgotPasswordButton = root.querySelector('#community-forgot-password');
+  const passwordResetForm = root.querySelector('#community-password-reset-form');
+  const newPasswordInput = root.querySelector('#community-new-password');
+  const confirmPasswordInput = root.querySelector('#community-confirm-password');
+  const passwordResetSubmit = root.querySelector('#community-password-reset-submit');
+  const passwordResetBack = root.querySelector('#community-password-reset-back');
+  const authSwitch = root.querySelector('.community-auth-switch');
   const switchCopy = root.querySelector('#community-switch-copy');
   const switchModeButton = root.querySelector('#community-switch-mode');
   const usernameWrap = root.querySelector('#community-username-wrap');
@@ -201,6 +243,8 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
   let currentTopic = 'tools';
   let sending = false;
   let loading = false;
+  let lastVerificationEmail = '';
+  let pendingPasswordResetToken = '';
 
   const setStatus = (node, text, kind = '') => {
     if (!node) return;
@@ -218,12 +262,17 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
     if (!response.ok) {
       const error = new Error(payload.error || `Yêu cầu thất bại (${response.status}).`);
       error.status = response.status;
+      error.code = payload.code || null;
       throw error;
     }
     return payload;
   };
   const setAuthMode = (mode) => {
     authMode = mode;
+    authForm.hidden = false;
+    passwordResetForm.hidden = true;
+    authSwitch.hidden = false;
+    if (forgotPasswordButton) forgotPasswordButton.hidden = mode === 'register';
     const registering = mode === 'register';
     authTitle.textContent = registering ? 'Tham gia cộng đồng' : 'Chào mừng trở lại';
     authDescription.textContent = registering ? 'Đăng ký miễn phí để tham gia các phòng thảo luận theo chủ đề.' : 'Đăng nhập để tiếp tục các cuộc thảo luận của bạn.';
@@ -336,7 +385,7 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
     }
   };
 
-  if (window.location.hostname !== primaryHost) {
+  if (![primaryHost, 'ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev'].includes(window.location.hostname)) {
     authPanel.hidden = true;
     memberPanel.hidden = true;
     loginPrompt.hidden = true;
@@ -364,17 +413,120 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
       payload.displayName = displayInput.value.trim() || payload.username;
     }
     try {
-      const result = await api(authMode === 'register' ? '/register' : '/login', { method: 'POST', body: JSON.stringify(payload) });
-      showMember(result.member);
+      const registering = authMode === 'register';
+      const result = await api(registering ? '/register' : '/login', { method: 'POST', body: JSON.stringify(payload) });
       passwordInput.value = '';
+      if (registering && result.pendingVerification) {
+        lastVerificationEmail = payload.email;
+        emailInput.value = payload.email;
+        setAuthMode('login');
+        if (resendVerificationButton) resendVerificationButton.hidden = false;
+        setStatus(authStatus, 'Tài khoản đã được tạo nhưng chưa kích hoạt. Hãy mở hộp thư của địa chỉ ' + payload.email + ' để xác nhận email trong vòng 30 phút. Nếu chưa thấy thư, hãy kiểm tra cả mục Thư rác/Spam và Quảng cáo.', 'success');
+        return;
+      }
+      if (resendVerificationButton) resendVerificationButton.hidden = true;
+      showMember(result.member);
       setStatus(roomStatus, 'Đăng nhập thành công. Đang tải phòng thảo luận…', 'success');
       await loadMessages();
     } catch (error) {
+      if (error.code === 'EMAIL_VERIFICATION_REQUIRED') {
+        lastVerificationEmail = payload.email;
+        if (resendVerificationButton) resendVerificationButton.hidden = false;
+      }
       setStatus(authStatus, error.message, 'error');
     } finally {
       authSubmit.disabled = false;
     }
   });
+  if (resendVerificationButton) {
+    resendVerificationButton.addEventListener('click', async () => {
+      const email = String(emailInput.value || lastVerificationEmail).trim().toLowerCase();
+      if (!email) {
+        setStatus(authStatus, 'Vui lòng nhập email trước khi yêu cầu gửi lại liên kết.', 'error');
+        return;
+      }
+      resendVerificationButton.disabled = true;
+      try {
+        const result = await api('/resend-verification', {
+          method: 'POST',
+          body: JSON.stringify({ email }),
+        });
+        setStatus(authStatus, 'Đã tiếp nhận yêu cầu cho địa chỉ ' + email + '. Nếu email thuộc tài khoản đang chờ xác nhận, hệ thống sẽ gửi lại hướng dẫn. Nếu chưa thấy thư, hãy kiểm tra mục Thư rác/Spam và Quảng cáo.', 'success');
+      } catch (error) {
+        setStatus(authStatus, error.message, 'error');
+      } finally {
+        resendVerificationButton.disabled = false;
+      }
+    });
+  }
+
+  if (forgotPasswordButton) {
+    forgotPasswordButton.addEventListener('click', async () => {
+      const email = String(emailInput.value || '').trim().toLowerCase();
+      if (!email || !emailInput.checkValidity()) {
+        emailInput.focus();
+        setStatus(authStatus, 'Nhập địa chỉ email hợp lệ để nhận liên kết đặt lại mật khẩu.', 'error');
+        return;
+      }
+      forgotPasswordButton.disabled = true;
+      try {
+        const result = await api('/request-password-reset', { method: 'POST', body: JSON.stringify({ email }) });
+        setStatus(authStatus, result.message || 'Nếu email thuộc tài khoản đã xác nhận, hệ thống sẽ gửi hướng dẫn khi dịch vụ sẵn sàng.', 'success');
+      } catch (_error) {
+        setStatus(authStatus, 'Chưa thể xử lý yêu cầu lúc này. Vui lòng thử lại sau.', 'error');
+      } finally {
+        forgotPasswordButton.disabled = false;
+      }
+    });
+  }
+  if (passwordResetForm) {
+    passwordResetForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!pendingPasswordResetToken) {
+        setStatus(authStatus, 'Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn. Hãy yêu cầu liên kết mới.', 'error');
+        return;
+      }
+      const password = String(newPasswordInput.value || '');
+      const confirmation = String(confirmPasswordInput.value || '');
+      if (password.length < 10 || password.length > 128) {
+        setStatus(authStatus, 'Mật khẩu mới cần từ 10 đến 128 ký tự.', 'error');
+        newPasswordInput.focus();
+        return;
+      }
+      if (password !== confirmation) {
+        setStatus(authStatus, 'Hai mật khẩu chưa khớp. Vui lòng nhập lại.', 'error');
+        confirmPasswordInput.focus();
+        return;
+      }
+      passwordResetSubmit.disabled = true;
+      try {
+        const result = await api('/reset-password', { method: 'POST', body: JSON.stringify({ token: pendingPasswordResetToken, password }) });
+        pendingPasswordResetToken = '';
+        passwordResetForm.reset();
+        passwordResetForm.hidden = true;
+        authForm.hidden = false;
+        authSwitch.hidden = false;
+        setAuthMode('login');
+        setStatus(authStatus, result.message || 'Mật khẩu đã được cập nhật. Bạn có thể đăng nhập bằng mật khẩu mới.', 'success');
+      } catch (error) {
+        setStatus(authStatus, error.message || 'Không thể đặt lại mật khẩu. Hãy yêu cầu liên kết mới.', 'error');
+      } finally {
+        passwordResetSubmit.disabled = false;
+      }
+    });
+  }
+  if (passwordResetBack) {
+    passwordResetBack.addEventListener('click', () => {
+      pendingPasswordResetToken = '';
+      passwordResetForm.reset();
+      passwordResetForm.hidden = true;
+      authForm.hidden = false;
+      authSwitch.hidden = false;
+      setAuthMode('login');
+      setStatus(authStatus, 'Bạn có thể đăng nhập hoặc yêu cầu liên kết đặt lại mật khẩu mới.');
+    });
+  }
+
   logoutButton.addEventListener('click', async () => {
     logoutButton.disabled = true;
     try {
@@ -413,17 +565,81 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
     }
   });
 
-  setAuthMode('register');
+  const verifyParams = new URLSearchParams(window.location.search);
+  const fragmentQueryIndex = window.location.hash.indexOf('?');
+  const fragmentVerifyParams = new URLSearchParams(fragmentQueryIndex >= 0 ? window.location.hash.slice(fragmentQueryIndex + 1) : '');
+  const verificationToken = fragmentVerifyParams.get('verify');
+  const resetToken = fragmentVerifyParams.get('reset');
+  const requestedMode = verifyParams.get('mode');
+  const initialAuthMode = requestedMode === 'login' || requestedMode === 'register'
+    ? requestedMode
+    : 'register';
+  if (resetToken) {
+    const cleanParams = new URLSearchParams(window.location.search);
+    cleanParams.delete('mode');
+    const remainingQuery = cleanParams.toString();
+    window.history.replaceState({}, '', window.location.pathname + (remainingQuery ? '?' + remainingQuery : '') + '#cong-dong');
+    root.scrollIntoView({ block: 'start' });
+    pendingPasswordResetToken = resetToken;
+    setAuthMode('login');
+    authForm.hidden = true;
+    passwordResetForm.hidden = false;
+    authSwitch.hidden = true;
+    if (resendVerificationButton) resendVerificationButton.hidden = true;
+    if (forgotPasswordButton) forgotPasswordButton.hidden = true;
+    setStatus(authStatus, 'Nhập và xác nhận mật khẩu mới của bạn.', '');
+  } else if (verificationToken) {
+    verifyParams.delete('mode');
+    const remainingQuery = verifyParams.toString();
+    window.history.replaceState({}, '', window.location.pathname + (remainingQuery ? '?' + remainingQuery : '') + '#cong-dong');
+    root.scrollIntoView({ block: 'start' });
+    setAuthMode('login');
+    if (resendVerificationButton) resendVerificationButton.hidden = true;
+    setStatus(authStatus, 'Nhấn nút bên dưới để xác nhận email.');
+  } else {
+    if (verifyParams.has('mode')) {
+      verifyParams.delete('mode');
+      const remainingQuery = verifyParams.toString();
+      window.history.replaceState({}, '', window.location.pathname + (remainingQuery ? '?' + remainingQuery : '') + window.location.hash);
+    }
+    setAuthMode(initialAuthMode);
+  }
   selectTopic('tools');
-  api('/me', { method: 'GET', headers: {} }).then((result) => {
-    showMember(result.member);
-    if (result.member) loadMessages();
-  }).catch((error) => {
-    setStatus(authStatus, error.status === 503 ? 'Cộng đồng đang chờ cấu hình cơ sở dữ liệu. Tài khoản và tin nhắn chưa thể lưu cho đến khi quản trị viên hoàn tất thiết lập.' : error.message, 'error');
-    authSubmit.disabled = error.status === 503;
-    switchModeButton.disabled = error.status === 503;
-    roomTabs.forEach((button) => { button.disabled = error.status === 503; });
-  });
+  if (verificationToken) {
+    if (resendVerificationButton) resendVerificationButton.hidden = true;
+    const confirmEmailButton = document.createElement('button');
+    confirmEmailButton.type = 'button';
+    confirmEmailButton.className = 'button primary community-submit';
+    confirmEmailButton.textContent = 'Xác nhận email';
+    confirmEmailButton.addEventListener('click', async () => {
+      confirmEmailButton.disabled = true;
+      setStatus(authStatus, 'Đang xác nhận email…');
+      try {
+        const result = await api('/verify-email', {
+          method: 'POST',
+          body: JSON.stringify({ token: verificationToken })
+        });
+        setAuthMode('login');
+        setStatus(authStatus, result.message || 'Email đã được xác nhận. Bạn có thể đăng nhập.', 'success');
+        confirmEmailButton.remove();
+      } catch (error) {
+        confirmEmailButton.disabled = false;
+        if (resendVerificationButton) resendVerificationButton.hidden = false;
+        setStatus(authStatus, error.message, 'error');
+      }
+    });
+    authStatus.insertAdjacentElement('afterend', confirmEmailButton);
+  } else if (!resetToken) {
+    api('/me', { method: 'GET', headers: {} }).then((result) => {
+      showMember(result.member);
+      if (result.member) loadMessages();
+    }).catch((error) => {
+      setStatus(authStatus, error.status === 503 ? 'Cộng đồng đang chờ cấu hình cơ sở dữ liệu. Tài khoản và tin nhắn chưa thể lưu cho đến khi quản trị viên hoàn tất thiết lập.' : error.message, 'error');
+      authSubmit.disabled = error.status === 503;
+      switchModeButton.disabled = error.status === 503;
+      roomTabs.forEach((button) => { button.disabled = error.status === 503; });
+    });
+  }
   window.setInterval(() => {
     if (currentMember && document.visibilityState === 'visible') loadMessages();
   }, 15000);

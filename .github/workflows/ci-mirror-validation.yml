@@ -1,0 +1,42 @@
+name: Mirror branch static validation
+on:
+  push:
+    branches:
+      - "ci-mirror/**"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-mirror-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  validate-static-release-candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout mirror snapshot
+        uses: actions/checkout@v4
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate source snapshot
+        run: |
+          node --check scripts/verify-static-snapshot.mjs
+          node scripts/verify-static-snapshot.mjs
+      - name: Build and validate production package locally (no deploy)
+        run: |
+          node --check scripts/build-pages.mjs
+          node scripts/build-production-pages.mjs
+          node scripts/test-production-pages.mjs
+      - name: Build isolated preview package locally (no deploy)
+        env:
+          CF_PAGES_BRANCH: fix/production-pages-safe-package-20261104
+          CF_PAGES_URL: https://ci-validation.pages.dev
+        run: |
+          node scripts/build-main-preview.mjs
+          node scripts/test-preview-pages.mjs
+      - name: Verify branch preview package selector
+        env:
+          CF_PAGES_BRANCH: main
+        run: node scripts/build-pages.mjs

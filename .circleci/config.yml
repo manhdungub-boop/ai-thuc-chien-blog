@@ -1,0 +1,66 @@
+version: 2.1
+
+jobs:
+  static-content-snapshot-validation:
+    docker:
+      - image: cimg/node:22.0
+    steps:
+      - checkout
+      - run:
+          name: Syntax check static snapshot validator
+          command: node --check scripts/verify-static-snapshot.mjs
+      - run:
+          name: Validate static content snapshot
+          command: node scripts/verify-static-snapshot.mjs
+
+  production-package-validation:
+    docker:
+      - image: cimg/node:22.0
+    steps:
+      - checkout
+      - run:
+          name: Syntax check Pages build selector
+          command: node --check scripts/build-pages.mjs
+      - run:
+          name: Build production package without deploying
+          command: node scripts/build-production-pages.mjs
+      - run:
+          name: Test production package
+          command: node scripts/test-production-pages.mjs
+      - run:
+          name: Generate SHA-256 manifest inside release artifact
+          command: |
+            cd production-output
+            find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+      - store_artifacts:
+          path: production-output
+          destination: production-static-release
+
+  preview-package-validation:
+    docker:
+      - image: cimg/node:22.0
+    steps:
+      - checkout
+      - run:
+          name: Build isolated noindex preview package
+          command: CF_PAGES_BRANCH=fix/production-pages-safe-package-20261104 CF_PAGES_URL=https://ci-validation.pages.dev node scripts/build-main-preview.mjs
+      - run:
+          name: Test isolated preview package
+          command: node scripts/test-preview-pages.mjs
+
+  main-pages-selector-validation:
+    docker:
+      - image: cimg/node:22.0
+    steps:
+      - checkout
+      - run:
+          name: Validate main branch Pages package selection
+          command: CF_PAGES_BRANCH=main node scripts/build-pages.mjs
+
+workflows:
+  validate-static-release-candidate:
+    jobs:
+      - static-content-snapshot-validation
+      - production-package-validation
+      - preview-package-validation
+      - main-pages-selector-validation
