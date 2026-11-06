@@ -1,0 +1,43 @@
+name: Staging Google OAuth integration
+
+on:
+  push:
+    branches:
+      - feature/required-email-verification
+  pull_request:
+    branches:
+      - feature/required-email-verification
+    paths:
+      - "worker.mjs"
+      - "migrations/0003_community_oauth_accounts.sql"
+      - "tests/staging-google-oidc-runtime.test.mjs"
+      - "scripts/test_google_oauth_worker_integration.mjs"
+      - "scripts/test_google_oauth_migration.py"
+      - ".github/workflows/staging-google-oauth-integration.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  staging-google-oauth:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Syntax-check integrated Worker and tests
+        run: |
+          node --check worker.mjs
+          node --check tests/staging-google-oidc-runtime.test.mjs
+          node --check scripts/test_google_oauth_worker_integration.mjs
+      - name: Run Google OIDC security regression tests against integrated Worker
+        run: node --test tests/staging-google-oidc-runtime.test.mjs
+      - name: Check staging-only OAuth routes and migration contract
+        run: node scripts/test_google_oauth_worker_integration.mjs
+      - name: Rehearse additive OAuth migration in local SQLite
+        run: python scripts/test_google_oauth_migration.py
