@@ -136,7 +136,7 @@ const expiredVerify = await call('/verify-email', { method: 'POST', body: { toke
 assert.equal(expiredVerify.status, 400, 'expired token must be rejected');
 assert.equal(expiredMember.email_verified_at, null, 'expired token must not activate the member');
 const login = await call('/login', { method: 'POST', body: { email: 'member@example.com', password: 'MotMatKhauRieng123!' } }); assert.equal(login.status, 200); assert.equal((await login.json()).member.username, 'thanhvien_1');
-const setCookie = login.headers.get('set-cookie'); assert.match(setCookie, /HttpOnly/); assert.match(setCookie, /Secure/); assert.match(setCookie, /SameSite=Lax/); assert.match(setCookie, /Path=\//); const cookie = setCookie.split(';')[0];
+const setCookie = login.headers.get('set-cookie'); assert.match(setCookie, /HttpOnly/); assert.match(setCookie, /Secure/); assert.match(setCookie, /SameSite=Lax/); assert.match(setCookie, /Path=\//); let cookie = setCookie.split(';')[0];
 const me = await call('/me', { cookie }); assert.equal(me.status, 200); assert.equal((await me.json()).member.username, 'thanhvien_1');
 
 // Full password-reset lifecycle: generic response, hashed one-time token, password update,
@@ -166,6 +166,7 @@ const oldPasswordAfterReset = await call('/login', { method: 'POST', ip: '203.0.
 assert.equal(oldPasswordAfterReset.status, 401);
 const newPasswordLogin = await call('/login', { method: 'POST', ip: '203.0.113.54', body: { email: 'member@example.com', password: 'New-Strong-Password-456!' } });
 assert.equal(newPasswordLogin.status, 200);
+cookie = newPasswordLogin.headers.get('set-cookie').split(';')[0];
 const replayReset = await call('/password-reset/complete', { method: 'POST', ip: '203.0.113.55', body: { token: rawResetToken, password: 'Another-Strong-Password-789!' } });
 assert.equal(replayReset.status, 400, 'password-reset token must be single-use');
 const expiredResetRequest = await call('/password-reset/request', { method: 'POST', ip: '203.0.113.56', body: { email: 'member@example.com' } });
