@@ -873,7 +873,7 @@ async function handleCommunityApi(request, env) {
       const parsed = await readJsonPayload(request);
       if (!parsed.ok) return communityJson({ error: parsed.error }, parsed.status, request);
       const email = String(parsed.value.email || "").trim().toLowerCase();
-      if (!email || email.length > 254 || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) return communityJson({ error: "Vui lòng nhập email hợp lệ." }, 400, request);
+      if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return communityJson({ error: "Vui lòng nhập email hợp lệ." }, 400, request);
       const ipHash = await sha256Base64Url(ip);
       const emailHash = await sha256Base64Url(email);
       if (!await communityRateLimit(db, `password-reset-ip:${ipHash}`, 5, 60 * 60 * 1000) || !await communityRateLimit(db, `password-reset-email:${emailHash}`, 3, 60 * 60 * 1000)) {
