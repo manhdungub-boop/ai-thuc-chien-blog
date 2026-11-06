@@ -1,40 +1,28 @@
 <!doctype html>
 <html lang="vi">
 <head>
+<meta name="twitter:title" content="Quy trình AI có kiểm duyệt từ ý tưởng đến kết quả">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Hướng dẫn xây dựng quy trình AI có kiểm duyệt từ đầu đến cuối: xác định đầu vào, tạo bản nháp, kiểm chứng, duyệt của con người và theo dõi kết quả.">
-<title>Quy trình AI có kiểm duyệt: từ ý tưởng đến kết quả đáng tin cậy | AI Thực Chiến</title>
+<meta name="description" content="Hướng dẫn xây dựng quy trình AI có kiểm duyệt từ đầu đến cuối: xác định đầu vào, tạo bản nháp, kiểm chứng, duyệt của con người và theo dõi kết quả."><meta name="twitter:description" content="Hướng dẫn xây dựng quy trình AI có kiểm duyệt từ đầu đến cuối: xác định đầu vào, tạo bản nháp, kiểm chứng, duyệt của con người và theo dõi kết quả.">
+<title>Quy trình AI có kiểm duyệt từ ý tưởng đến kết quả</title>
 <meta name="theme-color" content="#0b1020">
 <meta name="robots" content="index,follow,max-image-preview:large">
-<meta name="author" content="AI Thực Chiến">
+<meta name="author" content="DUNG - AI">
 <link rel="canonical" href="https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/quy-trinh-ai-co-kiem-duyet">
 <link rel="icon" type="image/svg+xml" href="../favicon.svg">
 <meta property="og:type" content="article">
 <meta property="og:locale" content="vi_VN">
 <meta property="og:site_name" content="AI Thực Chiến">
-<meta property="og:title" content="Quy trình AI có kiểm duyệt: từ ý tưởng đến kết quả đáng tin cậy">
-<meta property="og:description" content="Thiết kế workflow AI có điểm kiểm soát, kiểm chứng thông tin và phê duyệt trước khi hành động.">
+<meta property="og:title" content="Quy trình AI có kiểm duyệt từ ý tưởng đến kết quả">
+<meta property="og:description" content="Hướng dẫn xây dựng quy trình AI có kiểm duyệt từ đầu đến cuối: xác định đầu vào, tạo bản nháp, kiểm chứng, duyệt của con người và theo dõi kết quả.">
 <meta property="og:url" content="https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/quy-trinh-ai-co-kiem-duyet">
 <meta name="twitter:card" content="summary">
-<script type="application/ld+json">
-{
-  "@context":"https://schema.org",
-  "@type":"BlogPosting",
-  "headline":"Quy trình AI có kiểm duyệt: từ ý tưởng đến kết quả đáng tin cậy",
-  "description":"Hướng dẫn xây dựng quy trình AI có kiểm duyệt từ đầu đến cuối: xác định đầu vào, tạo bản nháp, kiểm chứng, duyệt của con người và theo dõi kết quả.",
-  "url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/quy-trinh-ai-co-kiem-duyet",
-  "mainEntityOfPage":{"@type":"WebPage","@id":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/quy-trinh-ai-co-kiem-duyet"},
-  "dateModified":"2026-10-22",
-  "inLanguage":"vi-VN",
-  "author":{"@type":"Organization","name":"AI Thực Chiến","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/"},
-  "publisher":{"@type":"Organization","name":"AI Thực Chiến","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/"}
-}
-</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Quy trình AI có kiểm duyệt: từ ý tưởng đến kết quả đáng tin cậy","description":"Hướng dẫn xây dựng quy trình AI có kiểm duyệt từ đầu đến cuối: xác định đầu vào, tạo bản nháp, kiểm chứng, duyệt của con người và theo dõi kết quả.","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/quy-trinh-ai-co-kiem-duyet","mainEntityOfPage":{"@type":"WebPage","@id":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/quy-trinh-ai-co-kiem-duyet"},"dateModified":"2026-10-28","inLanguage":"vi-VN","author":{"@type":"Person","name":"DUNG - AI"},"publisher":{"@type":"Organization","name":"AI Thực Chiến","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/","logo":"https://ai-thuc-chien-blog.manhdungub.workers.dev/logo.svg"}}</script>
 <link rel="alternate" type="application/rss+xml" title="AI Thực Chiến RSS" href="../feed.xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap" onload="this.onload=null;this.rel='stylesheet'"><noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap"></noscript>
 <link rel="stylesheet" href="../styles.css">
 </head>
 <body>
@@ -43,9 +31,35 @@
 <a class="brand" href="../"><span class="brand-mark">AI</span><span>AI <b>Thực Chiến</b></span></a>
 <a class="header-cta" href="../#bai-viet">← Tất cả bài viết</a>
 </header>
-<main class="section" style="max-width:900px;margin:auto" id="main-content">
+<main class="section" style="max-width:900px;margin:auto" id="main-content"><p class="article-byline" style="font-size:14px;color:var(--muted);margin:0 0 16px"><strong>Tác giả:</strong> DUNG - AI</p>
 <div class="section-kicker">WORKFLOW · AI CÓ KIỂM DUYỆT</div>
 <h1 style="font-size:clamp(34px,6vw,58px);letter-spacing:-1.5px">Quy trình AI có kiểm duyệt: từ ý tưởng đến kết quả đáng tin cậy</h1>
+<figure class="article-diagram" data-article-diagram="quy-trinh-ai-co-kiem-duyet" role="group" aria-labelledby="article-diagram-title-quy-trinh-ai-co-kiem-duyet" style="max-width:620px;margin:30px auto;padding:18px;border:1px solid var(--line);border-radius:18px;background:#0b1424">
+<svg viewBox="0 0 600 500" width="100%" height="auto" role="img" aria-labelledby="article-diagram-title-quy-trinh-ai-co-kiem-duyet article-diagram-desc-quy-trinh-ai-co-kiem-duyet" style="display:block;max-width:100%;height:auto">
+<title id="article-diagram-title-quy-trinh-ai-co-kiem-duyet">Sơ đồ thực hành: Quy trình AI có kiểm duyệt: từ ý tưởng đến kết quả đáng tin cậy</title>
+<desc id="article-diagram-desc-quy-trinh-ai-co-kiem-duyet">Ba bước chính trong bài viết: 1. Sơ đồ quy trình chuẩn; 2. Chia rõ trạng thái để tránh hành động nhầm; 3. Thiết kế điểm kiểm tra chất lượng</desc>
+<defs><linearGradient id="diagram-accent-quy-trinh-ai-co-kiem-duyet" x1="0" x2="1"><stop offset="0" stop-color="#55d6b5"/><stop offset="1" stop-color="#8ab4ff"/></linearGradient></defs>
+<text x="300" y="38" text-anchor="middle" fill="#73dfc2" font-size="16" font-weight="700" letter-spacing="2">LỘ TRÌNH THỰC HÀNH</text>
+<rect x="58" y="76" width="484" height="94" rx="18" fill="#14243b" stroke="#36506f" stroke-width="2"/>
+<circle cx="105" cy="123" r="22" fill="url(#diagram-accent-quy-trinh-ai-co-kiem-duyet)"/>
+<text x="105" y="130" text-anchor="middle" fill="#081421" font-size="19" font-weight="800">1</text>
+<text x="148" y="127" fill="#eef4ff" font-size="19" font-weight="600"><tspan x="148" dy="0">Sơ đồ quy trình chuẩn</tspan></text>
+<path d="M300 172 V214" fill="none" stroke="#68d8bd" stroke-width="3" stroke-linecap="round"/>
+<path d="M291 204 L300 215 L309 204" fill="none" stroke="#68d8bd" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="58" y="222" width="484" height="94" rx="18" fill="#14243b" stroke="#36506f" stroke-width="2"/>
+<circle cx="105" cy="269" r="22" fill="url(#diagram-accent-quy-trinh-ai-co-kiem-duyet)"/>
+<text x="105" y="276" text-anchor="middle" fill="#081421" font-size="19" font-weight="800">2</text>
+<text x="148" y="261" fill="#eef4ff" font-size="19" font-weight="600"><tspan x="148" dy="0">Chia rõ trạng thái để tránh hành</tspan><tspan x="148" dy="24">động nhầm</tspan></text>
+<path d="M300 318 V360" fill="none" stroke="#68d8bd" stroke-width="3" stroke-linecap="round"/>
+<path d="M291 350 L300 361 L309 350" fill="none" stroke="#68d8bd" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="58" y="368" width="484" height="94" rx="18" fill="#14243b" stroke="#36506f" stroke-width="2"/>
+<circle cx="105" cy="415" r="22" fill="url(#diagram-accent-quy-trinh-ai-co-kiem-duyet)"/>
+<text x="105" y="422" text-anchor="middle" fill="#081421" font-size="19" font-weight="800">3</text>
+<text x="148" y="419" fill="#eef4ff" font-size="19" font-weight="600"><tspan x="148" dy="0">Thiết kế điểm kiểm tra chất lượng</tspan></text>
+</svg>
+<figcaption style="margin-top:10px;color:var(--muted);font-size:13px;line-height:1.6">Sơ đồ tóm tắt ba phần chính của bài viết. Đọc hướng dẫn chi tiết và kiểm chứng kết quả trước khi áp dụng vào dữ liệu thật.</figcaption>
+</figure>
+
 <p style="color:var(--muted)">Một workflow tốt không chỉ tạo nội dung nhanh. Nó phải biết khi nào cần kiểm chứng, khi nào phải dừng và lúc nào cần con người quyết định.</p>
 <p><strong>Cập nhật:</strong> 22/10/2026 · <strong>Thời gian đọc:</strong> 7–9 phút</p>
 
@@ -148,6 +162,16 @@
 </ul>
 <p style="color:var(--muted);font-size:12px">Bài viết mang tính hướng dẫn thực hành. Tên tính năng, giới hạn gói miễn phí và khả năng tích hợp có thể thay đổi; hãy xác minh trong tài liệu chính thức trước khi triển khai.</p>
 <p><a class="button primary" href="../#bai-viet">← Quay lại danh sách bài viết</a></p>
+<section class="article-faq" aria-labelledby="faq-human-approval">
+<h2 id="faq-human-approval">Câu hỏi thường gặp</h2>
+<h3>Khi nào cần yêu cầu con người duyệt kết quả AI?</h3>
+<p>Đặt bước duyệt trước hành động khó đảo ngược hoặc có ảnh hưởng đáng kể đến người khác, ví dụ xuất bản công khai, gửi thông báo hàng loạt hoặc cập nhật dữ liệu quan trọng. Mức kiểm soát cần dựa vào tác động của sai sót, khả năng phát hiện lỗi và khả năng khôi phục, không chỉ dựa vào việc mô hình từng trả lời đúng.</p>
+<h3>Màn hình duyệt nên cung cấp thông tin gì?</h3>
+<p>Hiển thị đầu vào liên quan, bản nháp AI, nguồn đã đối chiếu, các kiểm tra đạt/chưa đạt và hành động sẽ xảy ra khi chấp thuận. Ghi ai duyệt, thời điểm, phiên bản hoặc mã chạy để có thể truy lại sau này. Không đưa secret hay dữ liệu không cần thiết vào log kiểm duyệt.</p>
+<h3>Điều gì xảy ra nếu người duyệt từ chối?</h3>
+<p>Quy trình nên có trạng thái từ chối hoặc yêu cầu sửa rõ ràng, lưu lý do ở mức cần thiết và dừng mọi tác động tiếp theo. Không tự gửi lại kết quả bị từ chối hoặc lặp lại hành động bằng retry. Nếu cần sửa, tạo bản nháp mới để kiểm tra và duyệt lại như một phiên bản khác.</p>
+</section>
+
 <section class="related-articles" aria-labelledby="related-articles-title">
 <div class="related-articles-heading"><p class="section-kicker">ĐỌC TIẾP</p><h2 id="related-articles-title">Bài viết liên quan</h2><p>Đi sâu hơn vào prompt, kiểm soát và vận hành workflow.</p></div>
 <nav class="related-articles-grid" aria-label="Bài viết liên quan">
@@ -156,7 +180,8 @@
 <a class="related-article" href="/articles/workflow-ai-airtable-activepieces"><strong>Workflow AI với Airtable và Activepieces</strong><span>Biến các bước thành quy trình theo dõi được.</span></a>
 </nav>
 </section>
-</main>
+<p class="article-library-cta" style="margin:28px 0 12px"><a class="button primary" href="../thu-vien.html">Khám phá thư viện bài viết →</a></p>
+<section class="article-author-note" aria-label="Ghi công tác giả và sử dụng nội dung"><p><strong>Tác giả:</strong> DUNG - AI</p><p>Khi trích dẫn, chia sẻ hoặc sử dụng lại nội dung bài viết này, vui lòng ghi rõ tác giả <strong>DUNG - AI</strong> và dẫn liên kết về bài viết gốc. Các tài sản của bên thứ ba (nếu có) vẫn tuân theo giấy phép và điều kiện sử dụng riêng.</p></section></main>
 <footer><a class="brand" href="../"><span class="brand-mark">AI</span><span>AI <b>Thực Chiến</b></span></a><span>Học thật · Thử thật · Tối ưu bằng bằng chứng · © 2026 AI Thực Chiến</span><a href="../feed.xml">RSS</a></footer>
 </body>
 </html>
