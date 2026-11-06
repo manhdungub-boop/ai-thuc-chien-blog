@@ -182,7 +182,7 @@ assert.equal(expiredReset.status, 400, 'expired password-reset token must be rej
 // Ported edge cases from GitLab's password-reset suite, adapted to the current GitHub Worker routes.
 db.rates.clear();
 relayResult = { ok: false, code: 'SEND_FAILED' };
-const resetTokensBeforeRelayFailure = db.resetTokens.length;
+const resetMemberId = db.members.find(member => member.email === 'member@example.com').id;
 const resetRelayFailure = await call('/password-reset/request', {
   method: 'POST',
   ip: '203.0.113.58',
@@ -190,8 +190,8 @@ const resetRelayFailure = await call('/password-reset/request', {
 });
 assert.equal(resetRelayFailure.status, 200, 'reset relay failure must preserve the generic public response');
 assert.deepEqual(await resetRelayFailure.json(), resetGeneric);
-assert.equal(db.resetTokens.length, resetTokensBeforeRelayFailure,
-  'failed reset email delivery must remove the undelivered reset token');
+assert.equal(db.resetTokens.some(token => token.member_id === resetMemberId), false,
+  'failed reset email delivery must remove every reset token for the affected member');
 relayResult = { ok: true };
 
 // Atomic token consumption: concurrent submissions must yield exactly one success.
