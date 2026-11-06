@@ -69,6 +69,20 @@ const previewSameOriginResponse = await worker.fetch(new Request(`${previewOrigi
 assert.equal(previewSameOriginResponse.status, 200, 'same-origin Preview API calls should be accepted');
 assert.equal(previewSameOriginResponse.headers.get('Access-Control-Allow-Origin'), previewOrigin);
 
+// Port the email-verification boundary checks from GitLab to the current Worker.
+const communityPreflight = await call('/register', { method: 'OPTIONS' });
+assert.equal(communityPreflight.status, 200, 'allowed community CORS preflight must succeed');
+assert.equal(communityPreflight.headers.get('Access-Control-Allow-Origin'), origin);
+assert.match(communityPreflight.headers.get('Access-Control-Allow-Methods') || '', /POST/);
+assert.match(communityPreflight.headers.get('Cache-Control') || '', /no-store/);
+const malformedVerification = await call('/verify-email', {
+  method: 'POST',
+  body: { token: 'not-a-valid-token' }
+});
+assert.equal(malformedVerification.status, 400, 'malformed email-verification tokens must be rejected');
+assert.equal(malformedVerification.headers.get('Access-Control-Allow-Origin'), origin);
+assert.equal(malformedVerification.headers.get('X-Content-Type-Options'), 'nosniff');
+
 const invalidRegister = await call('/register', { method: 'POST', body: { username: 'x', displayName: 'X', email: 'bad', password: 'short' } }); assert.equal(invalidRegister.status, 400);
 const nullPayload = await call('/register', { method: 'POST', body: null }); assert.equal(nullPayload.status, 400);
 
@@ -156,6 +170,16 @@ assert.notEqual(storedResetToken.token_hash, rawResetToken, 'raw password-reset 
 const nonexistentReset = await call('/password-reset/request', { method: 'POST', ip: '203.0.113.51', body: { email: 'not-a-member@example.com' } });
 assert.equal(nonexistentReset.status, 200);
 assert.deepEqual(await nonexistentReset.json(), resetGeneric, 'existing and nonexistent emails must receive the same public response');
+const malformedResetToken = await call('/password-reset/complete', {
+  method: 'POST', ip: '203.0.113.52',
+  body: { token: 'bad', password: 'New-Strong-Password-456!' }
+});
+assert.equal(malformedResetToken.status, 400, 'malformed password-reset tokens must be rejected without consuming the valid token');
+const shortResetPassword = await call('/password-reset/complete', {
+  method: 'POST', ip: '203.0.113.52',
+  body: { token: rawResetToken, password: 'short' }
+});
+assert.equal(shortResetPassword.status, 400, 'short replacement passwords must be rejected without consuming the valid token');
 const resetComplete = await call('/password-reset/complete', { method: 'POST', ip: '203.0.113.52', body: { token: rawResetToken, password: 'New-Strong-Password-456!' } });
 assert.equal(resetComplete.status, 200);
 assert.equal((await resetComplete.json()).ok, true);
