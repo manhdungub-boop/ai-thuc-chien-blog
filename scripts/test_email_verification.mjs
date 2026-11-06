@@ -46,7 +46,7 @@ const resetMigration = fs.readFileSync(new URL('../migrations/0004_community_pas
 assert.match(resetMigration, /community_password_reset_tokens/);
 assert.match(resetMigration, /token_hash TEXT PRIMARY KEY/);
 assert.match(resetMigration, /ON DELETE CASCADE/);
-assert.match(relay, /(?:verify|reset)=/);
+assert.ok(relay.includes('(?:verify|reset)='), 'relay must accept password reset tokens only on allowlisted hosts');
 console.log('PASS: email verification routes, fail-closed configuration, UI controls and additive migration are present.');
 
 
