@@ -139,6 +139,7 @@ const login = await call('/login', { method: 'POST', body: { email: 'member@exam
 const setCookie = login.headers.get('set-cookie'); assert.match(setCookie, /HttpOnly/); assert.match(setCookie, /Secure/); assert.match(setCookie, /SameSite=Lax/); assert.match(setCookie, /Path=\//); let cookie = setCookie.split(';')[0];
 const me = await call('/me', { cookie }); assert.equal(me.status, 200); assert.equal((await me.json()).member.username, 'thanhvien_1');
 
+// Regression coverage runs against the real Worker handler with an isolated in-memory D1 double.
 // Full password-reset lifecycle: generic response, hashed one-time token, password update,
 // expiry/replay rejection and revocation of existing sessions.
 const resetRequest = await call('/password-reset/request', { method: 'POST', ip: '203.0.113.50', body: { email: 'member@example.com' } });
