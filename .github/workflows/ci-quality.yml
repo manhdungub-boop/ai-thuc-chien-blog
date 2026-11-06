@@ -60,6 +60,17 @@ jobs:
       - name: Test article content quality
         run: npm run test:content
 
+      - name: Validate AI bank catalog and review queue
+        run: |
+          node scripts/validate-ai-tools-catalog.mjs data/ai-tools.json
+          node scripts/test-ai-tools-catalog-ui.mjs
+          node scripts/audit-ai-tools-catalog.mjs data/ai-tools.json docs/reviews/ai-tools-candidates-2026-11-02.json --strict
+
+      - name: Verify article authorship, attribution, and diagrams
+        run: |
+          node scripts/verify-article-attribution.mjs
+          node scripts/verify-article-diagrams.mjs
+
       - name: Test SEO consistency
         run: npm run test:seo
 
