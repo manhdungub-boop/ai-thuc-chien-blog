@@ -245,12 +245,20 @@ assert.deepEqual(concurrentStatuses, [200, 400],
 assert.equal(db.resetTokens.length, 0, 'concurrent reset must consume the token exactly once');
 assert.equal(db.sessions.some(session => session.member_id === db.members.find(member => member.email === 'member@example.com').id),
   false, 'concurrent reset success must revoke all existing sessions');
-const postConcurrentLogin = await call('/login', {
-  method: 'POST', ip: '203.0.113.62',
-  body: { email: 'member@example.com', password: 'New-Concurrent-Password-123!' }
-});
-assert.equal(postConcurrentLogin.status, 200, 'the password from the single successful concurrent reset must authenticate');
-cookie = postConcurrentLogin.headers.get('set-cookie').split(';')[0];
+const concurrentLoginAttempts = await Promise.all([
+  call('/login', {
+    method: 'POST', ip: '203.0.113.62',
+    body: { email: 'member@example.com', password: 'New-Concurrent-Password-123!' }
+  }),
+  call('/login', {
+    method: 'POST', ip: '203.0.113.64',
+    body: { email: 'member@example.com', password: 'New-Concurrent-Password-456!' }
+  })
+]);
+assert.deepEqual(concurrentLoginAttempts.map(response => response.status).sort((a, b) => a - b), [200, 401],
+  'exactly the password from the single successful concurrent reset must authenticate');
+const winningLogin = concurrentLoginAttempts.find(response => response.status === 200);
+cookie = winningLogin.headers.get('set-cookie').split(';')[0];
 
 // The completion endpoint must throttle repeated attempts even when tokens are well-formed but unknown.
 db.rates.clear();
