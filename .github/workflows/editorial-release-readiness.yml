@@ -34,16 +34,16 @@ jobs:
       - name: Package validated static candidate and checksum
         run: |
           cd dist
-          zip -qr ../release-candidate.zip .
+          tar -czf ../release-candidate.tar.gz .
           cd ..
-          sha256sum release-candidate.zip > release-candidate.sha256
+          sha256sum release-candidate.tar.gz > release-candidate.sha256
 
       - name: Preserve release candidate artifact
         uses: actions/upload-artifact@v4
         with:
           name: ai-thuc-chien-static-release-candidate
           path: |
-            release-candidate.zip
+            release-candidate.tar.gz
             release-candidate.sha256
           if-no-files-found: error
           retention-days: 7
