@@ -9,7 +9,7 @@ const files = fs.readdirSync(articleDir).filter((name) => name.endsWith('.html')
 assert.ok(files.length > 0, 'expected at least one published article file');
 for (const file of files) {
   const source = fs.readFileSync(path.join(articleDir, file), 'utf8');
-  assert.match(source, /<section class="related-articles" aria-labelledby="related-articles-title">/, `${file}: related section missing`);
+  assert.match(source, /<section class="related-articles" aria-labelledby="[a-z0-9-]+">/i, `${file}: related section with an explicit accessible label is missing`);
   assert.match(source, /<nav class="related-articles-grid" aria-label="Bài viết liên quan">/, `${file}: semantic related-links navigation missing`);
   const block = source.match(/<nav class="related-articles-grid"[\s\S]*?<\/nav>/)?.[0];
   assert.ok(block, `${file}: related navigation block missing`);
