@@ -1,6 +1,9 @@
 name: Manage Preview D1 Migrations
 
 on:
+  push:
+    branches:
+      - feature/community-password-reset-preview
   workflow_dispatch:
     inputs:
       mode:
