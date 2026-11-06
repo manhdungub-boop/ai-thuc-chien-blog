@@ -14,6 +14,19 @@ if (base.protocol !== 'https:' || !(isFeatureAlias || isGeneratedFeaturePreview)
 }
 const target = base.origin;
 
+async function requestWithRetry(url, init, label) {
+  let lastError;
+  for (let attempt = 1; attempt <= 12; attempt += 1) {
+    try {
+      return await fetch(url, { ...init, redirect: 'error', signal: AbortSignal.timeout(15000) });
+    } catch (error) {
+      lastError = error;
+      if (attempt < 12) await new Promise((resolve) => setTimeout(resolve, 5000));
+    }
+  }
+  throw new Error(`${label} could not reach the Preview endpoint after retries (${String(lastError?.name || 'network error')}).`);
+}
+
 // Read-only, same-origin request: proves the preview worker, D1 schema and CORS work together.
 const own = await requestWithRetry(`${target}/api/community/me`, {
   method: 'GET',
