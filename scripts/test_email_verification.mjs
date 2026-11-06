@@ -24,6 +24,7 @@ assert.ok(worker.includes('route === "password-reset/complete"'));
 assert.match(worker, /community_password_reset_tokens/);
 assert.match(worker, /password-reset-email:/);
 assert.match(worker, /DELETE FROM community_sessions WHERE member_id = \\?/);
+assert.ok(worker.includes('RETURNING member_id'), 'password reset token must be consumed atomically to prevent concurrent replay');
 assert.match(worker, /EMAIL_NOT_VERIFIED/);
 assert.match(worker, /email_verified_at IS NOT NULL/);
 assert.match(worker, /SHA-256/);
