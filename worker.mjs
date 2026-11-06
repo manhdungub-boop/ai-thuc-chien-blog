@@ -912,16 +912,18 @@ async function handleCommunityApi(request, env) {
       const ipHash = await sha256Base64Url(ip);
       if (!await communityRateLimit(db, `password-reset-complete-ip:${ipHash}`, 10, 15 * 60 * 1000)) return communityJson({ error: "Bạn đã thử quá nhiều lần. Vui lòng thử lại sau." }, 429, request);
       const tokenHash = await sha256Base64Url(token);
-      const row = await db.prepare(`SELECT t.member_id FROM community_password_reset_tokens t
-        JOIN community_members m ON m.id = t.member_id
-        WHERE t.token_hash = ? AND t.expires_at > ? AND m.email_verified_at IS NOT NULL LIMIT 1`).bind(tokenHash, now).first();
-      if (!row) return communityJson({ error: "Liên kết đặt lại mật khẩu không hợp lệ, đã dùng hoặc đã hết hạn. Hãy yêu cầu liên kết mới." }, 400, request);
+      // Atomically consume the token before changing the password so concurrent replay attempts cannot both succeed.
+      const consumed = await db.prepare(`DELETE FROM community_password_reset_tokens
+        WHERE token_hash = ? AND expires_at > ?
+          AND EXISTS (SELECT 1 FROM community_members m WHERE m.id = community_password_reset_tokens.member_id AND m.email_verified_at IS NOT NULL)
+        RETURNING member_id`).bind(tokenHash, now).first();
+      if (!consumed?.member_id) return communityJson({ error: "Liên kết đặt lại mật khẩu không hợp lệ, đã dùng hoặc đã hết hạn. Hãy yêu cầu liên kết mới." }, 400, request);
       const salt = crypto.getRandomValues(new Uint8Array(16));
       const passwordHash = await hashCommunityPassword(password, salt);
       await db.prepare("UPDATE community_members SET password_salt = ?, password_hash = ? WHERE id = ?")
-        .bind(bytesToBase64Url(salt), passwordHash, row.member_id).run();
-      await db.prepare("DELETE FROM community_password_reset_tokens WHERE member_id = ?").bind(row.member_id).run();
-      await db.prepare("DELETE FROM community_sessions WHERE member_id = ?").bind(row.member_id).run();
+        .bind(bytesToBase64Url(salt), passwordHash, consumed.member_id).run();
+      await db.prepare("DELETE FROM community_password_reset_tokens WHERE member_id = ?").bind(consumed.member_id).run();
+      await db.prepare("DELETE FROM community_sessions WHERE member_id = ?").bind(consumed.member_id).run();
       return communityJson({ ok: true, message: "Mật khẩu đã được đặt lại. Vui lòng đăng nhập bằng mật khẩu mới." }, 200, request);
     }
 
