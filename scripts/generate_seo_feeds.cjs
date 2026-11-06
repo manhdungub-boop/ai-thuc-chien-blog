@@ -125,6 +125,7 @@ function generate(outputDir) {
     { canonical: SITE + '/' },
     about,
     library,
+    aiBank,
     ...articles
   ].map((page) => {
     const lines = [
