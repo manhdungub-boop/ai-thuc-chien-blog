@@ -5,6 +5,7 @@ root = Path(__file__).resolve().parents[1]
 migration_1 = (root / "migrations/0001_community_reconstructed.sql").read_text(encoding="utf-8")
 migration_2 = (root / "migrations/0002_email_verification_reconstructed.sql").read_text(encoding="utf-8")
 migration_3 = (root / "migrations/0003_password_reset_tokens.sql").read_text(encoding="utf-8")
+migration_4 = (root / "migrations/0004_community_oauth_accounts.sql").read_text(encoding="utf-8")
 
 db = sqlite3.connect(":memory:")
 db.execute("PRAGMA foreign_keys=ON")
@@ -58,6 +59,42 @@ required_indexes = {
     "idx_community_password_reset_member",
 }
 indexes_present = required_indexes.issubset(indexes)
+
+# Rehearse OAuth migration 0004 only in this in-memory SQLite database.
+db.executescript(migration_4)
+oauth_columns = {row[1] for row in db.execute("PRAGMA table_info(community_oauth_accounts)")}
+oauth_table_shape = {"provider", "provider_user_id", "member_id", "email", "created_at"}.issubset(oauth_columns)
+oauth_indexes = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='index'")}
+oauth_index_present = "idx_community_oauth_accounts_member" in oauth_indexes
+
+db.execute(
+    "INSERT INTO community_oauth_accounts(provider,provider_user_id,member_id,email,created_at) VALUES(?,?,?,?,?)",
+    ("google", "mock-google-subject-001", "existing", "existing@example.invalid", "2026-11-06T00:00:00Z"),
+)
+oauth_valid_insert = db.execute(
+    "SELECT COUNT(*) FROM community_oauth_accounts WHERE provider='google' AND provider_user_id='mock-google-subject-001'"
+).fetchone()[0] == 1
+
+try:
+    db.execute(
+        "INSERT INTO community_oauth_accounts(provider,provider_user_id,member_id,email,created_at) VALUES(?,?,?,?,?)",
+        ("google", "mock-google-subject-001", "existing", "existing@example.invalid", "2026-11-06T00:01:00Z"),
+    )
+    oauth_duplicate_rejected = False
+except sqlite3.IntegrityError:
+    oauth_duplicate_rejected = True
+
+try:
+    db.execute(
+        "INSERT INTO community_oauth_accounts(provider,provider_user_id,member_id,email,created_at) VALUES(?,?,?,?,?)",
+        ("unknown", "mock-provider-subject-001", "existing", "existing@example.invalid", "2026-11-06T00:02:00Z"),
+    )
+    oauth_invalid_provider_rejected = False
+except sqlite3.IntegrityError:
+    oauth_invalid_provider_rejected = True
+
+db.execute("DELETE FROM community_members WHERE id='existing'")
+oauth_fk_cascade = db.execute("SELECT COUNT(*) FROM community_oauth_accounts").fetchone()[0] == 0
 
 # Rehearse migration 0003 against a schema shape observed in the current
 # production D1. This remains an in-memory compatibility test, not approval to
@@ -130,10 +167,16 @@ results = {
     "new_members_remain_unverified": new_member_unverified,
     "verification_and_reset_tokens_cascade_on_member_delete": token_cascade,
     "required_indexes_present": indexes_present,
+    "oauth_migration_creates_expected_table_shape": oauth_table_shape,
+    "oauth_migration_creates_member_lookup_index": oauth_index_present,
+    "oauth_account_accepts_valid_google_identity": oauth_valid_insert,
+    "oauth_provider_identity_composite_key_rejects_duplicates": oauth_duplicate_rejected,
+    "oauth_provider_check_rejects_unknown_provider": oauth_invalid_provider_rejected,
+    "oauth_account_is_deleted_when_member_is_deleted": oauth_fk_cascade,
     "password_reset_migration_is_compatible_with_existing_prod_schema_shape": prod_like_schema_compatible,
 }
 for name, passed in results.items():
     print(("PASS " if passed else "FAIL ") + name)
 if not all(results.values()):
     raise SystemExit(1)
-print("All migration rehearsals passed on in-memory SQLite only. No real D1 database was accessed; this does not authorize production migration.")
+print("All migration rehearsals, including OAuth migration 0004, passed on in-memory SQLite only. No real D1 database was accessed; this does not authorize production migration.")
