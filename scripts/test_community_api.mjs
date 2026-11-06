@@ -179,6 +179,71 @@ expiredResetRow.expires_at = new Date(Date.now() - 1000).toISOString();
 const expiredReset = await call('/password-reset/complete', { method: 'POST', ip: '203.0.113.57', body: { token: expiredResetToken, password: 'Expired-Strong-Password-789!' } });
 assert.equal(expiredReset.status, 400, 'expired password-reset token must be rejected');
 
+// Ported edge cases from GitLab's password-reset suite, adapted to the current GitHub Worker routes.
+db.rates.clear();
+relayResult = { ok: false, code: 'SEND_FAILED' };
+const resetTokensBeforeRelayFailure = db.resetTokens.length;
+const resetRelayFailure = await call('/password-reset/request', {
+  method: 'POST',
+  ip: '203.0.113.58',
+  body: { email: 'member@example.com' }
+});
+assert.equal(resetRelayFailure.status, 200, 'reset relay failure must preserve the generic public response');
+assert.deepEqual(await resetRelayFailure.json(), resetGeneric);
+assert.equal(db.resetTokens.length, resetTokensBeforeRelayFailure,
+  'failed reset email delivery must remove the undelivered reset token');
+relayResult = { ok: true };
+
+// Atomic token consumption: concurrent submissions must yield exactly one success.
+db.rates.clear();
+const concurrentResetRequest = await call('/password-reset/request', {
+  method: 'POST',
+  ip: '203.0.113.59',
+  body: { email: 'member@example.com' }
+});
+assert.equal(concurrentResetRequest.status, 200);
+const concurrentTokenMatch = capturedEmail.htmlBody.match(/[?]reset=([A-Za-z0-9_-]{32,80})/);
+assert.ok(concurrentTokenMatch, 'concurrent-reset fixture must contain a valid token');
+const concurrentToken = concurrentTokenMatch[1];
+const concurrentResponses = await Promise.all([
+  call('/password-reset/complete', {
+    method: 'POST', ip: '203.0.113.60',
+    body: { token: concurrentToken, password: 'New-Concurrent-Password-123!' }
+  }),
+  call('/password-reset/complete', {
+    method: 'POST', ip: '203.0.113.61',
+    body: { token: concurrentToken, password: 'New-Concurrent-Password-456!' }
+  })
+]);
+const concurrentStatuses = concurrentResponses.map(response => response.status).sort((a, b) => a - b);
+assert.deepEqual(concurrentStatuses, [200, 400],
+  'atomic reset-token consumption must allow only one concurrent request to succeed');
+assert.equal(db.resetTokens.length, 0, 'concurrent reset must consume the token exactly once');
+assert.equal(db.sessions.some(session => session.member_id === db.members.find(member => member.email === 'member@example.com').id),
+  false, 'concurrent reset success must revoke all existing sessions');
+const postConcurrentLogin = await call('/login', {
+  method: 'POST', ip: '203.0.113.62',
+  body: { email: 'member@example.com', password: 'New-Concurrent-Password-123!' }
+});
+assert.equal(postConcurrentLogin.status, 200, 'the password from the single successful concurrent reset must authenticate');
+cookie = postConcurrentLogin.headers.get('set-cookie').split(';')[0];
+
+// The completion endpoint must throttle repeated attempts even when tokens are well-formed but unknown.
+db.rates.clear();
+const invalidResetAttempts = [];
+for (let attempt = 0; attempt < 11; attempt += 1) {
+  invalidResetAttempts.push(await call('/password-reset/complete', {
+    method: 'POST',
+    ip: '203.0.113.63',
+    body: { token: 'A'.repeat(43), password: 'Valid-New-Password-456!' }
+  }));
+}
+const invalidResetStatuses = invalidResetAttempts.map(response => response.status);
+assert.equal(invalidResetStatuses.filter(status => status === 400).length, 10,
+  'the first ten well-formed invalid-token attempts must be rejected as invalid');
+assert.equal(invalidResetStatuses[10], 429,
+  'the eleventh password-reset completion attempt from one IP must be rate-limited');
+
 // The mail relay can reject a message despite HTTP 200; fail closed and remove the pending member/token.
 relayResult = { ok: false, code: 'SEND_FAILED' };
 const tokenCountBeforeFailedMail = db.tokens.length;
