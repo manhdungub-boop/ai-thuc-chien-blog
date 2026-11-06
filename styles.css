@@ -138,3 +138,6 @@
 .community-social-heading{margin:0;text-align:center;color:#9aa7c0;font-size:11px}
 .community-social-button{display:flex;align-items:center;justify-content:center;min-height:44px;padding:10px 14px;border:1px solid var(--line);border-radius:9px;background:#fff;color:#1b2434;font:inherit;font-size:12px;font-weight:750;text-decoration:none;cursor:pointer}
 .community-social-button:hover{border-color:var(--mint);transform:translateY(-1px)}
+
+/* Respect the HTML hidden attribute even when component styles set display:grid/block. */
+[hidden] { display: none !important; }
