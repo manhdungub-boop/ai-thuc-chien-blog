@@ -79,9 +79,17 @@
           <input id="community-password" name="password" type="password" minlength="10" maxlength="128" autocomplete="current-password" placeholder="Ít nhất 10 ký tự" required>
           <button class="button primary community-submit" id="community-auth-submit" type="submit">Đăng ký thành viên <span>→</span></button>
         </form>
+        <button class="button primary community-submit" id="community-verify-confirm" type="button" hidden>Xác nhận email</button>
+        <button type="button" id="community-resend-verification" class="community-resend-verification" hidden>Gửi lại email xác nhận</button>
+        <button type="button" id="community-forgot-password" class="community-resend-verification" hidden>Quên mật khẩu?</button>
+        <form id="community-password-reset-form" class="community-auth-form" hidden>
+          <label for="community-new-password">Mật khẩu mới</label>
+          <input id="community-new-password" name="newPassword" type="password" minlength="10" maxlength="128" autocomplete="new-password" placeholder="Ít nhất 10 ký tự" required>
+          <button class="button primary community-submit" id="community-password-reset-submit" type="submit">Đặt lại mật khẩu <span>→</span></button>
+        </form>
         <p class="community-status" id="community-auth-status" role="status" aria-live="polite"></p>
         <p class="community-auth-switch"><span id="community-switch-copy">Đã có tài khoản?</span> <button type="button" id="community-switch-mode">Đăng nhập</button></p>
-        <p class="community-privacy-note">Email chỉ dùng để đăng nhập, không hiển thị trong phòng. Tên hiển thị và tin nhắn sẽ được các thành viên đọc. Không dùng lại mật khẩu ở nơi khác. Phiên bản đầu chưa xác minh email hoặc hỗ trợ đặt lại mật khẩu.</p>
+        <p class="community-privacy-note">Email chỉ dùng để đăng nhập, không hiển thị trong phòng. Tên hiển thị và tin nhắn sẽ được các thành viên đọc. Không dùng lại mật khẩu ở nơi khác. Bạn cần xác nhận email trước khi đăng nhập. Liên kết xác nhận có hiệu lực 30 phút. Không dùng lại mật khẩu ở nơi khác.</p>
       </div>
       <div id="community-member-panel" hidden>
         <div class="community-member-avatar" aria-hidden="true">✦</div>
@@ -112,7 +120,7 @@
     </div>
   </div>
 </section>
-<section class="section articles" id="bai-viet"><div class="section-heading"><div><div class="section-kicker">THƯ VIỆN MỞ RỘNG</div><h2>Khám phá <em>69 bài thực hành.</em></h2><p>69 bài thực hành được tổ chức theo 4 chủ đề chính cùng các hướng dẫn bổ trợ, có ví dụ, checklist và nguồn tham khảo.</p></div><a class="button primary" href="thu-vien.html">Mở thư viện bài viết →</a></div><div class="section-heading"><div><div class="section-kicker">GÓC THỰC HÀNH</div><h2>Bắt đầu từ <em>một bước nhỏ.</em></h2></div><span class="section-count">BÀI VIẾT NỀN TẢNG</span></div><div class="article-tools" hidden>
+<section class="section articles" id="bai-viet"><div class="section-heading"><div><div class="section-kicker">THƯ VIỆN MỞ RỘNG</div><h2>Khám phá <em>48 bài thực hành.</em></h2><p>12 bài cho mỗi chủ đề, có ví dụ, checklist và nguồn tham khảo.</p></div><a class="button primary" href="thu-vien.html">Mở thư viện bài viết →</a></div><div class="section-heading"><div><div class="section-kicker">GÓC THỰC HÀNH</div><h2>Bắt đầu từ <em>một bước nhỏ.</em></h2></div><span class="section-count">BÀI VIẾT NỀN TẢNG</span></div><div class="article-tools" hidden>
 <div class="article-search-control">
 <label for="article-search">Tìm bài viết theo chủ đề hoặc từ khóa</label>
 <div class="article-search-field"><span aria-hidden="true">⌕</span><input id="article-search" name="article-search" type="search" placeholder="Ví dụ: SEO, workflow, kiểm chứng…" autocomplete="off" spellcheck="false" aria-controls="article-grid" aria-describedby="article-search-status"></div>
