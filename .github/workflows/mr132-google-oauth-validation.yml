@@ -1,0 +1,43 @@
+name: MR 132 Google OAuth validation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/test-social-auth.mjs'
+      - 'recovery-snapshots/worker-email-verification-candidate.mjs'
+      - 'site-snapshot/script.js'
+      - 'tests/staging-google-oidc-runtime.test.mjs'
+      - 'scripts/verify-staging-google-oidc-hardening.mjs'
+      - 'scripts/verify-migrations.py'
+      - 'migrations/**'
+      - 'docs/SOCIAL_LOGIN_STAGING_SETUP.md'
+      - '.github/workflows/mr132-google-oauth-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  offline-google-oauth-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Syntax-check OAuth test sources
+        run: |
+          node --check scripts/test-social-auth.mjs
+          node --check tests/staging-google-oidc-runtime.test.mjs
+          node --check scripts/verify-staging-google-oidc-hardening.mjs
+      - name: Run isolated Google OAuth regression tests
+        run: |
+          node scripts/test-social-auth.mjs
+          node --test tests/staging-google-oidc-runtime.test.mjs
+          node scripts/verify-staging-google-oidc-hardening.mjs
+      - name: Validate migrations in local in-memory SQLite only
+        run: python scripts/verify-migrations.py
