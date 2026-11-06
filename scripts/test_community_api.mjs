@@ -102,6 +102,22 @@ assert.match((await resendLimited.json()).error, /quá nhiều lần/i);
 const resendMember = db.members.find((m) => m.email === 'resend@example.com');
 assert.equal(db.tokens.filter((t) => t.member_id === resendMember.id).length, 1, 'resend should replace the prior token rather than accumulating valid tokens');
 
+// Password-reset email throttling must not reveal whether an email belongs to an account.
+const resetEmail = 'privacy-reset@example.invalid';
+for (let attempt = 0; attempt < 3; attempt += 1) {
+  const response = await call('/password-reset/request', { method: 'POST', body: { email: resetEmail } });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).ok, true);
+}
+const resetEmailLimited = await call('/password-reset/request', { method: 'POST', body: { email: resetEmail } });
+assert.equal(resetEmailLimited.status, 200, 'email-specific throttling must keep the generic response');
+assert.equal((await resetEmailLimited.json()).ok, true);
+// The IP-wide limit remains enforced independently and applies regardless of the email value.
+const resetOtherEmail = await call('/password-reset/request', { method: 'POST', body: { email: 'another-reset@example.invalid' } });
+assert.equal(resetOtherEmail.status, 200, 'the fifth request from this IP should still be allowed');
+const resetIpLimited = await call('/password-reset/request', { method: 'POST', body: { email: 'third-reset@example.invalid' } });
+assert.equal(resetIpLimited.status, 429, 'the sixth request from this IP within one hour must be throttled');
+
 // Expired verification tokens must be rejected and must not activate the member.
 const expiredRegistration = await call('/register', { method: 'POST', body: { username: 'expired_user', displayName: 'Expired Token', email: 'expired@example.com', password: 'Expired-Token-Password-123!' } });
 assert.equal(expiredRegistration.status, 201);
