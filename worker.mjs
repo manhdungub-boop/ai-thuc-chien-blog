@@ -210,7 +210,10 @@ const COMMUNITY_SESSION_SECONDS = 60 * 60 * 24 * 30;
 const COMMUNITY_PASSWORD_ITERATIONS = 100000;
 const COMMUNITY_ENCODER = new TextEncoder();
 
-const COMMUNITY_OAUTH_STAGING_ORIGIN = "https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev";
+const COMMUNITY_OAUTH_STAGING_ORIGINS = new Set([
+  "https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev",
+  "https://feature-required-email-verification-ai-thuc-chien-blog.manhdungub.workers.dev",
+]);
 const COMMUNITY_OAUTH_STATE_TTL_SECONDS = 600;
 
 function communityJson(data, status, request, extraHeaders = {}) {
@@ -480,7 +483,7 @@ async function validateGoogleOidcIdToken(idToken, clientId, expectedNonce) {
 
 async function beginCommunityOAuth(request, env, provider, db) {
   const requestUrl = new URL(request.url);
-  if (requestUrl.origin !== COMMUNITY_OAUTH_STAGING_ORIGIN) {
+  if (!COMMUNITY_OAUTH_STAGING_ORIGINS.has(requestUrl.origin)) {
     return communityJson({ error: "Đăng nhập mạng xã hội hiện chưa được bật." }, 404, request);
   }
   const credentials = communityOAuthCredentials(env, provider);
@@ -494,7 +497,7 @@ async function beginCommunityOAuth(request, env, provider, db) {
   }
 
   const state = bytesToBase64Url(crypto.getRandomValues(new Uint8Array(32)));
-  const redirectUri = COMMUNITY_OAUTH_STAGING_ORIGIN + "/api/community/oauth/" + provider + "/callback";
+  const redirectUri = requestUrl.origin + "/api/community/oauth/" + provider + "/callback";
   const headers = new Headers({
     "Cache-Control": "no-store, max-age=0",
     "Pragma": "no-cache",
@@ -609,7 +612,7 @@ async function completeCommunityOAuth(request, env, provider, db) {
   const requestUrl = new URL(request.url);
   const clearCookies = communityOAuthClearCookies(provider);
   const fail = (reason) => communityOAuthRedirect(request, provider, reason, clearCookies);
-  if (requestUrl.origin !== COMMUNITY_OAUTH_STAGING_ORIGIN) {
+  if (!COMMUNITY_OAUTH_STAGING_ORIGINS.has(requestUrl.origin)) {
     return communityJson({ error: "Callback đăng nhập không hợp lệ." }, 404, request);
   }
   // Bound callback processing before any provider network request or D1 account mutation.
@@ -629,7 +632,7 @@ async function completeCommunityOAuth(request, env, provider, db) {
   let stage = "OAUTH_TOKEN_EXCHANGE_FAILED";
   try {
     const credentials = communityOAuthCredentials(env, provider);
-    const redirectUri = COMMUNITY_OAUTH_STAGING_ORIGIN + "/api/community/oauth/" + provider + "/callback";
+    const redirectUri = requestUrl.origin + "/api/community/oauth/" + provider + "/callback";
     const tokenUrl = provider === "google"
       ? "https://oauth2.googleapis.com/token"
       : "https://graph.facebook.com/v26.0/oauth/access_token";
@@ -757,12 +760,12 @@ async function handleCommunityApi(request, env) {
 
   // Google OAuth is deliberately restricted to the dedicated staging hostname.
   if (route === "oauth/providers" && request.method === "GET") {
-    const isStagingOAuthHost = new URL(request.url).origin === COMMUNITY_OAUTH_STAGING_ORIGIN;
+    const isStagingOAuthHost = COMMUNITY_OAUTH_STAGING_ORIGINS.has(new URL(request.url).origin);
     return communityJson({ google: isStagingOAuthHost && communityOAuthReady(env, "google"), facebook: false }, 200, request);
   }
   const googleOAuthRoute = route.match(/^oauth\/google\/(start|callback)$/);
   if (googleOAuthRoute && request.method === "GET") {
-    if (new URL(request.url).origin !== COMMUNITY_OAUTH_STAGING_ORIGIN) {
+    if (!COMMUNITY_OAUTH_STAGING_ORIGINS.has(new URL(request.url).origin)) {
       return communityJson({ error: "Google OAuth chỉ được bật trên môi trường staging." }, 404, request);
     }
     return googleOAuthRoute[1] === "start"
