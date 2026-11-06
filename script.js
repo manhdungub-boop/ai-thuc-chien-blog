@@ -472,6 +472,7 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
       switchModeButton.parentElement.hidden = false;
       window.history.replaceState({}, '', `${window.location.pathname}#cong-dong`);
       setAuthMode('login');
+      forgotPasswordButton.hidden = false;
       setStatus(authStatus, result.message || 'Mật khẩu đã được đặt lại. Vui lòng đăng nhập.', 'success');
     } catch (error) { setStatus(authStatus, error.message, 'error'); }
     finally { passwordResetSubmit.disabled = false; }
