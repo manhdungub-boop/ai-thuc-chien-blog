@@ -10,7 +10,7 @@ on:
       - 'tests/staging-google-oidc-runtime.test.mjs'
       - 'scripts/verify-staging-google-oidc-hardening.mjs'
       - 'scripts/verify-migrations.py'
-      - 'migrations/**'
+      - 'tests/fixtures/reconstructed-migrations/**'
       - 'docs/SOCIAL_LOGIN_STAGING_SETUP.md'
       - '.github/workflows/mr132-google-oauth-validation.yml'
 
