@@ -757,7 +757,8 @@ async function handleCommunityApi(request, env) {
 
   // Google OAuth is deliberately restricted to the dedicated staging hostname.
   if (route === "oauth/providers" && request.method === "GET") {
-    return communityJson({ google: communityOAuthReady(env, "google"), facebook: false }, 200, request);
+    const isStagingOAuthHost = new URL(request.url).origin === COMMUNITY_OAUTH_STAGING_ORIGIN;
+    return communityJson({ google: isStagingOAuthHost && communityOAuthReady(env, "google"), facebook: false }, 200, request);
   }
   const googleOAuthRoute = route.match(/^oauth\/google\/(start|callback)$/);
   if (googleOAuthRoute && request.method === "GET") {
