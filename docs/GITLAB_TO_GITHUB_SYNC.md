@@ -35,7 +35,9 @@ Updated: 2026-11-07
 
 ## Deliberately not copied into active GitHub runtime
 
-The GitLab `site-snapshot/` tree is a historical static export. Its files differ from the current GitHub root implementation; 80 of 81 comparable files had different blob hashes. The GitHub content integration already contains the 69-page article set and AI Bank, so the older snapshot was not allowed to overwrite current files.
+The GitLab `site-snapshot/` tree was not copied wholesale because it also contains an older static shell and assets that must not overwrite the current GitHub Worker/authentication implementation. After the editorial audit exposed missing author attribution in the earlier GitHub article copies, all 69 reviewed article HTML files were selectively imported from `site-snapshot/articles/` into the active `articles/` directory. They carry the DUNG - AI author metadata/byline, BlogPosting author and publisher, reuse/attribution note, and accessible self-contained SVG diagram. The 69-item `thu-vien.html` page and assets referenced by the imported articles were also synced.
+
+The homepage and Worker remain based on the newer GitHub authentication branch: the AI Bank navigation/card additions were merged into the GitHub homepage without replacing its email-verification controls. The GitLab snapshot's homepage was not copied. The AI Bank data catalog was retained from the GitHub content branch because its four differing records had later verification dates (2026-11-05 versus 2026-11-04 or earlier in the GitLab snapshot) and more detailed current pricing/review notes.
 
 The following GitLab-specific or historical test assets were not wired into active GitHub CI because they target the older `recovery-snapshots/worker-email-verification-candidate.mjs`, `staging-entrypoint.mjs`, `site-snapshot/`, `.gitlab-ci.yml`, or old Wrangler configurations:
 
