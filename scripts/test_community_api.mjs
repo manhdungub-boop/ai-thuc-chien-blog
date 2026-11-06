@@ -85,6 +85,23 @@ const loginBeforeVerification = await call('/login', { method: 'POST', body: { e
 const tokenMatch = capturedEmail.htmlBody.match(/[?]verify=([A-Za-z0-9_-]{32,80})/); assert.ok(tokenMatch, 'verification email must contain a random one-time token'); const verify = await call('/verify-email', { method: 'POST', body: { token: tokenMatch[1] } }); assert.equal(verify.status, 200); assert.equal((await verify.json()).ok, true); assert.equal(db.tokens.length, 0);
 const replay = await call('/verify-email', { method: 'POST', body: { token: tokenMatch[1] } }); assert.equal(replay.status, 400, 'verification tokens must be single-use');
 
+// Resend is intentionally generic for account privacy and is rate-limited to three requests per email per hour.
+const resendRegistration = await call('/register', { method: 'POST', body: { username: 'resend_user', displayName: 'Resend User', email: 'resend@example.com', password: 'Resend-Password-123!' } });
+assert.equal(resendRegistration.status, 201);
+const resendMessagesBefore = db.tokens.filter((t) => t.member_id === db.members.find((m) => m.email === 'resend@example.com').id).length;
+assert.equal(resendMessagesBefore, 1);
+for (let attempt = 0; attempt < 3; attempt += 1) {
+  const resend = await call('/resend-verification', { method: 'POST', body: { email: 'resend@example.com' } });
+  assert.equal(resend.status, 200, 'first three resend requests should return the generic response');
+  assert.equal((await resend.json()).ok, true);
+  assert.equal(capturedEmail.to, 'resend@example.com', 'pending account should receive a new verification email');
+}
+const resendLimited = await call('/resend-verification', { method: 'POST', body: { email: 'resend@example.com' } });
+assert.equal(resendLimited.status, 429, 'fourth resend request in the same hour must be rate-limited');
+assert.match((await resendLimited.json()).error, /quá nhiều lần/i);
+const resendMember = db.members.find((m) => m.email === 'resend@example.com');
+assert.equal(db.tokens.filter((t) => t.member_id === resendMember.id).length, 1, 'resend should replace the prior token rather than accumulating valid tokens');
+
 // Expired verification tokens must be rejected and must not activate the member.
 const expiredRegistration = await call('/register', { method: 'POST', body: { username: 'expired_user', displayName: 'Expired Token', email: 'expired@example.com', password: 'Expired-Token-Password-123!' } });
 assert.equal(expiredRegistration.status, 201);
