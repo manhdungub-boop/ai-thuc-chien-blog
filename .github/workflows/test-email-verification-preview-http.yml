@@ -27,6 +27,8 @@ jobs:
           node-version: 22
       - name: Check test syntax
         run: node --check scripts/test_community_preview_http.mjs
+      - name: Build current static assets for Preview
+        run: node scripts/build_static_site.cjs
       - name: Configure email relay secrets on the feature Preview only
         id: configure_relay
         env:
