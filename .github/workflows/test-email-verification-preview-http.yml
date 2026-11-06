@@ -26,7 +26,9 @@ jobs:
         with:
           node-version: 22
       - name: Check test syntax
-        run: node --check scripts/test_community_preview_http.mjs
+        run: |
+          node --check scripts/test_community_preview_http.mjs
+          node --check scripts/test_community_preview_frontend.mjs
       - name: Build current static assets for Preview
         run: node scripts/build_static_site.cjs
       - name: Build and deploy current branch code to isolated Preview
@@ -45,6 +47,10 @@ jobs:
           fi
           echo "preview_url=$preview_url" >> "$GITHUB_OUTPUT"
           echo "PREVIEW_CODE_DEPLOY=success (branch source, generated dist assets and isolated Preview bindings)."
+      - name: Verify Preview frontend immediately after code deployment
+        env:
+          PREVIEW_URL: ${{ steps.deploy_preview.outputs.preview_url }}
+        run: node scripts/test_community_preview_frontend.mjs
       - name: Configure email relay secrets on the feature Preview only
         id: configure_relay
         env:
@@ -96,6 +102,10 @@ jobs:
           grep -Fq 'COMMUNITY_EMAIL_RELAY_URL' "$secret_list" || { echo "::error::Latest Preview is missing COMMUNITY_EMAIL_RELAY_URL."; exit 1; }
           grep -Fq 'COMMUNITY_EMAIL_RELAY_SECRET' "$secret_list" || { echo "::error::Latest Preview is missing COMMUNITY_EMAIL_RELAY_SECRET."; exit 1; }
           echo "PREVIEW_SECRET_NAMES=verified (names only; values not read or printed)."
+      - name: Verify Preview frontend after secret deployment
+        env:
+          PREVIEW_URL: ${{ steps.configure_relay.outputs.preview_url }}
+        run: node scripts/test_community_preview_frontend.mjs
       - name: Verify Apps Script relay endpoint without sending email
         env:
           COMMUNITY_EMAIL_RELAY_URL: ${{ secrets.COMMUNITY_EMAIL_RELAY_URL }}
