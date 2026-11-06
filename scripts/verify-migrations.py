@@ -2,10 +2,10 @@ import sqlite3
 from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
-migration_1 = (root / "migrations/0001_community_reconstructed.sql").read_text(encoding="utf-8")
-migration_2 = (root / "migrations/0002_email_verification_reconstructed.sql").read_text(encoding="utf-8")
-migration_3 = (root / "migrations/0003_password_reset_tokens.sql").read_text(encoding="utf-8")
-migration_4 = (root / "migrations/0004_community_oauth_accounts.sql").read_text(encoding="utf-8")
+migration_1 = (root / "tests/fixtures/reconstructed-migrations/0001_community_reconstructed.sql").read_text(encoding="utf-8")
+migration_2 = (root / "tests/fixtures/reconstructed-migrations/0002_email_verification_reconstructed.sql").read_text(encoding="utf-8")
+migration_3 = (root / "tests/fixtures/reconstructed-migrations/0003_password_reset_tokens.sql").read_text(encoding="utf-8")
+migration_4 = (root / "tests/fixtures/reconstructed-migrations/0004_community_oauth_accounts.sql").read_text(encoding="utf-8")
 
 db = sqlite3.connect(":memory:")
 db.execute("PRAGMA foreign_keys=ON")
