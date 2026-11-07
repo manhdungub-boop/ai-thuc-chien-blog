@@ -373,8 +373,8 @@ function communityOAuthReady(env, provider) {
   const credentials = communityOAuthCredentials(env, provider);
   return Boolean(credentials.clientId && credentials.clientSecret);
 }
-function communityOAuthCookieName(provider, part) {
-  return "__Host-ai_oauth_" + provider + "_" + part;
+function communityOAuthCookieName(provider, part, transactionId) {
+  return "__Host-ai_oauth_" + provider + "_" + part + "_" + transactionId;
 }
 function readCommunityOAuthCookie(request, name) {
   const prefix = name + "=";
@@ -382,8 +382,8 @@ function readCommunityOAuthCookie(request, name) {
   const entry = cookies.split(";").map((value) => value.trim()).find((value) => value.startsWith(prefix));
   return entry ? entry.slice(prefix.length) : "";
 }
-function communityOAuthCookie(provider, part, value, maxAge = COMMUNITY_OAUTH_STATE_TTL_SECONDS) {
-  return communityOAuthCookieName(provider, part) + "=" + value +
+function communityOAuthCookie(provider, part, value, transactionId, maxAge = COMMUNITY_OAUTH_STATE_TTL_SECONDS) {
+  return communityOAuthCookieName(provider, part, transactionId) + "=" + value +
     "; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=" + maxAge;
 }
 function communityOAuthRedirect(request, provider, result, extraCookies = []) {
@@ -403,11 +403,11 @@ function communityOAuthRedirect(request, provider, result, extraCookies = []) {
   for (const cookie of extraCookies) headers.append("Set-Cookie", cookie);
   return new Response(null, { status: 302, headers });
 }
-function communityOAuthClearCookies(provider) {
-  const cookies = [communityOAuthCookie(provider, "state", "", 0)];
+function communityOAuthClearCookies(provider, transactionId) {
+  const cookies = [communityOAuthCookie(provider, "state", "", transactionId, 0)];
   if (provider === "google") {
-    cookies.push(communityOAuthCookie(provider, "verifier", "", 0));
-    cookies.push(communityOAuthCookie(provider, "nonce", "", 0));
+    cookies.push(communityOAuthCookie(provider, "verifier", "", transactionId, 0));
+    cookies.push(communityOAuthCookie(provider, "nonce", "", transactionId, 0));
   }
   return cookies;
 }
@@ -520,14 +520,14 @@ async function beginCommunityOAuth(request, env, provider, db) {
     "Referrer-Policy": "no-referrer",
   });
   let authorizationUrl;
-  headers.append("Set-Cookie", communityOAuthCookie(provider, "state", state));
+  headers.append("Set-Cookie", communityOAuthCookie(provider, "state", state, state));
 
   if (provider === "google") {
     const verifier = bytesToBase64Url(crypto.getRandomValues(new Uint8Array(32)));
     const challenge = await sha256Base64Url(verifier);
     const nonce = bytesToBase64Url(crypto.getRandomValues(new Uint8Array(32)));
-    headers.append("Set-Cookie", communityOAuthCookie(provider, "verifier", verifier));
-    headers.append("Set-Cookie", communityOAuthCookie(provider, "nonce", nonce));
+    headers.append("Set-Cookie", communityOAuthCookie(provider, "verifier", verifier, state));
+    headers.append("Set-Cookie", communityOAuthCookie(provider, "nonce", nonce, state));
     authorizationUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
     authorizationUrl.search = new URLSearchParams({
       client_id: credentials.clientId,
@@ -626,20 +626,26 @@ async function communityOAuthMember(db, provider, providerUserId, email, display
 
 async function completeCommunityOAuth(request, env, provider, db) {
   const requestUrl = new URL(request.url);
-  const clearCookies = communityOAuthClearCookies(provider);
-  const fail = (reason) => communityOAuthRedirect(request, provider, reason, clearCookies);
   if (!COMMUNITY_OAUTH_STAGING_ORIGINS.has(requestUrl.origin)) {
     return communityJson({ error: "Callback đăng nhập không hợp lệ." }, 404, request);
   }
+  const state = String(requestUrl.searchParams.get("state") || "");
+  const validStateFormat = /^[A-Za-z0-9_-]{43}$/.test(state);
+  const storedState = validStateFormat
+    ? readCommunityOAuthCookie(request, communityOAuthCookieName(provider, "state", state))
+    : "";
+  const transactionValid = Boolean(storedState && state === storedState);
+  // Only a callback that proves possession of its own state cookie may clear that
+  // transaction's cookies. A bad callback must never invalidate another login flow.
+  const clearCookies = transactionValid ? communityOAuthClearCookies(provider, state) : [];
+  const fail = (reason) => communityOAuthRedirect(request, provider, reason, clearCookies);
   // Bound callback processing before any provider network request or D1 account mutation.
   const callbackIp = request.headers.get("CF-Connecting-IP") || "unknown";
   const callbackIpHash = await sha256Base64Url(callbackIp);
   if (!await communityRateLimit(db, "oauth-callback:" + provider + ":" + callbackIpHash, 30, 15 * 60 * 1000)) {
     return fail("OAUTH_CALLBACK_RATE_LIMITED");
   }
-  const state = String(requestUrl.searchParams.get("state") || "");
-  const storedState = readCommunityOAuthCookie(request, communityOAuthCookieName(provider, "state"));
-  if (!state || state.length > 128 || !storedState || state !== storedState) return fail("OAUTH_STATE_INVALID");
+  if (!transactionValid) return fail("OAUTH_STATE_INVALID");
   if (requestUrl.searchParams.has("error")) return fail("cancelled");
   const code = String(requestUrl.searchParams.get("code") || "");
   if (!code || code.length > 2048) return fail("OAUTH_CODE_MISSING");
@@ -660,7 +666,7 @@ async function completeCommunityOAuth(request, env, provider, db) {
       grant_type: "authorization_code",
     });
     if (provider === "google") {
-      const verifier = readCommunityOAuthCookie(request, communityOAuthCookieName(provider, "verifier"));
+      const verifier = readCommunityOAuthCookie(request, communityOAuthCookieName(provider, "verifier", state));
       if (!verifier || verifier.length < 43 || verifier.length > 128) return fail("OAUTH_VERIFIER_MISSING");
       tokenBody.set("code_verifier", verifier);
     }
@@ -724,7 +730,7 @@ async function completeCommunityOAuth(request, env, provider, db) {
     let email = "";
     let displayName = "";
     if (provider === "google") {
-      const expectedNonce = readCommunityOAuthCookie(request, communityOAuthCookieName(provider, "nonce"));
+      const expectedNonce = readCommunityOAuthCookie(request, communityOAuthCookieName(provider, "nonce", state));
       if (!expectedNonce || expectedNonce.length > 128) return fail("OAUTH_NONCE_MISSING");
       if (typeof tokenPayload.id_token !== "string") return fail("OAUTH_ID_TOKEN_MISSING");
       const identity = await validateGoogleOidcIdToken(tokenPayload.id_token, credentials.clientId, expectedNonce);
