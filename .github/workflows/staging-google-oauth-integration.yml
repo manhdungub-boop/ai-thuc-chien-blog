@@ -3,10 +3,10 @@ name: Staging Google OAuth integration
 on:
   push:
     branches:
-      - feature/required-email-verification
+      - main
   pull_request:
     branches:
-      - feature/required-email-verification
+      - main
     paths:
       - "worker.mjs"
       - "migrations/0003_community_oauth_accounts.sql"
@@ -14,6 +14,7 @@ on:
       - "scripts/test_google_oauth_worker_integration.mjs"
       - "scripts/test_google_oauth_migration.py"
       - ".github/workflows/staging-google-oauth-integration.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
