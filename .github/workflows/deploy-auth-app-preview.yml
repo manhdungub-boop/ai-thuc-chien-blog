@@ -10,6 +10,8 @@ on:
       - "wrangler.jsonc"
       - "migrations/**"
       - "scripts/test_auth_preview_oauth_http.mjs"
+      - "scripts/test_email_relay_no_send.mjs"
+      - "scripts/test_email_verification.mjs"
       - ".github/workflows/deploy-auth-app-preview.yml"
   workflow_dispatch:
 
@@ -68,6 +70,8 @@ jobs:
           node --check worker.mjs
           node --check script.js
           node --check scripts/test_auth_preview_oauth_http.mjs
+          node --check scripts/test_email_relay_no_send.mjs
+          node --check scripts/test_email_verification.mjs
 
       - name: Verify exact isolated Preview D1 target (read-only)
         shell: bash
@@ -167,6 +171,12 @@ jobs:
           fs.writeFileSync(path, JSON.stringify(secrets), {mode: 0o600});
           NODE
           npx --yes wrangler@4 secret bulk "$secret_file" --config wrangler.auth-preview.jsonc
+
+      - name: Verify Apps Script relay endpoint and shared secret without sending email
+        env:
+          COMMUNITY_EMAIL_RELAY_URL: ${{ secrets.COMMUNITY_EMAIL_RELAY_URL }}
+          COMMUNITY_EMAIL_RELAY_SECRET: ${{ secrets.COMMUNITY_EMAIL_RELAY_SECRET }}
+        run: node scripts/test_email_relay_no_send.mjs
 
       - name: Verify deployed staging Worker and overlapping OAuth flows
         env:

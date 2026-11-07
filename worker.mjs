@@ -331,9 +331,24 @@ async function sendCommunityVerificationEmail(env, email, displayName, token, or
     }),
   });
   let result = {};
-  try { result = await response.json(); } catch { throw new Error(`Email relay returned invalid JSON (HTTP ${response.status})`); }
+  try {
+    result = await response.json();
+  } catch {
+    const error = new Error(`Email relay returned invalid JSON (HTTP ${response.status})`);
+    error.code = "INVALID_JSON";
+    error.httpStatus = response.status;
+    throw error;
+  }
   // Apps Script ContentService can return HTTP 200 for application-level failures; inspect the JSON contract.
-  if (!response.ok || result?.ok !== true) throw new Error(`Email relay rejected the message (HTTP ${response.status})`);
+  if (!response.ok || result?.ok !== true) {
+    const relayCode = typeof result?.code === "string" && /^[A-Z0-9_]{1,48}$/.test(result.code)
+      ? result.code
+      : (response.ok ? "RELAY_REJECTED" : "HTTP_ERROR");
+    const error = new Error(`Email relay rejected the message (HTTP ${response.status}, code ${relayCode})`);
+    error.code = relayCode;
+    error.httpStatus = response.status;
+    throw error;
+  }
 }
 async function createCommunityVerificationToken(db, memberId) {
   await db.prepare("DELETE FROM community_email_verification_tokens WHERE member_id = ?").bind(memberId).run();
@@ -827,7 +842,15 @@ async function handleCommunityApi(request, env) {
       } catch (error) {
         await db.prepare("DELETE FROM community_email_verification_tokens WHERE member_id = ?").bind(memberId).run();
         await db.prepare("DELETE FROM community_members WHERE id = ? AND email_verified_at IS NULL").bind(memberId).run();
-        console.error("community_verification_email_failed", { errorName: error instanceof Error ? error.name : "UnknownError" });
+        const errorCode = typeof error?.code === "string" && /^[A-Z0-9_]{1,48}$/.test(error.code)
+          ? error.code
+          : "UNCLASSIFIED";
+        const errorHttpStatus = Number.isInteger(error?.httpStatus) ? error.httpStatus : null;
+        console.error("community_verification_email_failed", {
+          errorName: error instanceof Error ? error.name : "UnknownError",
+          errorCode,
+          errorHttpStatus
+        });
         return communityJson({ error: "Chưa gửi được email xác nhận. Tài khoản chưa được tạo; vui lòng thử lại sau." }, 503, request);
       }
       return communityJson({ verificationRequired: true, message: "Đã gửi email xác nhận. Hãy mở hộp thư và bấm liên kết trong vòng 30 phút để kích hoạt tài khoản." }, 201, request);
