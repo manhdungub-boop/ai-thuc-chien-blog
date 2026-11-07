@@ -163,6 +163,8 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
   const root = document.getElementById('cong-dong');
   if (!root) return;
   const primaryHost = 'ai-thuc-chien-blog.manhdungub.workers.dev';
+  const previewHost = 'ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev';
+  const pendingResetToken = new URLSearchParams(window.location.search).get('reset') || '';
   const authPanel = root.querySelector('#community-auth-panel');
   const memberPanel = root.querySelector('#community-member-panel');
   const authForm = root.querySelector('#community-auth-form');
@@ -350,7 +352,8 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
     }
   };
 
-  if (window.location.hostname !== primaryHost) {
+  const isPreviewPasswordReset = window.location.hostname === previewHost && Boolean(pendingResetToken);
+  if (window.location.hostname !== primaryHost && !isPreviewPasswordReset) {
     authPanel.hidden = true;
     memberPanel.hidden = true;
     loginPrompt.hidden = true;
@@ -467,7 +470,6 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
     }
   });
 
-  const pendingResetToken = new URLSearchParams(window.location.search).get('reset') || '';
   if (pendingResetToken) {
     authTitle.textContent = 'Đặt lại mật khẩu';
     authDescription.textContent = 'Tạo mật khẩu mới để tiếp tục sử dụng tài khoản.';
