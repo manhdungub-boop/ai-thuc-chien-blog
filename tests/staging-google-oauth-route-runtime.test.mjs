@@ -307,6 +307,21 @@ test("keeps overlapping Google OAuth transactions independent when the first cal
   assert.notEqual(first.state, second.state);
   assert.notEqual(cookieName(first.cookies[0]), cookieName(second.cookies[0]));
 
+  // A mismatched callback must not clear either active transaction's cookies.
+  const invalidCallback = new URL(STAGING + "/api/community/oauth/google/callback");
+  invalidCallback.searchParams.set("code", "must-not-be-exchanged");
+  invalidCallback.searchParams.set("state", "attacker-controlled-state");
+  const invalidResponse = await worker.fetch(new Request(invalidCallback, {
+    headers: {
+      Cookie: cookieHeader([...first.cookies, ...second.cookies]),
+      "CF-Connecting-IP": "192.0.2.16",
+    },
+  }), env);
+  assert.equal(invalidResponse.status, 302);
+  assert.match(invalidResponse.headers.get("Location"), /OAUTH_STATE_INVALID/);
+  assert.equal(cookiesFrom(invalidResponse).filter((cookie) => /Max-Age=0/.test(cookie)).length, 0);
+  assert.equal(networkCalls.filter((call) => call.url === "https://oauth2.googleapis.com/token").length, 0);
+
   // Complete the first transaction while both transactions' cookies are present.
   nonceOverride.expectedNonce = first.nonce;
   const firstCallback = new URL(STAGING + "/api/community/oauth/google/callback");
