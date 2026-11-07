@@ -35,7 +35,7 @@ assert.match(frontend, /community-forgot-password/);
 assert.match(frontend, /community-password-reset-form/);
 assert.ok(frontend.includes("password-reset/complete"));
 assert.match(frontend, /verificationRequired/);
-assert.ok(frontend.includes("const communityAuthHosts = new Set([\n    primaryHost,\n    'feature-required-email-verification-ai-thuc-chien-blog.manhdungub.workers.dev'\n  ]);"), 'isolated Preview must expose auth controls for end-to-end email testing');
+assert.ok(frontend.includes("const communityAuthHosts = new Set([\n    primaryHost,\n    'feature-required-email-verification-ai-thuc-chien-blog.manhdungub.workers.dev',\n    'ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev'\n  ]);"), 'documented feature and OAuth Preview hosts must expose auth controls for end-to-end testing');
 assert.match(frontend, /if \(!communityAuthHosts\.has\(window\.location\.hostname\)\)/, 'unrecognized hosts must keep community auth controls hidden');
 assert.match(html, /id="community-verify-confirm"/);
 assert.match(html, /id="community-resend-verification"/);
