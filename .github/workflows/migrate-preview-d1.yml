@@ -28,7 +28,7 @@ jobs:
       - name: Check out current main
         uses: actions/checkout@v7
         with:
-          ref: main
+          ref: ${{ github.ref }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
