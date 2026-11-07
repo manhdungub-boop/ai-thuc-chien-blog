@@ -42,4 +42,4 @@ assert conn.execute("SELECT COUNT(*) FROM community_email_verification_tokens").
 assert conn.execute("SELECT COUNT(*) FROM community_email_verification_status").fetchone()[0] == 0, "Deleting a member must cascade-delete verification status"
 assert conn.execute("SELECT COUNT(*) FROM community_oauth_accounts").fetchone()[0] == 0, "Deleting a member must cascade-delete OAuth accounts"
 assert conn.execute("SELECT COUNT(*) FROM community_password_reset_tokens").fetchone()[0] == 0, "Deleting a member must cascade-delete reset tokens"
-print("PASS: migrations 0001-0005 create community, email verification tokens and status, Google OAuth and password-reset tables; foreign keys, unique tokens and cascade cleanup are enforced")
+print("PASS: migrations 0001-0006 create community, email verification tokens and status, Google OAuth and password-reset tables; foreign keys, unique tokens and cascade cleanup are enforced")
