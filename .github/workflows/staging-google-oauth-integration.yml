@@ -7,6 +7,7 @@ on:
   pull_request:
     branches:
       - main
+      - sync/gitlab-completed-work-20261107
     paths:
       - "worker.mjs"
       - "migrations/0003_community_oauth_accounts.sql"
@@ -14,7 +15,6 @@ on:
       - "tests/staging-google-oauth-route-runtime.test.mjs"
       - "scripts/test_google_oauth_worker_integration.mjs"
       - "scripts/test_google_oauth_migration.py"
-      - ".github/workflows/staging-google-oauth-integration.yml"
   workflow_dispatch:
 
 permissions:
