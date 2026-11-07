@@ -15,7 +15,7 @@ assert.ok(Number(pbkdf2IterationsMatch[1]) <= 100000,
 assert.match(workerSource, /iterations:\s*COMMUNITY_PASSWORD_ITERATIONS/,
   'Password hashing must use the checked PBKDF2 iteration setting');
 class MockD1 {
-  constructor() { this.members = []; this.sessions = []; this.messages = []; this.emailVerificationTokens = []; this.passwordResetTokens = []; this.rates = new Map(); }
+  constructor() { this.members = []; this.sessions = []; this.messages = []; this.emailVerificationTokens = []; this.emailVerificationStatus = []; this.passwordResetTokens = []; this.rates = new Map(); }
   prepare(sql) {
     const db = this; let args = [];
     return {
@@ -23,11 +23,13 @@ class MockD1 {
       async run() {
         const q = sql.replace(/\s+/g, ' ').trim();
         if (q.startsWith('INSERT INTO community_rate_limits')) { const [bucket, windowStart] = args; const old = db.rates.get(bucket); db.rates.set(bucket, { count: old && old.window_start === windowStart ? old.count + 1 : 1, window_start: windowStart }); return { meta: { changes: 1 } }; }
-        if (q.startsWith('INSERT INTO community_members')) { const [id, username, email, display_name, password_salt, password_hash, created_at, email_verified_at] = args; if (db.members.some((m) => m.email === email || m.username === username)) throw new Error('unique constraint'); db.members.push({ id, username, email, display_name, password_salt, password_hash, created_at, email_verified_at }); return { meta: { changes: 1 } }; }
+        if (q.startsWith('INSERT INTO community_members')) { const [id, username, email, display_name, password_salt, password_hash, created_at] = args; if (db.members.some((m) => m.email === email || m.username === username)) throw new Error('unique constraint'); db.members.push({ id, username, email, display_name, password_salt, password_hash, created_at }); return { meta: { changes: 1 } }; }
+        if (q.startsWith('INSERT INTO community_email_verification_status')) { const [member_id, verified_at, created_at] = args; db.emailVerificationStatus.push({ member_id, verified_at, created_at }); return { meta: { changes: 1 } }; }
+        if (q.startsWith('UPDATE community_email_verification_status SET verified_at = ? WHERE member_id = ?')) { const [verified_at, member_id] = args; const row = db.emailVerificationStatus.find((r) => r.member_id === member_id && r.verified_at === null); if (!row) return { meta: { changes: 0 } }; row.verified_at = verified_at; return { meta: { changes: 1 } }; }
         if (q.startsWith('INSERT INTO community_email_verification_tokens')) { const [token_hash, member_id, created_at, expires_at] = args; db.emailVerificationTokens.push({ token_hash, member_id, created_at, expires_at }); return { meta: { changes: 1 } }; }
         if (q.startsWith('DELETE FROM community_email_verification_tokens WHERE token_hash = ?')) { const before = db.emailVerificationTokens.length; db.emailVerificationTokens = db.emailVerificationTokens.filter((r) => r.token_hash !== args[0]); return { meta: { changes: before - db.emailVerificationTokens.length } }; }
         if (q.startsWith('DELETE FROM community_email_verification_tokens WHERE member_id = ?')) { const before = db.emailVerificationTokens.length; db.emailVerificationTokens = db.emailVerificationTokens.filter((r) => r.member_id !== args[0]); return { meta: { changes: before - db.emailVerificationTokens.length } }; }
-        if (q.startsWith('DELETE FROM community_members WHERE id = ?')) { const before = db.members.length; db.members = db.members.filter((m) => m.id !== args[0]); db.emailVerificationTokens = db.emailVerificationTokens.filter((r) => r.member_id !== args[0]); return { meta: { changes: before - db.members.length } }; }
+        if (q.startsWith('DELETE FROM community_members WHERE id = ?')) { const before = db.members.length; db.members = db.members.filter((m) => m.id !== args[0]); db.emailVerificationTokens = db.emailVerificationTokens.filter((r) => r.member_id !== args[0]); db.emailVerificationStatus = db.emailVerificationStatus.filter((r) => r.member_id !== args[0]); return { meta: { changes: before - db.members.length } }; }
         if (q.startsWith('UPDATE community_members SET email_verified_at = ? WHERE id = ?')) { const [email_verified_at, id] = args; const member = db.members.find((m) => m.id === id); if (!member) return { meta: { changes: 0 } }; member.email_verified_at = email_verified_at; return { meta: { changes: 1 } }; }
         if (q.startsWith('INSERT INTO community_sessions')) { const [id, member_id, token_hash, created_at, expires_at] = args; db.sessions.push({ id, member_id, token_hash, created_at, expires_at }); return { meta: { changes: 1 } }; }
         if (q.startsWith('INSERT INTO community_messages')) { const [id, topic, member_id, body, created_at] = args; db.messages.push({ id, topic, member_id, body, created_at }); return { meta: { changes: 1 } }; }
@@ -48,7 +50,7 @@ class MockD1 {
       async first() {
         const q = sql.replace(/\s+/g, ' ').trim();
         if (q.startsWith('SELECT count FROM community_rate_limits')) return db.rates.get(args[0]) || null;
-        if (q.startsWith('SELECT id, username, email, display_name, password_salt, password_hash, created_at, email_verified_at FROM community_members')) return db.members.find((m) => m.email === args[0]) || null;
+        if (q.startsWith('SELECT m.id, m.username, m.email, m.display_name, m.password_salt, m.password_hash, m.created_at, v.verified_at FROM community_members')) { const member = db.members.find((m) => m.email === args[0]); if (!member) return null; const status = db.emailVerificationStatus.find((r) => r.member_id === member.id); return { ...member, verified_at: status?.verified_at || null }; }
         if (q.startsWith('SELECT id, email FROM community_members')) return db.members.find((m) => m.email === args[0]) ? (({id,email}) => ({id,email}))(db.members.find((m) => m.email === args[0])) : null;
         if (q.startsWith('DELETE FROM community_email_verification_tokens WHERE token_hash = ? AND expires_at > ? RETURNING member_id')) { const [token_hash, now] = args; const index = db.emailVerificationTokens.findIndex((r) => r.token_hash === token_hash && r.expires_at > now); if (index < 0) return null; const [row] = db.emailVerificationTokens.splice(index, 1); return { member_id: row.member_id }; }
         if (q.startsWith('DELETE FROM community_password_reset_tokens WHERE token_hash = ? AND expires_at > ? RETURNING member_id')) { const [token_hash, now] = args; const index = db.passwordResetTokens.findIndex((r) => r.token_hash === token_hash && r.expires_at > now); if (index < 0) return null; const [row] = db.passwordResetTokens.splice(index, 1); return { member_id: row.member_id }; }
