@@ -14,7 +14,7 @@ assert.ok(Number(pbkdf2IterationsMatch[1]) <= 100000,
 assert.match(workerSource, /iterations:\s*COMMUNITY_PASSWORD_ITERATIONS/,
   'Password hashing must use the checked PBKDF2 iteration setting');
 class MockD1 {
-  constructor() { this.members = []; this.sessions = []; this.messages = []; this.passwordResets = []; this.rates = new Map(); }
+  constructor() { this.members = []; this.sessions = []; this.messages = []; this.passwordResetTokens = []; this.rates = new Map(); }
   prepare(sql) {
     const db = this; let args = [];
     return {
@@ -25,10 +25,13 @@ class MockD1 {
         if (q.startsWith('INSERT INTO community_members')) { const [id, username, email, display_name, password_salt, password_hash, created_at] = args; if (db.members.some((m) => m.email === email || m.username === username)) throw new Error('unique constraint'); db.members.push({ id, username, email, display_name, password_salt, password_hash, created_at }); return { meta: { changes: 1 } }; }
         if (q.startsWith('INSERT INTO community_sessions')) { const [id, member_id, token_hash, created_at, expires_at] = args; db.sessions.push({ id, member_id, token_hash, created_at, expires_at }); return { meta: { changes: 1 } }; }
         if (q.startsWith('INSERT INTO community_messages')) { const [id, topic, member_id, body, created_at] = args; db.messages.push({ id, topic, member_id, body, created_at }); return { meta: { changes: 1 } }; }
-        if (q.startsWith('INSERT INTO community_password_resets')) { const [id, member_id, token_hash, created_at, expires_at] = args; if (db.passwordResets.some((r) => r.token_hash === token_hash)) throw new Error('unique constraint'); db.passwordResets.push({ id, member_id, token_hash, created_at, expires_at, used_at: null }); return { meta: { changes: 1 } }; }
-        if (q.startsWith('UPDATE community_password_resets SET used_at = ? WHERE member_id = ? AND used_at IS NULL')) { const [used_at, member_id] = args; let changes = 0; for (const r of db.passwordResets) if (r.member_id === member_id && r.used_at === null) { r.used_at = used_at; changes++; } return { meta: { changes } }; }
-        if (q.startsWith('UPDATE community_password_resets SET used_at = ? WHERE token_hash = ? AND used_at IS NULL')) { const [used_at, token_hash] = args; let changes = 0; for (const r of db.passwordResets) if (r.token_hash === token_hash && r.used_at === null) { r.used_at = used_at; changes++; } return { meta: { changes } }; }
-        if (q.startsWith('DELETE FROM community_password_resets WHERE expires_at <= ? OR used_at IS NOT NULL')) { const before = db.passwordResets.length; db.passwordResets = db.passwordResets.filter((r) => r.expires_at > args[0] && r.used_at === null); return { meta: { changes: before - db.passwordResets.length } }; }
+        if (q.startsWith('INSERT INTO community_password_reset_tokens')) { const [token_hash, member_id, created_at, expires_at] = args; if (db.passwordResetTokens.some((r) => r.token_hash === token_hash)) throw new Error('unique constraint'); db.passwordResetTokens.push({ token_hash, member_id, created_at, expires_at }); return { meta: { changes: 1 } }; }
+        if (q.startsWith('DELETE FROM community_password_reset_tokens WHERE member_id = ?')) { const before = db.passwordResetTokens.length; db.passwordResetTokens = db.passwordResetTokens.filter((r) => r.member_id !== args[0]); return { meta: { changes: before - db.passwordResetTokens.length } }; }
+        if (q.startsWith('DELETE FROM community_password_reset_tokens WHERE expires_at <= ?')) { const before = db.passwordResetTokens.length; db.passwordResetTokens = db.passwordResetTokens.filter((r) => r.expires_at > args[0]); return { meta: { changes: before - db.passwordResetTokens.length } }; }
+        if (q.startsWith('DELETE FROM community_password_reset_tokens WHERE token_hash = ?')) { const before = db.passwordResetTokens.length; db.passwordResetTokens = db.passwordResetTokens.filter((r) => r.token_hash !== args[0]); return { meta: { changes: before - db.passwordResetTokens.length } }; }
+        
+        
+        
         if (q.startsWith('UPDATE community_members SET password_salt = ?, password_hash = ? WHERE id = ?')) { const [password_salt, password_hash, id] = args; const member = db.members.find((m) => m.id === id); if (!member) return { meta: { changes: 0 } }; member.password_salt = password_salt; member.password_hash = password_hash; return { meta: { changes: 1 } }; }
         if (q.startsWith('DELETE FROM community_sessions WHERE member_id = ?')) { const before = db.sessions.length; db.sessions = db.sessions.filter((s) => s.member_id !== args[0]); return { meta: { changes: before - db.sessions.length } }; }
         if (q.startsWith('DELETE FROM community_sessions WHERE expires_at <=')) { const before = db.sessions.length; db.sessions = db.sessions.filter((s) => s.expires_at > args[0]); return { meta: { changes: before - db.sessions.length } }; }
@@ -41,7 +44,7 @@ class MockD1 {
         if (q.startsWith('SELECT count FROM community_rate_limits')) return db.rates.get(args[0]) || null;
         if (q.startsWith('SELECT id, username, email, display_name, password_salt, password_hash, created_at FROM community_members')) return db.members.find((m) => m.email === args[0]) || null;
         if (q.startsWith('SELECT id, email FROM community_members')) return db.members.find((m) => m.email === args[0]) ? (({id,email}) => ({id,email}))(db.members.find((m) => m.email === args[0])) : null;
-        if (q.startsWith('UPDATE community_password_resets SET used_at = ? WHERE token_hash = ? AND used_at IS NULL AND expires_at > ? RETURNING member_id')) { const [used_at, token_hash, now] = args; const row = db.passwordResets.find((r) => r.token_hash === token_hash && r.used_at === null && r.expires_at > now); if (!row) return null; row.used_at = used_at; return { member_id: row.member_id }; }
+        if (q.startsWith('DELETE FROM community_password_reset_tokens WHERE token_hash = ? AND expires_at > ? RETURNING member_id')) { const [token_hash, now] = args; const index = db.passwordResetTokens.findIndex((r) => r.token_hash === token_hash && r.expires_at > now); if (index < 0) return null; const [row] = db.passwordResetTokens.splice(index, 1); return { member_id: row.member_id }; }
         if (q.startsWith('SELECT m.id, m.username, m.display_name, m.created_at FROM community_sessions')) { const session = db.sessions.find((s) => s.token_hash === args[0] && s.expires_at > args[1]); const member = session && db.members.find((m) => m.id === session.member_id); return member ? { id: member.id, username: member.username, display_name: member.display_name, created_at: member.created_at } : null; }
         throw new Error('MockD1 unexpected first: ' + q);
       },
@@ -100,10 +103,12 @@ try {
 
   const resetCookie = registered.headers.get('set-cookie').split(';')[0];
   assert.ok(db.sessions.some((s) => s.member_id === registeredPayload.member.id));
+  assert.equal(db.passwordResetTokens.length, 1);
   const resetDone = await call('/password-reset/complete', { method: 'POST', body: { token: resetToken, password: 'MatKhauMoiTotHon123!' } });
   const resetDonePayload = await resetDone.json();
   assert.equal(resetDone.status, 200, 'Password reset failed: ' + JSON.stringify(resetDonePayload));
   assert.equal(resetDonePayload.ok, true);
+  assert.equal(db.passwordResetTokens.length, 0, 'A reset token must be consumed exactly once.');
   assert.equal(db.sessions.some((s) => s.member_id === registeredPayload.member.id), false,
     'Password reset must revoke every existing session.');
   const replay = await call('/password-reset/complete', { method: 'POST', body: { token: resetToken, password: 'MatKhauKhacTotHon456!' } });

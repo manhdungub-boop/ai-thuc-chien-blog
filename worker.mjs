@@ -391,18 +391,18 @@ async function handleCommunityApi(request, env) {
         const resetToken = bytesToBase64Url(crypto.getRandomValues(new Uint8Array(32)));
         const tokenHash = await sha256Base64Url(resetToken);
         const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
-        await db.prepare("UPDATE community_password_resets SET used_at = ? WHERE member_id = ? AND used_at IS NULL").bind(now, member.id).run();
-        await db.prepare("DELETE FROM community_password_resets WHERE expires_at <= ? OR used_at IS NOT NULL").bind(now).run();
-        await db.prepare("INSERT INTO community_password_resets (id, member_id, token_hash, created_at, expires_at, used_at) VALUES (?, ?, ?, ?, ?, NULL)")
-          .bind(crypto.randomUUID(), member.id, tokenHash, now, expiresAt).run();
+        await db.prepare("DELETE FROM community_password_reset_tokens WHERE member_id = ?").bind(member.id).run();
+        await db.prepare("DELETE FROM community_password_reset_tokens WHERE expires_at <= ?").bind(now).run();
+        await db.prepare("INSERT INTO community_password_reset_tokens (token_hash, member_id, created_at, expires_at) VALUES (?, ?, ?, ?)")
+          .bind(tokenHash, member.id, now, expiresAt).run();
         const resetUrl = new URL("/", request.url);
         resetUrl.searchParams.set("reset", resetToken);
         resetUrl.hash = "cong-dong";
         try {
           await sendCommunityPasswordResetEmail(env, member.email, resetUrl.toString());
         } catch (_error) {
-          await db.prepare("UPDATE community_password_resets SET used_at = ? WHERE token_hash = ? AND used_at IS NULL")
-            .bind(new Date().toISOString(), tokenHash).run();
+          await db.prepare("DELETE FROM community_password_reset_tokens WHERE token_hash = ?")
+            .bind(tokenHash).run();
           console.error("community_password_reset_email_failed", { route: "password-reset/request" });
         }
       }
@@ -423,13 +423,13 @@ async function handleCommunityApi(request, env) {
       const salt = crypto.getRandomValues(new Uint8Array(16));
       const passwordHash = await hashCommunityPassword(password, salt);
       const tokenHash = await sha256Base64Url(resetToken);
-      const consumed = await db.prepare("UPDATE community_password_resets SET used_at = ? WHERE token_hash = ? AND used_at IS NULL AND expires_at > ? RETURNING member_id")
-        .bind(now, tokenHash, now).first();
+      const consumed = await db.prepare("DELETE FROM community_password_reset_tokens WHERE token_hash = ? AND expires_at > ? RETURNING member_id")
+        .bind(tokenHash, now).first();
       if (!consumed?.member_id) return communityJson({ error: "Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn." }, 400, request);
       const updated = await db.prepare("UPDATE community_members SET password_salt = ?, password_hash = ? WHERE id = ?")
         .bind(bytesToBase64Url(salt), passwordHash, consumed.member_id).run();
       if (!updated.meta?.changes) return communityJson({ error: "Không thể cập nhật mật khẩu. Vui lòng yêu cầu liên kết mới." }, 500, request);
-      await db.prepare("UPDATE community_password_resets SET used_at = ? WHERE member_id = ? AND used_at IS NULL").bind(now, consumed.member_id).run();
+      await db.prepare("DELETE FROM community_password_reset_tokens WHERE member_id = ?").bind(consumed.member_id).run();
       await db.prepare("DELETE FROM community_sessions WHERE member_id = ?").bind(consumed.member_id).run();
       return communityJson({ ok: true, message: "Mật khẩu đã được đặt lại. Vui lòng đăng nhập lại." }, 200, request);
     }
