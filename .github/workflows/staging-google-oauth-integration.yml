@@ -37,7 +37,10 @@ jobs:
       - name: Syntax-check integrated Worker and tests
         run: |
           node --check worker.mjs
+          node --check script.js
           node --check tests/staging-google-oidc-runtime.test.mjs
+          node --check tests/staging-google-oauth-route-runtime.test.mjs
+          node --check tests/community-auth-host-allowlist.test.mjs
           node --check scripts/test_google_oauth_worker_integration.mjs
       - name: Run Google OIDC security regression tests against integrated Worker
         run: node --test tests/staging-google-oidc-runtime.test.mjs
