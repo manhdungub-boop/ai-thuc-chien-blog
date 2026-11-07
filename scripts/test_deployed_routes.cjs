@@ -43,7 +43,7 @@ async function get(pathname) {
   if (process.env.ALLOW_BACKUP_TITLE_VARIANT === 'true') {
     assert.match(homepageTitle, /AI Thực Chiến/i, 'Backup homepage title must identify the AI Thực Chiến site');
   } else {
-    assert.match(homepage, /<title[^>]*>\s*AI Thực Chiến\s*[—-]\s*Ứng dụng AI vào việc thật\s*<\/title>/i, `Primary Worker root route must return the current homepage title; received: ${homepageTitle.trim().slice(0, 160)}`);
+    assert.match(homepage, /<title[^>]*>\s*AI Thực Chiến(?:\s*\|\s*DUNG\s*-\s*AI)?\s*[—-]\s*Ứng dụng AI vào việc thật\s*<\/title>/i, `Primary Worker root route must return the current homepage title; received: ${homepageTitle.trim().slice(0, 160)}`);
   }
   assert.doesNotMatch(homepage, /LỖI 404|Không tìm thấy trang|Có vẻ đường dẫn/i, 'Root route must never return the branded not-found page');
 
