@@ -73,6 +73,11 @@ const badOrigin = await call('/register', { method: 'POST', originHeader: 'https
 const previewOrigin = 'https://fix-email-verification-prev-ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev';
 const previewPreflight = await call('/register', { method: 'OPTIONS', originHeader: previewOrigin }); assert.equal(previewPreflight.status, 200);
 assert.equal(previewPreflight.headers.get('Access-Control-Allow-Origin'), previewOrigin, 'The exact isolated branch Preview origin must be allowed.');
+const previewChatPreflight = await worker.fetch(new Request('https://api.example.test/api/chat', { method: 'OPTIONS', headers: { Origin: previewOrigin } }), {});
+assert.equal(previewChatPreflight.status, 200);
+assert.equal(previewChatPreflight.headers.get('Access-Control-Allow-Origin'), previewOrigin, 'The exact isolated branch Preview origin must be allowed for chat.');
+const rejectedChatOrigin = await worker.fetch(new Request('https://api.example.test/api/chat', { method: 'OPTIONS', headers: { Origin: 'https://evil.example' } }), {});
+assert.equal(rejectedChatOrigin.status, 403, 'Chat must continue rejecting untrusted origins.');
 const invalidRegister = await call('/register', { method: 'POST', body: { username: 'x', displayName: 'X', email: 'bad', password: 'short' } }); assert.equal(invalidRegister.status, 400);
 const nullPayload = await call('/register', { method: 'POST', body: null }); assert.equal(nullPayload.status, 400);
 const originalFetch = globalThis.fetch;
