@@ -71,11 +71,15 @@ function safeRegistrationFailure(result) {
     ["Dịch vụ xác nhận email chưa được cấu hình. Tài khoản chưa được tạo; vui lòng thử lại sau.", "EMAIL_RELAY_NOT_CONFIGURED"],
     ["Chức năng xác nhận email chưa được cấu hình. Vui lòng thử lại sau.", "EMAIL_RELAY_NOT_CONFIGURED"],
     ["Không thể gửi email xác nhận. Tài khoản chưa được tạo; vui lòng thử lại sau.", "EMAIL_RELAY_FAILED"],
+    ["Chưa gửi được email xác nhận. Tài khoản chưa được tạo; vui lòng thử lại sau.", "EMAIL_RELAY_FAILED"],
     ["Nguồn yêu cầu không được phép.", "ORIGIN_NOT_ALLOWED"],
     ["Bạn đã thử đăng ký quá nhiều lần. Vui lòng thử lại sau một giờ.", "REGISTRATION_RATE_LIMITED"],
   ]);
   const reason = knownErrors.get(typeof payload.error === "string" ? payload.error : "") || "UNCLASSIFIED_RESPONSE";
-  return "HTTP " + result.response.status + "; code=" + code + "; reason=" + reason;
+  const contentType = result.response.headers.get("content-type") || "none";
+  const hasCfRay = result.response.headers.has("cf-ray");
+  const hasJsonPayload = Boolean(result.payload && typeof result.payload === "object");
+  return "HTTP " + result.response.status + "; content_type=" + contentType + "; cf_ray=" + hasCfRay + "; json_payload=" + hasJsonPayload + "; code=" + code + "; reason=" + reason;
 }
 
 function assertJsonSuccess(result, expectedStatus, label) {
@@ -152,5 +156,6 @@ if (action === "register") {
 }
 
 console.log("Safety: no tokens, passwords, response bodies, or mailbox address were printed. Only the isolated staging Worker was contacted.");
+
 
 
