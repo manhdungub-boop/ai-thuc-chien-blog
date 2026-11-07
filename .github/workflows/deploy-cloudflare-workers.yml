@@ -1,88 +1,196 @@
-name: Deploy Cloudflare Workers (Preview only)
+name: Deploy Cloudflare Workers
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - "_headers"
+      - "index.html"
+      - "ve-chung-toi.html"
+      - "thu-vien.html"
+      - "articles/**"
+      - "styles.css"
+      - "script.js"
+      - "robots.txt"
+      - "sitemap.xml"
+      - "feed.xml"
+      - "favicon.svg"
+      - "404.html"
+      - "google4e45ddcf8facb122.html"
+      - "wrangler.jsonc"
+      - "worker.mjs"
+      - "migrations/**"
+      - "scripts/test_community_api.mjs"
+      - "scripts/test_community_schema.py"
+      - "package.json"
+      - "scripts/build_static_site.cjs"
+      - "scripts/generate_seo_feeds.cjs"
+      - "scripts/test_worker_headers.mjs"
+      - ".github/workflows/deploy-cloudflare-workers.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ai-thuc-chien-blog-preview-worker
+  group: deploy-cloudflare-workers
   cancel-in-progress: false
 
 jobs:
-  deploy-preview:
+  deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: "92cf091bbac8b4879ec65feb30b4715b"
     steps:
-      - name: Checkout selected feature branch
-        uses: actions/checkout@v4
+      - name: Check out source
+        uses: actions/checkout@v7
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: 22
 
-      - name: Validate exact Preview-only target
+      - name: Prepare and validate static assets
         shell: bash
         run: |
           set -euo pipefail
-          [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]] || { echo "::error::CLOUDFLARE_WORKERS_API_TOKEN is missing."; exit 1; }
-          python3 - <<'PY'
+          npm run build
+          python - <<'PY'
           import json
           from pathlib import Path
-          c = json.loads(Path("wrangler.preview.jsonc").read_text())
-          assert c["name"] == "ai-thuc-chien-blog-auth-app-preview"
-          assert c["account_id"] == "92cf091bbac8b4879ec65feb30b4715b"
-          db = c["d1_databases"]
-          assert len(db) == 1
-          assert db[0]["binding"] == "DB"
-          assert db[0]["database_name"] == "ai-thuc-chien-community-preview"
-          assert db[0]["database_id"] == "51d814c8-a3fc-4481-a5f1-60bc67617f3c"
-          assert db[0]["database_id"] != "fc2517cb-9543-4d7b-98f4-bcd5f3c013e7"
-          assert c["assets"]["directory"] == "./dist"
-          assert c["assets"]["binding"] == "ASSETS"
-          assert c["keep_vars"] is True
-          assert "secrets" in c and len(c["secrets"]["required"]) == 3
-          print("PASS: Preview Worker and Preview D1 IDs pinned; Production D1 is excluded.")
+          config = json.loads(Path("wrangler.jsonc").read_text(encoding="utf-8"))
+          assert config.get("name") == "ai-thuc-chien-blog", "Refusing to deploy to an unexpected Worker"
+          assert config.get("account_id") == "92cf091bbac8b4879ec65feb30b4715b", "Unexpected Cloudflare account"
+          assets = config.get("assets", {})
+          assert config.get("main") == "./worker.mjs", "Worker must load the reviewed security-header wrapper"
+          assert assets.get("directory") == "./dist", "Worker assets must come from dist/"
+          assert assets.get("binding") == "ASSETS", "Worker must bind static files to ASSETS"
+          assert assets.get("run_worker_first") is True, "All requests must pass through the Worker security wrapper"
+          assert Path("worker.mjs").is_file(), "Worker entrypoint was not included in source"
+          assert Path("dist/_headers").is_file(), "Security headers file was not packaged for Pages/static-assets handling"
+          assert Path("dist/google4e45ddcf8facb122.html").is_file(), "Search Console verification file was not packaged"
+          assert list(Path("dist/articles").glob("*.html")), "No article pages were packaged"
+          for required in ["X-Content-Type-Options: nosniff", "X-Frame-Options: DENY", "Referrer-Policy: strict-origin-when-cross-origin", "Permissions-Policy:", "Strict-Transport-Security: max-age=31536000"]:
+              assert required in Path("dist/_headers").read_text(encoding="utf-8"), f"Missing expected header rule: {required}"
+          print("WORKER ASSET PACKAGE PASS: security wrapper, Search Console file, articles, and _headers")
           PY
 
-      - name: Build assets and run local regression suite
+      - name: Check Worker runtime and security headers
         run: |
-          set -euo pipefail
-          npm run build
           node --check worker.mjs
           node --check script.js
           node scripts/test_worker_headers.mjs
           node scripts/test_community_api.mjs
           python3 scripts/test_community_schema.py
 
-      - name: Inspect Preview D1 migration state (read-only)
-        run: npx --yes wrangler@4 d1 migrations list "ai-thuc-chien-community-preview" --remote --config wrangler.preview.jsonc
+      - name: Check for dedicated Worker deployment token
+        id: token
+        shell: bash
+        env:
+          CF_WORKERS_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+        run: |
+          if [[ -z "$CF_WORKERS_TOKEN" ]]; then
+            echo "deploy_ready=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Worker deploy skipped: add CLOUDFLARE_WORKERS_API_TOKEN with Workers Scripts: Edit and D1: Edit permissions, then run this workflow again. The existing live Worker is not changed by this run."
+            {
+              echo "## Cloudflare Worker deployment skipped"
+              echo "The package was validated, but the production Worker was not changed because the repository secret CLOUDFLARE_WORKERS_API_TOKEN is not configured. The token needs Workers Scripts: Edit and D1: Edit permissions. Add it under [GitHub Actions secrets](https://github.com/manhdungub-boop/ai-thuc-chien-blog/settings/secrets/actions), then run [Deploy Cloudflare Workers](https://github.com/manhdungub-boop/ai-thuc-chien-blog/actions/workflows/deploy-cloudflare-workers.yml). Do not paste the token into source code or chat."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "deploy_ready=true" >> "$GITHUB_OUTPUT"
+          echo "A Worker deployment token is configured; proceeding with deployment."
 
-      - name: Deploy to isolated Preview Worker only
-        run: npx --yes wrangler@4 deploy --config wrangler.preview.jsonc
 
-      - name: Verify Preview pages, reset UI, API, and security headers
+      - name: Provision community D1 and apply schema migrations
+        if: steps.token.outputs.deploy_ready == 'true'
+        shell: bash
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          account_id="92cf091bbac8b4879ec65feb30b4715b"
+          database_name="ai-thuc-chien-community"
+          api="https://api.cloudflare.com/client/v4/accounts/${account_id}/d1/database"
+
+          list_status="$(curl --silent --show-error --output /tmp/d1-list.json --write-out '%{http_code}' \
+            --header "Authorization: Bearer ${CF_API_TOKEN}" \
+            --header 'Content-Type: application/json' "${api}?per_page=100")"
+          if [[ "${list_status}" -lt 200 || "${list_status}" -ge 300 ]] || ! jq -e '.success == true' /tmp/d1-list.json >/dev/null; then
+            echo "Could not list D1 databases. Check that CLOUDFLARE_WORKERS_API_TOKEN has D1:Edit and Workers Scripts:Edit permissions."
+            jq -r '.errors[]?.message // empty' /tmp/d1-list.json || true
+            exit 1
+          fi
+          database_id="$(jq -r --arg name "${database_name}" '.result[]? | select(.name == $name) | .uuid' /tmp/d1-list.json | head -n 1)"
+          if [[ -z "${database_id}" || "${database_id}" == "null" ]]; then
+            echo "Creating the persistent community database for the first time."
+            create_status="$(curl --silent --show-error --output /tmp/d1-create.json --write-out '%{http_code}' \
+              --request POST --header "Authorization: Bearer ${CF_API_TOKEN}" \
+              --header 'Content-Type: application/json' \
+              --data "{\"name\":\"${database_name}\"}" "${api}")"
+            if [[ "${create_status}" -lt 200 || "${create_status}" -ge 300 ]] || ! jq -e '.success == true and (.result.uuid | type == "string")' /tmp/d1-create.json >/dev/null; then
+              echo "Could not create the community D1 database. Check D1:Edit permissions."
+              jq -r '.errors[]?.message // empty' /tmp/d1-create.json || true
+              exit 1
+            fi
+            database_id="$(jq -r '.result.uuid' /tmp/d1-create.json)"
+          else
+            echo "Found the existing community database; preserving its data."
+          fi
+
+          python3 - "${database_id}" "${database_name}" <<'PY'
+          import json, sys
+          from pathlib import Path
+          config = json.loads(Path("wrangler.jsonc").read_text(encoding="utf-8"))
+          config["d1_databases"] = [{
+              "binding": "DB",
+              "database_name": sys.argv[2],
+              "database_id": sys.argv[1],
+              "migrations_dir": "migrations",
+          }]
+          Path("wrangler.deploy.jsonc").write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          PY
+          npx --yes wrangler@4 d1 migrations apply "${database_name}" --remote --config wrangler.deploy.jsonc
+
+      - name: Deploy to the existing production Worker
+        if: steps.token.outputs.deploy_ready == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+          accountId: 92cf091bbac8b4879ec65feb30b4715b
+          command: deploy --config wrangler.deploy.jsonc
+
+      - name: Verify live security headers and key routes
+        if: steps.token.outputs.deploy_ready == 'true'
         shell: bash
         run: |
           set -euo pipefail
-          host="https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev"
+          host="https://ai-thuc-chien-blog.manhdungub.workers.dev"
           headers="$(mktemp)"
-          body="$(mktemp)"
-          trap 'rm -f "$headers" "$body"' EXIT
-          status="$(curl --silent --show-error --location --max-time 25 -D "$headers" -o "$body" -w '%{http_code}' "$host/")"
-          [[ "$status" == "200" ]] || { echo "Preview homepage returned HTTP $status"; exit 1; }
-          for expected in 'X-Content-Type-Options: nosniff' 'X-Frame-Options: DENY' 'Referrer-Policy: strict-origin-when-cross-origin' 'Strict-Transport-Security: max-age=31536000'; do
-            grep -Fqi "$expected" "$headers" || { echo "Missing Preview security header: $expected"; exit 1; }
+          trap 'rm -f "$headers"' EXIT
+          curl --fail --silent --show-error --location --max-time 20 -H 'Sec-Fetch-Mode: navigate' -H 'Sec-Fetch-Dest: document' -H 'Sec-Fetch-Site: none' -D "$headers" -o /dev/null "$host/"
+          for expected in \
+            'X-Content-Type-Options: nosniff' \
+            'X-Frame-Options: DENY' \
+            'Referrer-Policy: strict-origin-when-cross-origin' \
+            'Permissions-Policy: camera=(), geolocation=(), microphone=(), payment=()' \
+            'Strict-Transport-Security: max-age=31536000'; do
+            if ! grep -Fqi "$expected" "$headers"; then
+              echo "FAIL: missing security header on $host: $expected"
+              cat "$headers"
+              exit 1
+            fi
           done
-          grep -q 'community-forgot-password' "$body" || { echo "Preview reset-request UI is missing."; exit 1; }
-          me_status="$(curl --silent --show-error --max-time 20 -o /tmp/community-me.json -w '%{http_code}' "$host/api/community/me")"
-          [[ "$me_status" == "200" ]] || { echo "Preview /api/community/me returned HTTP $me_status"; exit 1; }
-          reset_status="$(curl --silent --show-error --max-time 20 -H "Origin: $host" -H 'Content-Type: application/json' -d '{"email":"not-a-real-member@example.invalid"}' -o /tmp/community-reset.json -w '%{http_code}' "$host/api/community/password-reset/request")"
-          [[ "$reset_status" == "200" ]] || { echo "Preview password-reset request returned HTTP $reset_status"; exit 1; }
-          node -e 'const fs=require("node:fs"); const x=JSON.parse(fs.readFileSync("/tmp/community-reset.json","utf8")); if(x.ok!==true || !String(x.message||"").includes("Nếu email này có tài khoản hợp lệ")) process.exit(1);'
-          echo "PASS: Preview UI, reset route, member endpoint, and security headers verified."
+          article_code="$(curl --silent --show-error --location --max-time 20 -H 'Sec-Fetch-Mode: navigate' -H 'Sec-Fetch-Dest: document' -H 'Sec-Fetch-Site: none' -o /dev/null -w '%{http_code}' "$host/articles/do-luong-hieu-qua-blog")"
+          if [ \"$article_code\" != \"200\" ]; then
+            echo "FAIL: browser navigation to $host/articles/do-luong-hieu-qua-blog returned HTTP $article_code"
+            exit 1
+          fi
+          for path in "/articles/do-luong-hieu-qua-blog" "/sitemap.xml" "/feed.xml" "/google4e45ddcf8facb122.html" "/api/community/me"; do
+            code="$(curl --silent --show-error --location --max-time 20 -o /dev/null -w "%{http_code}" "$host$path")"
+            if [ "$code" != "200" ]; then
+              echo "FAIL: $host$path returned HTTP $code"
+              exit 1
+            fi
+          done
+          echo "WORKER SECURITY PASS: all five headers present; article, sitemap, RSS, and Search Console verification routes return HTTP 200."
+          SITE_URL="$host" node scripts/test_deployed_routes.cjs
