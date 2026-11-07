@@ -293,8 +293,43 @@ if (action === "register") {
   assert.equal(logoutAgain.payload?.ok, true, "Repeated logout must return ok=true.");
   console.log("PASS: secure session cookie; /me authenticated; logout revokes session; old cookie denied message GET/POST/DELETE; repeated logout is safe.");
 
+} else if (action === "cors") {
+  const allowed = await fetch(new URL("/api/community/messages", ORIGIN), {
+    method: "OPTIONS",
+    headers: {
+      Origin: ORIGIN,
+      "Access-Control-Request-Method": "POST",
+      "Access-Control-Request-Headers": "content-type",
+    },
+    signal: AbortSignal.timeout(15000),
+  });
+  assert.equal(allowed.status, 200, "Preview origin preflight must return HTTP 200.");
+  assert.equal(allowed.headers.get("access-control-allow-origin"), ORIGIN,
+    "Preflight must echo only the approved Preview origin.");
+  assert.equal(allowed.headers.get("access-control-allow-credentials"), "true",
+    "Preflight must allow credentials for the approved Preview origin.");
+  assert.match(allowed.headers.get("access-control-allow-methods") || "", /POST/);
+  assert.match(allowed.headers.get("access-control-allow-headers") || "", /Content-Type/i);
+  assert.equal(allowed.headers.get("access-control-max-age"), "86400");
+
+  const rejected = await fetch(new URL("/api/community/messages", ORIGIN), {
+    method: "OPTIONS",
+    headers: {
+      Origin: "https://untrusted.invalid",
+      "Access-Control-Request-Method": "POST",
+      "Access-Control-Request-Headers": "content-type",
+    },
+    signal: AbortSignal.timeout(15000),
+  });
+  assert.equal(rejected.status, 403, "An unapproved origin must be rejected with HTTP 403.");
+  assert.equal(rejected.headers.get("access-control-allow-origin"), null,
+    "An unapproved origin must not receive Access-Control-Allow-Origin.");
+  assert.equal(rejected.headers.get("access-control-allow-credentials"), null,
+    "An unapproved origin must not receive credentialed CORS permission.");
+  console.log("PASS: Preview CORS preflight allows only the approved Preview origin and rejects an untrusted origin.");
+
 } else {
-  throw new Error("Unknown action. Use register, confirm, login, session, ownership, request-reset, or finish-reset.");
+  throw new Error("Unknown action. Use register, confirm, login, session, cors, ownership, request-reset, or finish-reset.");
 }
 
 console.log("Safety: no tokens, passwords, response bodies, or mailbox address were printed. Only the isolated staging Worker was contacted.");
