@@ -76,11 +76,13 @@ const originalFetch = globalThis.fetch;
 let sentVerificationPayload = null;
 let sentResetPayload = null;
 let failVerificationRelay = true;
+let failVerificationNetwork = false;
 globalThis.fetch = async (url, options) => {
   assert.equal(String(url), env.COMMUNITY_EMAIL_RELAY_URL);
   const payload = JSON.parse(options.body);
   if (payload.subject === 'Xác nhận email — AI Thực Chiến') {
     sentVerificationPayload = payload;
+    if (failVerificationNetwork) throw new TypeError('Simulated network connection failure');
     if (failVerificationRelay) return new Response(JSON.stringify({ ok: false }), { status: 503, headers: { 'Content-Type': 'application/json' } });
   } else if (payload.subject === 'Đặt lại mật khẩu — AI Thực Chiến') sentResetPayload = payload;
   else throw new Error('Unexpected email relay subject');
@@ -93,6 +95,14 @@ assert.equal(db.members.length, 0, 'Failed email delivery must roll back the pen
 assert.equal(db.emailVerificationTokens.length, 0, 'Failed email delivery must remove the verification token.');
 assert.equal(db.emailVerificationStatus.length, 0, 'Failed email delivery must remove verification status.');
 failVerificationRelay = false;
+failVerificationNetwork = true;
+const networkFailure = await call('/register', { method: 'POST', body: { username: 'network_fail_user', displayName: 'Network Failure', email: 'network-fail@example.com', password: 'MotMatKhauRieng123!' } });
+assert.equal(networkFailure.status, 503, 'A relay network failure must be reported to the client.');
+assert.match((await networkFailure.json()).error, /Không thể gửi email xác nhận/i);
+assert.equal(db.members.length, 0, 'Network failure must roll back the pending member.');
+assert.equal(db.emailVerificationTokens.length, 0, 'Network failure must remove the verification token.');
+assert.equal(db.emailVerificationStatus.length, 0, 'Network failure must remove verification status.');
+failVerificationNetwork = false;
 const registered = await call('/register', { method: 'POST', body: { username: 'thanhvien_1', displayName: 'Thành viên thử', email: 'member@example.com', password: 'MotMatKhauRieng123!' } }); assert.equal(registered.status, 201);
 const registeredPayload = await registered.json(); assert.equal(registeredPayload.verificationRequired, true); assert.equal(registeredPayload.ok, true); assert.equal(JSON.stringify(registeredPayload).includes('MotMatKhauRieng123!'), false);
 assert.equal(registered.headers.get('set-cookie'), null, 'Pending registration must not create a login session.');
