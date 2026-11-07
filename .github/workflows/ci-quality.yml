@@ -43,6 +43,9 @@ jobs:
           node scripts/test_community_api.mjs
           node scripts/test_homepage_search.cjs
 
+      - name: Test community registration frontend contract
+        run: npm run test:community:frontend
+
       - name: Test community D1 schema
         run: python3 scripts/test_community_schema.py
 
