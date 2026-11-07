@@ -2,6 +2,7 @@
 'use strict';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { createHash } from 'node:crypto';
 import worker from '../worker.mjs';
 
 // Local Node may accept PBKDF2 counts that deployed Cloudflare Workers reject.
@@ -117,6 +118,22 @@ try {
   assert.equal(oldPasswordAfterReset.status, 401);
   const newPasswordAfterReset = await call('/login', { method: 'POST', body: { email: 'member@example.com', password: 'MatKhauMoiTotHon123!' } });
   assert.equal(newPasswordAfterReset.status, 200);
+
+  const expiredResetToken = 'expired-reset-token-for-regression-test';
+  const expiredTokenHash = createHash('sha256').update(expiredResetToken).digest('base64url');
+  db.passwordResetTokens.push({
+    token_hash: expiredTokenHash,
+    member_id: registeredPayload.member.id,
+    created_at: '2000-01-01T00:00:00.000Z',
+    expires_at: '2000-01-01T00:30:00.000Z'
+  });
+  const expiredReset = await call('/password-reset/complete', {
+    method: 'POST',
+    body: { token: expiredResetToken, password: 'KhongDuocChapNhan123!' }
+  });
+  assert.equal(expiredReset.status, 400, 'An expired reset token must be rejected.');
+  assert.ok(db.passwordResetTokens.some((row) => row.token_hash === expiredTokenHash),
+    'An expired token must not be consumed as a valid reset.');
 } finally {
   globalThis.fetch = originalFetch;
 }
