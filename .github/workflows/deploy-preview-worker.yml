@@ -6,6 +6,7 @@ on:
       - fix/email-verification-preview-20261107
     paths:
       - "worker.mjs"
+      - "index.html"
       - "script.js"
       - "styles.css"
       - ".github/workflows/deploy-preview-worker.yml"
