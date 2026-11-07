@@ -419,8 +419,12 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
         const result = await api('/password-reset/request', { method: 'POST', body: JSON.stringify({ email: payload.email }) });
         setStatus(authStatus, result.message || 'Nếu email này có tài khoản hợp lệ, chúng tôi sẽ gửi hướng dẫn đặt lại mật khẩu.', 'success');
         passwordInput.value = '';
+      } else if (authMode === 'register') {
+        const result = await api('/register', { method: 'POST', body: JSON.stringify(payload) });
+        passwordInput.value = '';
+        setStatus(authStatus, result.message || 'Đăng ký đã được tiếp nhận. Vui lòng mở email và xác nhận địa chỉ trước khi đăng nhập.', 'success');
       } else {
-        const result = await api(authMode === 'register' ? '/register' : '/login', { method: 'POST', body: JSON.stringify(payload) });
+        const result = await api('/login', { method: 'POST', body: JSON.stringify(payload) });
         showMember(result.member);
         passwordInput.value = '';
         setStatus(roomStatus, 'Đăng nhập thành công. Đang tải phòng thảo luận…', 'success');
