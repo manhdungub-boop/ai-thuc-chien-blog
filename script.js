@@ -178,6 +178,12 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
   const displayInput = root.querySelector('#community-display-name');
   const emailInput = root.querySelector('#community-email');
   const passwordInput = root.querySelector('#community-password');
+  const forgotWrap = root.querySelector('#community-forgot-wrap');
+  const forgotButton = root.querySelector('#community-forgot-password');
+  const resetForm = root.querySelector('#community-reset-form');
+  const resetPasswordInput = root.querySelector('#community-reset-password');
+  const resetStatus = root.querySelector('#community-reset-status');
+  const resetCancelButton = root.querySelector('#community-reset-cancel');
   const memberName = root.querySelector('#community-member-name');
   const memberStatus = root.querySelector('#community-member-status');
   const logoutButton = root.querySelector('#community-logout');
@@ -225,19 +231,27 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
   const setAuthMode = (mode) => {
     authMode = mode;
     const registering = mode === 'register';
-    authTitle.textContent = registering ? 'Tham gia cộng đồng' : 'Chào mừng trở lại';
-    authDescription.textContent = registering ? 'Đăng ký miễn phí để tham gia các phòng thảo luận theo chủ đề.' : 'Đăng nhập để tiếp tục các cuộc thảo luận của bạn.';
+    const requestingReset = mode === 'reset-request';
+    authTitle.textContent = registering ? 'Tham gia cộng đồng' : requestingReset ? 'Đặt lại mật khẩu' : 'Chào mừng trở lại';
+    authDescription.textContent = registering
+      ? 'Đăng ký miễn phí để tham gia các phòng thảo luận theo chủ đề.'
+      : requestingReset
+        ? 'Nhập email đã đăng ký. Nếu tài khoản hợp lệ, chúng tôi sẽ gửi liên kết đặt lại mật khẩu.'
+        : 'Đăng nhập để tiếp tục các cuộc thảo luận của bạn.';
     usernameWrap.hidden = !registering;
     usernameInput.hidden = !registering;
     usernameInput.required = registering;
     displayWrap.hidden = !registering;
     displayInput.hidden = !registering;
     displayInput.required = false;
+    passwordInput.hidden = requestingReset;
+    passwordInput.required = !requestingReset;
     passwordInput.autocomplete = registering ? 'new-password' : 'current-password';
     passwordInput.minLength = registering ? 10 : 1;
-    authSubmit.innerHTML = registering ? 'Đăng ký thành viên <span>→</span>' : 'Đăng nhập <span>→</span>';
-    switchCopy.textContent = registering ? 'Đã có tài khoản?' : 'Chưa có tài khoản?';
-    switchModeButton.textContent = registering ? 'Đăng nhập' : 'Đăng ký miễn phí';
+    authSubmit.innerHTML = registering ? 'Đăng ký thành viên <span>→</span>' : requestingReset ? 'Gửi liên kết đặt lại mật khẩu <span>→</span>' : 'Đăng nhập <span>→</span>';
+    switchCopy.textContent = registering ? 'Đã có tài khoản?' : 'Bạn đã nhớ mật khẩu?';
+    switchModeButton.textContent = registering ? 'Đăng nhập' : 'Quay lại';
+    forgotWrap.hidden = mode !== 'login';
     setStatus(authStatus, '');
   };
   const showMember = (member) => {
@@ -354,21 +368,60 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
   }
 
   switchModeButton.addEventListener('click', () => setAuthMode(authMode === 'register' ? 'login' : 'register'));
+  forgotButton.addEventListener('click', () => setAuthMode('reset-request'));
+  resetCancelButton.addEventListener('click', () => {
+    resetForm.hidden = true;
+    authForm.hidden = false;
+    setAuthMode('login');
+    setStatus(resetStatus, '');
+  });
+  resetForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const token = new URLSearchParams(window.location.search).get('reset') || '';
+    const password = resetPasswordInput.value;
+    const submit = resetForm.querySelector('button[type="submit"]');
+    submit.disabled = true;
+    setStatus(resetStatus, 'Đang cập nhật mật khẩu…');
+    try {
+      await api('/password-reset/complete', { method: 'POST', body: JSON.stringify({ token, password }) });
+      resetPasswordInput.value = '';
+      window.history.replaceState(null, '', window.location.pathname + '#cong-dong');
+      resetForm.hidden = true;
+      authForm.hidden = false;
+      setAuthMode('login');
+      setStatus(authStatus, 'Mật khẩu đã được đặt lại. Vui lòng đăng nhập bằng mật khẩu mới.', 'success');
+    } catch (error) {
+      setStatus(resetStatus, error.message, 'error');
+    } finally {
+      submit.disabled = false;
+    }
+  });
   authForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     authSubmit.disabled = true;
-    setStatus(authStatus, authMode === 'register' ? 'Đang tạo tài khoản an toàn…' : 'Đang đăng nhập…');
     const payload = { email: emailInput.value.trim(), password: passwordInput.value };
     if (authMode === 'register') {
+      setStatus(authStatus, 'Đang tạo tài khoản an toàn…');
       payload.username = usernameInput.value.trim().toLowerCase();
       payload.displayName = displayInput.value.trim() || payload.username;
+    } else if (authMode === 'reset-request') {
+      setStatus(authStatus, 'Đang gửi yêu cầu đặt lại mật khẩu…');
+      delete payload.password;
+    } else {
+      setStatus(authStatus, 'Đang đăng nhập…');
     }
     try {
-      const result = await api(authMode === 'register' ? '/register' : '/login', { method: 'POST', body: JSON.stringify(payload) });
-      showMember(result.member);
-      passwordInput.value = '';
-      setStatus(roomStatus, 'Đăng nhập thành công. Đang tải phòng thảo luận…', 'success');
-      await loadMessages();
+      if (authMode === 'reset-request') {
+        const result = await api('/password-reset/request', { method: 'POST', body: JSON.stringify({ email: payload.email }) });
+        setStatus(authStatus, result.message || 'Nếu email này có tài khoản hợp lệ, chúng tôi sẽ gửi hướng dẫn đặt lại mật khẩu.', 'success');
+        passwordInput.value = '';
+      } else {
+        const result = await api(authMode === 'register' ? '/register' : '/login', { method: 'POST', body: JSON.stringify(payload) });
+        showMember(result.member);
+        passwordInput.value = '';
+        setStatus(roomStatus, 'Đăng nhập thành công. Đang tải phòng thảo luận…', 'success');
+        await loadMessages();
+      }
     } catch (error) {
       setStatus(authStatus, error.message, 'error');
     } finally {
@@ -413,9 +466,19 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
     }
   });
 
-  setAuthMode('register');
+  const pendingResetToken = new URLSearchParams(window.location.search).get('reset') || '';
+  if (pendingResetToken) {
+    authTitle.textContent = 'Đặt lại mật khẩu';
+    authDescription.textContent = 'Tạo mật khẩu mới để tiếp tục sử dụng tài khoản.';
+    authForm.hidden = true;
+    resetForm.hidden = false;
+    forgotWrap.hidden = true;
+    resetPasswordInput.focus();
+  } else {
+    setAuthMode('register');
+  }
   selectTopic('tools');
-  api('/me', { method: 'GET', headers: {} }).then((result) => {
+  if (!pendingResetToken) api('/me', { method: 'GET', headers: {} }).then((result) => {
     showMember(result.member);
     if (result.member) loadMessages();
   }).catch((error) => {
