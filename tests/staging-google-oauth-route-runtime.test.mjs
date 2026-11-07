@@ -157,7 +157,7 @@ async function makeFixture({ tokenOverrides = {} } = {}) {
     if (url === "https://oauth2.googleapis.com/token") {
       assert.equal(init.method, "POST");
       lastTokenBody = new URLSearchParams(init.body);
-      const nonce = nonceOverride.nonce || "not-used";
+      const nonce = nonceOverride.nonce || nonceOverride.expectedNonce;
       const idToken = await makeIdToken(nonce, nonceOverride);
       return new Response(JSON.stringify({ access_token: "mock-access-token", token_type: "Bearer", expires_in: 3600, id_token: idToken }), {
         status: 200, headers: { "Content-Type": "application/json" },
@@ -189,6 +189,7 @@ async function startOAuth(env) {
   const state = findCookie(cookies, "__Host-ai_oauth_google_state");
   const verifier = findCookie(cookies, "__Host-ai_oauth_google_verifier");
   const nonce = findCookie(cookies, "__Host-ai_oauth_google_nonce");
+  nonceOverride.expectedNonce = nonce;
   assert.equal(location.searchParams.get("state"), state);
   assert.equal(location.searchParams.get("nonce"), nonce);
   assert.equal(location.searchParams.get("code_challenge_method"), "S256");
