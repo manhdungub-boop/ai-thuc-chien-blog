@@ -186,9 +186,11 @@ async function startOAuth(env) {
   assert.equal(response.status, 302);
   const location = new URL(response.headers.get("Location"));
   const cookies = cookiesFrom(response);
-  const state = findCookie(cookies, "__Host-ai_oauth_google_state");
-  const verifier = findCookie(cookies, "__Host-ai_oauth_google_verifier");
-  const nonce = findCookie(cookies, "__Host-ai_oauth_google_nonce");
+  const state = location.searchParams.get("state");
+  assert.ok(state, "Expected transaction state in the authorization URL");
+  const verifier = findCookie(cookies, "__Host-ai_oauth_google_verifier_" + state);
+  const nonce = findCookie(cookies, "__Host-ai_oauth_google_nonce_" + state);
+  assert.equal(findCookie(cookies, "__Host-ai_oauth_google_state_" + state), state);
   nonceOverride.expectedNonce = nonce;
   assert.equal(location.searchParams.get("state"), state);
   assert.equal(location.searchParams.get("nonce"), nonce);
@@ -275,7 +277,8 @@ test("runs Google OAuth start -> callback -> D1 identity/session -> authenticate
   assert.equal(db.sessions.size, 1);
 
   const responseCookies = cookiesFrom(response);
-  for (const name of ["__Host-ai_oauth_google_state", "__Host-ai_oauth_google_verifier", "__Host-ai_oauth_google_nonce"]) {
+  for (const part of ["state", "verifier", "nonce"]) {
+    const name = "__Host-ai_oauth_google_" + part + "_" + started.state;
     const cleared = responseCookies.find((cookie) => cookieName(cookie) === name);
     assert.ok(cleared, "Expected cleared cookie " + name);
     assert.match(cleared, /Max-Age=0/);
@@ -297,6 +300,58 @@ test("runs Google OAuth start -> callback -> D1 identity/session -> authenticate
   assert.equal(networkCalls.filter((call) => call.url === "https://oauth2.googleapis.com/token").length, 1);
 });
 
+test("keeps overlapping Google OAuth transactions independent when the first callback fails or completes", async () => {
+  const env = await makeFixture();
+  const first = await startOAuth(env);
+  const second = await startOAuth(env);
+  assert.notEqual(first.state, second.state);
+  assert.notEqual(cookieName(first.cookies[0]), cookieName(second.cookies[0]));
+
+  // Complete the first transaction while both transactions' cookies are present.
+  nonceOverride.expectedNonce = first.nonce;
+  const firstCallback = new URL(STAGING + "/api/community/oauth/google/callback");
+  firstCallback.searchParams.set("code", "mock-first-overlapping-code");
+  firstCallback.searchParams.set("state", first.state);
+  const firstResponse = await worker.fetch(new Request(firstCallback, {
+    headers: {
+      Cookie: cookieHeader([...first.cookies, ...second.cookies]),
+      "CF-Connecting-IP": "192.0.2.14",
+    },
+  }), env);
+  assert.equal(firstResponse.status, 302);
+  assert.match(firstResponse.headers.get("Location"), /oauth=success/);
+  assert.equal(lastTokenBody.get("code_verifier"), first.verifier);
+  assert.equal(lastTokenBody.get("code"), "mock-first-overlapping-code");
+
+  const firstCleared = cookiesFrom(firstResponse).filter((cookie) => /Max-Age=0/.test(cookie));
+  assert.equal(firstCleared.length, 3);
+  const firstClearedNames = new Set(firstCleared.map(cookieName));
+  for (const part of ["state", "verifier", "nonce"]) {
+    assert.ok(firstClearedNames.has("__Host-ai_oauth_google_" + part + "_" + first.state));
+    assert.ok(!firstClearedNames.has("__Host-ai_oauth_google_" + part + "_" + second.state));
+  }
+
+  // Applying the first response's Set-Cookie headers leaves the second flow intact.
+  const remainingCookies = [...first.cookies, ...second.cookies]
+    .filter((cookie) => !firstClearedNames.has(cookieName(cookie)));
+  nonceOverride.expectedNonce = second.nonce;
+  const secondCallback = new URL(STAGING + "/api/community/oauth/google/callback");
+  secondCallback.searchParams.set("code", "mock-second-overlapping-code");
+  secondCallback.searchParams.set("state", second.state);
+  const secondResponse = await worker.fetch(new Request(secondCallback, {
+    headers: {
+      Cookie: cookieHeader(remainingCookies),
+      "CF-Connecting-IP": "192.0.2.15",
+    },
+  }), env);
+  assert.equal(secondResponse.status, 302);
+  assert.match(secondResponse.headers.get("Location"), /oauth=success/);
+  assert.equal(lastTokenBody.get("code_verifier"), second.verifier);
+  assert.equal(lastTokenBody.get("code"), "mock-second-overlapping-code");
+  assert.equal(db.sessions.size, 2);
+  assert.equal(db.oauthAccounts.size, 1);
+});
+
 test("rejects a callback with mismatched state before contacting Google or creating data", async () => {
   const env = await makeFixture();
   const started = await startOAuth(env);
@@ -312,6 +367,8 @@ test("rejects a callback with mismatched state before contacting Google or creat
 
   assert.equal(response.status, 302);
   assert.match(response.headers.get("Location"), /OAUTH_STATE_INVALID/);
+  assert.equal(cookiesFrom(response).filter((cookie) => /Max-Age=0/.test(cookie)).length, 0,
+    "A callback without its matching transaction cookie must not clear an active flow");
   assert.equal(networkCalls.filter((call) => call.url === "https://oauth2.googleapis.com/token").length, 0);
   assert.equal(db.members.size, 0);
   assert.equal(db.oauthAccounts.size, 0);
