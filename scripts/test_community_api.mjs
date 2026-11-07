@@ -102,7 +102,6 @@ try {
   assert.equal(unknownReset.status, 200);
   assert.equal((await unknownReset.json()).message, resetRequestPayload.message);
 
-  const resetCookie = registered.headers.get('set-cookie').split(';')[0];
   assert.ok(db.sessions.some((s) => s.member_id === registeredPayload.member.id));
   assert.equal(db.passwordResetTokens.length, 1);
   const resetDone = await call('/password-reset/complete', { method: 'POST', body: { token: resetToken, password: 'MatKhauMoiTotHon123!' } });
@@ -134,6 +133,12 @@ try {
   assert.equal(expiredReset.status, 400, 'An expired reset token must be rejected.');
   assert.ok(db.passwordResetTokens.some((row) => row.token_hash === expiredTokenHash),
     'An expired token must not be consumed as a valid reset.');
+  const passwordAfterExpiredReset = await call('/login', {
+    method: 'POST',
+    body: { email: 'member@example.com', password: 'MatKhauMoiTotHon123!' }
+  });
+  assert.equal(passwordAfterExpiredReset.status, 200,
+    'An expired reset token must not change the current password.');
 } finally {
   globalThis.fetch = originalFetch;
 }
