@@ -81,7 +81,15 @@
         </form>
         <p class="community-status" id="community-auth-status" role="status" aria-live="polite"></p>
         <p class="community-auth-switch"><span id="community-switch-copy">Đã có tài khoản?</span> <button type="button" id="community-switch-mode">Đăng nhập</button></p>
-        <p class="community-privacy-note">Email chỉ dùng để đăng nhập, không hiển thị trong phòng. Tên hiển thị và tin nhắn sẽ được các thành viên đọc. Không dùng lại mật khẩu ở nơi khác. Phiên bản đầu chưa xác minh email hoặc hỗ trợ đặt lại mật khẩu.</p>
+        <p class="community-auth-switch" id="community-forgot-wrap" hidden><button type="button" id="community-forgot-password">Quên mật khẩu?</button></p>
+        <form id="community-reset-form" class="community-auth-form" hidden>
+          <label for="community-reset-password">Mật khẩu mới</label>
+          <input id="community-reset-password" name="newPassword" type="password" minlength="10" maxlength="128" autocomplete="new-password" placeholder="Ít nhất 10 ký tự" required>
+          <button class="button primary community-submit" type="submit">Đặt lại mật khẩu <span>→</span></button>
+          <p class="community-auth-switch"><button type="button" id="community-reset-cancel">Quay lại đăng nhập</button></p>
+        </form>
+        <p class="community-status" id="community-reset-status" role="status" aria-live="polite"></p>
+        <p class="community-privacy-note">Email chỉ dùng để đăng nhập, không hiển thị trong phòng. Tên hiển thị và tin nhắn sẽ được các thành viên đọc. Không dùng lại mật khẩu ở nơi khác. Bạn có thể yêu cầu liên kết đặt lại mật khẩu qua email đã đăng ký.</p>
       </div>
       <div id="community-member-panel" hidden>
         <div class="community-member-avatar" aria-hidden="true">✦</div>
