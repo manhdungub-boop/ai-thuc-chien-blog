@@ -1,6 +1,11 @@
 name: Staging Email Secrets Preflight
 
 on:
+  push:
+    branches:
+      - fix/email-verification-preview-20261107
+    paths:
+      - ".github/workflows/staging-email-preflight.yml"
   workflow_dispatch:
 
 permissions:
