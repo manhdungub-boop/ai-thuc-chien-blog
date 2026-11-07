@@ -38,7 +38,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
 
       - name: Validate staging-only inputs and secret availability
         shell: bash
@@ -64,7 +63,6 @@ jobs:
 
       - name: Install dependencies and build static assets
         run: |
-          npm ci
           npm run build
           node --check worker.mjs
           node --check script.js
