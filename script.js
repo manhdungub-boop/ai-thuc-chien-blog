@@ -164,7 +164,7 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
   if (!root) return;
   const primaryHost = 'ai-thuc-chien-blog.manhdungub.workers.dev';
   const previewHost = 'ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev';
-  const pendingResetToken = new URLSearchParams(window.location.search).get('reset') || '';
+  const pendingResetToken = new URLSearchParams(window.location.search).get('reset') || '';\n  const pendingVerifyToken = new URLSearchParams(window.location.search).get('verify') || '';
   const authPanel = root.querySelector('#community-auth-panel');
   const memberPanel = root.querySelector('#community-member-panel');
   const authForm = root.querySelector('#community-auth-form');
@@ -474,7 +474,24 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
     }
   });
 
-  if (pendingResetToken) {
+  if (pendingVerifyToken) {
+    authTitle.textContent = 'Xác nhận email';
+    authDescription.textContent = 'Đang xác nhận địa chỉ email của bạn…';
+    authForm.hidden = true;
+    resetForm.hidden = true;
+    forgotWrap.hidden = true;
+    setStatus(authStatus, 'Đang xác nhận email…');
+    api('/verify-email', { method: 'POST', body: JSON.stringify({ token: pendingVerifyToken }) }).then(() => {
+      window.history.replaceState(null, '', window.location.pathname + '#cong-dong');
+      authForm.hidden = false;
+      setAuthMode('login');
+      setStatus(authStatus, 'Email đã được xác nhận. Bạn có thể đăng nhập.', 'success');
+    }).catch((error) => {
+      authForm.hidden = false;
+      setAuthMode('login');
+      setStatus(authStatus, error.message, 'error');
+    });
+  } else if (pendingResetToken) {
     authTitle.textContent = 'Đặt lại mật khẩu';
     authDescription.textContent = 'Tạo mật khẩu mới để tiếp tục sử dụng tài khoản.';
     authForm.hidden = true;
@@ -485,7 +502,7 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
     setAuthMode('register');
   }
   selectTopic('tools');
-  if (!pendingResetToken) api('/me', { method: 'GET', headers: {} }).then((result) => {
+  if (!pendingResetToken && !pendingVerifyToken) api('/me', { method: 'GET', headers: {} }).then((result) => {
     showMember(result.member);
     if (result.member) loadMessages();
   }).catch((error) => {
