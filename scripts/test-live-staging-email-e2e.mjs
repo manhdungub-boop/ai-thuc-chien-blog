@@ -119,6 +119,9 @@ if (action === "register") {
     "Registration did not report verificationRequired=true.");
   assert.equal(result.response.headers.get("set-cookie"), null,
     "Pending registration must not create a login session.");
+  const pendingLogin = await post("/api/community/login", { email, password });
+  assert.equal(pendingLogin.response.status, 403,
+    "An unverified account must not be allowed to log in.");
   console.log("PASS: a disposable staging registration was accepted and the confirmation email was requested.");
 } else if (action === "confirm") {
   const email = testEmailForCurrentPipeline();
@@ -127,6 +130,8 @@ if (action === "register") {
   validatePassword(password, "STAGING_E2E_PASSWORD");
   validateToken(token, "STAGING_E2E_VERIFY_TOKEN");
   assertJsonSuccess(await post("/api/community/verify-email", { token }), 200, "Email confirmation");
+  const replay = await post("/api/community/verify-email", { token });
+  assert.equal(replay.response.status, 400, "A verification token must be single-use.");
   assertLoginSuccess(await post("/api/community/login", { email, password }), 200, "Login after email confirmation");
   console.log("PASS: the live email-confirmation token was accepted once and login works after confirmation.");
 } else if (action === "login") {
