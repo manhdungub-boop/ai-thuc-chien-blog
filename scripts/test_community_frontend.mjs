@@ -20,6 +20,7 @@ assert.match(handler, /Đang tạo tài khoản an toàn/, 'Loading feedback mus
 assert.match(handler, /api\('\/register'/, 'Registration API must be called.');
 assert.match(handler, /result\.message \|\| .*'success'/, 'Success feedback must be shown.');
 assert.match(handler, /error\.message, 'error'/, 'Failure feedback must be shown.');
+assert.match(js, /catch \(error\) \{[\s\S]*?error instanceof TypeError[\s\S]*?Không thể kết nối đến máy chủ/, 'Network failures must produce clear Vietnamese feedback.');
 assert.match(handler, /passwordInput\.value = ''/, 'Password must be cleared after success.');
 
 console.log('PASS: registration frontend contract — required controls, accessible status, submit handler, loading lock, API call, success/error feedback, password clearing');
