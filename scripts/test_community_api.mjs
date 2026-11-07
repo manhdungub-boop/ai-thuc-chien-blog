@@ -89,11 +89,11 @@ assert.equal(registered.headers.get('set-cookie'), null, 'Pending registration m
 assert.equal(sentVerificationPayload.to, 'member@example.com');
 assert.equal(sentVerificationPayload.secret, env.COMMUNITY_EMAIL_RELAY_SECRET);
 assert.equal(sentVerificationPayload.subject, 'Xác nhận email — AI Thực Chiến');
-const verifyUrl = new URL(sentVerificationPayload.verifyUrl); assert.equal(verifyUrl.origin, origin); assert.equal(verifyUrl.pathname, '/api/community/verify-email');
-const verifyToken = verifyUrl.searchParams.get('token'); assert.match(verifyToken, /^[A-Za-z0-9_-]{32,80}$/);
+const verifyUrl = new URL(sentVerificationPayload.verifyUrl); assert.equal(verifyUrl.origin, origin); assert.equal(verifyUrl.pathname, '/');
+const verifyToken = verifyUrl.searchParams.get('verify'); assert.match(verifyToken, /^[A-Za-z0-9_-]{32,80}$/); assert.equal(verifyUrl.hash, '#cong-dong');
 assert.ok(sentVerificationPayload.textBody.includes(sentVerificationPayload.verifyUrl));
 assert.ok(sentVerificationPayload.htmlBody.includes('href="' + sentVerificationPayload.verifyUrl + '"'));
-const landingUrl = new URL(sentVerificationPayload.verifyUrl); assert.equal(landingUrl.pathname, '/'); assert.equal(landingUrl.searchParams.get('verify'), verifyToken); assert.equal(landingUrl.hash, '#cong-dong'); const landing = await worker.fetch(new Request(sentVerificationPayload.verifyUrl), env); assert.equal(landing.status, 200);
+const landing = await worker.fetch(new Request(sentVerificationPayload.verifyUrl), env); assert.equal(landing.status, 200);
 const pendingLogin = await call('/login', { method: 'POST', body: { email: 'member@example.com', password: 'MotMatKhauRieng123!' } }); assert.equal(pendingLogin.status, 403);
 const confirmed = await call('/verify-email', { method: 'POST', body: { token: verifyToken } }); assert.equal(confirmed.status, 200); assert.equal((await confirmed.json()).ok, true);
 assert.equal(db.emailVerificationTokens.length, 0);
