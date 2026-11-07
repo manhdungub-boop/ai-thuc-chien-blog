@@ -213,6 +213,42 @@ test.before(async () => {
   );
 });
 
+
+test("links a verified Google identity to an existing email account without replacing its password", async () => {
+  const env = await makeFixture();
+  const originalPasswordHash = "pre-existing-password-hash";
+  db.members.set("existing-member-001", {
+    id: "existing-member-001",
+    username: "existing_member",
+    email: "runtime.user@example.com",
+    display_name: "Existing Member",
+    password_salt: "existing-salt",
+    password_hash: originalPasswordHash,
+    created_at: "2026-01-01T00:00:00.000Z",
+    email_verified_at: null,
+  });
+  const started = await startOAuth(env);
+  const callback = new URL(STAGING + "/api/community/oauth/google/callback");
+  callback.searchParams.set("code", "mock-link-existing-account");
+  callback.searchParams.set("state", started.state);
+  const response = await worker.fetch(new Request(callback, {
+    headers: {
+      Cookie: cookieHeader(started.cookies),
+      "CF-Connecting-IP": "192.0.2.13",
+    },
+  }), env);
+
+  assert.equal(response.status, 302);
+  assert.match(response.headers.get("Location"), /oauth=success/);
+  assert.equal(db.members.size, 1);
+  const member = db.members.get("existing-member-001");
+  assert.ok(member.email_verified_at, "verified Google email should verify the existing account");
+  assert.equal(member.password_hash, originalPasswordHash, "OAuth linking must not replace password credentials");
+  assert.equal(db.oauthAccounts.size, 1);
+  assert.equal([...db.oauthAccounts.values()][0].memberId, "existing-member-001");
+  assert.equal(db.sessions.size, 1);
+});
+
 test.after(() => {
   globalThis.fetch = originalFetch;
 });
