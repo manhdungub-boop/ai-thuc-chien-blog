@@ -292,10 +292,10 @@ async function readJsonPayload(request, maxBytes = 6000) {
 
 async function sendCommunityEmailVerification(env, recipient, verifyUrl) {
   if (!env.COMMUNITY_EMAIL_RELAY_URL || !env.COMMUNITY_EMAIL_RELAY_SECRET) throw new Error("Email relay is not configured.");
-  const textBody = "Chào bạn! Cảm ơn bạn đã đăng ký AI Thực Chiến.\\nMở liên kết sau và bấm Xác nhận email để kích hoạt tài khoản:\\n" +
-    verifyUrl + "\\nLiên kết chỉ sử dụng một lần và hết hạn sau 24 giờ. Nếu bạn không đăng ký, hãy bỏ qua email này.";
+  const textBody = "Chào bạn! Cảm ơn bạn đã đăng ký AI Thực Chiến.\nMở liên kết sau và bấm Xác nhận email để kích hoạt tài khoản:\n" +
+    verifyUrl + "\nLiên kết chỉ sử dụng một lần và hết hạn sau 24 giờ. Nếu bạn không đăng ký, hãy bỏ qua email này.";
   const htmlBody = "<p>Cảm ơn bạn đã đăng ký tài khoản AI Thực Chiến.</p>" +
-    "<p><a href=\\"" + verifyUrl + "\\">Xác nhận email</a></p>" +
+    "<p><a href=\"" + verifyUrl + "\">Xác nhận email</a></p>" +
     "<p>Liên kết chỉ sử dụng một lần và hết hạn sau 24 giờ. Nếu bạn không đăng ký, hãy bỏ qua email này.</p>";
   const response = await fetch(env.COMMUNITY_EMAIL_RELAY_URL, {
     method: "POST", headers: { "Content-Type": "application/json" },
