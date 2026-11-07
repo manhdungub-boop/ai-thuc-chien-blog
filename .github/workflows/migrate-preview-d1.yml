@@ -1,6 +1,9 @@
 name: Manage Preview D1 Migrations
 
 on:
+  push:
+    branches:
+      - feature/community-password-reset-preview
   workflow_dispatch:
     inputs:
       mode:
@@ -25,10 +28,10 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: 92cf091bbac8b4879ec65feb30b4715b
     steps:
-      - name: Check out current main
+      - name: Check out the selected ref (feature branch for Preview migration)
         uses: actions/checkout@v7
         with:
-          ref: main
+          ref: ${{ github.ref }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -76,6 +79,7 @@ jobs:
           fi
           rm -f "$response"
           echo "PASS: verified separate preview D1 database. No SQL has been executed."
+          echo "SAFETY: this workflow is restricted to the hard-coded preview D1 UUID and name; production database IDs are rejected."
 
       - name: List current preview migrations (read-only)
         run: npx --yes wrangler@4 d1 migrations list "ai-thuc-chien-community-preview" --remote --config wrangler.preview-migrations.jsonc

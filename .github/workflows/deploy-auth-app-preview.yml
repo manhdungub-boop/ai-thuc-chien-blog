@@ -1,0 +1,196 @@
+name: Deploy GitHub PR to isolated OAuth Preview
+
+on:
+  push:
+    branches:
+      - sync/gitlab-completed-work-20261107
+    paths:
+      - "worker.mjs"
+      - "script.js"
+      - "wrangler.jsonc"
+      - "migrations/**"
+      - "scripts/test_auth_preview_oauth_http.mjs"
+      - "scripts/test_email_relay_no_send.mjs"
+      - "scripts/test_email_verification.mjs"
+      - ".github/workflows/deploy-auth-app-preview.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-isolated-auth-app-preview
+  cancel-in-progress: false
+
+jobs:
+  deploy-staging-preview:
+    if: github.ref == 'refs/heads/sync/gitlab-completed-work-20261107'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: "92cf091bbac8b4879ec65feb30b4715b"
+      PREVIEW_WORKER_NAME: "ai-thuc-chien-blog-auth-app-preview"
+      PREVIEW_D1_ID: "51d814c8-a3fc-4481-a5f1-60bc67617f3c"
+      PREVIEW_D1_NAME: "ai-thuc-chien-community-preview"
+    steps:
+      - name: Check out the exact PR branch commit
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Validate staging-only inputs and secret availability
+        shell: bash
+        env:
+          COMMUNITY_EMAIL_RELAY_URL: ${{ secrets.COMMUNITY_EMAIL_RELAY_URL }}
+          COMMUNITY_EMAIL_RELAY_SECRET: ${{ secrets.COMMUNITY_EMAIL_RELAY_SECRET }}
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]] || { echo "::error::Missing CLOUDFLARE_WORKERS_API_TOKEN."; exit 1; }
+          [[ -n "${COMMUNITY_EMAIL_RELAY_URL:-}" ]] || { echo "::error::Missing COMMUNITY_EMAIL_RELAY_URL."; exit 1; }
+          [[ -n "${COMMUNITY_EMAIL_RELAY_SECRET:-}" ]] || { echo "::error::Missing COMMUNITY_EMAIL_RELAY_SECRET."; exit 1; }
+          [[ -n "${GOOGLE_OAUTH_CLIENT_ID:-}" && -n "${GOOGLE_OAUTH_CLIENT_SECRET:-}" ]] || { echo "::error::Both Google OAuth staging secrets are required."; exit 1; }
+          [[ "$PREVIEW_WORKER_NAME" == "ai-thuc-chien-blog-auth-app-preview" ]] || { echo "::error::Unexpected Worker target."; exit 1; }
+          [[ "$PREVIEW_D1_ID" == "51d814c8-a3fc-4481-a5f1-60bc67617f3c" ]] || { echo "::error::Unexpected Preview D1 target."; exit 1; }
+          echo "::add-mask::$CLOUDFLARE_API_TOKEN"
+          echo "::add-mask::$COMMUNITY_EMAIL_RELAY_URL"
+          echo "::add-mask::$COMMUNITY_EMAIL_RELAY_SECRET"
+          echo "::add-mask::$GOOGLE_OAUTH_CLIENT_ID"
+          echo "::add-mask::$GOOGLE_OAUTH_CLIENT_SECRET"
+          echo "PASS: required staging credentials are present; values are masked."
+
+      - name: Install dependencies and build static assets
+        run: |
+          npm run build
+          node --check worker.mjs
+          node --check script.js
+          node --check scripts/test_auth_preview_oauth_http.mjs
+          node --check scripts/test_email_relay_no_send.mjs
+          node --check scripts/test_email_verification.mjs
+
+      - name: Verify exact isolated Preview D1 target (read-only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          config="$(node <<'NODE'
+          const fs = require("node:fs");
+          const c = JSON.parse(fs.readFileSync("wrangler.jsonc", "utf8"));
+          const prod = (c.d1_databases || []).find(x => x.binding === "DB");
+          const preview = ((c.previews || {}).d1_databases || []).find(x => x.binding === "DB");
+          if (!prod || !preview) throw new Error("Expected production and preview D1 declarations.");
+          if (prod.database_id === preview.database_id || prod.database_name === preview.database_name) {
+            throw new Error("Preview D1 must be distinct from Production D1.");
+          }
+          if (preview.database_id !== process.env.PREVIEW_D1_ID ||
+              preview.database_name !== process.env.PREVIEW_D1_NAME) {
+            throw new Error("Preview D1 does not match the hard-coded safe target.");
+          }
+          process.stdout.write(JSON.stringify({productionId: prod.database_id, previewId: preview.database_id}));
+          NODE
+          )"
+          preview_id="$(jq -r '.previewId' <<< "$config")"
+          [[ "$preview_id" != "$(jq -r '.productionId' <<< "$config")" ]] || { echo "::error::Production and Preview D1 IDs must differ."; exit 1; }
+          response="$RUNNER_TEMP/preview-d1.json"
+          status="$(curl --silent --show-error --max-time 20 \
+            --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            --header "Accept: application/json" \
+            --output "$response" --write-out '%{http_code}' \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/d1/database/${PREVIEW_D1_ID}")"
+          if [[ "$status" != "200" ]] || ! jq -e --arg id "$PREVIEW_D1_ID" --arg name "$PREVIEW_D1_NAME" \
+            '.success == true and (.result.uuid == $id or .result.id == $id) and .result.name == $name' "$response" >/dev/null; then
+            echo "::error::Cloudflare did not verify the exact Preview D1 target (HTTP ${status}); deployment stopped."
+            jq -r '.errors[]?.message // empty' "$response" || true
+            exit 1
+          fi
+          echo "PASS: exact Preview D1 identity verified; Production D1 is not the deployment target."
+
+      - name: List Preview migrations without applying SQL
+        run: npx --yes wrangler@4 d1 migrations list "$PREVIEW_D1_NAME" --remote --config wrangler.preview-migrations.jsonc
+
+      - name: Generate locked Preview-only Wrangler config
+        shell: bash
+        env:
+          COMMUNITY_EMAIL_RELAY_URL: ${{ secrets.COMMUNITY_EMAIL_RELAY_URL }}
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require("node:fs");
+          const c = JSON.parse(fs.readFileSync("wrangler.jsonc", "utf8"));
+          const prod = (c.d1_databases || []).find(x => x.binding === "DB");
+          const preview = ((c.previews || {}).d1_databases || []).find(x => x.binding === "DB");
+          if (c.account_id !== process.env.CLOUDFLARE_ACCOUNT_ID ||
+              c.name !== "ai-thuc-chien-blog" ||
+              !prod || !preview ||
+              prod.database_id === preview.database_id ||
+              preview.database_id !== process.env.PREVIEW_D1_ID ||
+              preview.database_name !== process.env.PREVIEW_D1_NAME) {
+            throw new Error("Safety stop: Wrangler config does not identify the expected isolated Preview resources.");
+          }
+          c.name = process.env.PREVIEW_WORKER_NAME;
+          c.d1_databases = [{...preview, binding: "DB"}];
+          delete c.previews;
+          c.vars = {...(c.vars || {}), COMMUNITY_EMAIL_RELAY_URL: process.env.COMMUNITY_EMAIL_RELAY_URL};
+          c.workers_dev = true;
+          c.preview_urls = true;
+          fs.writeFileSync("wrangler.auth-preview.jsonc", JSON.stringify(c, null, 2) + "\n", {mode: 0o600});
+          console.log("PASS: generated config targets only the dedicated Preview Worker and isolated Preview D1.");
+          NODE
+
+      - name: Deploy current PR code to the dedicated staging Worker only
+        run: |
+          npx --yes wrangler@4 deploy --config wrangler.auth-preview.jsonc \
+            --message "GitHub PR #77 staging-only OAuth validation ${GITHUB_SHA}"
+
+      - name: Configure existing staging-only secret bindings
+        shell: bash
+        env:
+          COMMUNITY_EMAIL_RELAY_SECRET: ${{ secrets.COMMUNITY_EMAIL_RELAY_SECRET }}
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          umask 077
+          secret_file="$RUNNER_TEMP/auth-preview-secrets.json"
+          trap 'rm -f "$secret_file"' EXIT
+          node - "$secret_file" <<'NODE'
+          const fs = require("node:fs");
+          const path = process.argv[2];
+          const secrets = {
+            COMMUNITY_EMAIL_RELAY_SECRET: process.env.COMMUNITY_EMAIL_RELAY_SECRET,
+            GOOGLE_OAUTH_CLIENT_ID: process.env.GOOGLE_OAUTH_CLIENT_ID,
+            GOOGLE_OAUTH_CLIENT_SECRET: process.env.GOOGLE_OAUTH_CLIENT_SECRET
+          };
+          for (const [name, value] of Object.entries(secrets)) {
+            if (typeof value !== "string" || !value.length) throw new Error("Missing required staging secret: " + name);
+          }
+          fs.writeFileSync(path, JSON.stringify(secrets), {mode: 0o600});
+          NODE
+          npx --yes wrangler@4 secret bulk "$secret_file" --config wrangler.auth-preview.jsonc
+
+      - name: Verify Apps Script relay endpoint and shared secret without sending email
+        env:
+          COMMUNITY_EMAIL_RELAY_URL: ${{ secrets.COMMUNITY_EMAIL_RELAY_URL }}
+          COMMUNITY_EMAIL_RELAY_SECRET: ${{ secrets.COMMUNITY_EMAIL_RELAY_SECRET }}
+        run: node scripts/test_email_relay_no_send.mjs
+
+      - name: Verify deployed staging Worker and overlapping OAuth flows
+        env:
+          PREVIEW_URL: "https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev"
+        run: node scripts/test_auth_preview_oauth_http.mjs
+
+      - name: Record staging deployment boundary
+        if: always()
+        run: |
+          {
+            echo "## Staging-only OAuth Preview deployment"
+            echo "- Target Worker: ai-thuc-chien-blog-auth-app-preview"
+            echo "- Target D1: ai-thuc-chien-community-preview (51d814c8-a3fc-4481-a5f1-60bc67617f3c)"
+            echo "- Source commit: ${GITHUB_SHA}"
+            echo "- Production Worker, Production D1, DNS and Production secrets were not targeted."
+            echo "- No D1 migrations were applied by this workflow."
+          } >> "$GITHUB_STEP_SUMMARY"

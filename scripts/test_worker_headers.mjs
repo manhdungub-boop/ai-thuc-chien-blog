@@ -22,6 +22,32 @@ function assertSecurityHeaders(response, expectHsts = true) {
   }
 }
 
+// Branch Previews must serve their own frontend assets rather than the production Pages copy.
+const beforePreviewFetch = globalThis.fetch;
+let previewPagesCalls = 0;
+globalThis.fetch = async () => {
+  previewPagesCalls += 1;
+  throw new Error('Preview must not fetch the production Pages homepage');
+};
+let previewHomepage;
+try {
+  previewHomepage = await worker.fetch(new Request('https://feature-required-email-verification-ai-thuc-chien-blog.manhdungub.workers.dev/?verify=fake-preview-token#cong-dong'), {
+    ASSETS: { fetch: async (request) => {
+      assert.equal(new URL(request.url).pathname, '/index.html');
+      return new Response('<button id="community-verify-confirm">Xác nhận email</button>', {
+        status: 200,
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      });
+    } },
+  });
+} finally {
+  globalThis.fetch = beforePreviewFetch;
+}
+assert.equal(previewPagesCalls, 0, 'Branch Preview must not call the production Pages fallback');
+assert.equal(previewHomepage.status, 200);
+assert.match(await previewHomepage.text(), /community-verify-confirm/, 'Branch Preview must serve its own verification UI');
+assertSecurityHeaders(previewHomepage);
+
 const beforePrimaryPages = globalThis.fetch;
 let primaryPagesCalls = 0;
 globalThis.fetch = async (input, init = {}) => {
@@ -37,7 +63,7 @@ globalThis.fetch = async (input, init = {}) => {
 };
 let root;
 try {
-  root = await worker.fetch(new Request('https://example.test/'), {
+  root = await worker.fetch(new Request('https://ai-thuc-chien-blog.manhdungub.workers.dev/'), {
     ASSETS: { fetch: async () => { throw new Error('Root should prefer the verified Pages homepage'); } },
   });
 } finally {
@@ -70,7 +96,7 @@ globalThis.fetch = async (input, init = {}) => {
 };
 let recoveredHomepage;
 try {
-  recoveredHomepage = await worker.fetch(new Request('https://example.test/?diag=fallback'), {
+  recoveredHomepage = await worker.fetch(new Request('https://ai-thuc-chien-blog.manhdungub.workers.dev/?diag=fallback'), {
     ASSETS: { fetch: async (request) => {
       assert.equal(new URL(request.url).pathname, '/index.html');
       return new Response('<h1>404</h1>', { status: 404, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
@@ -103,7 +129,7 @@ globalThis.fetch = async (input, init = {}) => {
 };
 let recoveredBranded404;
 try {
-  recoveredBranded404 = await worker.fetch(new Request('https://example.test/?diag=branded-404'), {
+  recoveredBranded404 = await worker.fetch(new Request('https://ai-thuc-chien-blog.manhdungub.workers.dev/?diag=branded-404'), {
     ASSETS: { fetch: async (request) => {
       assert.equal(new URL(request.url).pathname, '/index.html');
       return new Response('<h1>LỖI 404 · KHÔNG TÌM THẤY TRANG</h1><p>Có vẻ đường dẫn đã đi lạc.</p>', {

@@ -2,24 +2,50 @@
 <html lang="vi">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="Cách lưu bí mật, giới hạn quyền, xoay vòng token và xử lý khi lộ khóa trong công cụ tự động hóa."><meta name="theme-color" content="#0b1020"><meta name="robots" content="index,follow,max-image-preview:large"><meta name="author" content="AI Thực Chiến">
+<meta name="description" content="Checklist bảo vệ API key trong workflow AI: lưu secret đúng chỗ, giới hạn quyền, tránh lộ qua log và xoay vòng token khi cần."><meta name="theme-color" content="#0b1020"><meta name="robots" content="index,follow,max-image-preview:large"><meta name="author" content="DUNG - AI">
 <link rel="canonical" href="https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/bao-ve-api-key-trong-workflow-ai">
 <link rel="icon" type="image/svg+xml" href="../favicon.svg">
-<meta property="og:type" content="article"><meta property="og:locale" content="vi_VN"><meta property="og:site_name" content="AI Thực Chiến"><meta property="og:title" content="Bảo vệ API key trong workflow AI: checklist cho người mới | AI Thực Chiến"><meta property="og:description" content="Cách lưu bí mật, giới hạn quyền, xoay vòng token và xử lý khi lộ khóa trong công cụ tự động hóa."><meta property="og:url" content="https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/bao-ve-api-key-trong-workflow-ai">
-<meta name="twitter:card" content="summary"><meta name="twitter:title" content="Bảo vệ API key trong workflow AI: checklist cho người mới"><meta name="twitter:description" content="Cách lưu bí mật, giới hạn quyền, xoay vòng token và xử lý khi lộ khóa trong công cụ tự động hóa.">
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Bảo vệ API key trong workflow AI: checklist cho người mới","description":"Cách lưu bí mật, giới hạn quyền, xoay vòng token và xử lý khi lộ khóa trong công cụ tự động hóa.","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/bao-ve-api-key-trong-workflow-ai","mainEntityOfPage":{"@type":"WebPage","@id":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/bao-ve-api-key-trong-workflow-ai"},"datePublished":"2026-10-18","dateModified":"2026-10-22","inLanguage":"vi-VN","articleSection":"AI THỰC HÀNH · BẢO MẬT","author":{"@type":"Organization","name":"AI Thực Chiến","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/"},"publisher":{"@type":"Organization","name":"AI Thực Chiến","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/"}}</script>
-<title>Bảo vệ API key trong workflow AI: checklist cho người mới | AI Thực Chiến</title>
+<meta property="og:type" content="article"><meta property="og:locale" content="vi_VN"><meta property="og:site_name" content="AI Thực Chiến"><meta property="og:title" content="Bảo vệ API key trong workflow AI: checklist cho người mới"><meta property="og:description" content="Checklist bảo vệ API key trong workflow AI: lưu secret đúng chỗ, giới hạn quyền, tránh lộ qua log và xoay vòng token khi cần."><meta property="og:url" content="https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/bao-ve-api-key-trong-workflow-ai">
+<meta name="twitter:card" content="summary"><meta name="twitter:title" content="Bảo vệ API key trong workflow AI: checklist cho người mới"><meta name="twitter:description" content="Checklist bảo vệ API key trong workflow AI: lưu secret đúng chỗ, giới hạn quyền, tránh lộ qua log và xoay vòng token khi cần.">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Bảo vệ API key trong workflow AI: checklist cho người mới","description":"Checklist bảo vệ API key trong workflow AI: lưu secret đúng chỗ, giới hạn quyền, tránh lộ qua log và xoay vòng token khi cần.","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/bao-ve-api-key-trong-workflow-ai","mainEntityOfPage":{"@type":"WebPage","@id":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/bao-ve-api-key-trong-workflow-ai"},"datePublished":"2026-10-18","dateModified":"2026-10-28","inLanguage":"vi-VN","articleSection":"AI THỰC HÀNH · BẢO MẬT","author":{"@type":"Person","name":"DUNG - AI"},"publisher":{"@type":"Organization","name":"AI Thực Chiến","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/","logo":"https://ai-thuc-chien-blog.manhdungub.workers.dev/logo.svg"}}</script>
+<title>Bảo vệ API key trong workflow AI: checklist cho người mới</title>
 <link rel="alternate" type="application/rss+xml" title="AI Thực Chiến RSS" href="../feed.xml">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap" onload="this.onload=null;this.rel='stylesheet'"><noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap"></noscript>
 <link rel="stylesheet" href="../styles.css">
 </head>
 <body>
 <a class="skip-link" href="#main-content">Bỏ qua đến nội dung chính</a>
 <header class="site-header"><a class="brand" href="../"><span class="brand-mark">AI</span><span>AI <b>Thực Chiến</b></span></a><a class="header-cta" href="../#bai-viet">← Tất cả bài viết</a></header>
-<main class="section" style="max-width:900px;margin:auto" id="main-content">
+<main class="section" style="max-width:900px;margin:auto" id="main-content"><p class="article-byline" style="font-size:14px;color:var(--muted);margin:0 0 16px"><strong>Tác giả:</strong> DUNG - AI</p>
 <div class="section-kicker">AI THỰC HÀNH · BẢO MẬT</div>
 <h1 style="font-size:clamp(32px,5vw,54px);line-height:1.2;letter-spacing:-1.6px;margin:18px 0">Bảo vệ API key trong workflow AI: checklist cho người mới</h1>
+<figure class="article-diagram" data-article-diagram="bao-ve-api-key-trong-workflow-ai" role="group" aria-labelledby="article-diagram-title-bao-ve-api-key-trong-workflow-ai" style="max-width:620px;margin:30px auto;padding:18px;border:1px solid var(--line);border-radius:18px;background:#0b1424">
+<svg viewBox="0 0 600 500" width="100%" height="auto" role="img" aria-labelledby="article-diagram-title-bao-ve-api-key-trong-workflow-ai article-diagram-desc-bao-ve-api-key-trong-workflow-ai" style="display:block;max-width:100%;height:auto">
+<title id="article-diagram-title-bao-ve-api-key-trong-workflow-ai">Sơ đồ thực hành: Bảo vệ API key trong workflow AI: checklist cho người mới</title>
+<desc id="article-diagram-desc-bao-ve-api-key-trong-workflow-ai">Ba bước chính trong bài viết: API key khác mật khẩu thông thường ở đâu?; Lưu bí mật đúng chỗ; Áp dụng nguyên tắc quyền tối thiểu</desc>
+<defs><linearGradient id="diagram-accent-bao-ve-api-key-trong-workflow-ai" x1="0" x2="1"><stop offset="0" stop-color="#55d6b5"/><stop offset="1" stop-color="#8ab4ff"/></linearGradient></defs>
+<text x="300" y="38" text-anchor="middle" fill="#73dfc2" font-size="16" font-weight="700" letter-spacing="2">LỘ TRÌNH THỰC HÀNH</text>
+<rect x="58" y="76" width="484" height="94" rx="18" fill="#14243b" stroke="#36506f" stroke-width="2"/>
+<circle cx="105" cy="123" r="22" fill="url(#diagram-accent-bao-ve-api-key-trong-workflow-ai)"/>
+<text x="105" y="130" text-anchor="middle" fill="#081421" font-size="19" font-weight="800">1</text>
+<text x="148" y="115" fill="#eef4ff" font-size="19" font-weight="600"><tspan x="148" dy="0">API key khác mật khẩu thông thường</tspan><tspan x="148" dy="24">ở đâu?</tspan></text>
+<path d="M300 172 V214" fill="none" stroke="#68d8bd" stroke-width="3" stroke-linecap="round"/>
+<path d="M291 204 L300 215 L309 204" fill="none" stroke="#68d8bd" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="58" y="222" width="484" height="94" rx="18" fill="#14243b" stroke="#36506f" stroke-width="2"/>
+<circle cx="105" cy="269" r="22" fill="url(#diagram-accent-bao-ve-api-key-trong-workflow-ai)"/>
+<text x="105" y="276" text-anchor="middle" fill="#081421" font-size="19" font-weight="800">2</text>
+<text x="148" y="273" fill="#eef4ff" font-size="19" font-weight="600"><tspan x="148" dy="0">Lưu bí mật đúng chỗ</tspan></text>
+<path d="M300 318 V360" fill="none" stroke="#68d8bd" stroke-width="3" stroke-linecap="round"/>
+<path d="M291 350 L300 361 L309 350" fill="none" stroke="#68d8bd" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="58" y="368" width="484" height="94" rx="18" fill="#14243b" stroke="#36506f" stroke-width="2"/>
+<circle cx="105" cy="415" r="22" fill="url(#diagram-accent-bao-ve-api-key-trong-workflow-ai)"/>
+<text x="105" y="422" text-anchor="middle" fill="#081421" font-size="19" font-weight="800">3</text>
+<text x="148" y="419" fill="#eef4ff" font-size="19" font-weight="600"><tspan x="148" dy="0">Áp dụng nguyên tắc quyền tối thiểu</tspan></text>
+</svg>
+<figcaption style="margin-top:10px;color:var(--muted);font-size:13px;line-height:1.6">Sơ đồ tóm tắt ba phần chính của bài viết. Đọc hướng dẫn chi tiết và kiểm chứng kết quả trước khi áp dụng vào dữ liệu thật.</figcaption>
+</figure>
+
 <p style="color:var(--muted);font-size:17px;line-height:1.9">API key và token kết nối thường là chìa khóa truy cập dữ liệu hoặc phát sinh chi phí. Đừng đặt chúng trong mã nguồn, prompt, ảnh chụp màn hình hay bảng dữ liệu dùng chung.</p>
 <p style="font-size:12px;color:#8993ab">Cập nhật ngày <time datetime="2026-10-22">22/10/2026</time> · Thời gian đọc khoảng 7 phút</p>
 <div class="article-content">
@@ -36,10 +62,21 @@
 <li><a href="https://genai.owasp.org/llm-top-10/" target="_blank" rel="noopener noreferrer">OWASP GenAI Security Project — LLM Top 10</a></li></ul>
 <p style="color:var(--muted);font-size:13px">Bài viết là hướng dẫn thực hành, không thay thế việc kiểm thử trong môi trường của bạn. Hãy xác minh tài liệu, quyền truy cập và kết quả thực tế trước khi triển khai trên dữ liệu hoặc hệ thống quan trọng.</p>
 <div style="border-top:1px solid var(--line);margin-top:38px;padding-top:22px"><a class="article-link" href="../#bai-viet">← Quay lại danh sách bài viết <span>→</span></a></div>
+<section class="article-faq" aria-labelledby="faq-api-key-workflow">
+<h2 id="faq-api-key-workflow">Câu hỏi thường gặp</h2>
+<h3>Có nên đưa API key vào prompt, bảng dữ liệu hoặc log để tiện gỡ lỗi không?</h3>
+<p>Không. Secret nên nằm trong cơ chế quản lý credential của nền tảng hoặc kho bí mật được phê duyệt. Log chỉ lưu tên kết nối, mã chạy và trạng thái cần thiết; loại bỏ authorization header, URL có token và payload chứa dữ liệu nhạy cảm. Khi chia sẻ workflow, kiểm tra quyền sử dụng kết nối chứ không chỉ quyền sửa sơ đồ.</p>
+<h3>Nếu nghi ngờ API key đã bị lộ thì cần làm gì?</h3>
+<p>Thu hồi hoặc xoay vòng key tại dịch vụ gốc, kiểm tra những workflow còn sử dụng key cũ và rà lại nhật ký truy cập theo quy trình ứng phó sự cố. Xóa chuỗi khỏi bài viết hoặc log không làm key mất hiệu lực. Nếu key có quyền ghi, gửi hoặc xóa dữ liệu, đánh giá các tác động có thể xảy ra trước khi bật lại workflow.</p>
+<h3>Có nên dùng chung một key cho nhiều workflow?</h3>
+<p>Ưu tiên tách key theo môi trường và nhiệm vụ khi nhà cung cấp hỗ trợ. Mỗi key chỉ nên có quyền tối thiểu và phạm vi tài nguyên cần thiết. Việc tách key giúp giảm phạm vi ảnh hưởng khi một workflow bị lỗi hoặc credential phải thu hồi, đồng thời dễ xác định tác vụ nào đang sử dụng quyền đó.</p>
+</section>
+
 <section class="related-articles" aria-labelledby="related-articles-title"><div class="related-articles-heading"><p class="section-kicker">ĐỌC TIẾP</p><h2 id="related-articles-title">Bài viết liên quan</h2><p>Tiếp tục xây dựng workflow AI thực tế, có kiểm soát.</p></div><nav class="related-articles-grid" aria-label="Bài viết liên quan"><a class="related-article" href="/articles/workflow-ai-chong-loi-va-chay-lai-an-toan"><strong>Thiết kế workflow AI chịu lỗi: retry, chống trùng và hàng chờ duyệt</strong><span>Cách phân loại lỗi tạm thời, giới hạn retry, chống chạy trùng và chuyển ngoại lệ sang người xử lý.</span></a>
 <a class="related-article" href="/articles/kiem-tra-json-dau-ra-ai-truoc-khi-tu-dong-hoa"><strong>Kiểm tra đầu ra AI trước khi tự động hóa: JSON, schema và quy tắc nghiệp vụ</strong><span>Cách biến câu trả lời AI thành dữ liệu có cấu trúc an toàn hơn bằng schema, kiểm tra mã và bước phê duyệt.</span></a>
-<a class="related-article" href="/articles/do-luong-hieu-qua-workflow-ai"><strong>Đo hiệu quả workflow AI</strong><span>Đo chất lượng, thời gian, chi phí và lỗi.</span></a></nav></section>
-</main>
+<a class="related-article" href="/articles/do-luong-hieu-qua-workflow-ai"><strong>Đo hiệu quả workflow AI</strong><span>Đo chất lượng, thời gian, chi phí và lỗi.</span></a><a class="related-article" href="/articles/bao-ve-api-key-automation"><strong>Checklist API key cho Airtable và Activepieces: 8 bước an toàn</strong><span>Bảng kiểm cụ thể để rà soát kết nối no-code trước khi bật workflow.</span></a></nav></section>
+<p class="article-library-cta" style="margin:28px 0 12px"><a class="button primary" href="../thu-vien.html">Khám phá thư viện bài viết →</a></p>
+<section class="article-author-note" aria-label="Ghi công tác giả và sử dụng nội dung"><p><strong>Tác giả:</strong> DUNG - AI</p><p>Khi trích dẫn, chia sẻ hoặc sử dụng lại nội dung bài viết này, vui lòng ghi rõ tác giả <strong>DUNG - AI</strong> và dẫn liên kết về bài viết gốc. Các tài sản của bên thứ ba (nếu có) vẫn tuân theo giấy phép và điều kiện sử dụng riêng.</p></section></main>
 <footer><a class="brand" href="../"><span class="brand-mark">AI</span><span>AI <b>Thực Chiến</b></span></a><span>Học thật · Thử thật · Đo lường bằng bằng chứng · <a href="../feed.xml">RSS</a></span><span>© <span id="year">2026</span> AI Thực Chiến</span></footer>
-<script src="../script.js"></script>
+<script src="../script.js" defer></script>
 </body></html>

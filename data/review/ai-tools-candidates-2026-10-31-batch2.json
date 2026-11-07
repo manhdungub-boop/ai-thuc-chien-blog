@@ -1,0 +1,216 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-10-31T14:14:11+07:00",
+  "catalog_policy": {
+    "default_locale": "vi",
+    "currency": "USD",
+    "new_entry_status": "needs_review",
+    "note": "Second candidate batch. Evidence checked on official vendor pricing/docs/repository pages. Candidate records are not approved for public listing; pricing_status remains unknown pending editor review."
+  },
+  "tools": [
+    {
+      "id": "litellm",
+      "name": "LiteLLM",
+      "vendor": "BerriAI",
+      "website": "https://www.litellm.ai/",
+      "categories": [
+        "developer",
+        "integration",
+        "automation",
+        "agents"
+      ],
+      "pricing_model": "self_hosted_free_and_cloud_paid",
+      "pricing_status": "unknown",
+      "license": "MIT for core project; enterprise directory/features have separate commercial licensing terms",
+      "platforms": [
+        "python",
+        "api",
+        "docker",
+        "self_hosted",
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "description": "AI gateway và SDK thống nhất API cho nhiều nhà cung cấp mô hình, kèm định tuyến, dự phòng, quản lý khóa, ngân sách và theo dõi chi phí.",
+      "free_tier_summary": "Gateway mã nguồn mở tự lưu trữ được nhà cung cấp công bố miễn phí lâu dài; Enterprise có phí theo quy mô triển khai. Trang giá còn nêu bản dùng thử Enterprise 30 ngày, không phải gói miễn phí vĩnh viễn.",
+      "official_sources": [
+        "https://www.litellm.ai/pricing",
+        "https://docs.litellm.ai/",
+        "https://github.com/BerriAI/litellm/blob/main/pyproject.toml",
+        "https://github.com/BerriAI/litellm"
+      ],
+      "last_verified": "2026-10-31",
+      "verification_status": "needs_review",
+      "status": "active",
+      "tags": [
+        "llm-gateway",
+        "model-routing",
+        "sdk",
+        "api",
+        "cost-tracking"
+      ]
+    },
+    {
+      "id": "langfuse",
+      "name": "Langfuse",
+      "vendor": "Langfuse",
+      "website": "https://langfuse.com/",
+      "categories": [
+        "developer",
+        "research",
+        "data",
+        "automation"
+      ],
+      "pricing_model": "self_hosted_free_and_cloud_paid",
+      "pricing_status": "unknown",
+      "license": "MIT for core open-source platform; enterprise add-ons/features may require a commercial license",
+      "platforms": [
+        "web",
+        "cloud",
+        "self_hosted",
+        "docker",
+        "kubernetes",
+        "api",
+        "python",
+        "javascript"
+      ],
+      "description": "Nền tảng quan sát và đánh giá ứng dụng LLM, theo dõi trace, chi phí, prompt, dataset và chất lượng agent.",
+      "free_tier_summary": "Core self-host được công bố miễn phí với MIT; Cloud có Hobby miễn phí theo hạn mức và các gói trả phí. Một số tính năng bổ sung self-host cần license key.",
+      "official_sources": [
+        "https://langfuse.com/pricing-self-host",
+        "https://langfuse.com/self-hosting",
+        "https://langfuse.com/pricing",
+        "https://github.com/langfuse/langfuse"
+      ],
+      "last_verified": "2026-10-31",
+      "verification_status": "needs_review",
+      "status": "active",
+      "tags": [
+        "llm-observability",
+        "evaluation",
+        "tracing",
+        "prompt-management"
+      ]
+    },
+    {
+      "id": "openhands",
+      "name": "OpenHands",
+      "vendor": "All Hands AI",
+      "website": "https://www.openhands.dev/",
+      "categories": [
+        "coding",
+        "agents",
+        "developer",
+        "automation"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "unknown",
+      "license": "MIT for OpenHands Open Source; hosted and enterprise service terms are separate",
+      "platforms": [
+        "web",
+        "desktop",
+        "cli",
+        "self_hosted",
+        "cloud",
+        "api",
+        "linux",
+        "macos"
+      ],
+      "description": "AI software development agent có thể làm việc với mã nguồn qua giao diện web, terminal và CLI; hỗ trợ nhiều nhà cung cấp mô hình.",
+      "free_tier_summary": "Bản mã nguồn mở chạy local miễn phí cho một người dùng; Cloud Individual miễn phí nhưng giới hạn 10 cuộc hội thoại/ngày và mô hình do OpenHands cung cấp tính theo chi phí; Enterprise báo giá riêng.",
+      "official_sources": [
+        "https://www.openhands.dev/pricing",
+        "https://docs.openhands.dev/",
+        "https://github.com/OpenHands/OpenHands",
+        "https://github.com/OpenHands/OpenHands/blob/main/LICENSE"
+      ],
+      "last_verified": "2026-10-31",
+      "verification_status": "needs_review",
+      "status": "active",
+      "tags": [
+        "coding-agent",
+        "software-engineering",
+        "cli",
+        "developer-agent"
+      ]
+    },
+    {
+      "id": "ragflow",
+      "name": "RAGFlow",
+      "vendor": "InfiniFlow",
+      "website": "https://ragflow.io/",
+      "categories": [
+        "documents",
+        "research",
+        "agents",
+        "data"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "unknown",
+      "license": "Apache-2.0 for the open-source repository; review third-party components and hosted-service terms separately",
+      "platforms": [
+        "web",
+        "cloud",
+        "self_hosted",
+        "docker",
+        "api",
+        "python"
+      ],
+      "description": "Nền tảng RAG và agent xử lý tài liệu nhiều định dạng, kết hợp tìm kiếm lai, trích xuất dữ liệu và workflow tác tử.",
+      "free_tier_summary": "RAGFlow Cloud công bố gói Free gồm 5 ứng dụng, 1 thành viên, 0,1 GB dữ liệu và 500 credits/tháng; gói Starter/Pro có phí. Repository hỗ trợ tự triển khai; yêu cầu tài nguyên máy chủ đáng kể.",
+      "official_sources": [
+        "https://ragflow.io/",
+        "https://github.com/infiniflow/ragflow",
+        "https://github.com/infiniflow/ragflow/blob/main/LICENSE",
+        "https://ragflow.io/docs"
+      ],
+      "last_verified": "2026-10-31",
+      "verification_status": "needs_review",
+      "status": "active",
+      "tags": [
+        "rag",
+        "document-ai",
+        "knowledge-base",
+        "agent-workflow"
+      ]
+    },
+    {
+      "id": "langgraph",
+      "name": "LangGraph",
+      "vendor": "LangChain",
+      "website": "https://www.langchain.com/langgraph",
+      "categories": [
+        "agents",
+        "developer",
+        "automation"
+      ],
+      "pricing_model": "free",
+      "pricing_status": "unknown",
+      "license": "MIT",
+      "platforms": [
+        "python",
+        "javascript",
+        "typescript",
+        "api",
+        "self_hosted"
+      ],
+      "description": "Framework điều phối agent có trạng thái, hỗ trợ workflow dài hạn, bộ nhớ, streaming và kiểm soát human-in-the-loop.",
+      "free_tier_summary": "Thư viện LangGraph được LangChain công bố là mã nguồn mở MIT và miễn phí. LangSmith là sản phẩm riêng trong hệ sinh thái, có thể có gói trả phí; không gộp chi phí LangSmith vào LangGraph.",
+      "official_sources": [
+        "https://www.langchain.com/langgraph",
+        "https://docs.langchain.com/oss/python/langgraph/overview",
+        "https://github.com/langchain-ai/langgraph",
+        "https://github.com/langchain-ai/langgraph/blob/main/LICENSE"
+      ],
+      "last_verified": "2026-10-31",
+      "verification_status": "needs_review",
+      "status": "active",
+      "tags": [
+        "agent-framework",
+        "orchestration",
+        "stateful-agent",
+        "human-in-the-loop"
+      ]
+    }
+  ]
+}

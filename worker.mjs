@@ -187,6 +187,16 @@ const COMMUNITY_ALLOWED_ORIGINS = new Set([
   "https://ai-thuc-chien-blog.manhdungub.workers.dev",
   "https://ai-thuc-chien-blog.pages.dev",
 ]);
+function isCommunityOriginAllowed(request) {
+  const origin = request.headers.get("Origin");
+  if (!origin) return true;
+  if (COMMUNITY_ALLOWED_ORIGINS.has(origin)) return true;
+  try {
+    return origin === new URL(request.url).origin;
+  } catch (_error) {
+    return false;
+  }
+}
 const COMMUNITY_TOPICS = Object.freeze({
   tools: "Công cụ AI",
   automation: "Tự động hóa",
@@ -200,6 +210,12 @@ const COMMUNITY_SESSION_SECONDS = 60 * 60 * 24 * 30;
 const COMMUNITY_PASSWORD_ITERATIONS = 100000;
 const COMMUNITY_ENCODER = new TextEncoder();
 
+const COMMUNITY_OAUTH_STAGING_ORIGINS = new Set([
+  "https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev",
+  "https://feature-required-email-verification-ai-thuc-chien-blog.manhdungub.workers.dev",
+]);
+const COMMUNITY_OAUTH_STATE_TTL_SECONDS = 600;
+
 function communityJson(data, status, request, extraHeaders = {}) {
   const headers = new Headers({
     "Content-Type": "application/json; charset=utf-8",
@@ -208,7 +224,7 @@ function communityJson(data, status, request, extraHeaders = {}) {
     ...extraHeaders,
   });
   const origin = request.headers.get("Origin");
-  if (origin && COMMUNITY_ALLOWED_ORIGINS.has(origin)) {
+  if (origin && isCommunityOriginAllowed(request)) {
     headers.set("Access-Control-Allow-Origin", origin);
     headers.set("Access-Control-Allow-Credentials", "true");
     headers.set("Vary", "Origin");
@@ -264,7 +280,7 @@ async function communityMemberFromRequest(request, db) {
   const now = new Date().toISOString();
   return db.prepare(`SELECT m.id, m.username, m.display_name, m.created_at
     FROM community_sessions s JOIN community_members m ON m.id = s.member_id
-    WHERE s.token_hash = ? AND s.expires_at > ? LIMIT 1`).bind(tokenHash, now).first();
+    WHERE s.token_hash = ? AND s.expires_at > ? AND m.email_verified_at IS NOT NULL LIMIT 1`).bind(tokenHash, now).first();
 }
 async function createCommunitySession(db, memberId) {
   await db.prepare("DELETE FROM community_sessions WHERE expires_at <= ?").bind(new Date().toISOString()).run();
@@ -288,9 +304,487 @@ async function readJsonPayload(request, maxBytes = 6000) {
     return { ok: true, value };
   } catch (_error) { return { ok: false, status: 400, error: "Dữ liệu gửi không hợp lệ." }; }
 }
+const COMMUNITY_VERIFICATION_SECONDS = 30 * 60;
+function escapeCommunityHtml(value) {
+  return String(value || "").replace(/[&<>\"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[char]);
+}
+async function sendCommunityVerificationEmail(env, email, displayName, token, origin) {
+  if (!env.COMMUNITY_EMAIL_RELAY_URL || !env.COMMUNITY_EMAIL_RELAY_SECRET) {
+    throw new Error("Email verification relay is not configured");
+  }
+  const verifyUrl = `${origin}/?verify=${encodeURIComponent(token)}#cong-dong`;
+  const safeName = escapeCommunityHtml(displayName || "bạn");
+  const safeUrl = escapeCommunityHtml(verifyUrl);
+  const textBody = `Chào ${displayName || "bạn"}. Xác nhận email để hoàn tất đăng ký AI Thực Chiến bằng liên kết sau (hết hạn sau 30 phút): ${verifyUrl}. Nếu bạn không yêu cầu đăng ký, hãy bỏ qua email này.`;
+  const htmlBody = `<div style="font-family:Arial,sans-serif;line-height:1.65;color:#172033;max-width:560px;margin:auto"><h1>Xác nhận email của bạn</h1><p>Chào ${safeName},</p><p>Để hoàn tất đăng ký cộng đồng AI Thực Chiến, hãy bấm nút bên dưới. Liên kết chỉ có hiệu lực trong 30 phút và chỉ dùng một lần.</p><p><a href="${safeUrl}" style="display:inline-block;padding:12px 20px;background:#85efd0;color:#092a2c;border-radius:8px;text-decoration:none;font-weight:bold">Xác nhận email</a></p><p>Nếu nút không hoạt động, sao chép liên kết này vào trình duyệt:</p><p style="overflow-wrap:anywhere">${safeUrl}</p><p>Nếu bạn không yêu cầu đăng ký, hãy bỏ qua email này.</p></div>`;
+  const response = await fetch(env.COMMUNITY_EMAIL_RELAY_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Accept": "application/json" },
+    body: JSON.stringify({
+      secret: env.COMMUNITY_EMAIL_RELAY_SECRET,
+      to: email,
+      subject: "Xác nhận email — AI Thực Chiến",
+      displayName: displayName || "bạn",
+      verifyUrl,
+      textBody,
+      htmlBody,
+    }),
+  });
+  let result = {};
+  try {
+    result = await response.json();
+  } catch {
+    const error = new Error(`Email relay returned invalid JSON (HTTP ${response.status})`);
+    error.code = "INVALID_JSON";
+    error.httpStatus = response.status;
+    throw error;
+  }
+  // Apps Script ContentService can return HTTP 200 for application-level failures; inspect the JSON contract.
+  if (!response.ok || result?.ok !== true) {
+    const relayCode = typeof result?.code === "string" && /^[A-Z0-9_]{1,48}$/.test(result.code)
+      ? result.code
+      : (response.ok ? "RELAY_REJECTED" : "HTTP_ERROR");
+    const error = new Error(`Email relay rejected the message (HTTP ${response.status}, code ${relayCode})`);
+    error.code = relayCode;
+    error.httpStatus = response.status;
+    throw error;
+  }
+}
+async function createCommunityVerificationToken(db, memberId) {
+  await db.prepare("DELETE FROM community_email_verification_tokens WHERE member_id = ?").bind(memberId).run();
+  const token = bytesToBase64Url(crypto.getRandomValues(new Uint8Array(32)));
+  const tokenHash = await sha256Base64Url(token);
+  const createdAt = new Date();
+  const expiresAt = new Date(createdAt.getTime() + COMMUNITY_VERIFICATION_SECONDS * 1000).toISOString();
+  await db.prepare("INSERT INTO community_email_verification_tokens (token_hash, member_id, created_at, expires_at) VALUES (?, ?, ?, ?)")
+    .bind(tokenHash, memberId, createdAt.toISOString(), expiresAt).run();
+  return token;
+}
+async function sendCommunityPasswordResetEmail(env, email, displayName, token, origin) {
+  if (!env.COMMUNITY_EMAIL_RELAY_URL || !env.COMMUNITY_EMAIL_RELAY_SECRET) throw new Error("Password reset email relay is not configured");
+  const resetUrl = `${origin}/?reset=${encodeURIComponent(token)}#cong-dong`;
+  const safeName = escapeCommunityHtml(displayName || "bạn");
+  const safeUrl = escapeCommunityHtml(resetUrl);
+  const textBody = `Chào ${displayName || "bạn"}. Bạn vừa yêu cầu đặt lại mật khẩu AI Thực Chiến. Mở liên kết sau trong vòng 30 phút để tạo mật khẩu mới: ${resetUrl}. Nếu bạn không yêu cầu, hãy bỏ qua email này.`;
+  const htmlBody = `<div style="font-family:Arial,sans-serif;line-height:1.65;color:#172033;max-width:560px;margin:auto"><h1>Đặt lại mật khẩu</h1><p>Chào ${safeName},</p><p>Để đặt mật khẩu mới cho tài khoản AI Thực Chiến, hãy bấm nút bên dưới. Liên kết chỉ có hiệu lực trong 30 phút và chỉ dùng một lần.</p><p><a href="${safeUrl}" style="display:inline-block;padding:12px 20px;background:#85efd0;color:#092a2c;border-radius:8px;text-decoration:none;font-weight:bold">Đặt lại mật khẩu</a></p><p>Nếu bạn không yêu cầu, hãy bỏ qua email này.</p></div>`;
+  const response = await fetch(env.COMMUNITY_EMAIL_RELAY_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Accept": "application/json" },
+    body: JSON.stringify({ secret: env.COMMUNITY_EMAIL_RELAY_SECRET, to: email, subject: "Đặt lại mật khẩu — AI Thực Chiến", displayName: displayName || "bạn", verifyUrl: resetUrl, textBody, htmlBody }),
+  });
+  let result = {};
+  try { result = await response.json(); } catch { throw new Error(`Email relay returned invalid JSON (HTTP ${response.status})`); }
+  if (!response.ok || result?.ok !== true) throw new Error(`Email relay rejected the password reset message (HTTP ${response.status})`);
+}
+
+function communityOAuthCredentials(env, provider) {
+  if (provider !== "google") return { clientId: "", clientSecret: "" };
+  return {
+    clientId: String(env.GOOGLE_OAUTH_CLIENT_ID || "").trim(),
+    clientSecret: String(env.GOOGLE_OAUTH_CLIENT_SECRET || ""),
+  };
+}
+function communityOAuthReady(env, provider) {
+  const credentials = communityOAuthCredentials(env, provider);
+  return Boolean(credentials.clientId && credentials.clientSecret);
+}
+function communityOAuthCookieName(provider, part, transactionId) {
+  return "__Host-ai_oauth_" + provider + "_" + part + "_" + transactionId;
+}
+function readCommunityOAuthCookie(request, name) {
+  const prefix = name + "=";
+  const cookies = request.headers.get("Cookie") || "";
+  const entry = cookies.split(";").map((value) => value.trim()).find((value) => value.startsWith(prefix));
+  return entry ? entry.slice(prefix.length) : "";
+}
+function communityOAuthCookie(provider, part, value, transactionId, maxAge = COMMUNITY_OAUTH_STATE_TTL_SECONDS) {
+  return communityOAuthCookieName(provider, part, transactionId) + "=" + value +
+    "; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=" + maxAge;
+}
+function communityOAuthRedirect(request, provider, result, extraCookies = []) {
+  const destination = new URL("/", request.url);
+  destination.searchParams.set("oauth", result);
+  destination.searchParams.set("provider", provider);
+  if (result !== "success" && result !== "cancelled" && result !== "email_missing" && result !== "unavailable") {
+    destination.searchParams.set("oauth_error", result);
+  }
+  destination.hash = "cong-dong";
+  const headers = new Headers({
+    "Location": destination.toString(),
+    "Cache-Control": "no-store, max-age=0",
+    "Pragma": "no-cache",
+    "Referrer-Policy": "no-referrer",
+  });
+  for (const cookie of extraCookies) headers.append("Set-Cookie", cookie);
+  return new Response(null, { status: 302, headers });
+}
+function communityOAuthClearCookies(provider, transactionId) {
+  const cookies = [communityOAuthCookie(provider, "state", "", transactionId, 0)];
+  if (provider === "google") {
+    cookies.push(communityOAuthCookie(provider, "verifier", "", transactionId, 0));
+    cookies.push(communityOAuthCookie(provider, "nonce", "", transactionId, 0));
+  }
+  return cookies;
+}
+
+function validCommunityOAuthEmail(email) {
+  const value = String(email || "").trim().toLowerCase();
+  return value.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) ? value : "";
+}
+async function validateGoogleOidcIdToken(idToken, clientId, expectedNonce) {
+  if (typeof idToken !== "string" || idToken.length > 16384 || !expectedNonce) throw new Error("oidc_token_missing");
+  const parts = idToken.split(".");
+  if (parts.length !== 3 || parts.some((part) => !part || part.length > 12000)) throw new Error("oidc_jwt_malformed");
+  const decodeBase64UrlJson = (part) => {
+    const normalized = part.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized + "=".repeat((4 - normalized.length % 4) % 4);
+    const binary = atob(padded);
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    return JSON.parse(new TextDecoder().decode(bytes));
+  };
+  const header = decodeBase64UrlJson(parts[0]);
+  const claims = decodeBase64UrlJson(parts[1]);
+  if (!header || header.alg !== "RS256" || typeof header.kid !== "string" || header.kid.length > 256) {
+    throw new Error("oidc_header_invalid");
+  }
+
+  const discoveryResponse = await fetch("https://accounts.google.com/.well-known/openid-configuration", {
+    headers: { "Accept": "application/json" },
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!discoveryResponse.ok) throw new Error("oidc_discovery_unavailable");
+  const discovery = await discoveryResponse.json();
+  if (discovery.issuer !== "https://accounts.google.com" ||
+      typeof discovery.jwks_uri !== "string") throw new Error("oidc_discovery_invalid");
+  const jwksUrl = new URL(discovery.jwks_uri);
+  if (jwksUrl.protocol !== "https:" || jwksUrl.hostname !== "www.googleapis.com" ||
+      jwksUrl.pathname !== "/oauth2/v3/certs") throw new Error("oidc_jwks_uri_invalid");
+
+  const jwksResponse = await fetch(jwksUrl.toString(), {
+    headers: { "Accept": "application/json" },
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!jwksResponse.ok) throw new Error("oidc_jwks_unavailable");
+  const jwks = await jwksResponse.json();
+  const jwk = Array.isArray(jwks.keys)
+    ? jwks.keys.find((key) => key && key.kid === header.kid && key.kty === "RSA" &&
+        key.alg === "RS256" && (!key.use || key.use === "sig"))
+    : null;
+  if (!jwk) throw new Error("oidc_signing_key_not_found");
+  const publicKey = await crypto.subtle.importKey(
+    "jwk",
+    jwk,
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["verify"]
+  );
+  const signatureText = parts[2].replace(/-/g, "+").replace(/_/g, "/");
+  const signaturePadded = signatureText + "=".repeat((4 - signatureText.length % 4) % 4);
+  const signatureBinary = atob(signaturePadded);
+  const signature = Uint8Array.from(signatureBinary, (character) => character.charCodeAt(0));
+  const signedBytes = new TextEncoder().encode(parts[0] + "." + parts[1]);
+  const validSignature = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", publicKey, signature, signedBytes);
+  if (!validSignature) throw new Error("oidc_signature_invalid");
+
+  const now = Math.floor(Date.now() / 1000);
+  const audiences = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
+  if (!["https://accounts.google.com", "accounts.google.com"].includes(claims.iss) ||
+      !audiences.includes(clientId) ||
+      (audiences.length > 1 && claims.azp !== clientId) ||
+      (claims.azp && claims.azp !== clientId) ||
+      !Number.isInteger(claims.exp) || claims.exp <= now ||
+      (claims.nbf !== undefined && (!Number.isInteger(claims.nbf) || claims.nbf > now + 60)) ||
+      !Number.isInteger(claims.iat) || claims.iat > now + 60 ||
+      now - claims.iat > 60 * 60 ||
+      claims.exp <= claims.iat ||
+      typeof claims.sub !== "string" || !/^[\x21-\x7E]{1,255}$/.test(claims.sub) ||
+      claims.nonce !== expectedNonce ||
+      claims.email_verified !== true) {
+    throw new Error("oidc_claims_invalid");
+  }
+  const email = validCommunityOAuthEmail(claims.email);
+  if (!email) throw new Error("oidc_email_invalid");
+  return {
+    sub: claims.sub,
+    email,
+    name: String(claims.name || claims.given_name || "").trim().slice(0, 40),
+  };
+}
+
+
+async function beginCommunityOAuth(request, env, provider, db) {
+  const requestUrl = new URL(request.url);
+  if (!COMMUNITY_OAUTH_STAGING_ORIGINS.has(requestUrl.origin)) {
+    return communityJson({ error: "Đăng nhập mạng xã hội hiện chưa được bật." }, 404, request);
+  }
+  const credentials = communityOAuthCredentials(env, provider);
+  if (!credentials.clientId || !credentials.clientSecret) {
+    return communityJson({ error: "Nhà cung cấp đăng nhập chưa được cấu hình.", code: "OAUTH_NOT_CONFIGURED" }, 503, request);
+  }
+  const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+  const ipHash = await sha256Base64Url(ip);
+  if (!await communityRateLimit(db, "oauth-start:" + provider + ":" + ipHash, 10, 15 * 60 * 1000)) {
+    return communityJson({ error: "Bạn đã bắt đầu đăng nhập quá nhiều lần. Vui lòng thử lại sau." }, 429, request);
+  }
+
+  const state = bytesToBase64Url(crypto.getRandomValues(new Uint8Array(32)));
+  const redirectUri = requestUrl.origin + "/api/community/oauth/" + provider + "/callback";
+  const headers = new Headers({
+    "Cache-Control": "no-store, max-age=0",
+    "Pragma": "no-cache",
+    "Referrer-Policy": "no-referrer",
+  });
+  let authorizationUrl;
+  headers.append("Set-Cookie", communityOAuthCookie(provider, "state", state, state));
+
+  if (provider === "google") {
+    const verifier = bytesToBase64Url(crypto.getRandomValues(new Uint8Array(32)));
+    const challenge = await sha256Base64Url(verifier);
+    const nonce = bytesToBase64Url(crypto.getRandomValues(new Uint8Array(32)));
+    headers.append("Set-Cookie", communityOAuthCookie(provider, "verifier", verifier, state));
+    headers.append("Set-Cookie", communityOAuthCookie(provider, "nonce", nonce, state));
+    authorizationUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+    authorizationUrl.search = new URLSearchParams({
+      client_id: credentials.clientId,
+      redirect_uri: redirectUri,
+      response_type: "code",
+      scope: "openid email profile",
+      state,
+      nonce,
+      code_challenge: challenge,
+      code_challenge_method: "S256",
+      prompt: "select_account",
+    }).toString();
+  } else {
+    authorizationUrl = new URL("https://www.facebook.com/v26.0/dialog/oauth");
+    authorizationUrl.search = new URLSearchParams({
+      client_id: credentials.clientId,
+      redirect_uri: redirectUri,
+      response_type: "code",
+      scope: "email,public_profile",
+      state,
+    }).toString();
+  }
+  headers.set("Location", authorizationUrl.toString());
+  return new Response(null, { status: 302, headers });
+}
+
+async function communityOAuthMember(db, provider, providerUserId, email, displayName) {
+  const now = new Date().toISOString();
+  const linkedSql = "SELECT m.id, m.username, m.email, m.display_name, m.created_at " +
+    "FROM community_oauth_accounts a JOIN community_members m ON m.id = a.member_id " +
+    "WHERE a.provider = ? AND a.provider_user_id = ? LIMIT 1";
+  let linked = await db.prepare(linkedSql).bind(provider, providerUserId).first();
+  if (linked) return linked;
+
+  const byEmailSql = "SELECT id, username, email, display_name, email_verified_at, created_at " +
+    "FROM community_members WHERE email = ? LIMIT 1";
+  // Facebook's /me email field is not an explicit verified-email claim. Never use it
+  // to find, verify, or take over an existing email/password account. Keep the
+  // provider identity separate until an authenticated account-link flow exists.
+  const memberEmail = provider === "facebook"
+    ? "facebook-" + await sha256Base64Url(providerUserId) + "@social.invalid"
+    : email;
+  let member = await db.prepare(byEmailSql).bind(memberEmail).first();
+  if (member) {
+    // Only Google's explicit email_verified claim permits email-based account linking.
+    if (provider === "google" && !member.email_verified_at) {
+      await db.prepare("UPDATE community_members SET email_verified_at = ? WHERE id = ? AND email_verified_at IS NULL")
+        .bind(now, member.id).run();
+      member.email_verified_at = now;
+    }
+  } else {
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const inaccessiblePassword = bytesToBase64Url(crypto.getRandomValues(new Uint8Array(32)));
+    const passwordHash = await hashCommunityPassword(inaccessiblePassword, salt);
+    const baseUsername = (memberEmail.split("@")[0] || "member").toLowerCase()
+      .replace(/[^a-z0-9_]/g, "_").replace(/_+/g, "_").replace(/^_+|_+$/g, "") || "member";
+    const verifiedAt = provider === "google" ? now : null;
+    let created = false;
+    for (let attempt = 0; attempt < 8 && !created; attempt += 1) {
+      const suffix = bytesToBase64Url(crypto.getRandomValues(new Uint8Array(5))).slice(0, 5).toLowerCase();
+      const username = baseUsername.slice(0, 18) + "_" + suffix;
+      const memberId = crypto.randomUUID();
+      try {
+        await db.prepare("INSERT INTO community_members " +
+          "(id, username, email, display_name, password_salt, password_hash, created_at, email_verified_at) " +
+          "VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+          .bind(memberId, username, memberEmail, displayName.slice(0, 40), bytesToBase64Url(salt), passwordHash, now, verifiedAt).run();
+        member = { id: memberId, username, email: memberEmail, display_name: displayName.slice(0, 40), email_verified_at: verifiedAt, created_at: now };
+        created = true;
+      } catch (error) {
+        member = await db.prepare(byEmailSql).bind(memberEmail).first();
+        if (member) {
+          if (provider === "google" && !member.email_verified_at) {
+            await db.prepare("UPDATE community_members SET email_verified_at = ? WHERE id = ? AND email_verified_at IS NULL")
+              .bind(now, member.id).run();
+            member.email_verified_at = now;
+          }
+          created = true;
+        } else if (!/unique|constraint/i.test(String(error?.message || error))) {
+          throw error;
+        }
+      }
+    }
+    if (!member) throw new Error("oauth_member_create_failed");
+  }
+
+  await db.prepare("INSERT INTO community_oauth_accounts " +
+    "(provider, provider_user_id, member_id, email, created_at) VALUES (?, ?, ?, ?, ?) " +
+    "ON CONFLICT(provider, provider_user_id) DO NOTHING")
+    .bind(provider, providerUserId, member.id, email, now).run();
+
+  linked = await db.prepare(linkedSql).bind(provider, providerUserId).first();
+  if (!linked) throw new Error("oauth_identity_link_failed");
+  return linked;
+}
+
+async function completeCommunityOAuth(request, env, provider, db) {
+  const requestUrl = new URL(request.url);
+  if (!COMMUNITY_OAUTH_STAGING_ORIGINS.has(requestUrl.origin)) {
+    return communityJson({ error: "Callback đăng nhập không hợp lệ." }, 404, request);
+  }
+  const state = String(requestUrl.searchParams.get("state") || "");
+  const validStateFormat = /^[A-Za-z0-9_-]{43}$/.test(state);
+  const storedState = validStateFormat
+    ? readCommunityOAuthCookie(request, communityOAuthCookieName(provider, "state", state))
+    : "";
+  const transactionValid = Boolean(storedState && state === storedState);
+  // Only a callback that proves possession of its own state cookie may clear that
+  // transaction's cookies. A bad callback must never invalidate another login flow.
+  const clearCookies = transactionValid ? communityOAuthClearCookies(provider, state) : [];
+  const fail = (reason) => communityOAuthRedirect(request, provider, reason, clearCookies);
+  // Bound callback processing before any provider network request or D1 account mutation.
+  const callbackIp = request.headers.get("CF-Connecting-IP") || "unknown";
+  const callbackIpHash = await sha256Base64Url(callbackIp);
+  if (!await communityRateLimit(db, "oauth-callback:" + provider + ":" + callbackIpHash, 30, 15 * 60 * 1000)) {
+    return fail("OAUTH_CALLBACK_RATE_LIMITED");
+  }
+  if (!transactionValid) return fail("OAUTH_STATE_INVALID");
+  if (requestUrl.searchParams.has("error")) return fail("cancelled");
+  const code = String(requestUrl.searchParams.get("code") || "");
+  if (!code || code.length > 2048) return fail("OAUTH_CODE_MISSING");
+  if (!communityOAuthReady(env, provider)) return fail("unavailable");
+
+  let stage = "OAUTH_TOKEN_EXCHANGE_FAILED";
+  try {
+    const credentials = communityOAuthCredentials(env, provider);
+    const redirectUri = requestUrl.origin + "/api/community/oauth/" + provider + "/callback";
+    const tokenUrl = provider === "google"
+      ? "https://oauth2.googleapis.com/token"
+      : "https://graph.facebook.com/v26.0/oauth/access_token";
+    const tokenBody = new URLSearchParams({
+      client_id: credentials.clientId,
+      client_secret: credentials.clientSecret,
+      code,
+      redirect_uri: redirectUri,
+      grant_type: "authorization_code",
+    });
+    if (provider === "google") {
+      const verifier = readCommunityOAuthCookie(request, communityOAuthCookieName(provider, "verifier", state));
+      if (!verifier || verifier.length < 43 || verifier.length > 128) return fail("OAUTH_VERIFIER_MISSING");
+      tokenBody.set("code_verifier", verifier);
+    }
+    let tokenResponse;
+    try {
+      tokenResponse = await fetch(tokenUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: tokenBody.toString(),
+        signal: AbortSignal.timeout(10000),
+      });
+    } catch (_networkError) {
+      // Probe only the public Google token endpoint with a credential-free GET.
+      // A non-2xx HTTP response still proves DNS/TLS/egress reached Google.
+      // Never log exception messages, request bodies, OAuth codes, cookies or credentials.
+      const errorName = typeof _networkError?.name === "string" ? _networkError.name : "";
+      const errorClass = ["AbortError", "TimeoutError", "TypeError", "Error"].includes(errorName)
+        ? errorName
+        : "Other";
+      const timedOut = errorName === "TimeoutError" || errorName === "AbortError";
+      let endpointReachable = false;
+      let probeStatus = 0;
+      if (provider === "google") {
+        try {
+          const probe = await fetch("https://oauth2.googleapis.com/token", {
+            method: "GET",
+                signal: AbortSignal.timeout(5000),
+          });
+          endpointReachable = true;
+          probeStatus = probe.status;
+        } catch (_probeError) {
+          endpointReachable = false;
+        }
+      }
+      console.warn("[oauth] token_exchange_transport_failure", {
+        provider,
+        errorClass,
+        endpointReachable,
+        probeStatus,
+      });
+      if (timedOut) return fail("OAUTH_TOKEN_TIMEOUT");
+      return fail(endpointReachable ? "OAUTH_TOKEN_REQUEST_FAILED" : "OAUTH_GOOGLE_ENDPOINT_UNREACHABLE");
+    }
+    let tokenPayload;
+    try {
+      tokenPayload = await tokenResponse.json();
+    } catch (_parseError) {
+      return fail("OAUTH_TOKEN_RESPONSE_INVALID");
+    }
+    if (!tokenResponse.ok || typeof tokenPayload.access_token !== "string" || tokenPayload.access_token.length > 4096) {
+      // Expose only a strictly sanitized provider error identifier, never its description or payload.
+      const googleError = provider === "google" ? String(tokenPayload.error || "") : "";
+      const safeGoogleError = /^[a-z][a-z0-9_]{1,63}$/.test(googleError)
+        ? "OAUTH_GOOGLE_" + googleError.toUpperCase()
+        : "OAUTH_TOKEN_EXCHANGE_FAILED";
+      return fail(safeGoogleError);
+    }
+
+    stage = "OAUTH_USERINFO_FAILED";
+    let providerUserId = "";
+    let email = "";
+    let displayName = "";
+    if (provider === "google") {
+      const expectedNonce = readCommunityOAuthCookie(request, communityOAuthCookieName(provider, "nonce", state));
+      if (!expectedNonce || expectedNonce.length > 128) return fail("OAUTH_NONCE_MISSING");
+      if (typeof tokenPayload.id_token !== "string") return fail("OAUTH_ID_TOKEN_MISSING");
+      const identity = await validateGoogleOidcIdToken(tokenPayload.id_token, credentials.clientId, expectedNonce);
+      providerUserId = identity.sub;
+      email = identity.email;
+      displayName = identity.name;
+    } else {
+      const userResponse = await fetch("https://graph.facebook.com/v26.0/me?fields=id%2Cname%2Cemail", {
+        headers: { "Authorization": "Bearer " + tokenPayload.access_token },
+        signal: AbortSignal.timeout(10000),
+      });
+      const user = await userResponse.json();
+      if (!userResponse.ok) return fail("OAUTH_USERINFO_FAILED");
+      providerUserId = String(user.id || "");
+      email = validCommunityOAuthEmail(user.email);
+      displayName = String(user.name || "").trim();
+      // Facebook can omit email when the user has no confirmed address or has not granted the email permission.
+      if (!email) return fail("email_missing");
+    }
+    if (!providerUserId || providerUserId.length > 255 || !email) return fail("OAUTH_PROFILE_INVALID");
+    if (displayName.length < 2) displayName = email.split("@")[0];
+    displayName = displayName.slice(0, 40);
+
+    stage = "OAUTH_MEMBER_PERSIST_FAILED";
+    const member = await communityOAuthMember(db, provider, providerUserId, email, displayName);
+    const sessionToken = await createCommunitySession(db, member.id);
+    const response = communityOAuthRedirect(request, provider, "success", clearCookies);
+    response.headers.append("Set-Cookie", communityCookie(sessionToken));
+    return response;
+  } catch (_error) {
+    // Emit only fixed stage codes. Never log secrets, tokens, cookies, email or provider payloads.
+    if (_error?.message === "oauth_account_link_required") return fail("OAUTH_ACCOUNT_LINK_REQUIRED");
+    return fail(stage);
+  }
+}
+
 async function handleCommunityApi(request, env) {
   const origin = request.headers.get("Origin");
-  if (origin && !COMMUNITY_ALLOWED_ORIGINS.has(origin)) return communityJson({ error: "Nguồn yêu cầu không được phép." }, 403, request);
+  if (origin && !isCommunityOriginAllowed(request)) return communityJson({ error: "Nguồn yêu cầu không được phép." }, 403, request);
   if (request.method === "OPTIONS") return communityJson({ ok: true }, 200, request);
   if (!env.DB || typeof env.DB.prepare !== "function") {
     return communityJson({ error: "Cộng đồng chưa được cấu hình cơ sở dữ liệu. Quản trị viên cần hoàn tất thiết lập D1." }, 503, request);
@@ -300,6 +794,21 @@ async function handleCommunityApi(request, env) {
   const db = env.DB;
   const ip = request.headers.get("CF-Connecting-IP") || "unknown";
   const now = new Date().toISOString();
+
+  // Google OAuth is deliberately restricted to the dedicated staging hostname.
+  if (route === "oauth/providers" && request.method === "GET") {
+    const isStagingOAuthHost = COMMUNITY_OAUTH_STAGING_ORIGINS.has(new URL(request.url).origin);
+    return communityJson({ google: isStagingOAuthHost && communityOAuthReady(env, "google"), facebook: false }, 200, request);
+  }
+  const googleOAuthRoute = route.match(/^oauth\/google\/(start|callback)$/);
+  if (googleOAuthRoute && request.method === "GET") {
+    if (!COMMUNITY_OAUTH_STAGING_ORIGINS.has(new URL(request.url).origin)) {
+      return communityJson({ error: "Google OAuth chỉ được bật trên môi trường staging." }, 404, request);
+    }
+    return googleOAuthRoute[1] === "start"
+      ? beginCommunityOAuth(request, env, "google", db)
+      : completeCommunityOAuth(request, env, "google", db);
+  }
 
   try {
     if (route === "register" && request.method === "POST") {
@@ -314,22 +823,142 @@ async function handleCommunityApi(request, env) {
       if (displayName.length < 2 || displayName.length > 40) return communityJson({ error: "Tên hiển thị cần từ 2 đến 40 ký tự." }, 400, request);
       if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return communityJson({ error: "Vui lòng nhập email hợp lệ." }, 400, request);
       if (password.length < 10 || password.length > 128) return communityJson({ error: "Mật khẩu cần từ 10 đến 128 ký tự." }, 400, request);
+      if (!env.COMMUNITY_EMAIL_RELAY_URL || !env.COMMUNITY_EMAIL_RELAY_SECRET) return communityJson({ error: "Chức năng xác nhận email chưa được cấu hình. Vui lòng thử lại sau." }, 503, request);
       const ipHash = await sha256Base64Url(ip);
       if (!await communityRateLimit(db, `register:${ipHash}`, 5, 60 * 60 * 1000)) return communityJson({ error: "Bạn đã thử đăng ký quá nhiều lần. Vui lòng thử lại sau một giờ." }, 429, request);
       const salt = crypto.getRandomValues(new Uint8Array(16));
       const passwordHash = await hashCommunityPassword(password, salt);
       const memberId = crypto.randomUUID();
       try {
-        await db.prepare(`INSERT INTO community_members (id, username, email, display_name, password_salt, password_hash, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?)`).bind(memberId, username, email, displayName, bytesToBase64Url(salt), passwordHash, now).run();
+        await db.prepare(`INSERT INTO community_members (id, username, email, display_name, password_salt, password_hash, created_at, email_verified_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`).bind(memberId, username, email, displayName, bytesToBase64Url(salt), passwordHash, now).run();
       } catch (error) {
-        if (/unique|constraint/i.test(String(error?.message || error))) {
-          return communityJson({ error: "Email hoặc tên thành viên đã được sử dụng." }, 409, request);
-        }
+        if (/unique|constraint/i.test(String(error?.message || error))) return communityJson({ error: "Email hoặc tên thành viên đã được sử dụng." }, 409, request);
         throw error;
       }
-      const token = await createCommunitySession(db, memberId);
-      return communityJson({ member: { id: memberId, username, displayName, createdAt: now } }, 201, request, { "Set-Cookie": communityCookie(token) });
+      try {
+        const token = await createCommunityVerificationToken(db, memberId);
+        await sendCommunityVerificationEmail(env, email, displayName, token, new URL(request.url).origin);
+      } catch (error) {
+        await db.prepare("DELETE FROM community_email_verification_tokens WHERE member_id = ?").bind(memberId).run();
+        await db.prepare("DELETE FROM community_members WHERE id = ? AND email_verified_at IS NULL").bind(memberId).run();
+        const errorCode = typeof error?.code === "string" && /^[A-Z0-9_]{1,48}$/.test(error.code)
+          ? error.code
+          : "UNCLASSIFIED";
+        const errorHttpStatus = Number.isInteger(error?.httpStatus) ? error.httpStatus : null;
+        console.error("community_verification_email_failed", {
+          errorName: error instanceof Error ? error.name : "UnknownError",
+          errorCode,
+          errorHttpStatus
+        });
+        return communityJson({ error: "Chưa gửi được email xác nhận. Tài khoản chưa được tạo; vui lòng thử lại sau." }, 503, request);
+      }
+      return communityJson({ verificationRequired: true, message: "Đã gửi email xác nhận. Hãy mở hộp thư và bấm liên kết trong vòng 30 phút để kích hoạt tài khoản." }, 201, request);
+    }
+
+    if (route === "verify-email" && request.method === "POST") {
+      const parsed = await readJsonPayload(request);
+      if (!parsed.ok) return communityJson({ error: parsed.error }, parsed.status, request);
+      const token = String(parsed.value.token || "");
+      if (!/^[A-Za-z0-9_-]{32,80}$/.test(token)) return communityJson({ error: "Liên kết xác nhận không hợp lệ hoặc đã hết hạn." }, 400, request);
+      const tokenHash = await sha256Base64Url(token);
+      const row = await db.prepare(`SELECT t.member_id, m.email, m.email_verified_at
+        FROM community_email_verification_tokens t JOIN community_members m ON m.id = t.member_id
+        WHERE t.token_hash = ? AND t.expires_at > ? LIMIT 1`).bind(tokenHash, now).first();
+      if (!row) return communityJson({ error: "Liên kết xác nhận không hợp lệ, đã dùng hoặc đã hết hạn. Hãy gửi lại email xác nhận." }, 400, request);
+      await db.prepare("DELETE FROM community_email_verification_tokens WHERE token_hash = ?").bind(tokenHash).run();
+      await db.prepare("UPDATE community_members SET email_verified_at = ? WHERE id = ? AND email_verified_at IS NULL").bind(now, row.member_id).run();
+      await db.prepare("DELETE FROM community_email_verification_tokens WHERE member_id = ?").bind(row.member_id).run();
+      return communityJson({ ok: true, message: "Email đã được xác nhận. Bây giờ bạn có thể đăng nhập.", email: row.email }, 200, request);
+    }
+
+    if (route === "resend-verification" && request.method === "POST") {
+      const parsed = await readJsonPayload(request);
+      if (!parsed.ok) return communityJson({ error: parsed.error }, parsed.status, request);
+      const email = String(parsed.value.email || "").trim().toLowerCase();
+      if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return communityJson({ error: "Vui lòng nhập email hợp lệ." }, 400, request);
+      const ipHash = await sha256Base64Url(ip);
+      const emailHash = await sha256Base64Url(email);
+      if (!await communityRateLimit(db, `verify-resend-ip:${ipHash}`, 10, 60 * 60 * 1000) || !await communityRateLimit(db, `verify-resend-email:${emailHash}`, 3, 60 * 60 * 1000)) {
+        return communityJson({ error: "Bạn đã yêu cầu gửi lại quá nhiều lần. Vui lòng thử lại sau." }, 429, request);
+      }
+      const member = await db.prepare("SELECT id, email, display_name, email_verified_at FROM community_members WHERE email = ? LIMIT 1").bind(email).first();
+      // Always use the same public response to avoid exposing which email addresses have accounts.
+      const generic = { ok: true, message: "Nếu email này có tài khoản đang chờ xác nhận, chúng tôi sẽ gửi liên kết mới." };
+      if (!member || member.email_verified_at) return communityJson(generic, 200, request);
+      if (!env.COMMUNITY_EMAIL_RELAY_URL || !env.COMMUNITY_EMAIL_RELAY_SECRET) return communityJson({ error: "Chức năng gửi email chưa được cấu hình. Vui lòng thử lại sau." }, 503, request);
+      try {
+        const token = await createCommunityVerificationToken(db, member.id);
+        await sendCommunityVerificationEmail(env, member.email, member.display_name, token, new URL(request.url).origin);
+      } catch (error) {
+        await db.prepare("DELETE FROM community_email_verification_tokens WHERE member_id = ?").bind(member.id).run();
+        console.error("community_verification_resend_failed", { errorName: error instanceof Error ? error.name : "UnknownError" });
+        return communityJson({ error: "Chưa gửi được email xác nhận. Vui lòng thử lại sau." }, 503, request);
+      }
+      return communityJson(generic, 200, request);
+    }
+
+    if (route === "password-reset/request" && request.method === "POST") {
+      const parsed = await readJsonPayload(request);
+      if (!parsed.ok) return communityJson({ error: parsed.error }, parsed.status, request);
+      const email = String(parsed.value.email || "").trim().toLowerCase();
+      if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return communityJson({ error: "Vui lòng nhập email hợp lệ." }, 400, request);
+      const ipHash = await sha256Base64Url(ip);
+      const emailHash = await sha256Base64Url(email);
+      const generic = { ok: true, message: "Nếu email này có tài khoản hợp lệ, chúng tôi sẽ gửi hướng dẫn đặt lại mật khẩu." };
+      // IP throttling may return 429 because it applies equally to every email from this client.
+      if (!await communityRateLimit(db, `password-reset-ip:${ipHash}`, 5, 60 * 60 * 1000)) {
+        return communityJson({ error: "Bạn đã gửi quá nhiều yêu cầu từ thiết bị/mạng này. Vui lòng thử lại sau." }, 429, request);
+      }
+      // Email throttling must keep the generic response to avoid revealing whether an account exists.
+      if (!await communityRateLimit(db, `password-reset-email:${emailHash}`, 3, 60 * 60 * 1000)) {
+        return communityJson(generic, 200, request);
+      }
+      const member = await db.prepare("SELECT id, email, display_name, email_verified_at FROM community_members WHERE email = ? LIMIT 1").bind(email).first();
+      if (!member || !member.email_verified_at) return communityJson(generic, 200, request);
+      if (!env.COMMUNITY_EMAIL_RELAY_URL || !env.COMMUNITY_EMAIL_RELAY_SECRET) {
+        console.error("community_password_reset_unavailable", { reason: "relay_not_configured" });
+        return communityJson(generic, 200, request);
+      }
+      try {
+        await db.prepare("DELETE FROM community_password_reset_tokens WHERE member_id = ?").bind(member.id).run();
+        const token = bytesToBase64Url(crypto.getRandomValues(new Uint8Array(32)));
+        const tokenHash = await sha256Base64Url(token);
+        const createdAt = new Date();
+        const expiresAt = new Date(createdAt.getTime() + COMMUNITY_VERIFICATION_SECONDS * 1000).toISOString();
+        await db.prepare("INSERT INTO community_password_reset_tokens (token_hash, member_id, created_at, expires_at) VALUES (?, ?, ?, ?)")
+          .bind(tokenHash, member.id, createdAt.toISOString(), expiresAt).run();
+        await sendCommunityPasswordResetEmail(env, member.email, member.display_name, token, new URL(request.url).origin);
+      } catch (error) {
+        await db.prepare("DELETE FROM community_password_reset_tokens WHERE member_id = ?").bind(member.id).run();
+        console.error("community_password_reset_email_failed", { errorName: error instanceof Error ? error.name : "UnknownError" });
+      }
+      return communityJson(generic, 200, request);
+    }
+
+    if (route === "password-reset/complete" && request.method === "POST") {
+      const parsed = await readJsonPayload(request);
+      if (!parsed.ok) return communityJson({ error: parsed.error }, parsed.status, request);
+      const token = String(parsed.value.token || "");
+      const password = String(parsed.value.password || "");
+      if (!/^[A-Za-z0-9_-]{32,80}$/.test(token)) return communityJson({ error: "Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn." }, 400, request);
+      if (password.length < 10 || password.length > 128) return communityJson({ error: "Mật khẩu mới cần từ 10 đến 128 ký tự." }, 400, request);
+      const ipHash = await sha256Base64Url(ip);
+      if (!await communityRateLimit(db, `password-reset-complete-ip:${ipHash}`, 10, 15 * 60 * 1000)) return communityJson({ error: "Bạn đã thử quá nhiều lần. Vui lòng thử lại sau." }, 429, request);
+      const tokenHash = await sha256Base64Url(token);
+      // Atomically consume the token before changing the password so concurrent replay attempts cannot both succeed.
+      const consumed = await db.prepare(`DELETE FROM community_password_reset_tokens
+        WHERE token_hash = ? AND expires_at > ?
+          AND EXISTS (SELECT 1 FROM community_members m WHERE m.id = community_password_reset_tokens.member_id AND m.email_verified_at IS NOT NULL)
+        RETURNING member_id`).bind(tokenHash, now).first();
+      if (!consumed?.member_id) return communityJson({ error: "Liên kết đặt lại mật khẩu không hợp lệ, đã dùng hoặc đã hết hạn. Hãy yêu cầu liên kết mới." }, 400, request);
+      const salt = crypto.getRandomValues(new Uint8Array(16));
+      const passwordHash = await hashCommunityPassword(password, salt);
+      await db.prepare("UPDATE community_members SET password_salt = ?, password_hash = ? WHERE id = ?")
+        .bind(bytesToBase64Url(salt), passwordHash, consumed.member_id).run();
+      await db.prepare("DELETE FROM community_password_reset_tokens WHERE member_id = ?").bind(consumed.member_id).run();
+      await db.prepare("DELETE FROM community_sessions WHERE member_id = ?").bind(consumed.member_id).run();
+      return communityJson({ ok: true, message: "Mật khẩu đã được đặt lại. Vui lòng đăng nhập bằng mật khẩu mới." }, 200, request);
     }
 
     if (route === "login" && request.method === "POST") {
@@ -344,12 +973,13 @@ async function handleCommunityApi(request, env) {
       if (!await communityRateLimit(db, `login-ip:${ipHash}`, 20, 15 * 60 * 1000) || !await communityRateLimit(db, `login-account:${emailHash}:${ipHash}`, 8, 15 * 60 * 1000)) {
         return communityJson({ error: "Bạn đăng nhập quá nhiều lần. Vui lòng thử lại sau ít phút." }, 429, request);
       }
-      const row = await db.prepare("SELECT id, username, email, display_name, password_salt, password_hash, created_at FROM community_members WHERE email = ? LIMIT 1").bind(email).first();
+      const row = await db.prepare("SELECT id, username, email, display_name, password_salt, password_hash, created_at, email_verified_at FROM community_members WHERE email = ? LIMIT 1").bind(email).first();
       let valid = false;
       if (row) {
         try { valid = (await hashCommunityPassword(password, base64UrlToBytes(row.password_salt))) === row.password_hash; } catch (_error) { valid = false; }
       }
       if (!valid) return communityJson({ error: "Email hoặc mật khẩu chưa chính xác." }, 401, request);
+      if (!row.email_verified_at) return communityJson({ code: "EMAIL_NOT_VERIFIED", error: "Bạn cần xác nhận email trước khi đăng nhập. Hãy mở email hoặc gửi lại liên kết xác nhận." }, 403, request);
       const token = await createCommunitySession(db, row.id);
       return communityJson({ member: safeCommunityMember(row) }, 200, request, { "Set-Cookie": communityCookie(token) });
     }
@@ -447,10 +1077,11 @@ export default {
         return withSecurityHeaders(await handleCommunityApi(request, env), request);
       }
       const isHomepageRead = (request.method === "GET" || request.method === "HEAD") && pathname === "/";
-      if (isHomepageRead) {
-        // Prefer the separately verified Pages copy for the public homepage. This
-        // bypasses a stale/misrouted Worker asset response while keeping the visitor
-        // on the canonical Worker origin so same-origin APIs still work.
+      const isPrimaryWorkerHost = requestUrl.hostname === "ai-thuc-chien-blog.manhdungub.workers.dev";
+      if (isHomepageRead && isPrimaryWorkerHost) {
+        // Keep the independently verified Pages fallback for the production hostname.
+        // Branch Previews must serve their own ASSETS so their frontend matches the
+        // branch Worker code and can exercise query-string email verification.
         try {
           const pagesUrl = new URL(request.url);
           pagesUrl.hostname = "ai-thuc-chien-blog.pages.dev";
@@ -513,7 +1144,7 @@ export default {
           looksLikeBrandedNotFound = false;
         }
       }
-      if (isHomepageRead && (assetResponse.status === 404 || assetResponse.status >= 500 || looksLikeBrandedNotFound)) {
+      if (isHomepageRead && isPrimaryWorkerHost && (assetResponse.status === 404 || assetResponse.status >= 500 || looksLikeBrandedNotFound)) {
         // Keep the canonical Worker URL available if its asset binding temporarily
         // returns a not-found/server error; Pages is the independently verified static fallback.
         try {
