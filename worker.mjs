@@ -304,7 +304,12 @@ async function sendCommunityEmailVerification(env, recipient, verifyUrl) {
     signal: AbortSignal.timeout(10000),
   });
   const result = await response.json().catch(() => null);
-  if (!response.ok || result?.ok !== true) throw new Error("Email relay rejected verification message.");
+  if (!response.ok || result?.ok !== true) {
+    const relayCode = typeof result?.code === "string" && /^[A-Z0-9_]{1,48}$/.test(result.code) ? result.code : "UNKNOWN";
+    const error = new Error("Email relay rejected verification message.");
+    error.code = relayCode;
+    throw error;
+  }
 }
 
 async function sendCommunityPasswordResetEmail(env, recipient, resetUrl) {
@@ -409,7 +414,9 @@ async function handleCommunityApi(request, env) {
           return communityJson({ error: "Email hoặc tên thành viên đã được sử dụng." }, 409, request);
         }
         if (/relay|email/i.test(String(error?.message || error))) {
-          return communityJson({ error: "Không thể gửi email xác nhận. Tài khoản chưa được tạo; vui lòng thử lại sau." }, 503, request);
+          const relayCode = typeof error?.code === "string" && /^[A-Z0-9_]{1,48}$/.test(error.code)
+            ? "EMAIL_RELAY_" + error.code : "EMAIL_RELAY_FAILED";
+          return communityJson({ error: "Không thể gửi email xác nhận. Tài khoản chưa được tạo; vui lòng thử lại sau.", code: relayCode }, 503, request);
         }
         throw error;
       }
