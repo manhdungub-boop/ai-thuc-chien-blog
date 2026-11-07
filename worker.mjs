@@ -31,6 +31,7 @@ function withSecurityHeaders(response, request) {
 const CHAT_ALLOWED_ORIGINS = new Set([
   "https://ai-thuc-chien-blog.manhdungub.workers.dev",
   "https://ai-thuc-chien-blog.pages.dev",
+  "https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev",
 ]);
 const CHAT_RECENT_REQUESTS = new Map();
 
