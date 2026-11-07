@@ -1,0 +1,36 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "ai-thuc-chien-blog-auth-app-preview",
+  "account_id": "92cf091bbac8b4879ec65feb30b4715b",
+  "compatibility_date": "2026-10-12",
+  "compatibility_flags": ["assets_navigation_has_no_effect"],
+  "workers_dev": true,
+  "keep_vars": true,
+  "assets": {
+    "directory": "./dist",
+    "html_handling": "none",
+    "not_found_handling": "404-page",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "main": "./worker.mjs",
+  "ai": { "binding": "AI" },
+  "vars": {
+    "COMMUNITY_EMAIL_RELAY_URL": "https://script.google.com/macros/s/AKfycbwIlb_NKeLovOpkFc_RcLYFGfbC_IDpO6O8g_rMfIm-IXvj2z8yzxpOglINwNvh982N/exec"
+  },
+  "secrets": {
+    "required": [
+      "COMMUNITY_EMAIL_RELAY_SECRET",
+      "GOOGLE_OAUTH_CLIENT_ID",
+      "GOOGLE_OAUTH_CLIENT_SECRET"
+    ]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ai-thuc-chien-community-preview",
+      "database_id": "51d814c8-a3fc-4481-a5f1-60bc67617f3c",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

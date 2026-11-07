@@ -1,0 +1,88 @@
+name: Deploy Preview Worker (STAGING only)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-thuc-chien-blog-preview-worker
+  cancel-in-progress: false
+
+jobs:
+  deploy-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_API_TOKEN: \${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: "92cf091bbac8b4879ec65feb30b4715b"
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validate exact STAGING target and token presence
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ -n "\${CLOUDFLARE_API_TOKEN:-}" ]] || { echo "::error::CLOUDFLARE_WORKERS_API_TOKEN is missing."; exit 1; }
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          c = json.loads(Path("wrangler.preview.jsonc").read_text())
+          assert c["name"] == "ai-thuc-chien-blog-auth-app-preview"
+          assert c["account_id"] == "92cf091bbac8b4879ec65feb30b4715b"
+          assert c["d1_databases"] == [{
+              "binding": "DB",
+              "database_name": "ai-thuc-chien-community-preview",
+              "database_id": "51d814c8-a3fc-4481-a5f1-60bc67617f3c",
+              "migrations_dir": "migrations"
+          }]
+          assert c["d1_databases"][0]["database_id"] != "fc2517cb-9543-4d7b-98f4-bcd5f3c013e7"
+          assert c["assets"]["directory"] == "./dist"
+          assert c["assets"]["binding"] == "ASSETS"
+          assert c["keep_vars"] is True
+          assert c["secrets"]["required"] == ["COMMUNITY_EMAIL_RELAY_SECRET", "GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET"]
+          print("PASS: exact Preview Worker and isolated Preview D1 target; Production DB is excluded.")
+          PY
+
+      - name: Build static assets and validate Worker
+        run: |
+          set -euo pipefail
+          npm run build
+          node --check worker.mjs
+          node --check script.js
+          node scripts/test_worker_headers.mjs
+          node scripts/test_community_api.mjs
+          python3 scripts/test_community_schema.py
+
+      - name: Confirm Preview migration ledger (read-only)
+        run: npx --yes wrangler@4 d1 migrations list "ai-thuc-chien-community-preview" --remote --config wrangler.preview.jsonc
+
+      - name: Deploy reviewed code to Preview Worker only
+        run: npx --yes wrangler@4 deploy --config wrangler.preview.jsonc
+
+      - name: Verify Preview Worker routes and security headers
+        shell: bash
+        run: |
+          set -euo pipefail
+          host="https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev"
+          status="$(curl --silent --show-error --location --max-time 25 -o /dev/null -w '%{http_code}' "$host/")"
+          [[ "$status" == "200" ]] || { echo "Preview homepage returned HTTP $status"; exit 1; }
+          headers="$(mktemp)"
+          trap 'rm -f "$headers"' EXIT
+          curl --silent --show-error --location --max-time 25 -D "$headers" -o /dev/null "$host/"
+          for expected in 'X-Content-Type-Options: nosniff' 'X-Frame-Options: DENY' 'Referrer-Policy: strict-origin-when-cross-origin' 'Strict-Transport-Security: max-age=31536000'; do
+            grep -Fqi "$expected" "$headers" || { echo "Missing Preview security header: $expected"; exit 1; }
+          done
+          me_status="$(curl --silent --show-error --max-time 20 -o /tmp/community-me.json -w '%{http_code}' "$host/api/community/me")"
+          [[ "$me_status" == "200" ]] || { echo "Preview /api/community/me returned HTTP $me_status"; exit 1; }
+          reset_status="$(curl --silent --show-error --max-time 20 -H 'Origin: https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev' -H 'Content-Type: application/json' -d '{"email":"not-a-real-member@example.invalid"}' -o /tmp/community-reset.json -w '%{http_code}' "$host/api/community/password-reset/request")"
+          [[ "$reset_status" == "200" ]] || { echo "Preview password-reset request returned HTTP $reset_status"; exit 1; }
+          node -e 'const fs=require("node:fs"); const x=JSON.parse(fs.readFileSync("/tmp/community-reset.json","utf8")); if(x.ok!==true || !String(x.message||"").includes("Nếu email này có tài khoản hợp lệ")) process.exit(1);'
+          echo "PASS: Preview homepage, security headers, member endpoint, and generic password-reset route verified."
