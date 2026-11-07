@@ -370,6 +370,7 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
   switchModeButton.addEventListener('click', () => setAuthMode(authMode === 'register' ? 'login' : 'register'));
   forgotButton.addEventListener('click', () => setAuthMode('reset-request'));
   resetCancelButton.addEventListener('click', () => {
+    window.history.replaceState(null, '', window.location.pathname + '#cong-dong');
     resetForm.hidden = true;
     authForm.hidden = false;
     setAuthMode('login');
