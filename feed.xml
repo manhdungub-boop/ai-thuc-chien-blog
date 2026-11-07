@@ -1,64 +1,424 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+<rss version="2.0">
   <channel>
     <title>AI Thực Chiến</title>
     <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/</link>
-    <description>Hướng dẫn AI dễ áp dụng, công cụ miễn phí và quy trình tự động hóa cho công việc thực tế.</description>
-    <language>vi-VN</language>
-    <atom:link href="https://ai-thuc-chien-blog.manhdungub.workers.dev/feed.xml" rel="self" type="application/rss+xml"/>
+    <description>Kiến thức AI thực hành, tự động hóa và công nghệ cho người Việt.</description>
     <item>
-      <title>Prompt Injection là gì? 8 lớp phòng vệ cho workflow AI | AI Thực Chiến</title>
-      <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/nhan-biet-prompt-injection-ai</link>
-      <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/nhan-biet-prompt-injection-ai</guid>
-      <description>Nhận diện prompt injection và áp dụng 8 lớp phòng vệ cho AI agent đọc web, email, tài liệu và sử dụng công cụ.</description>
-    </item>
+    <title>Đặt giới hạn quota cho AI Agent: hard-stop, ngân sách và circuit breaker | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/gioi-han-quota-ai-agent</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/gioi-han-quota-ai-agent</guid>
+    <pubDate>Mon, 02 Nov 2026 08:00:00 +0700</pubDate>
+    <author>DUNG - AI</author>
+    <description>Thiết kế hard limit cho AI Agent: số lượt gọi, token, số bước, concurrency, retry có giới hạn và dừng an toàn khi quota/billing đã cạn.</description>
+  </item>
     <item>
-      <title>Công thức viết prompt AI hiệu quả: 7 phần và 3 mẫu | AI Thực Chiến</title>
-      <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/viet-prompt-ai-hieu-qua</link>
-      <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/viet-prompt-ai-hieu-qua</guid>
-      <description>Công thức prompt 7 phần, ba mẫu sao chép để viết nội dung và kiểm tra sự thật, cùng cách cải thiện bằng thử nghiệm nhỏ.</description>
-    </item>
-    <item>
-      <title>Đo hiệu quả blog bằng Search Console và Web Analytics | AI Thực Chiến</title>
-      <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/do-luong-hieu-qua-blog</link>
-      <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/do-luong-hieu-qua-blog</guid>
-      <description>Phân biệt lượt hiển thị, nhấp chuột và lượt truy cập; thiết lập quy trình đo lường và cải thiện blog dựa trên dữ liệu thật.</description>
-    </item>
-    <item>
-      <title>Checklist SEO kỹ thuật cho blog mới | AI Thực Chiến</title>
-      <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/seo-ky-thuat-blog-moi</link>
-      <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/seo-ky-thuat-blog-moi</guid>
-      <description>Checklist kiểm tra HTTP, canonical, sitemap, Google Search Console và đo lường cho website tĩnh mới.</description>
-    </item>
-    <item>
-      <title>Xây dựng workflow AI có kiểm duyệt với Airtable và Activepieces | AI Thực Chiến</title>
-      <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/workflow-ai-airtable-activepieces</link>
-      <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/workflow-ai-airtable-activepieces</guid>
-      <description>Thiết kế quy trình từ bản ghi Airtable đến bản nháp AI chờ con người duyệt, kèm bộ lọc, chống chạy lặp và kiểm thử.</description>
-    </item>
-    <item>
-      <title>Checklist kiểm chứng nội dung AI trước khi xuất bản | AI Thực Chiến</title>
-      <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/kiem-chung-noi-dung-ai</link>
-      <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/kiem-chung-noi-dung-ai</guid>
-      <description>Checklist thực tế để kiểm chứng thông tin, nguồn dẫn, số liệu và rủi ro trước khi xuất bản nội dung do AI hỗ trợ.</description>
-    </item>
-    <item>
-      <title>Quy trình AI có kiểm duyệt | AI Thực Chiến</title>
-      <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/quy-trinh-ai-co-kiem-duyet</link>
-      <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/quy-trinh-ai-co-kiem-duyet</guid>
-      <description>Thiết kế quy trình AI có bước kiểm duyệt của con người trước khi xuất bản hoặc gửi đi.</description>
-    </item>
-    <item>
-      <title>5 cách bắt đầu dùng AI trong công việc | AI Thực Chiến</title>
-      <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/bat-dau-voi-ai</link>
-      <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/bat-dau-voi-ai</guid>
-      <description>5 cách thực tế để bắt đầu dùng AI trong công việc mà không cần biết lập trình.</description>
-    </item>
-    <item>
-      <title>Bản đồ công cụ xây dựng blog AI | AI Thực Chiến</title>
-      <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/ban-do-cong-cu-blog-ai</link>
-      <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/ban-do-cong-cu-blog-ai</guid>
-      <description>Bản đồ công cụ để xây dựng blog AI với website tĩnh, GitHub và bộ máy tự động hóa.</description>
-    </item>
+    <title>AI Agent là gì? Hướng dẫn thực hành từng bước | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/ai-agent-thuc-hanh-tu-thiet-ke-den-kiem-soat</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/ai-agent-thuc-hanh-tu-thiet-ke-den-kiem-soat</guid>
+    <description>Hiểu AI Agent khác chatbot và workflow; thực hành agent nghiên cứu có nguồn và quy trình affiliate 7 vai trò với giới hạn quyền, kiểm chứng và phê duyệt của con người.</description>
+  </item>
+<item>
+    <title>MCP Filesystem Server an toàn: giới hạn quyền tệp cho AI Agent | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/mcp-filesystem-server-an-toan</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/mcp-filesystem-server-an-toan</guid>
+    <description>Tách thư mục đọc và ghi, dùng mount chỉ đọc, kiểm tra symlink/hard link, cập nhật bản vá và duyệt trước thao tác có tác động.</description>
+  </item>
+  <item>
+    <title>Xử lý lỗi và retry an toàn trong workflow | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/xu-ly-loi-retry-workflow</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/xu-ly-loi-retry-workflow</guid>
+    <description>Build safer retries by classifying errors, applying bounded backoff, preventing duplicate actions and routing exhausted failures for review.</description>
+  </item>
+  <item>
+    <title>Xây thư viện prompt có phiên bản để dùng lại | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/xay-dung-thu-vien-prompt</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/xay-dung-thu-vien-prompt</guid>
+    <description>Xây thư viện prompt có phiên bản: gắn mã, mục tiêu, đầu vào, đầu ra, bộ kiểm thử, người duyệt và lịch sử thay đổi để tái sử dụng an toàn.</description>
+  </item>
+  <item>
+    <title>Quy trình tìm khách hàng tiềm năng có người duyệt | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/xay-dung-quy-trinh-lead-voi-human-approval</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/xay-dung-quy-trinh-lead-voi-human-approval</guid>
+    <description>Thiết kế quy trình khách hàng tiềm năng có người duyệt: dùng tín hiệu được phép, chấm mức phù hợp, lưu ngữ cảnh tối thiểu và chặn gửi tự động khi chưa duyệt.</description>
+  </item>
+  <item>
+    <title>Xây kho tri thức AI có nguồn: hướng dẫn RAG thực tế | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/xay-dung-kho-tri-thuc-ai-co-nguon</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/xay-dung-kho-tri-thuc-ai-co-nguon</guid>
+    <description>Cách chuẩn bị tài liệu, truy xuất đoạn liên quan, gắn nguồn và xử lý khi kho tri thức không có câu trả lời.</description>
+  </item>
+  <item>
+    <title>Xây bộ đánh giá chất lượng AI bằng tiêu chí và ví dụ chuẩn | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/xay-bo-danh-gia-chat-luong-ai</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/xay-bo-danh-gia-chat-luong-ai</guid>
+    <description>Lập bộ đánh giá AI bằng câu hỏi chuẩn, thang điểm, lỗi chặn và kiểm thử hồi quy để biết phiên bản nào đáp ứng yêu cầu thực tế.</description>
+  </item>
+  <item>
+    <title>Mẫu theo dõi lợi nhuận affiliate: từ nhấp chuột đến hoa hồng thực nhận | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/xay-bang-theo-doi-loi-nhuan-affiliate</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/xay-bang-theo-doi-loi-nhuan-affiliate</guid>
+    <description>Theo dõi nội dung, lượt nhấp, đơn hợp lệ, hoa hồng và thời gian làm việc để đo hiệu quả thực tế.</description>
+  </item>
+  <item>
+    <title>Thiết kế workflow AI chịu lỗi: retry, chống trùng và hàng chờ duyệt | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/workflow-ai-chong-loi-va-chay-lai-an-toan</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/workflow-ai-chong-loi-va-chay-lai-an-toan</guid>
+    <description>Cách phân loại lỗi tạm thời, giới hạn retry, chống chạy trùng và chuyển ngoại lệ sang người xử lý.</description>
+  </item>
+  <item>
+    <title>Xây dựng workflow AI có kiểm duyệt với Airtable và Activepieces | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/workflow-ai-airtable-activepieces</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/workflow-ai-airtable-activepieces</guid>
+    <description>Hướng dẫn thiết kế workflow nội dung AI với Airtable và Activepieces, có trạng thái chờ duyệt, chống chạy lặp và kiểm soát trước khi đăng.</description>
+  </item>
+  <item>
+    <title>Công thức viết prompt AI hiệu quả: 7 phần và 3 mẫu | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/viet-prompt-ai-hieu-qua</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/viet-prompt-ai-hieu-qua</guid>
+    <description>Công thức viết prompt AI theo 7 phần, kèm 3 mẫu có thể sao chép để viết nội dung, kiểm tra sự thật và cải thiện kết quả có hệ thống.</description>
+  </item>
+  <item>
+    <title>Viết nội dung giới thiệu sản phẩm dựa trên bằng chứng | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/viet-noi-dung-san-pham-co-bang-chung</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/viet-noi-dung-san-pham-co-bang-chung</guid>
+    <description>Viết nội dung giới thiệu sản phẩm từ thông tin có thể xác minh: đối chiếu biến thể, thông số, điều kiện sử dụng và công khai mối liên hệ thương mại.</description>
+  </item>
+  <item>
+    <title>Tính ROI của công cụ AI bằng số liệu thực tế | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/tinh-roi-tu-dong-hoa-ai</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/tinh-roi-tu-dong-hoa-ai</guid>
+    <description>Đo ROI tự động hóa AI bằng thời gian tiết kiệm thực, chi phí công cụ, kiểm duyệt, sửa lỗi và bảo trì; thử nghiệm theo đường cơ sở trước khi mở rộng.</description>
+  </item>
+  <item>
+    <title>Tính lợi nhuận thực của tiếp thị liên kết | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/tinh-loi-nhuan-thuc-tu-affiliate</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/tinh-loi-nhuan-thuc-tu-affiliate</guid>
+    <description>Tính lợi nhuận affiliate sau hủy đơn, hoàn trả, chi phí công cụ và thời gian làm nội dung; phân biệt hoa hồng dự kiến với khoản đã duyệt và thực nhận.</description>
+  </item>
+  <item>
+    <title>Tìm nhu cầu thị trường từ tín hiệu công khai và hợp lệ | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/tim-nhu-cau-thi-truong-cong-khai</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/tim-nhu-cau-thi-truong-cong-khai</guid>
+    <description>Tìm nhu cầu thị trường từ tín hiệu công khai: phân nhóm vấn đề, đánh giá ý định mua, lưu nguồn và tránh suy đoán dữ liệu cá nhân hoặc spam.</description>
+  </item>
+  <item>
+    <title>Thử nghiệm thị trường ngân sách thấp trong 7 ngày | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/thu-nghiem-thi-truong-voi-ngan-sach-thap</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/thu-nghiem-thi-truong-voi-ngan-sach-thap</guid>
+    <description>Kiểm chứng nhu cầu thị trường trong 7 ngày với ngân sách nhỏ: đặt giả thuyết, thu tín hiệu hợp lệ, thử đề nghị và xác định ngưỡng tiếp tục hoặc dừng.</description>
+  </item>
+  <item>
+    <title>Thiết kế workflow có điểm khôi phục và chạy lại an toàn | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/thiet-ke-workflow-co-diem-khoi-phuc</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/thiet-ke-workflow-co-diem-khoi-phuc</guid>
+    <description>Thiết kế checkpoint, retry có giới hạn, khóa chống trùng và cách khôi phục để workflow AI không lặp hành động khi lỗi.</description>
+  </item>
+  <item>
+    <title>Thiết kế workflow AI từ đầu vào đến đầu ra có kiểm soát | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/thiet-ke-workflow-ai-dau-cuoi</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/thiet-ke-workflow-ai-dau-cuoi</guid>
+    <description>Vẽ từng bước, dữ liệu đi qua, người chịu trách nhiệm và điều kiện dừng. Hướng dẫn thực hành theo từng bước, ví dụ cụ thể và checklist kiểm tra trước khi áp dụng.</description>
+  </item>
+  <item>
+    <title>Tạo ảnh AI bằng brief rõ ràng và có thể tái sử dụng | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/tao-anh-ai-co-brief</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/tao-anh-ai-co-brief</guid>
+    <description>Write a reusable AI image brief with purpose, composition, aspect ratio, visual constraints, iteration criteria and a final rights and readability check.</description>
+  </item>
+  <item>
+    <title>Tái sử dụng một nội dung thành nhiều định dạng mà không mất chất | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/tai-su-dung-noi-dung-da-kiem-chung</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/tai-su-dung-noi-dung-da-kiem-chung</guid>
+    <description>Chuyển một nội dung đã kiểm chứng thành bài blog, bài mạng xã hội, email và FAQ mà vẫn giữ nguyên dữ kiện, điều kiện và nguồn gốc.</description>
+  </item>
+  <item>
+    <title>So sánh gói miễn phí AI: giới hạn, quyền riêng tư và chi phí ẩn | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/so-sanh-goi-mien-phi-ai</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/so-sanh-goi-mien-phi-ai</guid>
+    <description>So sánh gói AI miễn phí theo nhiệm vụ thật, giới hạn sử dụng, quyền riêng tư, khả năng xuất dữ liệu và chi phí trên mỗi đầu ra đạt yêu cầu.</description>
+  </item>
+  <item>
+    <title>SEO nội dung hữu ích: ưu tiên câu hỏi của người đọc | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/seo-noi-dung-huu-ich</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/seo-noi-dung-huu-ich</guid>
+    <description>Improve helpful content SEO by answering the searcher’s task, adding original evidence, structuring the page clearly and measuring qualified outcomes.</description>
+  </item>
+  <item>
+    <title>Checklist SEO kỹ thuật cho blog mới | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/seo-ky-thuat-blog-moi</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/seo-ky-thuat-blog-moi</guid>
+    <description>Checklist SEO kỹ thuật cho blog mới: kiểm tra HTTP 200, canonical, robots.txt, sitemap, dữ liệu có cấu trúc, Search Console và đo lường mà không phỏng đoán kết quả.</description>
+  </item>
+  <item>
+    <title>Quy trình viết bài với AI: từ nháp đến bản biên tập | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/quy-trinh-viet-bai-voi-ai</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/quy-trinh-viet-bai-voi-ai</guid>
+    <description>Tách nghiên cứu, dàn ý, bản nháp, kiểm chứng, biên tập và xuất bản thành các giai đoạn. Hướng dẫn thực hành theo từng bước, ví dụ cụ thể và checklist kiểm tra trước khi áp dụng.</description>
+  </item>
+  <item>
+    <title>Quy trình AI có kiểm duyệt: từ ý tưởng đến kết quả đáng tin cậy | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/quy-trinh-ai-co-kiem-duyet</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/quy-trinh-ai-co-kiem-duyet</guid>
+    <description>Hướng dẫn xây dựng quy trình AI có kiểm duyệt từ đầu đến cuối: xác định đầu vào, tạo bản nháp, kiểm chứng, duyệt của con người và theo dõi kết quả.</description>
+  </item>
+  <item>
+    <title>Quản lý rủi ro khi xây dự án kiếm tiền bằng AI | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/quan-ly-rui-ro-du-an-kiem-tien-ai</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/quan-ly-rui-ro-du-an-kiem-tien-ai</guid>
+    <description>Lập sổ rủi ro cho dự án kiếm tiền bằng AI: kiểm tra nhu cầu, kinh tế đơn vị, bản quyền, dữ liệu, nền tảng và tiêu chí dừng trước khi đầu tư.</description>
+  </item>
+  <item>
+    <title>Dùng AI phân tích bảng tính mà vẫn kiểm soát số liệu | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/phan-tich-du-lieu-bang-ai</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/phan-tich-du-lieu-bang-ai</guid>
+    <description>Phân tích bảng tính bằng AI an toàn hơn: lập từ điển dữ liệu, kiểm tra công thức, đối chiếu số tổng và phát hiện ngoại lệ trước khi kết luận.</description>
+  </item>
+  <item>
+    <title>Prompt Injection là gì? 8 lớp phòng vệ cho workflow AI | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/nhan-biet-prompt-injection-ai</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/nhan-biet-prompt-injection-ai</guid>
+    <description>Tìm hiểu prompt injection và 8 lớp phòng vệ thực tế cho AI agent: giới hạn quyền, bảo vệ dữ liệu, kiểm soát công cụ và duyệt hành động nhạy cảm.</description>
+  </item>
+  <item>
+    <title>Nghiên cứu web bằng AI có nguồn và dấu vết kiểm tra | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/nghien-cuu-web-co-nguon-voi-ai</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/nghien-cuu-web-co-nguon-voi-ai</guid>
+    <description>Quy trình nghiên cứu web bằng AI: tách mệnh đề, ưu tiên nguồn gốc, kiểm tra trích dẫn và lưu dấu vết cho từng kết luận.</description>
+  </item>
+  <item>
+    <title>Tìm chủ đề nội dung từ nhu cầu độc giả thay vì đoán | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/nghien-cuu-chu-de-noi-dung</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/nghien-cuu-chu-de-noi-dung</guid>
+    <description>Tìm chủ đề nội dung từ câu hỏi thực, đánh giá khác biệt, khả năng kiểm chứng và sự phù hợp với độc giả.</description>
+  </item>
+  <item>
+    <title>Log và giám sát workflow để phát hiện lỗi sớm | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/log-va-giam-sat-workflow</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/log-va-giam-sat-workflow</guid>
+    <description>Giám sát workflow với run ID, trạng thái, mã lỗi và cảnh báo có người xử lý, đồng thời tránh lộ dữ liệu.</description>
+  </item>
+  <item>
+    <title>Lập lịch biên tập nội dung có bước kiểm tra | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/lich-bien-tap-va-xuat-ban</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/lich-bien-tap-va-xuat-ban</guid>
+    <description>Create a realistic editorial calendar with topic intent, owners, dependencies, review gates, update windows and metrics beyond publishing volume.</description>
+  </item>
+  <item>
+    <title>Viết prompt AI có cấu trúc: bối cảnh, nhiệm vụ, đầu ra và tiêu chí | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/lap-prompt-ai-co-cau-truc</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/lap-prompt-ai-co-cau-truc</guid>
+    <description>Viết prompt có cấu trúc với bối cảnh, nhiệm vụ, ràng buộc, schema đầu ra và bộ test hồi quy.</description>
+  </item>
+  <item>
+    <title>Lập dàn ý bài viết chuyên sâu bằng AI | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/lap-dan-y-bai-viet-chuyen-sau</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/lap-dan-y-bai-viet-chuyen-sau</guid>
+    <description>Build a useful long-form outline from reader intent, a clear promise, evidence needs, logical sections and examples that remove common gaps.</description>
+  </item>
+  <item>
+    <title>Kiểm tra đầu ra AI trước khi tự động hóa: JSON, schema và quy tắc nghiệp vụ | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/kiem-tra-json-dau-ra-ai-truoc-khi-tu-dong-hoa</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/kiem-tra-json-dau-ra-ai-truoc-khi-tu-dong-hoa</guid>
+    <description>Cách biến câu trả lời AI thành dữ liệu có cấu trúc an toàn hơn bằng schema, kiểm tra mã và bước phê duyệt.</description>
+  </item>
+  <item>
+    <title>Checklist biên tập bài viết trước khi xuất bản | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/kiem-tra-chat-luong-bai-truoc-dang</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/kiem-tra-chat-luong-bai-truoc-dang</guid>
+    <description>Use a publication checklist for factual accuracy, source quality, structure, links, image rights, mobile readability and final human approval.</description>
+  </item>
+  <item>
+    <title>Bản quyền và nội dung AI: checklist trước khi đăng | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/kiem-tra-ban-quyen-noi-dung-ai</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/kiem-tra-ban-quyen-noi-dung-ai</guid>
+    <description>Audit AI-assisted content for source provenance, tool terms, third-party rights, personal data, misleading likenesses and a usable evidence trail.</description>
+  </item>
+  <item>
+    <title>Checklist kiểm thử workflow trước khi bật thật | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/kiem-thu-workflow-truoc-khi-bat</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/kiem-thu-workflow-truoc-khi-bat</guid>
+    <description>Kiểm thử workflow trước khi bật thật: dữ liệu thiếu, quyền, timeout, tác động trùng và cổng duyệt.</description>
+  </item>
+  <item>
+    <title>Thiết kế bộ kiểm thử đầu ra AI thay vì chỉ đọc một mẫu | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/kiem-thu-dau-ra-ai</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/kiem-thu-dau-ra-ai</guid>
+    <description>Thiết kế bộ test AI với ca chuẩn, ngoại lệ, lỗi chặn và hồi quy để đo độ đúng, định dạng và công sửa.</description>
+  </item>
+  <item>
+    <title>Kiểm thử chất lượng AI: tạo bộ test nhỏ trước khi đổi prompt | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/kiem-thu-chat-luong-dau-ra-ai</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/kiem-thu-chat-luong-dau-ra-ai</guid>
+    <description>Cách xây bộ câu hỏi chuẩn, chấm đầu ra AI, phát hiện hồi quy và kiểm tra lại khi thay prompt hoặc mô hình.</description>
+  </item>
+  <item>
+    <title>Kiểm soát quyền truy cập và dữ liệu trong workflow AI | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/kiem-soat-quyen-va-du-lieu-workflow</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/kiem-soat-quyen-va-du-lieu-workflow</guid>
+    <description>Thiết kế quyền tối thiểu cho workflow AI: phân loại dữ liệu, quản lý token, giới hạn truy cập, nhật ký và điểm duyệt của con người.</description>
+  </item>
+  <item>
+    <title>Kiểm chứng ý tưởng kiếm tiền bằng AI bằng thử nghiệm nhỏ | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/kiem-chung-y-tuong-kiem-tien-ai-bang-thu-nghiem-nho</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/kiem-chung-y-tuong-kiem-tien-ai-bang-thu-nghiem-nho</guid>
+    <description>Thử nghiệm ý tưởng kiếm tiền bằng AI với tín hiệu nhu cầu công khai, đề nghị nhỏ, chi phí phục vụ và tiêu chí dừng rõ ràng.</description>
+  </item>
+  <item>
+    <title>Checklist kiểm chứng sản phẩm trước khi giới thiệu | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/kiem-chung-san-pham-truoc-khi-gioi-thieu</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/kiem-chung-san-pham-truoc-khi-gioi-thieu</guid>
+    <description>Kiểm tra đúng model, biến thể, thông số, giá, điều kiện bảo hành và giới hạn trước khi giới thiệu sản phẩm.</description>
+  </item>
+  <item>
+    <title>Checklist kiểm chứng nội dung do AI tạo trước khi xuất bản | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/kiem-chung-noi-dung-dung-ai</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/kiem-chung-noi-dung-dung-ai</guid>
+    <description>Checklist thực hành để kiểm chứng nội dung do AI tạo: phân loại tuyên bố, truy nguồn, kiểm tra dữ liệu mới, phát hiện bịa đặt và duyệt trước khi xuất bản.</description>
+  </item>
+  <item>
+    <title>Checklist kiểm chứng nội dung AI trước khi xuất bản | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/kiem-chung-noi-dung-ai</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/kiem-chung-noi-dung-ai</guid>
+    <description>Checklist thực tế để kiểm chứng thông tin, nguồn dẫn, số liệu và rủi ro trước khi xuất bản nội dung do AI hỗ trợ.</description>
+  </item>
+  <item>
+    <title>Quy trình kiểm chứng câu trả lời AI trước khi sử dụng | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/kiem-chung-cau-tra-loi-ai</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/kiem-chung-cau-tra-loi-ai</guid>
+    <description>Kiểm chứng câu trả lời AI bằng cách tách mệnh đề, đối chiếu nguồn, tính lại số liệu và ghi phần chưa chắc.</description>
+  </item>
+  <item>
+    <title>Kiểm chứng ảnh và nội dung AI trước khi đăng công khai | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/kiem-chung-anh-va-noi-dung-ai-truoc-khi-dang</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/kiem-chung-anh-va-noi-dung-ai-truoc-khi-dang</guid>
+    <description>Checklist kiểm chứng nội dung và ảnh AI trước khi đăng: nguồn dữ kiện, bản quyền, ngữ cảnh, nhãn tổng hợp và phê duyệt.</description>
+  </item>
+  <item>
+    <title>Kết nối API và webhook an toàn cho người mới | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/ket-noi-api-webhook-an-toan</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/ket-noi-api-webhook-an-toan</guid>
+    <description>Learn how to connect APIs and webhooks safely: define request contracts, verify event origins, handle errors, prevent duplicates and protect secrets.</description>
+  </item>
+  <item>
+    <title>Kế hoạch 30 ngày kiểm chứng mô hình kiếm tiền bằng AI | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/ke-hoach-30-ngay-kiem-chung-mo-hinh</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/ke-hoach-30-ngay-kiem-chung-mo-hinh</guid>
+    <description>Kế hoạch 30 ngày kiểm chứng ý tưởng AI bằng tín hiệu nhu cầu, bản thử nhỏ, chi phí thực và tiêu chí dừng.</description>
+  </item>
+  <item>
+    <title>Thiết kế bước duyệt của con người trong workflow AI | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/human-in-the-loop-trong-workflow</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/human-in-the-loop-trong-workflow</guid>
+    <description>Design human approval gates for AI workflows, including version-specific approvals, decision states, escalation rules and audit trails.</description>
+  </item>
+  <item>
+    <title>Đo hiệu quả workflow AI: 5 chỉ số và thử nghiệm 7 ngày | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/do-luong-hieu-qua-workflow-ai</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/do-luong-hieu-qua-workflow-ai</guid>
+    <description>Hướng dẫn đo hiệu quả workflow AI bằng đường cơ sở, 5 chỉ số thiết thực và pilot 7 ngày; gồm cách tính thời gian tiết kiệm, ngưỡng dừng và bước duyệt của con người.</description>
+  </item>
+  <item>
+    <title>Đo hiệu quả nội dung vượt khỏi lượt xem | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/do-luong-hieu-qua-noi-dung</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/do-luong-hieu-qua-noi-dung</guid>
+    <description>Đo hiệu quả nội dung theo nhiệm vụ người đọc: đặt mục tiêu, phễu chỉ số, đường cơ sở và hành động cải thiện.</description>
+  </item>
+  <item>
+    <title>Đo hiệu quả blog bằng Search Console và Web Analytics | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/do-luong-hieu-qua-blog</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/do-luong-hieu-qua-blog</guid>
+    <description>Hướng dẫn đo hiệu quả blog bằng Google Search Console và Cloudflare Web Analytics: phân biệt lượt hiển thị, nhấp chuột, lượt truy cập và cách chọn việc cần cải thiện.</description>
+  </item>
+  <item>
+    <title>Trước khi đưa dữ liệu vào AI: checklist đánh giá rủi ro | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/danh-gia-rui-ro-du-lieu-khi-dung-ai</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/danh-gia-rui-ro-du-lieu-khi-dung-ai</guid>
+    <description>Checklist thực tế giúp cá nhân và doanh nghiệp nhỏ phân loại dữ liệu, đánh giá công cụ AI, giảm thông tin nhạy cảm và thiết kế bước duyệt an toàn.</description>
+  </item>
+  <item>
+    <title>Chống chạy trùng: idempotency cho workflow tự động | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/chong-trung-va-idempotency-workflow</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/chong-trung-va-idempotency-workflow</guid>
+    <description>Prevent duplicate workflow side effects with stable idempotency keys, status records, atomic updates and safe recovery after timeouts.</description>
+  </item>
+  <item>
+    <title>Chọn mô hình kiếm tiền bằng AI theo nguồn lực thực tế | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/chon-mo-hinh-kiem-tien-bang-ai</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/chon-mo-hinh-kiem-tien-bang-ai</guid>
+    <description>Liệt kê kỹ năng, thời gian, chi phí, kênh tiếp cận và vấn đề bạn có thể giải quyết. Hướng dẫn thực hành theo từng bước, ví dụ cụ thể và checklist kiểm tra trước khi áp dụng.</description>
+  </item>
+  <item>
+    <title>Chọn mô hình AI cho từng công việc: ma trận quyết định | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/chon-mo-hinh-ai-cho-cong-viec</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/chon-mo-hinh-ai-cho-cong-viec</guid>
+    <description>So sánh mô hình AI theo loại việc, độ chính xác, chi phí mỗi kết quả đạt, độ trễ và quyền riêng tư; kèm ma trận thử nghiệm để chọn bằng bằng chứng.</description>
+  </item>
+  <item>
+    <title>Chọn công cụ AI theo công việc thay vì theo trào lưu | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/chon-cong-cu-ai-theo-cong-viec</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/chon-cong-cu-ai-theo-cong-viec</guid>
+    <description>Xác định đầu ra cần tạo và mức rủi ro của nhiệm vụ trước khi so sánh thương hiệu. Hướng dẫn thực hành theo từng bước, ví dụ cụ thể và checklist kiểm tra trước khi áp dụng.</description>
+  </item>
+  <item>
+    <title>Biến một ý tưởng thành bộ nội dung đa kênh mà không lặp lại | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/bien-y-tuong-thanh-noi-dung-da-kenh</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/bien-y-tuong-thanh-noi-dung-da-kenh</guid>
+    <description>Tạo nguồn nội dung chuẩn rồi chuyển thể theo mục tiêu từng kênh, giữ nguyên dữ kiện đã kiểm chứng.</description>
+  </item>
+  <item>
+    <title>5 cách bắt đầu dùng AI trong công việc | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/bat-dau-voi-ai</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/bat-dau-voi-ai</guid>
+    <description>5 cách thực tế để bắt đầu dùng AI trong công việc mà không cần biết lập trình.</description>
+  </item>
+  <item>
+    <title>Bảo vệ dữ liệu khi dùng AI: phân loại trước khi nhập | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/bao-ve-du-lieu-khi-dung-ai</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/bao-ve-du-lieu-khi-dung-ai</guid>
+    <description>Phân loại dữ liệu trước khi dùng AI, giảm đầu vào và xác minh chính sách lưu trữ, truy cập của nhà cung cấp.</description>
+  </item>
+  <item>
+    <title>Bảo vệ API key trong workflow AI: checklist cho người mới | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/bao-ve-api-key-trong-workflow-ai</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/bao-ve-api-key-trong-workflow-ai</guid>
+    <description>Cách lưu bí mật, giới hạn quyền, xoay vòng token và xử lý khi lộ khóa trong công cụ tự động hóa.</description>
+  </item>
+  <item>
+    <title>Bảo vệ API key trong công cụ tự động hóa | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/bao-ve-api-key-automation</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/bao-ve-api-key-automation</guid>
+    <description>Bảo vệ API key với quyền tối thiểu, kho secret, xoay vòng token và xử lý an toàn khi nghi ngờ lộ khóa.</description>
+  </item>
+  <item>
+    <title>Bản đồ công cụ xây dựng blog AI | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/ban-do-cong-cu-blog-ai</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/ban-do-cong-cu-blog-ai</guid>
+    <description>Bản đồ công cụ để xây dựng blog AI với website tĩnh, GitHub và bộ máy tự động hóa.</description>
+  </item>
+  <item>
+    <title>Thiết kế Airtable làm kho dữ liệu cho workflow | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/airtable-lam-kho-du-lieu-workflow</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/airtable-lam-kho-du-lieu-workflow</guid>
+    <description>Design an Airtable base for automation with stable record IDs, explicit statuses, linked tables, validation rules and audit fields.</description>
+  </item>
+  <item>
+    <title>Tiếp thị liên kết minh bạch: tư vấn trước, giới thiệu sau | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/affiliate-minh-bach-va-huu-ich</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/affiliate-minh-bach-va-huu-ich</guid>
+    <description>Tư vấn affiliate minh bạch: xác định nhu cầu, kiểm tra sản phẩm, nêu giới hạn và công khai hoa hồng trước khi giới thiệu.</description>
+  </item>
+  <item>
+    <title>Thiết lập trigger và action trong Activepieces có kiểm soát | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/activepieces-trigger-va-action</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/activepieces-trigger-va-action</guid>
+    <description>Configure Activepieces triggers and actions with safe test data, field mapping, retries and human approval before real-world actions.</description>
+  </item>
+  <item>
+    <title>Tạo báo cáo tuần từ Google Sheets với AI có kiểm chứng | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/bao-cao-tuan-google-sheets-voi-ai</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/bao-cao-tuan-google-sheets-voi-ai</guid>
+    <description>Quy trình tạo báo cáo tuần từ bảng tính: chuẩn hóa dữ liệu, tính chỉ số có thể kiểm tra, dùng AI viết bản nháp và đối chiếu trước khi chia sẻ.</description>
+  </item>
   </channel>
 </rss>
