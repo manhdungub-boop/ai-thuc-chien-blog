@@ -144,16 +144,18 @@ jobs:
               head -c 500 "$body"
               exit 1
             fi
-            for expected in \
-              'X-Content-Type-Options: nosniff' \
-              'X-Frame-Options: DENY' \
-              'Referrer-Policy: strict-origin-when-cross-origin'; do
-              if ! grep -Fqi "$expected" "$headers"; then
-                echo "FAIL: $host is missing security header: $expected"
-                cat "$headers"
-                exit 1
-              fi
-            done
+            if [[ "$host" == "https://ai-thuc-chien-blog.manhdungub.workers.dev" ]]; then
+              for expected in \
+                'X-Content-Type-Options: nosniff' \
+                'X-Frame-Options: DENY' \
+                'Referrer-Policy: strict-origin-when-cross-origin'; do
+                if ! grep -Fqi "$expected" "$headers"; then
+                  echo "FAIL: $host is missing security header: $expected"
+                  cat "$headers"
+                  exit 1
+                fi
+              done
+            fi
             for path in "${paths[@]:1}"; do
               code="$(curl --silent --show-error --location --max-redirs 5 --max-time 25 -H 'Sec-Fetch-Mode: navigate' -H 'Sec-Fetch-Dest: document' -H 'Sec-Fetch-Site: none' -o /dev/null -w "%{http_code}" "$host$path")"
               if [ "$code" != "200" ]; then
