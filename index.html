@@ -81,6 +81,12 @@
         </form>
         <button class="button primary community-submit" id="community-verify-confirm" type="button" hidden>Xác nhận email</button>
         <button type="button" id="community-resend-verification" class="community-resend-verification" hidden>Gửi lại email xác nhận</button>
+        <button type="button" id="community-forgot-password" class="community-resend-verification" hidden>Quên mật khẩu?</button>
+        <form id="community-password-reset-form" class="community-auth-form" hidden>
+          <label for="community-new-password">Mật khẩu mới</label>
+          <input id="community-new-password" name="newPassword" type="password" minlength="10" maxlength="128" autocomplete="new-password" placeholder="Ít nhất 10 ký tự" required>
+          <button class="button primary community-submit" id="community-password-reset-submit" type="submit">Đặt lại mật khẩu <span>→</span></button>
+        </form>
         <p class="community-status" id="community-auth-status" role="status" aria-live="polite"></p>
         <p class="community-auth-switch"><span id="community-switch-copy">Đã có tài khoản?</span> <button type="button" id="community-switch-mode">Đăng nhập</button></p>
         <p class="community-privacy-note">Email chỉ dùng để đăng nhập, không hiển thị trong phòng. Tên hiển thị và tin nhắn sẽ được các thành viên đọc. Không dùng lại mật khẩu ở nơi khác. Bạn cần xác nhận email trước khi đăng nhập. Liên kết xác nhận có hiệu lực 30 phút. Không dùng lại mật khẩu ở nơi khác.</p>

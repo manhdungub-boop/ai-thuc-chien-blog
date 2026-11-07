@@ -23,7 +23,7 @@ function doPost(e) {
     const textBody = String(payload.textBody || '');
     const htmlBody = String(payload.htmlBody || '');
     const verifyUrl = String(payload.verifyUrl || '');
-    const verifyMatch = verifyUrl.match(/^https:\/\/([^/?#]+)\/\?verify=([A-Za-z0-9_-]{32,80})#cong-dong$/);
+    const verifyMatch = verifyUrl.match(/^https:\/\/([^/?#]+)\/\?(?:verify|reset)=([A-Za-z0-9_-]{32,80})#cong-dong$/);
     const verifyHost = verifyMatch ? verifyMatch[1].toLowerCase() : '';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient) || recipient.length > 254 ||
         !textBody || !htmlBody || !verifyMatch || !allowedHosts.includes(verifyHost)) {

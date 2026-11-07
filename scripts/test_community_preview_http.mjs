@@ -72,6 +72,28 @@ assert.equal(schemaProbe.status, 400, `Random unknown verification token should 
 assert.equal(schemaProbe.headers.get('access-control-allow-origin'), target, 'Schema probe must have same-origin CORS');
 console.log('PASS: Random unknown verification token returns HTTP 400, confirming the Preview token table and email_verified_at column are queryable without writing data.');
 
+// Read-only negative tests: malformed reset inputs must be rejected before any database write or email send.
+const resetProbe = await requestWithRetry(`${target}/api/community/password-reset/complete`, {
+  method: 'POST',
+  headers: { Origin: target, Referer: `${target}/#cong-dong`, Accept: 'application/json', 'Content-Type': 'application/json' },
+  body: JSON.stringify({ token: 'invalid', password: 'not-a-valid-token' }),
+}, 'Password reset token validation');
+assert.equal(resetProbe.status, 400, `Malformed password reset token should return HTTP 400, got ${resetProbe.status}`);
+const resetRequestProbe = await requestWithRetry(`${target}/api/community/password-reset/request`, {
+  method: 'POST',
+  headers: { Origin: target, Referer: `${target}/#cong-dong`, Accept: 'application/json', 'Content-Type': 'application/json' },
+  body: JSON.stringify({ email: 'not-an-email' }),
+}, 'Password reset request validation');
+assert.equal(resetRequestProbe.status, 400, `Malformed password reset email should return HTTP 400, got ${resetRequestProbe.status}`);
+// Positive syntax check with a reserved .invalid address: no real member can own it, so no email is sent.
+const validSyntaxProbe = await requestWithRetry(`${target}/api/community/password-reset/request`, {
+  method: 'POST',
+  headers: { Origin: target, Referer: `${target}/#cong-dong`, Accept: 'application/json', 'Content-Type': 'application/json' },
+  body: JSON.stringify({ email: 'reset-validation-probe@example.invalid' }),
+}, 'Password reset valid email syntax probe');
+assert.equal(validSyntaxProbe.status, 200, `Syntactically valid email should pass validation and return the generic response, got ${validSyntaxProbe.status}`);
+console.log('PASS: Password reset rejects malformed email and accepts a syntactically valid reserved .invalid address without sending email.');
+
 // Read-only negative test: an unrelated origin must be rejected by the same endpoint.
 const hostile = await requestWithRetry(`${target}/api/community/me`, {
   method: 'GET',

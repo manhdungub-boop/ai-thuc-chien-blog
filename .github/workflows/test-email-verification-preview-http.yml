@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - feature/required-email-verification
+      - feature/community-password-reset-preview
   workflow_dispatch:
     inputs:
       preview_url:
