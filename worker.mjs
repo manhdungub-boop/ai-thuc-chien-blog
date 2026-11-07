@@ -291,18 +291,30 @@ async function readJsonPayload(request, maxBytes = 6000) {
 }
 
 async function sendCommunityEmailVerification(env, recipient, verifyUrl) {
-  if (!env.COMMUNITY_EMAIL_RELAY_URL || !env.COMMUNITY_EMAIL_RELAY_SECRET) throw new Error("Email relay is not configured.");
+  if (!env.COMMUNITY_EMAIL_RELAY_URL || !env.COMMUNITY_EMAIL_RELAY_SECRET) {
+    const missing = [!env.COMMUNITY_EMAIL_RELAY_URL ? "URL" : "", !env.COMMUNITY_EMAIL_RELAY_SECRET ? "SECRET" : ""].filter(Boolean).join("_");
+    const error = new Error("Email relay is not configured.");
+    error.code = "MISSING_" + missing;
+    throw error;
+  }
   const textBody = "Chào bạn! Cảm ơn bạn đã đăng ký AI Thực Chiến.\nMở liên kết sau và bấm Xác nhận email để kích hoạt tài khoản:\n" +
     verifyUrl + "\nLiên kết chỉ sử dụng một lần và hết hạn sau 24 giờ. Nếu bạn không đăng ký, hãy bỏ qua email này.";
   const htmlBody = "<p>Cảm ơn bạn đã đăng ký tài khoản AI Thực Chiến.</p>" +
     "<p><a href=\"" + verifyUrl + "\">Xác nhận email</a></p>" +
     "<p>Liên kết chỉ sử dụng một lần và hết hạn sau 24 giờ. Nếu bạn không đăng ký, hãy bỏ qua email này.</p>";
-  const response = await fetch(env.COMMUNITY_EMAIL_RELAY_URL, {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ secret: env.COMMUNITY_EMAIL_RELAY_SECRET, to: recipient,
-      subject: "Xác nhận email — AI Thực Chiến", textBody, htmlBody, verifyUrl }),
-    signal: AbortSignal.timeout(10000),
-  });
+  let response;
+  try {
+    response = await fetch(env.COMMUNITY_EMAIL_RELAY_URL, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ secret: env.COMMUNITY_EMAIL_RELAY_SECRET, to: recipient,
+        subject: "Xác nhận email — AI Thực Chiến", textBody, htmlBody, verifyUrl }),
+      signal: AbortSignal.timeout(10000),
+    });
+  } catch (_error) {
+    const error = new Error("Email relay request failed.");
+    error.code = "NETWORK_ERROR";
+    throw error;
+  }
   const result = await response.json().catch(() => null);
   if (!response.ok || result?.ok !== true) {
     const relayCode = typeof result?.code === "string" && /^[A-Z0-9_]{1,48}$/.test(result.code) ? result.code : "UNKNOWN";
