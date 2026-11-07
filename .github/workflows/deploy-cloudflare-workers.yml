@@ -39,6 +39,9 @@ concurrency:
 
 jobs:
   deploy:
+    # Merging application code must not deploy production or apply D1 migrations implicitly.
+    # A production release requires an explicit manual workflow dispatch.
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Check out source

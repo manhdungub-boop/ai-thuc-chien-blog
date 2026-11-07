@@ -170,6 +170,28 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
   const authDescription = root.querySelector('#community-auth-description');
   const authSubmit = root.querySelector('#community-auth-submit');
   const authStatus = root.querySelector('#community-auth-status');
+
+  // Google sign-in is enabled only when the staging Worker confirms credentials are configured.
+  const socialAuthContainer = document.createElement('div');
+  socialAuthContainer.className = 'community-social-auth';
+  socialAuthContainer.hidden = true;
+  const socialAuthHeading = document.createElement('p');
+  socialAuthHeading.className = 'community-social-heading';
+  socialAuthHeading.textContent = 'Hoặc tiếp tục bằng';
+  const socialGoogleButton = document.createElement('a');
+  socialGoogleButton.className = 'community-social-button';
+  socialGoogleButton.href = '/api/community/oauth/google/start';
+  socialGoogleButton.textContent = 'G  Tiếp tục với Google';
+  socialGoogleButton.setAttribute('aria-label', 'Đăng nhập hoặc đăng ký bằng Google');
+  socialGoogleButton.hidden = true;
+  socialAuthContainer.append(socialAuthHeading, socialGoogleButton);
+  if (authForm) authForm.insertAdjacentElement('afterend', socialAuthContainer);
+  let googleOAuthReady = false;
+  let oauthNotice = null;
+  const verifyButton = root.querySelector('#community-verify-confirm');
+  const resendButton = root.querySelector('#community-resend-verification');
+  let pendingVerificationEmail = '';
+  const verificationToken = new URLSearchParams(window.location.search).get('verify') || '';
   const switchCopy = root.querySelector('#community-switch-copy');
   const switchModeButton = root.querySelector('#community-switch-mode');
   const usernameWrap = root.querySelector('#community-username-wrap');
@@ -218,6 +240,7 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
     if (!response.ok) {
       const error = new Error(payload.error || `Yêu cầu thất bại (${response.status}).`);
       error.status = response.status;
+      error.code = payload.code || "";
       throw error;
     }
     return payload;
@@ -239,6 +262,7 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
     switchCopy.textContent = registering ? 'Đã có tài khoản?' : 'Chưa có tài khoản?';
     switchModeButton.textContent = registering ? 'Đăng nhập' : 'Đăng ký miễn phí';
     setStatus(authStatus, '');
+    if (socialAuthContainer) socialAuthContainer.hidden = !googleOAuthReady || Boolean(verificationToken) || Boolean(authPanel.hidden);
   };
   const showMember = (member) => {
     currentMember = member || null;
@@ -336,7 +360,12 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
     }
   };
 
-  if (window.location.hostname !== primaryHost) {
+  // Permit the isolated PR Preview for end-to-end email-verification testing.
+  const communityAuthHosts = new Set([
+    primaryHost,
+    'feature-required-email-verification-ai-thuc-chien-blog.manhdungub.workers.dev'
+  ]);
+  if (!communityAuthHosts.has(window.location.hostname)) {
     authPanel.hidden = true;
     memberPanel.hidden = true;
     loginPrompt.hidden = true;
@@ -365,16 +394,53 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
     }
     try {
       const result = await api(authMode === 'register' ? '/register' : '/login', { method: 'POST', body: JSON.stringify(payload) });
-      showMember(result.member);
       passwordInput.value = '';
+      if (authMode === 'register' && result.verificationRequired) {
+        pendingVerificationEmail = payload.email;
+        resendButton.hidden = false;
+        setStatus(authStatus, result.message || 'Đã gửi email xác nhận. Hãy kiểm tra hộp thư.', 'success');
+        return;
+      }
+      showMember(result.member);
       setStatus(roomStatus, 'Đăng nhập thành công. Đang tải phòng thảo luận…', 'success');
       await loadMessages();
     } catch (error) {
+      if (error.code === 'EMAIL_NOT_VERIFIED') { pendingVerificationEmail = emailInput.value.trim(); resendButton.hidden = false; }
       setStatus(authStatus, error.message, 'error');
     } finally {
       authSubmit.disabled = false;
     }
   });
+  verifyButton.addEventListener('click', async () => {
+    if (!verificationToken) return;
+    verifyButton.disabled = true;
+    setStatus(authStatus, 'Đang xác nhận email…');
+    try {
+      const result = await api('/verify-email', { method: 'POST', body: JSON.stringify({ token: verificationToken }) });
+      emailInput.value = result.email || emailInput.value;
+      verifyButton.hidden = true;
+      resendButton.hidden = true;
+      pendingVerificationEmail = '';
+      window.history.replaceState({}, '', `${window.location.pathname}#cong-dong`);
+      setAuthMode('login');
+      setStatus(authStatus, result.message || 'Email đã được xác nhận. Bạn có thể đăng nhập.', 'success');
+    } catch (error) {
+      setStatus(authStatus, error.message, 'error');
+      resendButton.hidden = false;
+      pendingVerificationEmail = emailInput.value.trim();
+    } finally { verifyButton.disabled = false; }
+  });
+  resendButton.addEventListener('click', async () => {
+    const email = (pendingVerificationEmail || emailInput.value).trim();
+    if (!email) { setStatus(authStatus, 'Hãy nhập email đã đăng ký trước.', 'error'); emailInput.focus(); return; }
+    resendButton.disabled = true;
+    try {
+      const result = await api('/resend-verification', { method: 'POST', body: JSON.stringify({ email }) });
+      setStatus(authStatus, result.message || 'Nếu tài khoản đang chờ xác nhận, email mới sẽ được gửi.', 'success');
+    } catch (error) { setStatus(authStatus, error.message, 'error'); }
+    finally { resendButton.disabled = false; }
+  });
+
   logoutButton.addEventListener('click', async () => {
     logoutButton.disabled = true;
     try {
@@ -415,10 +481,67 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
 
   setAuthMode('register');
   selectTopic('tools');
+
+  const oauthParams = new URLSearchParams(window.location.search);
+  const oauthResult = oauthParams.get('oauth');
+  const oauthProvider = oauthParams.get('provider');
+  const oauthError = oauthParams.get('oauth_error');
+  if (oauthResult) {
+    oauthParams.delete('oauth');
+    oauthParams.delete('provider');
+    oauthParams.delete('oauth_error');
+    const remaining = oauthParams.toString();
+    window.history.replaceState({}, '', window.location.pathname + (remaining ? '?' + remaining : '') + '#cong-dong');
+    setAuthMode('login');
+    if (oauthResult === 'success') {
+      oauthNotice = { text: 'Đăng nhập bằng Google thành công.', kind: 'success' };
+    } else if (oauthResult === 'cancelled') {
+      oauthNotice = { text: 'Bạn đã hủy đăng nhập Google.', kind: 'error' };
+    } else {
+      const diagnostics = {
+        OAUTH_STATE_INVALID: 'Phiên đăng nhập không còn hợp lệ. Hãy thử lại.',
+        OAUTH_CODE_MISSING: 'Google không trả về mã xác thực.',
+        OAUTH_VERIFIER_MISSING: 'Phiên đăng nhập thiếu khóa PKCE. Hãy bắt đầu lại.',
+        OAUTH_TOKEN_EXCHANGE_FAILED: 'Google từ chối đổi mã xác thực. Cần kiểm tra cấu hình OAuth.',
+        OAUTH_GOOGLE_ENDPOINT_UNREACHABLE: 'Worker không kết nối được tới máy chủ OAuth của Google.',
+        OAUTH_TOKEN_REQUEST_FAILED: 'Yêu cầu đổi mã OAuth tới Google thất bại.',
+        OAUTH_TOKEN_TIMEOUT: 'Máy chủ Google không phản hồi đúng thời hạn.',
+        OAUTH_TOKEN_RESPONSE_INVALID: 'Phản hồi đổi mã OAuth của Google không hợp lệ.',
+        OAUTH_GOOGLE_INVALID_CLIENT: 'Google không chấp nhận OAuth Client ID/Client Secret.',
+        OAUTH_GOOGLE_INVALID_GRANT: 'Mã đăng nhập hết hạn, đã sử dụng hoặc không khớp PKCE.',
+        OAUTH_GOOGLE_REDIRECT_URI_MISMATCH: 'Callback URI không khớp cấu hình OAuth trên Google.',
+        OAUTH_EMAIL_UNVERIFIED: 'Google chưa xác nhận địa chỉ email này.',
+        OAUTH_MEMBER_PERSIST_FAILED: 'Không lưu được tài khoản vào cơ sở dữ liệu staging.'
+      };
+      oauthNotice = { text: 'Không thể đăng nhập bằng Google. ' + (diagnostics[oauthError] || 'Vui lòng thử lại.') + (oauthError ? ' (Mã: ' + oauthError + ')' : ''), kind: 'error' };
+    }
+    root.scrollIntoView({ block: 'start' });
+  }
+
+  api('/oauth/providers', { method: 'GET', headers: {} }).then((providers) => {
+    googleOAuthReady = providers.google === true;
+    socialGoogleButton.hidden = !googleOAuthReady;
+    socialAuthContainer.hidden = !googleOAuthReady || Boolean(verificationToken) || Boolean(authPanel.hidden);
+  }).catch(() => {
+    googleOAuthReady = false;
+    socialGoogleButton.hidden = true;
+    socialAuthContainer.hidden = true;
+  });
+
+  if (verificationToken) {
+    setAuthMode('login');
+    verifyButton.hidden = false;
+    setStatus(authStatus, 'Liên kết email đã mở. Bấm nút bên dưới để xác nhận tài khoản.', 'success');
+  }
   api('/me', { method: 'GET', headers: {} }).then((result) => {
     showMember(result.member);
     if (result.member) loadMessages();
+    if (oauthNotice) {
+      if (result.member && oauthNotice.kind === 'success') setStatus(memberStatus, oauthNotice.text, 'success');
+      else setStatus(authStatus, oauthNotice.text, oauthNotice.kind);
+    }
   }).catch((error) => {
+    if (oauthNotice) setStatus(authStatus, oauthNotice.text, oauthNotice.kind);
     setStatus(authStatus, error.status === 503 ? 'Cộng đồng đang chờ cấu hình cơ sở dữ liệu. Tài khoản và tin nhắn chưa thể lưu cho đến khi quản trị viên hoàn tất thiết lập.' : error.message, 'error');
     authSubmit.disabled = error.status === 503;
     switchModeButton.disabled = error.status === 503;

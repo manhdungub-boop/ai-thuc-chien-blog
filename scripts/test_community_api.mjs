@@ -14,7 +14,7 @@ assert.ok(Number(pbkdf2IterationsMatch[1]) <= 100000,
 assert.match(workerSource, /iterations:\s*COMMUNITY_PASSWORD_ITERATIONS/,
   'Password hashing must use the checked PBKDF2 iteration setting');
 class MockD1 {
-  constructor() { this.members = []; this.sessions = []; this.messages = []; this.rates = new Map(); }
+  constructor() { this.members = []; this.sessions = []; this.messages = []; this.tokens = []; this.rates = new Map(); }
   prepare(sql) {
     const db = this; let args = [];
     return {
@@ -22,7 +22,12 @@ class MockD1 {
       async run() {
         const q = sql.replace(/\s+/g, ' ').trim();
         if (q.startsWith('INSERT INTO community_rate_limits')) { const [bucket, windowStart] = args; const old = db.rates.get(bucket); db.rates.set(bucket, { count: old && old.window_start === windowStart ? old.count + 1 : 1, window_start: windowStart }); return { meta: { changes: 1 } }; }
-        if (q.startsWith('INSERT INTO community_members')) { const [id, username, email, display_name, password_salt, password_hash, created_at] = args; if (db.members.some((m) => m.email === email || m.username === username)) throw new Error('unique constraint'); db.members.push({ id, username, email, display_name, password_salt, password_hash, created_at }); return { meta: { changes: 1 } }; }
+        if (q.startsWith('INSERT INTO community_members')) { const [id, username, email, display_name, password_salt, password_hash, created_at] = args; if (db.members.some((m) => m.email === email || m.username === username)) throw new Error('unique constraint'); db.members.push({ id, username, email, display_name, password_salt, password_hash, created_at, email_verified_at: null }); return { meta: { changes: 1 } }; }
+        if (q.startsWith('INSERT INTO community_email_verification_tokens')) { const [token_hash, member_id, created_at, expires_at] = args; db.tokens.push({ token_hash, member_id, created_at, expires_at }); return { meta: { changes: 1 } }; }
+        if (q.startsWith('DELETE FROM community_email_verification_tokens WHERE member_id =')) { const before = db.tokens.length; db.tokens = db.tokens.filter((t) => t.member_id !== args[0]); return { meta: { changes: before - db.tokens.length } }; }
+        if (q.startsWith('DELETE FROM community_email_verification_tokens WHERE token_hash =')) { const before = db.tokens.length; db.tokens = db.tokens.filter((t) => t.token_hash !== args[0]); return { meta: { changes: before - db.tokens.length } }; }
+        if (q.startsWith('DELETE FROM community_members WHERE id =')) { const before = db.members.length; db.members = db.members.filter((m) => !(m.id === args[0] && !m.email_verified_at)); return { meta: { changes: before - db.members.length } }; }
+        if (q.startsWith('UPDATE community_members SET email_verified_at =')) { const m = db.members.find((x) => x.id === args[1]); if (m && !m.email_verified_at) m.email_verified_at = args[0]; return { meta: { changes: m ? 1 : 0 } }; }
         if (q.startsWith('INSERT INTO community_sessions')) { const [id, member_id, token_hash, created_at, expires_at] = args; db.sessions.push({ id, member_id, token_hash, created_at, expires_at }); return { meta: { changes: 1 } }; }
         if (q.startsWith('INSERT INTO community_messages')) { const [id, topic, member_id, body, created_at] = args; db.messages.push({ id, topic, member_id, body, created_at }); return { meta: { changes: 1 } }; }
         if (q.startsWith('DELETE FROM community_sessions WHERE expires_at <=')) { const before = db.sessions.length; db.sessions = db.sessions.filter((s) => s.expires_at > args[0]); return { meta: { changes: before - db.sessions.length } }; }
@@ -33,7 +38,9 @@ class MockD1 {
       async first() {
         const q = sql.replace(/\s+/g, ' ').trim();
         if (q.startsWith('SELECT count FROM community_rate_limits')) return db.rates.get(args[0]) || null;
-        if (q.startsWith('SELECT id, username, email, display_name, password_salt, password_hash, created_at FROM community_members')) return db.members.find((m) => m.email === args[0]) || null;
+        if (q.startsWith('SELECT id, username, email, display_name, password_salt, password_hash, created_at, email_verified_at FROM community_members')) return db.members.find((m) => m.email === args[0]) || null;
+        if (q.startsWith('SELECT t.member_id, m.email, m.email_verified_at FROM community_email_verification_tokens')) { const t = db.tokens.find((x) => x.token_hash === args[0] && x.expires_at > args[1]); const m = t && db.members.find((x) => x.id === t.member_id); return m ? { member_id: m.id, email: m.email, email_verified_at: m.email_verified_at } : null; }
+        if (q.startsWith('SELECT id, email, display_name, email_verified_at FROM community_members')) return db.members.find((m) => m.email === args[0]) || null;
         if (q.startsWith('SELECT m.id, m.username, m.display_name, m.created_at FROM community_sessions')) { const session = db.sessions.find((s) => s.token_hash === args[0] && s.expires_at > args[1]); const member = session && db.members.find((m) => m.id === session.member_id); return member ? { id: member.id, username: member.username, display_name: member.display_name, created_at: member.created_at } : null; }
         throw new Error('MockD1 unexpected first: ' + q);
       },
@@ -46,22 +53,86 @@ class MockD1 {
   }
 }
 const origin = 'https://ai-thuc-chien-blog.manhdungub.workers.dev';
-const db = new MockD1(); const env = { DB: db, ASSETS: { fetch: async () => new Response('asset') } };
+const db = new MockD1(); const env = { DB: db, ASSETS: { fetch: async () => new Response('asset') }, COMMUNITY_EMAIL_RELAY_URL: 'https://mail-relay.example.test/exec', COMMUNITY_EMAIL_RELAY_SECRET: 'test-shared-secret' };
+const originalFetch = globalThis.fetch; let capturedEmail = null; let relayResult = { ok: true };
+globalThis.fetch = async (input, init = {}) => { if (String(input) === 'https://mail-relay.example.test/exec') { capturedEmail = JSON.parse(init.body); assert.equal(capturedEmail.secret, 'test-shared-secret'); return new Response(JSON.stringify(relayResult), { status: 200, headers: { 'Content-Type': 'application/json' } }); } return originalFetch(input, init); };
 const call = (path, { method = 'GET', body, cookie, originHeader = origin } = {}) => worker.fetch(new Request(`https://example.test/api/community${path}`, { method, headers: { ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(cookie ? { Cookie: cookie } : {}), ...(originHeader ? { Origin: originHeader } : {}), 'CF-Connecting-IP': '198.51.100.77' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }), env);
 const unconfigured = await worker.fetch(new Request('https://example.test/api/community/me'), {}); assert.equal(unconfigured.status, 503); assert.match((await unconfigured.json()).error, /cơ sở dữ liệu/i);
 const badOrigin = await call('/register', { method: 'POST', originHeader: 'https://evil.example', body: {} }); assert.equal(badOrigin.status, 403);
+const previewOrigin = 'https://feature-required-email-verification-ai-thuc-chien-blog.workers.dev';
+const previewSameOriginResponse = await worker.fetch(new Request(`${previewOrigin}/api/community/me`, { headers: { Origin: previewOrigin } }), env);
+assert.equal(previewSameOriginResponse.status, 200, 'same-origin Preview API calls should be accepted');
+assert.equal(previewSameOriginResponse.headers.get('Access-Control-Allow-Origin'), previewOrigin);
+
 const invalidRegister = await call('/register', { method: 'POST', body: { username: 'x', displayName: 'X', email: 'bad', password: 'short' } }); assert.equal(invalidRegister.status, 400);
 const nullPayload = await call('/register', { method: 'POST', body: null }); assert.equal(nullPayload.status, 400);
+
+// Missing relay config must fail closed before any member, token, or rate-limit write.
+const oldRelayUrl = env.COMMUNITY_EMAIL_RELAY_URL;
+const oldRelaySecret = env.COMMUNITY_EMAIL_RELAY_SECRET;
+const countsBeforeNoRelay = [db.members.length, db.tokens.length, db.rates.size];
+env.COMMUNITY_EMAIL_RELAY_URL = '';
+env.COMMUNITY_EMAIL_RELAY_SECRET = '';
+const noRelay = await call('/register', { method: 'POST', body: { username: 'no_relay_user', displayName: 'No Relay', email: 'no-relay@example.invalid', password: 'Temporary-No-Relay-Password-123!' } });
+assert.equal(noRelay.status, 503);
+assert.match((await noRelay.json()).error, /xác nhận email chưa được cấu hình/i);
+assert.deepEqual([db.members.length, db.tokens.length, db.rates.size], countsBeforeNoRelay);
+env.COMMUNITY_EMAIL_RELAY_URL = oldRelayUrl;
+env.COMMUNITY_EMAIL_RELAY_SECRET = oldRelaySecret;
 const registered = await call('/register', { method: 'POST', body: { username: 'thanhvien_1', displayName: 'Thành viên thử', email: 'member@example.com', password: 'MotMatKhauRieng123!' } }); assert.equal(registered.status, 201);
-const registeredPayload = await registered.json(); assert.equal(registeredPayload.member.username, 'thanhvien_1'); assert.equal(JSON.stringify(registeredPayload).includes('MotMatKhauRieng123!'), false);
-const setCookie = registered.headers.get('set-cookie'); assert.match(setCookie, /HttpOnly/); assert.match(setCookie, /Secure/); assert.match(setCookie, /SameSite=Lax/); assert.match(setCookie, /Path=\//); const cookie = setCookie.split(';')[0];
+const registeredPayload = await registered.json(); assert.equal(registeredPayload.verificationRequired, true); assert.equal(JSON.stringify(registeredPayload).includes('MotMatKhauRieng123!'), false); assert.equal(registered.headers.get('set-cookie'), null); assert.ok(capturedEmail); assert.equal(capturedEmail.to, 'member@example.com');
+const loginBeforeVerification = await call('/login', { method: 'POST', body: { email: 'member@example.com', password: 'MotMatKhauRieng123!' } }); assert.equal(loginBeforeVerification.status, 403); assert.equal((await loginBeforeVerification.json()).code, 'EMAIL_NOT_VERIFIED');
+const tokenMatch = capturedEmail.htmlBody.match(/[?]verify=([A-Za-z0-9_-]{32,80})/); assert.ok(tokenMatch, 'verification email must contain a random one-time token'); const verify = await call('/verify-email', { method: 'POST', body: { token: tokenMatch[1] } }); assert.equal(verify.status, 200); assert.equal((await verify.json()).ok, true); assert.equal(db.tokens.length, 0);
+const replay = await call('/verify-email', { method: 'POST', body: { token: tokenMatch[1] } }); assert.equal(replay.status, 400, 'verification tokens must be single-use');
+
+// Resend is intentionally generic for account privacy and is rate-limited to three requests per email per hour.
+const resendRegistration = await call('/register', { method: 'POST', body: { username: 'resend_user', displayName: 'Resend User', email: 'resend@example.com', password: 'Resend-Password-123!' } });
+assert.equal(resendRegistration.status, 201);
+const resendMessagesBefore = db.tokens.filter((t) => t.member_id === db.members.find((m) => m.email === 'resend@example.com').id).length;
+assert.equal(resendMessagesBefore, 1);
+for (let attempt = 0; attempt < 3; attempt += 1) {
+  const resend = await call('/resend-verification', { method: 'POST', body: { email: 'resend@example.com' } });
+  assert.equal(resend.status, 200, 'first three resend requests should return the generic response');
+  assert.equal((await resend.json()).ok, true);
+  assert.equal(capturedEmail.to, 'resend@example.com', 'pending account should receive a new verification email');
+}
+const resendLimited = await call('/resend-verification', { method: 'POST', body: { email: 'resend@example.com' } });
+assert.equal(resendLimited.status, 429, 'fourth resend request in the same hour must be rate-limited');
+assert.match((await resendLimited.json()).error, /quá nhiều lần/i);
+const resendMember = db.members.find((m) => m.email === 'resend@example.com');
+assert.equal(db.tokens.filter((t) => t.member_id === resendMember.id).length, 1, 'resend should replace the prior token rather than accumulating valid tokens');
+
+// Expired verification tokens must be rejected and must not activate the member.
+const expiredRegistration = await call('/register', { method: 'POST', body: { username: 'expired_user', displayName: 'Expired Token', email: 'expired@example.com', password: 'Expired-Token-Password-123!' } });
+assert.equal(expiredRegistration.status, 201);
+const expiredTokenMatch = capturedEmail.htmlBody.match(/[?]verify=([A-Za-z0-9_-]{32,80})/);
+assert.ok(expiredTokenMatch, 'second verification mail must contain a token');
+const expiredMember = db.members.find((m) => m.email === 'expired@example.com');
+const storedExpiredToken = db.tokens.find((t) => t.member_id === expiredMember.id);
+assert.ok(storedExpiredToken, 'verification token must be stored');
+storedExpiredToken.expires_at = new Date(Date.now() - 1000).toISOString();
+const expiredVerify = await call('/verify-email', { method: 'POST', body: { token: expiredTokenMatch[1] } });
+assert.equal(expiredVerify.status, 400, 'expired token must be rejected');
+assert.equal(expiredMember.email_verified_at, null, 'expired token must not activate the member');
+const login = await call('/login', { method: 'POST', body: { email: 'member@example.com', password: 'MotMatKhauRieng123!' } }); assert.equal(login.status, 200); assert.equal((await login.json()).member.username, 'thanhvien_1');
+const setCookie = login.headers.get('set-cookie'); assert.match(setCookie, /HttpOnly/); assert.match(setCookie, /Secure/); assert.match(setCookie, /SameSite=Lax/); assert.match(setCookie, /Path=\//); const cookie = setCookie.split(';')[0];
 const me = await call('/me', { cookie }); assert.equal(me.status, 200); assert.equal((await me.json()).member.username, 'thanhvien_1');
+
+// The mail relay can reject a message despite HTTP 200; fail closed and remove the pending member/token.
+relayResult = { ok: false, code: 'SEND_FAILED' };
+const tokenCountBeforeFailedMail = db.tokens.length;
+const failedMail = await call('/register', { method: 'POST', body: { username: 'mail_fail_user', displayName: 'Mail Failure', email: 'mail-failure@example.invalid', password: 'Another-Temporary-Password-123!' } });
+assert.equal(failedMail.status, 503);
+assert.equal(db.members.some((m) => m.email === 'mail-failure@example.invalid'), false, 'failed email delivery must not leave a pending member');
+assert.equal(db.tokens.length, tokenCountBeforeFailedMail, 'failed email delivery must not leave an extra verification token');
+relayResult = { ok: true };
 const sent = await call('/messages', { method: 'POST', cookie, body: { topic: 'automation', body: 'Tôi đang thử một workflow có bước duyệt.' } }); assert.equal(sent.status, 201); assert.equal((await sent.json()).message.topic, 'automation');
 const listed = await call('/messages?topic=automation', { cookie }); assert.equal(listed.status, 200); const listedPayload = await listed.json(); assert.equal(listedPayload.messages.length, 1); assert.equal(listedPayload.messages[0].own, true);
 const removed = await call(`/messages/${listedPayload.messages[0].id}`, { method: 'DELETE', cookie }); assert.equal(removed.status, 200); assert.equal(db.messages.length, 0);
 const badTopic = await call('/messages?topic=unknown', { cookie }); assert.equal(badTopic.status, 400);
 const badMessage = await call('/messages', { method: 'POST', cookie, body: { topic: 'tools', body: '   ' } }); assert.equal(badMessage.status, 400);
-const login = await call('/login', { method: 'POST', body: { email: 'member@example.com', password: 'MotMatKhauRieng123!' } }); assert.equal(login.status, 200); assert.equal((await login.json()).member.username, 'thanhvien_1');
+
 const wrongPassword = await call('/login', { method: 'POST', body: { email: 'member@example.com', password: 'sai-mat-khau' } }); assert.equal(wrongPassword.status, 401);
 const logout = await call('/logout', { method: 'POST', cookie }); assert.equal(logout.status, 200); assert.match(logout.headers.get('set-cookie'), /Max-Age=0/);
-console.log('PASS: community registration, PBKDF2 login, HttpOnly/Secure cookie, session lookup/logout, topic-specific messages, validation, origin protection, and missing-DB behavior');
+globalThis.fetch = originalFetch;
+console.log('PASS: email verification required before login; one-time token, Apps Script relay mock, PBKDF2 login, secure session, messages, validation, origin protection and missing-DB behavior');

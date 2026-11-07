@@ -7,6 +7,7 @@ on:
   pull_request:
     branches:
       - main
+      - feature/required-email-verification
   workflow_dispatch:
 
 permissions:
@@ -35,16 +36,24 @@ jobs:
         run: |
           node --check script.js
           node --check worker.mjs
+          node --check tests/staging-google-oidc-runtime.test.mjs
+          node --check scripts/test_google_oauth_worker_integration.mjs
 
       - name: Test Worker runtime and security headers
         run: |
           node scripts/test_worker_headers.mjs
           node scripts/test_worker_retrieval.mjs
           node scripts/test_community_api.mjs
+          node scripts/test_email_verification.mjs
+          node --test tests/staging-google-oidc-runtime.test.mjs
+          node scripts/test_google_oauth_worker_integration.mjs
           node scripts/test_homepage_search.cjs
 
       - name: Test community D1 schema
         run: python3 scripts/test_community_schema.py
+
+      - name: Rehearse additive Google OAuth migration in local SQLite
+        run: python3 scripts/test_google_oauth_migration.py
 
       - name: Test isolated D1 configuration for previews
         run: node scripts/test_d1_preview_config.cjs
