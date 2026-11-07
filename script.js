@@ -217,11 +217,19 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
     node.dataset.kind = kind;
   };
   const api = async (path, options = {}) => {
-    const response = await fetch(`/api/community${path}`, {
-      credentials: 'same-origin',
-      ...options,
-      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }
-    });
+    let response;
+    try {
+      response = await fetch(`/api/community${path}`, {
+        credentials: 'same-origin',
+        ...options,
+        headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }
+      });
+    } catch (error) {
+      if (error instanceof TypeError) {
+        throw new Error('Không thể kết nối đến máy chủ. Vui lòng kiểm tra mạng và thử lại.');
+      }
+      throw error;
+    }
     let payload = {};
     try { payload = await response.json(); } catch (_error) { /* Keep a safe fallback for non-JSON responses. */ }
     if (!response.ok) {
