@@ -129,6 +129,13 @@ if (action === "register") {
   assertJsonSuccess(await post("/api/community/verify-email", { token }), 200, "Email confirmation");
   assertLoginSuccess(await post("/api/community/login", { email, password }), 200, "Login after email confirmation");
   console.log("PASS: the live email-confirmation token was accepted once and login works after confirmation.");
+} else if (action === "login") {
+  const email = testEmailForCurrentPipeline();
+  const password = required("STAGING_E2E_PASSWORD");
+  validatePassword(password, "STAGING_E2E_PASSWORD");
+  const result = await post("/api/community/login", { email, password });
+  assertLoginSuccess(result, 200, "Staging login");
+  console.log("PASS: the previously confirmed disposable staging account can log in.");
 } else if (action === "request-reset") {
   const email = testEmailForCurrentPipeline();
   const result = await post("/api/community/password-reset/request", { email });
@@ -152,7 +159,7 @@ if (action === "register") {
   assertLoginSuccess(await post("/api/community/login", { email, password: newPassword }), 200, "Login with replacement password");
   console.log("PASS: the live reset token was accepted; the old password was rejected and the replacement password works.");
 } else {
-  throw new Error("Unknown action. Use register, confirm, request-reset, or finish-reset.");
+  throw new Error("Unknown action. Use register, confirm, login, request-reset, or finish-reset.");
 }
 
 console.log("Safety: no tokens, passwords, response bodies, or mailbox address were printed. Only the isolated staging Worker was contacted.");
