@@ -164,7 +164,8 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
   if (!root) return;
   const primaryHost = 'ai-thuc-chien-blog.manhdungub.workers.dev';
   const previewHost = 'ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev';
-  const pendingResetToken = new URLSearchParams(window.location.search).get('reset') || '';\n  const pendingVerifyToken = new URLSearchParams(window.location.search).get('verify') || '';
+  const pendingResetToken = new URLSearchParams(window.location.search).get('reset') || '';
+  const pendingVerifyToken = new URLSearchParams(window.location.search).get('verify') || '';
   const authPanel = root.querySelector('#community-auth-panel');
   const memberPanel = root.querySelector('#community-member-panel');
   const authForm = root.querySelector('#community-auth-form');
