@@ -1,1 +1,154 @@
-aW1wb3J0IGFzc2VydCBmcm9tICJub2RlOmFzc2VydC9zdHJpY3QiOwoKY29uc3QgT1JJR0lOID0gImh0dHBzOi8vYWktdGh1Yy1jaGllbi1ibG9nLWF1dGgtYXBwLXByZXZpZXcubWFuaGR1bmd1Yi53b3JrZXJzLmRldiI7CmNvbnN0IGFjdGlvbiA9IHByb2Nlc3MuYXJndlsyXTsKCmZ1bmN0aW9uIHJlcXVpcmVkKG5hbWUpIHsKICBjb25zdCB2YWx1ZSA9IFN0cmluZyhwcm9jZXNzLmVudltuYW1lXSB8fCAiIikudHJpbSgpOwogIGFzc2VydC5vayh2YWx1ZSwgIlJlcXVpcmVkIENJIHZhcmlhYmxlIGlzIG1pc3Npbmc6ICIgKyBuYW1lICsgIi4iKTsKICByZXR1cm4gdmFsdWU7Cn0KCmZ1bmN0aW9uIHZhbGlkYXRlVGVzdEVtYWlsKGVtYWlsKSB7CiAgYXNzZXJ0Lm1hdGNoKAogICAgZW1haWwsCiAgICAvXm1hbmhkdW5ndWJcK3N0YWdpbmctZTJlLVthLXowLTktXStAZ21haWxcLmNvbSQvaSwKICAgICJTVEFHSU5HX0UyRV9FTUFJTCBtdXN0IGJlIGEgdW5pcXVlIHBsdXMtYWxpYXMgZm9yIHRoZSBwcm9qZWN0J3Mgb3duIEdtYWlsIG1haWxib3guIgogICk7Cn0KCmZ1bmN0aW9uIHRlc3RFbWFpbEZvckN1cnJlbnRQaXBlbGluZSgpIHsKICBjb25zdCBiYXNlID0gcmVxdWlyZWQoIlNUQUdJTkdfRTJFX0VNQUlMIik7CiAgdmFsaWRhdGVUZXN0RW1haWwoYmFzZSk7CiAgY29uc3QgcGlwZWxpbmVJZCA9IFN0cmluZyhwcm9jZXNzLmVudi5DSV9QSVBFTElORV9JRCB8fCAiIikucmVwbGFjZSgvW14wLTldL2csICIiKS5zbGljZSgtMTIpOwogIGFzc2VydC5vayhwaXBlbGluZUlkLCAiQ0lfUElQRUxJTkVfSUQgaXMgcmVxdWlyZWQgdG8ga2VlcCB0aGUgc2FtZSBkaXNwb3NhYmxlIGVtYWlsIGFjcm9zcyBFMkUgam9icyBpbiBvbmUgcGlwZWxpbmUuIik7CiAgY29uc3QgbG9jYWxQYXJ0ID0gYmFzZS5zbGljZSgwLCBiYXNlLmxhc3RJbmRleE9mKCJAIikpOwogIGFzc2VydC5vayhsb2NhbFBhcnQubGVuZ3RoICsgcGlwZWxpbmVJZC5sZW5ndGggKyAxIDw9IDY0LAogICAgIlNUQUdJTkdfRTJFX0VNQUlMIGxvY2FsIHBhcnQgaXMgdG9vIGxvbmcgdG8gYWRkIGEgcGlwZWxpbmUtc3BlY2lmaWMgc3VmZml4LiIpOwogIGNvbnN0IGVtYWlsID0gbG9jYWxQYXJ0ICsgIi0iICsgcGlwZWxpbmVJZCArICJAZ21haWwuY29tIjsKICByZXR1cm4gZW1haWw7Cn0KCmZ1bmN0aW9uIHZhbGlkYXRlVG9rZW4odG9rZW4sIG5hbWUpIHsKICBhc3NlcnQubWF0Y2godG9rZW4sIC9eW0EtWmEtejAtOV8tXXszMiw4MH0kLywgbmFtZSArICIgaXMgbm90IGluIHRoZSBleHBlY3RlZCBvcGFxdWUgdG9rZW4gZm9ybWF0LiIpOwp9CgpmdW5jdGlvbiB2YWxpZGF0ZVBhc3N3b3JkKHBhc3N3b3JkLCBuYW1lKSB7CiAgYXNzZXJ0Lm9rKHBhc3N3b3JkLmxlbmd0aCA+PSAxNCAmJiBwYXNzd29yZC5sZW5ndGggPD0gMTI4LCBuYW1lICsgIiBtdXN0IGJlIDE04oCTMTI4IGNoYXJhY3RlcnMuIik7CiAgYXNzZXJ0Lm9rKC9bQS1aXS8udGVzdChwYXNzd29yZCkgJiYgL1thLXpdLy50ZXN0KHBhc3N3b3JkKSAmJiAvWzAtOV0vLnRlc3QocGFzc3dvcmQpLAogICAgbmFtZSArICIgbXVzdCBpbmNsdWRlIHVwcGVyL2xvd2VyY2FzZSBsZXR0ZXJzIGFuZCBkaWdpdHMuIik7Cn0KCmFzeW5jIGZ1bmN0aW9uIHBvc3QocGF0aCwgYm9keSkgewogIGNvbnN0IHJlc3BvbnNlID0gYXdhaXQgZmV0Y2gobmV3IFVSTChwYXRoLCBPUklHSU4pLCB7CiAgICBtZXRob2Q6ICJQT1NUIiwKICAgIHJlZGlyZWN0OiAiZXJyb3IiLAogICAgaGVhZGVyczogewogICAgICBPcmlnaW46IE9SSUdJTiwKICAgICAgQWNjZXB0OiAiYXBwbGljYXRpb24vanNvbiIsCiAgICAgICJDb250ZW50LVR5cGUiOiAiYXBwbGljYXRpb24vanNvbiIsCiAgICAgICJDYWNoZS1Db250cm9sIjogIm5vLXN0b3JlIiwKICAgIH0sCiAgICBib2R5OiBKU09OLnN0cmluZ2lmeShib2R5KSwKICAgIHNpZ25hbDogQWJvcnRTaWduYWwudGltZW91dCgxNTAwMCksCiAgfSk7CiAgbGV0IHBheWxvYWQgPSBudWxsOwogIHRyeSB7CiAgICBwYXlsb2FkID0gYXdhaXQgcmVzcG9uc2UuanNvbigpOwogIH0gY2F0Y2ggewogICAgcGF5bG9hZCA9IG51bGw7CiAgfQogIHJldHVybiB7IHJlc3BvbnNlLCBwYXlsb2FkIH07Cn0KCmZ1bmN0aW9uIHNhZmVSZWdpc3RyYXRpb25GYWlsdXJlKHJlc3VsdCkgewogIGNvbnN0IHBheWxvYWQgPSByZXN1bHQucGF5bG9hZCAmJiB0eXBlb2YgcmVzdWx0LnBheWxvYWQgPT09ICJvYmplY3QiID8gcmVzdWx0LnBheWxvYWQgOiB7fTsKICBjb25zdCBjb2RlID0gdHlwZW9mIHBheWxvYWQuY29kZSA9PT0gInN0cmluZyIgJiYgL15bQS1aMC05Xy1dezEsNDh9JC8udGVzdChwYXlsb2FkLmNvZGUpCiAgICA/IHBheWxvYWQuY29kZQogICAgOiAiTk9UX1BST1ZJREVEIjsKICBjb25zdCBrbm93bkVycm9ycyA9IG5ldyBNYXAoWwogICAgWyJFbWFpbCBob+G6t2MgdMOqbiB0aMOgbmggdmnDqm4gxJHDoyDEkcaw4bujYyBz4butZCBThu6VuZy4iLCAiRU1BSUxfT1JfVVNFUk5BTUVfQ09ORkxJQ1QiXSwKICAgIFsiROG7i2NoIHbhu6UgeMOhYyBuaOG6rW4gZW1haWwgY2jGsGEgxJHGsOG7o2MgY+G6pXUgaMOsbmguIFTDoGkga2hv4bqjbiBjaMawYSDEkcaw4bujYyB04bqhbzsgdnVpIGzDsm5nIHRo4butIGzhuqFpIHNhdS4iLCAiRU1BSUxfUkVMQVlfTk9UX0NPTkZJR1VSRUQiXSwKICAgIFsiS2jDtG5nIHRo4buDIGfhu61pIGVtYWlsIHjDoWMgbmjhuq1uLiBUw6BpIGtob+G6o24gY2jGsGEgxJHGsOG7o2MgdOG6oW87IHZ1aSBsw7JuZyB0aOG7rSBs4bqhaSBzYXUuIiwgIkVNQUlMX1JFTEFZX0ZBSUxFRCJdLAogICAgWyJOZ3Xhu5NuIHnDqnUgY+G6p3Uga2jDtG5nIMSRxrDhu6NjIHBow6lwLiIsICJPUklHSU5fTk9UX0FMTE9XRUQiXSwKICAgIFsiQuG6oW4gxJHDoyB0aOG7rSDEkcSDbmcga8O9IHF1w6Egbmhp4buBdSBs4bqnbi4gVnVpIGzDsm5nIHRo4butIGzhuqFpIHNhdSBt4buZdCBnaeG7nS4iLCAiUkVHSVNUUkFUSU9OX1JBVEVfTElNSVRFRCJdLAogIF0pOwogIGNvbnN0IHJlYXNvbiA9IGtub3duRXJyb3JzLmdldCh0eXBlb2YgcGF5bG9hZC5lcnJvciA9PT0gInN0cmluZyIgPyBwYXlsb2FkLmVycm9yIDogIiIpIHx8ICJVTkNMQVNTSUZJRURfUkVTUE9OU0UiOwogIHJldHVybiAiSFRUUCAiICsgcmVzdWx0LnJlc3BvbnNlLnN0YXR1cyArICI7IGNvZGU9IiArIGNvZGUgKyAiOyByZWFzb249IiArIHJlYXNvbjsKfQoKZnVuY3Rpb24gYXNzZXJ0SnNvblN1Y2Nlc3MocmVzdWx0LCBleHBlY3RlZFN0YXR1cywgbGFiZWwpIHsKICBhc3NlcnQuZXF1YWwocmVzdWx0LnJlc3BvbnNlLnN0YXR1cywgZXhwZWN0ZWRTdGF0dXMsIGxhYmVsICsgIiByZXR1cm5lZCB1bmV4cGVjdGVkIEhUVFAgc3RhdHVzICIgKyByZXN1bHQucmVzcG9uc2Uuc3RhdHVzICsgIi4iKTsKICBhc3NlcnQub2socmVzdWx0LnBheWxvYWQgJiYgdHlwZW9mIHJlc3VsdC5wYXlsb2FkID09PSAib2JqZWN0IiwgbGFiZWwgKyAiIGRpZCBub3QgcmV0dXJuIEpTT04uIik7CiAgYXNzZXJ0LmVxdWFsKHJlc3VsdC5wYXlsb2FkLm9rLCB0cnVlLCBsYWJlbCArICIgZGlkIG5vdCByZXR1cm4gb2s9dHJ1ZS4iKTsKfQoKZnVuY3Rpb24gYXNzZXJ0TG9naW5TdWNjZXNzKHJlc3VsdCwgZXhwZWN0ZWRTdGF0dXMsIGxhYmVsKSB7CiAgYXNzZXJ0LmVxdWFsKHJlc3VsdC5yZXNwb25zZS5zdGF0dXMsIGV4cGVjdGVkU3RhdHVzLCBsYWJlbCArICIgcmV0dXJuZWQgdW5leHBlY3RlZCBIVFRQIHN0YXR1cyAiICsgcmVzdWx0LnJlc3BvbnNlLnN0YXR1cyArICIuIik7CiAgYXNzZXJ0Lm9rKHJlc3VsdC5wYXlsb2FkICYmIHR5cGVvZiByZXN1bHQucGF5bG9hZCA9PT0gIm9iamVjdCIsIGxhYmVsICsgIiBkaWQgbm90IHJldHVybiBKU09OLiIpOwogIGFzc2VydC5vayhyZXN1bHQucGF5bG9hZC5tZW1iZXIgJiYgdHlwZW9mIHJlc3VsdC5wYXlsb2FkLm1lbWJlciA9PT0gIm9iamVjdCIsCiAgICBsYWJlbCArICIgZGlkIG5vdCByZXR1cm4gYSBtZW1iZXIgb2JqZWN0LiIpOwogIGFzc2VydC5vayh0eXBlb2YgcmVzdWx0LnBheWxvYWQubWVtYmVyLnVzZXJuYW1lID09PSAic3RyaW5nIiAmJiByZXN1bHQucGF5bG9hZC5tZW1iZXIudXNlcm5hbWUubGVuZ3RoID4gMCwKICAgIGxhYmVsICsgIiBkaWQgbm90IHJldHVybiBhIHZhbGlkIG1lbWJlciB1c2VybmFtZS4iKTsKfQoKYXNzZXJ0LmVxdWFsKAogIE9SSUdJTiwKICAiaHR0cHM6Ly9haS10aHVjLWNoaWVuLWJsb2ctYXV0aC1hcHAtcHJldmlldy5tYW5oZHVuZ3ViLndvcmtlcnMuZGV2IiwKICAiVGhpcyBsaXZlIHRlc3QgbXVzdCB0YXJnZXQgdGhlIGlzb2xhdGVkIHN0YWdpbmcgV29ya2VyIG9ubHkuIgopOwoKaWYgKGFjdGlvbiA9PT0gInJlZ2lzdGVyIikgewogIGNvbnN0IGVtYWlsID0gdGVzdEVtYWlsRm9yQ3VycmVudFBpcGVsaW5lKCk7CiAgY29uc3QgcGFzc3dvcmQgPSByZXF1aXJlZCgiU1RBR0lOR19FMkVfUEFTU1dPUkQiKTsKICB2YWxpZGF0ZVBhc3N3b3JkKHBhc3N3b3JkLCAiU1RBR0lOR19FMkVfUEFTU1dPUkQiKTsKICBjb25zdCBzdWZmaXggPSAocHJvY2Vzcy5lbnYuQ0lfSk9CX0lEIHx8IFN0cmluZyhEYXRlLm5vdygpKSkucmVwbGFjZSgvW14wLTldL2csICIiKS5zbGljZSgtMTIpOwogIGNvbnN0IHJlc3VsdCA9IGF3YWl0IHBvc3QoIi9hcGkvY29tbXVuaXR5L3JlZ2lzdGVyIiwgewogICAgdXNlcm5hbWU6ICJzdGdlMmUiICsgc3VmZml4LAogICAgZGlzcGxheU5hbWU6ICJTdGFnaW5nIEUyRSBEaXNwb3NhYmxlIiwKICAgIGVtYWlsLAogICAgcGFzc3dvcmQsCiAgfSk7CiAgYXNzZXJ0LmVxdWFsKHJlc3VsdC5yZXNwb25zZS5zdGF0dXMsIDIwMiwgIlJlZ2lzdHJhdGlvbiBkaWQgbm90IHJldHVybiBwZW5kaW5nLXZlcmlmaWNhdGlvbiBIVFRQIDIwMjsgIiArIHNhZmVSZWdpc3RyYXRpb25GYWlsdXJlKHJlc3VsdCkgKyAiLiIpOwogIGFzc2VydC5vayhyZXN1bHQucGF5bG9hZCAmJiByZXN1bHQucGF5bG9hZC5wZW5kaW5nVmVyaWZpY2F0aW9uID09PSB0cnVlLAogICAgIlJlZ2lzdHJhdGlvbiBkaWQgbm90IHJlcG9ydCBwZW5kaW5nVmVyaWZpY2F0aW9uPXRydWUuIik7CiAgYXNzZXJ0LmVxdWFsKHJlc3VsdC5yZXNwb25zZS5oZWFkZXJzLmdldCgic2V0LWNvb2tpZSIpLCBudWxsLAogICAgIlBlbmRpbmcgcmVnaXN0cmF0aW9uIG11c3Qgbm90IGNyZWF0ZSBhIGxvZ2luIHNlc3Npb24uIik7CiAgY29uc29sZS5sb2coIlBBU1M6IGEgZGlzcG9zYWJsZSBzdGFnaW5nIHJlZ2lzdHJhdGlvbiB3YXMgYWNjZXB0ZWQgYW5kIHRoZSBjb25maXJtYXRpb24gZW1haWwgd2FzIHJlcXVlc3RlZC4iKTsKfSBlbHNlIGlmIChhY3Rpb24gPT09ICJjb25maXJtIikgewogIGNvbnN0IGVtYWlsID0gdGVzdEVtYWlsRm9yQ3VycmVudFBpcGVsaW5lKCk7CiAgY29uc3QgcGFzc3dvcmQgPSByZXF1aXJlZCgiU1RBR0lOR19FMkVfUEFTU1dPUkQiKTsKICBjb25zdCB0b2tlbiA9IHJlcXVpcmVkKCJTVEFHSU5HX0UyRV9WRVJJRllfVE9LRU4iKTsKICB2YWxpZGF0ZVBhc3N3b3JkKHBhc3N3b3JkLCAiU1RBR0lOR19FMkVfUEFTU1dPUkQiKTsKICB2YWxpZGF0ZVRva2VuKHRva2VuLCAiU1RBR0lOR19FMkVfVkVSSUZZX1RPS0VOIik7CiAgYXNzZXJ0SnNvblN1Y2Nlc3MoYXdhaXQgcG9zdCgiL2FwaS9jb21tdW5pdHkvdmVyaWZ5LWVtYWlsIiwgeyB0b2tlbiB9KSwgMjAwLCAiRW1haWwgY29uZmlybWF0aW9uIik7CiAgYXNzZXJ0TG9naW5TdWNjZXNzKGF3YWl0IHBvc3QoIi9hcGkvY29tbXVuaXR5L2xvZ2luIiwgeyBlbWFpbCwgcGFzc3dvcmQgfSksIDIwMCwgIkxvZ2luIGFmdGVyIGVtYWlsIGNvbmZpcm1hdGlvbiIpOwogIGNvbnNvbGUubG9nKCJQQVNTOiB0aGUgbGl2ZSBlbWFpbC1jb25maXJtYXRpb24gdG9rZW4gd2FzIGFjY2VwdGVkIG9uY2UgYW5kIGxvZ2luIHdvcmtzIGFmdGVyIGNvbmZpcm1hdGlvbi4iKTsKfSBlbHNlIGlmIChhY3Rpb24gPT09ICJyZXF1ZXN0LXJlc2V0IikgewogIGNvbnN0IGVtYWlsID0gdGVzdEVtYWlsRm9yQ3VycmVudFBpcGVsaW5lKCk7CiAgY29uc3QgcmVzdWx0ID0gYXdhaXQgcG9zdCgiL2FwaS9jb21tdW5pdHkvcmVxdWVzdC1wYXNzd29yZC1yZXNldCIsIHsgZW1haWwgfSk7CiAgYXNzZXJ0SnNvblN1Y2Nlc3MocmVzdWx0LCAyMDAsICJQYXNzd29yZC1yZXNldCByZXF1ZXN0Iik7CiAgYXNzZXJ0Lm9rKHR5cGVvZiByZXN1bHQucGF5bG9hZC5tZXNzYWdlID09PSAic3RyaW5nIiAmJgogICAgcmVzdWx0LnBheWxvYWQubWVzc2FnZS5pbmNsdWRlcygiTuG6v3UgZW1haWwgdGh14buZYyB0w6BpIGtob+G6o24iKSwKICAgICJQYXNzd29yZC1yZXNldCByZXF1ZXN0IG11c3QgcmV0dXJuIHRoZSBnZW5lcmljIHB1YmxpYyByZXNwb25zZS4iKTsKICBjb25zb2xlLmxvZygiUEFTUzogdGhlIHBhc3N3b3JkLXJlc2V0IHJlcXVlc3QgcmV0dXJuZWQgaXRzIGdlbmVyaWMgcmVzcG9uc2UgYW5kIHdhcyBzdWJtaXR0ZWQgdG8gdGhlIHN0YWdpbmcgcmVsYXkuIik7Cn0gZWxzZSBpZiAoYWN0aW9uID09PSAiZmluaXNoLXJlc2V0IikgewogIGNvbnN0IGVtYWlsID0gdGVzdEVtYWlsRm9yQ3VycmVudFBpcGVsaW5lKCk7CiAgY29uc3Qgb2xkUGFzc3dvcmQgPSByZXF1aXJlZCgiU1RBR0lOR19FMkVfUEFTU1dPUkQiKTsKICBjb25zdCBuZXdQYXNzd29yZCA9IHJlcXVpcmVkKCJTVEFHSU5HX0UyRV9ORVdfUEFTU1dPUkQiKTsKICBjb25zdCB0b2tlbiA9IHJlcXVpcmVkKCJTVEFHSU5HX0UyRV9SRVNFVF9UT0tFTiIpOwogIHZhbGlkYXRlUGFzc3dvcmQob2xkUGFzc3dvcmQsICJTVEFHSU5HX0UyRV9QQVNTV09SRCIpOwogIHZhbGlkYXRlUGFzc3dvcmQobmV3UGFzc3dvcmQsICJTVEFHSU5HX0UyRV9ORVdfUEFTU1dPUkQiKTsKICBhc3NlcnQubm90RXF1YWwobmV3UGFzc3dvcmQsIG9sZFBhc3N3b3JkLCAiVGhlIHJlcGxhY2VtZW50IHBhc3N3b3JkIG11c3QgZGlmZmVyIGZyb20gdGhlIG9sZCBwYXNzd29yZC4iKTsKICB2YWxpZGF0ZVRva2VuKHRva2VuLCAiU1RBR0lOR19FMkVfUkVTRVRfVE9LRU4iKTsKICBhc3NlcnRKc29uU3VjY2Vzcyhhd2FpdCBwb3N0KCIvYXBpL2NvbW11bml0eS9yZXNldC1wYXNzd29yZCIsIHsgdG9rZW4sIHBhc3N3b3JkOiBuZXdQYXNzd29yZCB9KSwgMjAwLCAiUGFzc3dvcmQgcmVzZXQiKTsKICBjb25zdCBvbGRMb2dpbiA9IGF3YWl0IHBvc3QoIi9hcGkvY29tbXVuaXR5L2xvZ2luIiwgeyBlbWFpbCwgcGFzc3dvcmQ6IG9sZFBhc3N3b3JkIH0pOwogIGFzc2VydC5lcXVhbChvbGRMb2dpbi5yZXNwb25zZS5zdGF0dXMsIDQwMSwgIlRoZSBwcmV2aW91cyBwYXNzd29yZCBtdXN0IGJlIHJlamVjdGVkIHdpdGggSFRUUCA0MDEgYWZ0ZXIgcmVzZXQuIik7CiAgYXNzZXJ0TG9naW5TdWNjZXNzKGF3YWl0IHBvc3QoIi9hcGkvY29tbXVuaXR5L2xvZ2luIiwgeyBlbWFpbCwgcGFzc3dvcmQ6IG5ld1Bhc3N3b3JkIH0pLCAyMDAsICJMb2dpbiB3aXRoIHJlcGxhY2VtZW50IHBhc3N3b3JkIik7CiAgY29uc29sZS5sb2coIlBBU1M6IHRoZSBsaXZlIHJlc2V0IHRva2VuIHdhcyBhY2NlcHRlZDsgdGhlIG9sZCBwYXNzd29yZCB3YXMgcmVqZWN0ZWQgYW5kIHRoZSByZXBsYWNlbWVudCBwYXNzd29yZCB3b3Jrcy4iKTsKfSBlbHNlIHsKICB0aHJvdyBuZXcgRXJyb3IoIlVua25vd24gYWN0aW9uLiBVc2UgcmVnaXN0ZXIsIGNvbmZpcm0sIHJlcXVlc3QtcmVzZXQsIG9yIGZpbmlzaC1yZXNldC4iKTsKfQoKY29uc29sZS5sb2coIlNhZmV0eTogbm8gdG9rZW5zLCBwYXNzd29yZHMsIHJlc3BvbnNlIGJvZGllcywgb3IgbWFpbGJveCBhZGRyZXNzIHdlcmUgcHJpbnRlZC4gT25seSB0aGUgaXNvbGF0ZWQgc3RhZ2luZyBXb3JrZXIgd2FzIGNvbnRhY3RlZC4iKTsK
+import assert from "node:assert/strict";
+
+const ORIGIN = "https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev";
+const action = process.argv[2];
+
+function required(name) {
+  const value = String(process.env[name] || "").trim();
+  assert.ok(value, "Required CI variable is missing: " + name + ".");
+  return value;
+}
+
+function validateTestEmail(email) {
+  assert.match(
+    email,
+    /^manhdungub\+staging-e2e-[a-z0-9-]+@gmail\.com$/i,
+    "STAGING_E2E_EMAIL must be a unique plus-alias for the project's own Gmail mailbox."
+  );
+}
+
+function testEmailForCurrentPipeline() {
+  const base = required("STAGING_E2E_EMAIL");
+  validateTestEmail(base);
+  const pipelineId = String(process.env.CI_PIPELINE_ID || "").replace(/[^0-9]/g, "").slice(-12);
+  assert.ok(pipelineId, "CI_PIPELINE_ID is required to keep the same disposable email across E2E jobs in one pipeline.");
+  const localPart = base.slice(0, base.lastIndexOf("@"));
+  assert.ok(localPart.length + pipelineId.length + 1 <= 64,
+    "STAGING_E2E_EMAIL local part is too long to add a pipeline-specific suffix.");
+  const email = localPart + "-" + pipelineId + "@gmail.com";
+  return email;
+}
+
+function validateToken(token, name) {
+  assert.match(token, /^[A-Za-z0-9_-]{32,80}$/, name + " is not in the expected opaque token format.");
+}
+
+function validatePassword(password, name) {
+  assert.ok(password.length >= 14 && password.length <= 128, name + " must be 14–128 characters.");
+  assert.ok(/[A-Z]/.test(password) && /[a-z]/.test(password) && /[0-9]/.test(password),
+    name + " must include upper/lowercase letters and digits.");
+}
+
+async function post(path, body) {
+  const response = await fetch(new URL(path, ORIGIN), {
+    method: "POST",
+    redirect: "error",
+    headers: {
+      Origin: ORIGIN,
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(15000),
+  });
+  let payload = null;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+  return { response, payload };
+}
+
+function safeRegistrationFailure(result) {
+  const payload = result.payload && typeof result.payload === "object" ? result.payload : {};
+  const code = typeof payload.code === "string" && /^[A-Z0-9_-]{1,48}$/.test(payload.code)
+    ? payload.code
+    : "NOT_PROVIDED";
+  const knownErrors = new Map([
+    ["Email hoặc tên thành viên đã được sử dụng.", "EMAIL_OR_USERNAME_CONFLICT"],
+    ["Dịch vụ xác nhận email chưa được cấu hình. Tài khoản chưa được tạo; vui lòng thử lại sau.", "EMAIL_RELAY_NOT_CONFIGURED"],
+    ["Không thể gửi email xác nhận. Tài khoản chưa được tạo; vui lòng thử lại sau.", "EMAIL_RELAY_FAILED"],
+    ["Nguồn yêu cầu không được phép.", "ORIGIN_NOT_ALLOWED"],
+    ["Bạn đã thử đăng ký quá nhiều lần. Vui lòng thử lại sau một giờ.", "REGISTRATION_RATE_LIMITED"],
+  ]);
+  const reason = knownErrors.get(typeof payload.error === "string" ? payload.error : "") || "UNCLASSIFIED_RESPONSE";
+  return "HTTP " + result.response.status + "; code=" + code + "; reason=" + reason;
+}
+
+function assertJsonSuccess(result, expectedStatus, label) {
+  assert.equal(result.response.status, expectedStatus, label + " returned unexpected HTTP status " + result.response.status + ".");
+  assert.ok(result.payload && typeof result.payload === "object", label + " did not return JSON.");
+  assert.equal(result.payload.ok, true, label + " did not return ok=true.");
+}
+
+function assertLoginSuccess(result, expectedStatus, label) {
+  assert.equal(result.response.status, expectedStatus, label + " returned unexpected HTTP status " + result.response.status + ".");
+  assert.ok(result.payload && typeof result.payload === "object", label + " did not return JSON.");
+  assert.ok(result.payload.member && typeof result.payload.member === "object",
+    label + " did not return a member object.");
+  assert.ok(typeof result.payload.member.username === "string" && result.payload.member.username.length > 0,
+    label + " did not return a valid member username.");
+}
+
+assert.equal(
+  ORIGIN,
+  "https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev",
+  "This live test must target the isolated staging Worker only."
+);
+
+if (action === "register") {
+  const email = testEmailForCurrentPipeline();
+  const password = required("STAGING_E2E_PASSWORD");
+  validatePassword(password, "STAGING_E2E_PASSWORD");
+  const suffix = (process.env.CI_JOB_ID || String(Date.now())).replace(/[^0-9]/g, "").slice(-12);
+  const result = await post("/api/community/register", {
+    username: "stge2e" + suffix,
+    displayName: "Staging E2E Disposable",
+    email,
+    password,
+  });
+  assert.equal(result.response.status, 202, "Registration did not return pending-verification HTTP 202; " + safeRegistrationFailure(result) + ".");
+  assert.ok(result.payload && result.payload.pendingVerification === true,
+    "Registration did not report pendingVerification=true.");
+  assert.equal(result.response.headers.get("set-cookie"), null,
+    "Pending registration must not create a login session.");
+  console.log("PASS: a disposable staging registration was accepted and the confirmation email was requested.");
+} else if (action === "confirm") {
+  const email = testEmailForCurrentPipeline();
+  const password = required("STAGING_E2E_PASSWORD");
+  const token = required("STAGING_E2E_VERIFY_TOKEN");
+  validatePassword(password, "STAGING_E2E_PASSWORD");
+  validateToken(token, "STAGING_E2E_VERIFY_TOKEN");
+  assertJsonSuccess(await post("/api/community/verify-email", { token }), 200, "Email confirmation");
+  assertLoginSuccess(await post("/api/community/login", { email, password }), 200, "Login after email confirmation");
+  console.log("PASS: the live email-confirmation token was accepted once and login works after confirmation.");
+} else if (action === "request-reset") {
+  const email = testEmailForCurrentPipeline();
+  const result = await post("/api/community/request-password-reset", { email });
+  assertJsonSuccess(result, 200, "Password-reset request");
+  assert.ok(typeof result.payload.message === "string" &&
+    result.payload.message.includes("Nếu email thuộc tài khoản"),
+    "Password-reset request must return the generic public response.");
+  console.log("PASS: the password-reset request returned its generic response and was submitted to the staging relay.");
+} else if (action === "finish-reset") {
+  const email = testEmailForCurrentPipeline();
+  const oldPassword = required("STAGING_E2E_PASSWORD");
+  const newPassword = required("STAGING_E2E_NEW_PASSWORD");
+  const token = required("STAGING_E2E_RESET_TOKEN");
+  validatePassword(oldPassword, "STAGING_E2E_PASSWORD");
+  validatePassword(newPassword, "STAGING_E2E_NEW_PASSWORD");
+  assert.notEqual(newPassword, oldPassword, "The replacement password must differ from the old password.");
+  validateToken(token, "STAGING_E2E_RESET_TOKEN");
+  assertJsonSuccess(await post("/api/community/reset-password", { token, password: newPassword }), 200, "Password reset");
+  const oldLogin = await post("/api/community/login", { email, password: oldPassword });
+  assert.equal(oldLogin.response.status, 401, "The previous password must be rejected with HTTP 401 after reset.");
+  assertLoginSuccess(await post("/api/community/login", { email, password: newPassword }), 200, "Login with replacement password");
+  console.log("PASS: the live reset token was accepted; the old password was rejected and the replacement password works.");
+} else {
+  throw new Error("Unknown action. Use register, confirm, request-reset, or finish-reset.");
+}
+
+console.log("Safety: no tokens, passwords, response bodies, or mailbox address were printed. Only the isolated staging Worker was contacted.");
+
