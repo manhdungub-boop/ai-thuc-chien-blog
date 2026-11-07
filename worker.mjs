@@ -382,7 +382,7 @@ async function handleCommunityApi(request, env) {
       const password = String(payload.password || "");
       if (!/^[a-z0-9_]{3,24}$/.test(username)) return communityJson({ error: "Tên thành viên cần 3–24 ký tự: chữ thường, số hoặc dấu gạch dưới." }, 400, request);
       if (displayName.length < 2 || displayName.length > 40) return communityJson({ error: "Tên hiển thị cần từ 2 đến 40 ký tự." }, 400, request);
-      if (email.length > 254 || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) return communityJson({ error: "Vui lòng nhập email hợp lệ." }, 400, request);
+      if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return communityJson({ error: "Vui lòng nhập email hợp lệ." }, 400, request);
       if (password.length < 10 || password.length > 128) return communityJson({ error: "Mật khẩu cần từ 10 đến 128 ký tự." }, 400, request);
       const ipHash = await sha256Base64Url(ip);
       if (!await communityRateLimit(db, `register:${ipHash}`, 5, 60 * 60 * 1000)) return communityJson({ error: "Bạn đã thử đăng ký quá nhiều lần. Vui lòng thử lại sau một giờ." }, 429, request);
