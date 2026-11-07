@@ -11,6 +11,7 @@ on:
       - "worker.mjs"
       - "migrations/0003_community_oauth_accounts.sql"
       - "tests/staging-google-oidc-runtime.test.mjs"
+      - "tests/staging-google-oauth-route-runtime.test.mjs"
       - "scripts/test_google_oauth_worker_integration.mjs"
       - "scripts/test_google_oauth_migration.py"
       - ".github/workflows/staging-google-oauth-integration.yml"
@@ -38,6 +39,8 @@ jobs:
           node --check scripts/test_google_oauth_worker_integration.mjs
       - name: Run Google OIDC security regression tests against integrated Worker
         run: node --test tests/staging-google-oidc-runtime.test.mjs
+      - name: Exercise complete OAuth route flow with isolated D1 mock
+        run: node --test tests/staging-google-oauth-route-runtime.test.mjs
       - name: Check staging-only OAuth routes and migration contract
         run: node scripts/test_google_oauth_worker_integration.mjs
       - name: Rehearse additive OAuth migration in local SQLite
