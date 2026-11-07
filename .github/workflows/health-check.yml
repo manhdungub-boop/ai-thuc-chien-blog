@@ -128,7 +128,6 @@ jobs:
             "/articles/do-luong-hieu-qua-blog"
             "/sitemap.xml"
             "/feed.xml"
-            "/google4e45ddcf8facb122.html"
           )
           for host in "${hosts[@]}"; do
             echo "Checking live host: $host"
