@@ -7,6 +7,7 @@ on:
     paths:
       - "worker.mjs"
       - "script.js"
+      - "styles.css"
       - ".github/workflows/deploy-preview-worker.yml"
   workflow_dispatch:
 
