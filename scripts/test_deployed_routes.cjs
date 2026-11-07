@@ -39,11 +39,11 @@ async function get(pathname) {
 
   const homepage = pages.get('/');
   assert.match(homepage, /<html\b[^>]*lang=["']vi["']/i, 'Homepage must declare Vietnamese language');
-  const homepageTitle = (homepage.match(/<title[^>]*>([\\s\\S]*?)<\\/title>/i) || [])[1] || '';
+  const homepageTitle = (homepage.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '';
   if (process.env.ALLOW_BACKUP_TITLE_VARIANT === 'true') {
     assert.match(homepageTitle, /AI Thực Chiến/i, 'Backup homepage title must identify the AI Thực Chiến site');
   } else {
-    assert.match(homepage, /<title[^>]*>\\s*AI Thực Chiến\\s*[—-]\\s*Ứng dụng AI vào việc thật\\s*<\\/title>/i, 'Primary Worker root route must return the current homepage title');
+    assert.match(homepage, /<title[^>]*>\s*AI Thực Chiến\s*[—-]\s*Ứng dụng AI vào việc thật\s*<\/title>/i, 'Primary Worker root route must return the current homepage title');
   }
   assert.doesNotMatch(homepage, /LỖI 404|Không tìm thấy trang|Có vẻ đường dẫn/i, 'Root route must never return the branded not-found page');
 
