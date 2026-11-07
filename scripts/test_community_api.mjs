@@ -132,7 +132,7 @@ try {
   assert.equal(resetDone.status, 200, 'Password reset failed: ' + JSON.stringify(resetDonePayload));
   assert.equal(resetDonePayload.ok, true);
   assert.equal(db.passwordResetTokens.length, 0, 'A reset token must be consumed exactly once.');
-  assert.equal(db.sessions.some((s) => s.member_id === registeredPayload.member.id), false,
+  assert.equal(db.sessions.some((s) => s.member_id === loginPayload.member.id), false,
     'Password reset must revoke every existing session.');
   const replay = await call('/password-reset/complete', { method: 'POST', body: { token: resetToken, password: 'MatKhauKhacTotHon456!' } });
   assert.equal(replay.status, 400, 'A reset token must not be reusable.');
@@ -145,7 +145,7 @@ try {
   const expiredTokenHash = createHash('sha256').update(expiredResetToken).digest('base64url');
   db.passwordResetTokens.push({
     token_hash: expiredTokenHash,
-    member_id: registeredPayload.member.id,
+    member_id: loginPayload.member.id,
     created_at: '2000-01-01T00:00:00.000Z',
     expires_at: '2000-01-01T00:30:00.000Z'
   });
