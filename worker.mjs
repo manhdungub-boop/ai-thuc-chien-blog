@@ -365,7 +365,7 @@ async function handleCommunityApi(request, env) {
         await db.prepare("DELETE FROM community_email_verification_tokens WHERE token_hash = ?").bind(tokenHash).run();
         return communityJson({ error: "Liên kết xác nhận không hợp lệ, đã hết hạn hoặc đã được sử dụng." }, 400, request);
       }
-      const updated = await db.prepare("UPDATE community_members SET email_verified_at = ? WHERE id = ?")
+      const updated = await db.prepare("UPDATE community_email_verification_status SET verified_at = ? WHERE member_id = ? AND verified_at IS NULL")
         .bind(now, consumed.member_id).run();
       if (!updated.meta?.changes) return communityJson({ error: "Không tìm thấy tài khoản cần xác nhận." }, 404, request);
       await db.prepare("DELETE FROM community_email_verification_tokens WHERE member_id = ?").bind(consumed.member_id).run();
@@ -393,8 +393,10 @@ async function handleCommunityApi(request, env) {
       const verifyTokenHash = await sha256Base64Url(verifyToken);
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
       try {
-        await db.prepare(`INSERT INTO community_members (id, username, email, display_name, password_salt, password_hash, created_at, email_verified_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`).bind(memberId, username, email, displayName, bytesToBase64Url(salt), passwordHash, now).run();
+        await db.prepare(`INSERT INTO community_members (id, username, email, display_name, password_salt, password_hash, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)`).bind(memberId, username, email, displayName, bytesToBase64Url(salt), passwordHash, now).run();
+        await db.prepare("INSERT INTO community_email_verification_status (member_id, verified_at, created_at) VALUES (?, NULL, ?)")
+          .bind(memberId, now).run();
         await db.prepare("INSERT INTO community_email_verification_tokens (token_hash, member_id, created_at, expires_at) VALUES (?, ?, ?, ?)")
           .bind(verifyTokenHash, memberId, now, expiresAt).run();
         const verifyUrl = new URL("/api/community/verify-email", request.url);
@@ -425,13 +427,15 @@ async function handleCommunityApi(request, env) {
       if (!await communityRateLimit(db, `login-ip:${ipHash}`, 20, 15 * 60 * 1000) || !await communityRateLimit(db, `login-account:${emailHash}:${ipHash}`, 8, 15 * 60 * 1000)) {
         return communityJson({ error: "Bạn đăng nhập quá nhiều lần. Vui lòng thử lại sau ít phút." }, 429, request);
       }
-      const row = await db.prepare("SELECT id, username, email, display_name, password_salt, password_hash, created_at, email_verified_at FROM community_members WHERE email = ? LIMIT 1").bind(email).first();
+      const row = await db.prepare(`SELECT m.id, m.username, m.email, m.display_name, m.password_salt, m.password_hash, m.created_at, v.verified_at
+        FROM community_members m LEFT JOIN community_email_verification_status v ON v.member_id = m.id
+        WHERE m.email = ? LIMIT 1`).bind(email).first();
       let valid = false;
       if (row) {
         try { valid = (await hashCommunityPassword(password, base64UrlToBytes(row.password_salt))) === row.password_hash; } catch (_error) { valid = false; }
       }
       if (!valid) return communityJson({ error: "Email hoặc mật khẩu chưa chính xác." }, 401, request);
-      if (!row.email_verified_at) return communityJson({ error: "Vui lòng xác nhận email trước khi đăng nhập. Hãy mở thư xác nhận trong hộp thư của bạn." }, 403, request);
+      if (!row.verified_at) return communityJson({ error: "Vui lòng xác nhận email trước khi đăng nhập. Hãy mở thư xác nhận trong hộp thư của bạn." }, 403, request);
       const token = await createCommunitySession(db, row.id);
       return communityJson({ member: safeCommunityMember(row) }, 200, request, { "Set-Cookie": communityCookie(token) });
     }
