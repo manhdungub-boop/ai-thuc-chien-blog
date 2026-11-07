@@ -1,6 +1,13 @@
 name: Deploy isolated Preview Worker
 
 on:
+  push:
+    branches:
+      - fix/email-verification-preview-20261107
+    paths:
+      - "worker.mjs"
+      - "script.js"
+      - ".github/workflows/deploy-preview-worker.yml"
   workflow_dispatch:
 
 permissions:
