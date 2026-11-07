@@ -24,8 +24,6 @@ on:
         description: "One-time password-reset token copied from the staging reset email"
         required: false
         type: string
-  pull_request:
-    types: [opened, synchronize, reopened]
 
 permissions:
   contents: read
@@ -51,7 +49,7 @@ jobs:
       - name: Validate inputs and mask one-time tokens
         shell: bash
         env:
-          ACTION: ${{ github.event_name == 'pull_request' && 'register' || inputs.action }}
+          ACTION: ${{ inputs.action }}
           REGISTRATION_RUN_ID: ${{ inputs.registration_run_id }}
           VERIFY_TOKEN: ${{ inputs.verify_token }}
           RESET_TOKEN: ${{ inputs.reset_token }}
@@ -72,7 +70,7 @@ jobs:
       - name: Run staging-only email E2E action
         shell: bash
         env:
-          ACTION: ${{ github.event_name == 'pull_request' && 'register' || inputs.action }}
+          ACTION: ${{ inputs.action }}
           VERIFY_TOKEN: ${{ inputs.verify_token }}
           RESET_TOKEN: ${{ inputs.reset_token }}
           STAGING_E2E_EMAIL: ${{ secrets.STAGING_E2E_EMAIL }}
@@ -97,7 +95,7 @@ jobs:
       - name: Publish safe run metadata
         if: always()
         env:
-          ACTION: ${{ github.event_name == 'pull_request' && 'register' || inputs.action }}
+          ACTION: ${{ inputs.action }}
           RUN_ID: ${{ github.run_id }}
         run: |
           echo "STAGING_E2E_ACTION=$ACTION"
