@@ -93,7 +93,7 @@ const verifyUrl = new URL(sentVerificationPayload.verifyUrl); assert.equal(verif
 const verifyToken = verifyUrl.searchParams.get('token'); assert.match(verifyToken, /^[A-Za-z0-9_-]{32,80}$/);
 assert.ok(sentVerificationPayload.textBody.includes(sentVerificationPayload.verifyUrl));
 assert.ok(sentVerificationPayload.htmlBody.includes('href="' + sentVerificationPayload.verifyUrl + '"'));
-const landing = await worker.fetch(new Request(sentVerificationPayload.verifyUrl), env); assert.equal(landing.status, 200); assert.match(await landing.text(), /Xác nhận email/);
+const landingUrl = new URL(sentVerificationPayload.verifyUrl); assert.equal(landingUrl.pathname, '/'); assert.equal(landingUrl.searchParams.get('verify'), verifyToken); assert.equal(landingUrl.hash, '#cong-dong'); const landing = await worker.fetch(new Request(sentVerificationPayload.verifyUrl), env); assert.equal(landing.status, 200);
 const pendingLogin = await call('/login', { method: 'POST', body: { email: 'member@example.com', password: 'MotMatKhauRieng123!' } }); assert.equal(pendingLogin.status, 403);
 const confirmed = await call('/verify-email', { method: 'POST', body: { token: verifyToken } }); assert.equal(confirmed.status, 200); assert.equal((await confirmed.json()).ok, true);
 assert.equal(db.emailVerificationTokens.length, 0);
