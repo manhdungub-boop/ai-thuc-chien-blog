@@ -31,7 +31,6 @@ function withSecurityHeaders(response, request) {
 const CHAT_ALLOWED_ORIGINS = new Set([
   "https://ai-thuc-chien-blog.manhdungub.workers.dev",
   "https://ai-thuc-chien-blog.pages.dev",
-  "https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev",
 ]);
 const CHAT_RECENT_REQUESTS = new Map();
 
@@ -187,6 +186,7 @@ async function handleChat(request, env) {
 const COMMUNITY_ALLOWED_ORIGINS = new Set([
   "https://ai-thuc-chien-blog.manhdungub.workers.dev",
   "https://ai-thuc-chien-blog.pages.dev",
+  "https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev",
 ]);
 const COMMUNITY_TOPICS = Object.freeze({
   tools: "Công cụ AI",
