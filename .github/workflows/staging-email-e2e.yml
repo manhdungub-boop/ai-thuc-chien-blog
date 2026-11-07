@@ -12,6 +12,7 @@ on:
           - confirm
           - login
           - ownership
+          - session
           - request-reset
           - finish-reset
       registration_run_id:

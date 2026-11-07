@@ -229,8 +229,72 @@ if (action === "register") {
     }
   }
 
+} else if (action === "session") {
+  const email = testEmailForCurrentPipeline();
+  const password = required("STAGING_E2E_PASSWORD");
+  validatePassword(password, "STAGING_E2E_PASSWORD");
+
+  const login = await post("/api/community/login", { email, password });
+  assertLoginSuccess(login, 200, "Staging session login");
+  const setCookie = login.response.headers.get("set-cookie") || "";
+  const cookie = setCookie.split(";")[0];
+  assert.match(cookie, /^__Host-ai_community=[A-Za-z0-9_-]{32,100}$/,
+    "Login did not return the expected secure session cookie.");
+  assert.match(setCookie, /HttpOnly/i, "Session cookie must be HttpOnly.");
+  assert.match(setCookie, /Secure/i, "Session cookie must be Secure.");
+  assert.match(setCookie, /SameSite=Lax/i, "Session cookie must use SameSite=Lax.");
+  assert.match(setCookie, /Path=\//i, "Session cookie must be scoped to root path.");
+
+  async function requestWithCookie(path, method, body) {
+    const response = await fetch(new URL(path, ORIGIN), {
+      method,
+      redirect: "error",
+      headers: {
+        Origin: ORIGIN,
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store",
+        Cookie: cookie,
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      signal: AbortSignal.timeout(15000),
+    });
+    let payload = null;
+    try { payload = await response.json(); } catch { payload = null; }
+    return { response, payload };
+  }
+
+  const meBefore = await requestWithCookie("/api/community/me", "GET");
+  assert.equal(meBefore.response.status, 200, "/me must return HTTP 200 for an authenticated member.");
+  assert.equal(meBefore.payload?.member?.username, login.payload.member.username,
+    "/me must resolve the same member as the login response.");
+
+  const logout = await requestWithCookie("/api/community/logout", "POST", {});
+  assert.equal(logout.response.status, 200, "Logout must return HTTP 200.");
+  assert.equal(logout.payload?.ok, true, "Logout must return ok=true.");
+  const cleared = logout.response.headers.get("set-cookie") || "";
+  assert.match(cleared, /Max-Age=0/i, "Logout must expire the session cookie.");
+  assert.match(cleared, /HttpOnly/i, "Logout expiry cookie must remain HttpOnly.");
+  assert.match(cleared, /Secure/i, "Logout expiry cookie must remain Secure.");
+
+  const meAfter = await requestWithCookie("/api/community/me", "GET");
+  assert.equal(meAfter.response.status, 200, "/me should remain a safe public session-status endpoint after logout.");
+  assert.equal(meAfter.payload?.member, null, "The old session cookie must no longer resolve a member after logout.");
+
+  const messagesAfter = await requestWithCookie("/api/community/messages?topic=tools", "GET");
+  assert.equal(messagesAfter.response.status, 401, "A logged-out session must not read community messages.");
+  const postAfter = await requestWithCookie("/api/community/messages", "POST", { topic: "tools", body: "must not be created" });
+  assert.equal(postAfter.response.status, 401, "A logged-out session must not create community messages.");
+  const deleteAfter = await requestWithCookie("/api/community/messages/00000000-0000-4000-8000-000000000000", "DELETE");
+  assert.equal(deleteAfter.response.status, 401, "A logged-out session must not delete community messages.");
+
+  const logoutAgain = await requestWithCookie("/api/community/logout", "POST", {});
+  assert.equal(logoutAgain.response.status, 200, "Repeated logout must be safe and idempotent.");
+  assert.equal(logoutAgain.payload?.ok, true, "Repeated logout must return ok=true.");
+  console.log("PASS: secure session cookie; /me authenticated; logout revokes session; old cookie denied message GET/POST/DELETE; repeated logout is safe.");
+
 } else {
-  throw new Error("Unknown action. Use register, confirm, login, request-reset, or finish-reset.");
+  throw new Error("Unknown action. Use register, confirm, login, session, ownership, request-reset, or finish-reset.");
 }
 
 console.log("Safety: no tokens, passwords, response bodies, or mailbox address were printed. Only the isolated staging Worker was contacted.");
