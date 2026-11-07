@@ -101,8 +101,9 @@ try {
   const resetCookie = registered.headers.get('set-cookie').split(';')[0];
   assert.ok(db.sessions.some((s) => s.member_id === registeredPayload.member.id));
   const resetDone = await call('/password-reset/complete', { method: 'POST', body: { token: resetToken, password: 'MatKhauMoiTotHon123!' } });
-  assert.equal(resetDone.status, 200);
-  assert.equal((await resetDone.json()).ok, true);
+  const resetDonePayload = await resetDone.json();
+  assert.equal(resetDone.status, 200, 'Password reset failed: ' + JSON.stringify(resetDonePayload));
+  assert.equal(resetDonePayload.ok, true);
   assert.equal(db.sessions.some((s) => s.member_id === registeredPayload.member.id), false,
     'Password reset must revoke every existing session.');
   const replay = await call('/password-reset/complete', { method: 'POST', body: { token: resetToken, password: 'MatKhauKhacTotHon456!' } });
