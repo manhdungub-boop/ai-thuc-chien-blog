@@ -355,7 +355,7 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
 
   const isPreviewPasswordReset = window.location.hostname === previewHost && Boolean(pendingResetToken);
   const isPreviewEmailVerification = window.location.hostname === previewHost && Boolean(pendingVerifyToken);
-  if (window.location.hostname !== primaryHost && !isPreviewPasswordReset && !isPreviewEmailVerification) {
+  if (window.location.hostname !== primaryHost && window.location.hostname !== previewHost && !isPreviewPasswordReset && !isPreviewEmailVerification) {
     authPanel.hidden = true;
     memberPanel.hidden = true;
     loginPrompt.hidden = true;
