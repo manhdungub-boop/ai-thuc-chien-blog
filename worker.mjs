@@ -187,6 +187,7 @@ const COMMUNITY_ALLOWED_ORIGINS = new Set([
   "https://ai-thuc-chien-blog.manhdungub.workers.dev",
   "https://ai-thuc-chien-blog.pages.dev",
   "https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev",
+  "https://fix-email-verification-prev-ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev",
 ]);
 const COMMUNITY_TOPICS = Object.freeze({
   tools: "Công cụ AI",
