@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
-      CLOUDFLARE_API_TOKEN: \${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: "92cf091bbac8b4879ec65feb30b4715b"
     steps:
       - name: Checkout feature branch
@@ -30,7 +30,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          [[ -n "\${CLOUDFLARE_API_TOKEN:-}" ]] || { echo "::error::CLOUDFLARE_WORKERS_API_TOKEN is missing."; exit 1; }
+          [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]] || { echo "::error::CLOUDFLARE_WORKERS_API_TOKEN is missing."; exit 1; }
           python3 - <<'PY'
           import json
           from pathlib import Path
