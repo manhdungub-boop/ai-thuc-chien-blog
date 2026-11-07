@@ -17,16 +17,19 @@ function validateTestEmail(email) {
   );
 }
 
-function testEmailForCurrentPipeline() {
+function testEmailForPipelineId(rawPipelineId) {
   const base = required("STAGING_E2E_EMAIL");
   validateTestEmail(base);
-  const pipelineId = String(process.env.CI_PIPELINE_ID || "").replace(/[^0-9]/g, "").slice(-12);
-  assert.ok(pipelineId, "CI_PIPELINE_ID is required to keep the same disposable email across E2E jobs in one pipeline.");
+  const pipelineId = String(rawPipelineId || "").replace(/[^0-9]/g, "").slice(-12);
+  assert.ok(pipelineId, "A valid registration run ID is required to derive the disposable test email.");
   const localPart = base.slice(0, base.lastIndexOf("@"));
   assert.ok(localPart.length + pipelineId.length + 1 <= 64,
     "STAGING_E2E_EMAIL local part is too long to add a pipeline-specific suffix.");
-  const email = localPart + "-" + pipelineId + "@gmail.com";
-  return email;
+  return localPart + "-" + pipelineId + "@gmail.com";
+}
+
+function testEmailForCurrentPipeline() {
+  return testEmailForPipelineId(process.env.CI_PIPELINE_ID);
 }
 
 function validateToken(token, name) {
@@ -158,6 +161,74 @@ if (action === "register") {
   assert.equal(oldLogin.response.status, 401, "The previous password must be rejected with HTTP 401 after reset.");
   assertLoginSuccess(await post("/api/community/login", { email, password: newPassword }), 200, "Login with replacement password");
   console.log("PASS: the live reset token was accepted; the old password was rejected and the replacement password works.");
+} else if (action === "ownership") {
+  const firstEmail = testEmailForPipelineId(process.env.CI_PIPELINE_ID);
+  const secondEmail = testEmailForPipelineId(required("STAGING_E2E_OTHER_PIPELINE_ID"));
+  const password = required("STAGING_E2E_PASSWORD");
+  validatePassword(password, "STAGING_E2E_PASSWORD");
+
+  async function loginAndGetCookie(email) {
+    const result = await post("/api/community/login", { email, password });
+    assertLoginSuccess(result, 200, "Staging ownership-test login");
+    const setCookie = result.response.headers.get("set-cookie") || "";
+    const cookie = setCookie.split(";")[0];
+    assert.match(cookie, /^__Host-ai_community=[A-Za-z0-9_-]{32,100}$/,
+      "Login did not return the expected secure community session cookie.");
+    return cookie;
+  }
+
+  async function requestAsMember(path, method, cookie, body) {
+    const response = await fetch(new URL(path, ORIGIN), {
+      method,
+      redirect: "error",
+      headers: {
+        Origin: ORIGIN,
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store",
+        Cookie: cookie,
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      signal: AbortSignal.timeout(15000),
+    });
+    let payload = null;
+    try { payload = await response.json(); } catch { payload = null; }
+    return { response, payload };
+  }
+
+  const cookieA = await loginAndGetCookie(firstEmail);
+  const cookieB = await loginAndGetCookie(secondEmail);
+  const marker = "STAGING E2E ownership check " + String(process.env.CI_JOB_ID || Date.now()).replace(/[^0-9]/g, "");
+  let messageId = "";
+  try {
+    const created = await requestAsMember("/api/community/messages", "POST", cookieB, { topic: "tools", body: marker });
+    assert.equal(created.response.status, 201, "Member B could not create the temporary ownership-test message.");
+    assert.ok(typeof created.payload?.message?.id === "string" && /^[0-9a-f-]{36}$/i.test(created.payload.message.id),
+      "Message creation did not return a valid message ID.");
+    messageId = created.payload.message.id;
+
+    const crossDelete = await requestAsMember("/api/community/messages/" + messageId, "DELETE", cookieA);
+    assert.equal(crossDelete.response.status, 404, "Member A must not be able to delete Member B's message.");
+    assert.equal(crossDelete.payload?.error, "Không tìm thấy tin nhắn hoặc bạn không có quyền xóa.",
+      "Cross-member deletion did not return the expected ownership-denial response.");
+
+    const visibleToOwner = await requestAsMember("/api/community/messages?topic=tools", "GET", cookieB);
+    assert.equal(visibleToOwner.response.status, 200, "Member B could not read the discussion after the denied cross-delete.");
+    assert.ok(Array.isArray(visibleToOwner.payload?.messages) &&
+      visibleToOwner.payload.messages.some((item) => item.id === messageId && item.body === marker),
+      "Member B's message disappeared after Member A's denied delete attempt.");
+
+    const ownDelete = await requestAsMember("/api/community/messages/" + messageId, "DELETE", cookieB);
+    assert.equal(ownDelete.response.status, 200, "Member B could not delete their own temporary test message.");
+    assert.equal(ownDelete.payload?.ok, true, "Member B's own deletion did not return ok=true.");
+    messageId = "";
+    console.log("PASS: cross-member delete denied (HTTP 404); owner retained visibility and successfully deleted own test message.");
+  } finally {
+    if (messageId) {
+      await requestAsMember("/api/community/messages/" + messageId, "DELETE", cookieB).catch(() => {});
+    }
+  }
+
 } else {
   throw new Error("Unknown action. Use register, confirm, login, request-reset, or finish-reset.");
 }

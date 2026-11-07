@@ -11,6 +11,7 @@ on:
           - register
           - confirm
           - login
+          - ownership
           - request-reset
           - finish-reset
       registration_run_id:
@@ -23,6 +24,10 @@ on:
         type: string
       reset_token:
         description: "One-time password-reset token copied from the staging reset email"
+        required: false
+        type: string
+      other_registration_run_id:
+        description: "Second original registration run ID (required for ownership test)"
         required: false
         type: string
 
@@ -54,10 +59,15 @@ jobs:
           REGISTRATION_RUN_ID: ${{ inputs.registration_run_id }}
           VERIFY_TOKEN: ${{ inputs.verify_token }}
           RESET_TOKEN: ${{ inputs.reset_token }}
+          OTHER_REGISTRATION_RUN_ID: ${{ inputs.other_registration_run_id }}
         run: |
           set -euo pipefail
           if [[ "$ACTION" != "register" ]]; then
             [[ "$REGISTRATION_RUN_ID" =~ ^[0-9]{1,20}$ ]] || { echo "A valid original registration run ID is required."; exit 1; }
+          fi
+          if [[ "$ACTION" == "ownership" ]]; then
+            [[ "$OTHER_REGISTRATION_RUN_ID" =~ ^[0-9]{1,20}$ ]] || { echo "A valid second registration run ID is required for ownership testing."; exit 1; }
+            [[ "$OTHER_REGISTRATION_RUN_ID" != "$REGISTRATION_RUN_ID" ]] || { echo "Ownership testing requires two different registration run IDs."; exit 1; }
           fi
           if [[ "$ACTION" == "confirm" ]]; then
             [[ "$VERIFY_TOKEN" =~ ^[A-Za-z0-9_-]{32,80}$ ]] || { echo "A valid one-time verification token is required."; exit 1; }
@@ -74,6 +84,7 @@ jobs:
           ACTION: ${{ inputs.action }}
           VERIFY_TOKEN: ${{ inputs.verify_token }}
           RESET_TOKEN: ${{ inputs.reset_token }}
+          STAGING_E2E_OTHER_PIPELINE_ID: ${{ inputs.other_registration_run_id }}
           STAGING_E2E_EMAIL: ${{ secrets.STAGING_E2E_EMAIL }}
           STAGING_E2E_PASSWORD: ${{ secrets.STAGING_E2E_PASSWORD }}
           CI_PIPELINE_ID: ${{ inputs.registration_run_id || github.run_id }}
