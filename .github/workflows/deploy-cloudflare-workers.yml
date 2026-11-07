@@ -34,6 +34,12 @@ on:
       - "scripts/test_worker_headers.mjs"
       - ".github/workflows/deploy-cloudflare-workers.yml"
   workflow_dispatch:
+    inputs:
+      confirm_production_worker_and_d1_changes:
+        description: "Required: explicitly approve deploying the Production Worker and applying pending Production D1 migrations."
+        required: true
+        type: boolean
+        default: false
 permissions:
   contents: read
 
@@ -44,7 +50,7 @@ concurrency:
 jobs:
   deploy:
     # Pushes validate the merge but cannot deploy. Only an explicit manual dispatch may deploy production.
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.confirm_production_worker_and_d1_changes == true
     runs-on: ubuntu-latest
     steps:
       - name: Check out source
