@@ -11,6 +11,7 @@ on:
       - "migrations/**"
       - "scripts/test_auth_preview_oauth_http.mjs"
       - ".github/workflows/deploy-auth-app-preview.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
