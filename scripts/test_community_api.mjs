@@ -96,8 +96,8 @@ const pendingLogin = await call('/login', { method: 'POST', body: { email: 'memb
 const confirmed = await call('/verify-email', { method: 'POST', body: { token: verifyToken } }); assert.equal(confirmed.status, 200); assert.equal((await confirmed.json()).ok, true);
 assert.equal(db.emailVerificationTokens.length, 0);
 const verificationReplay = await call('/verify-email', { method: 'POST', body: { token: verifyToken } }); assert.equal(verificationReplay.status, 400, 'A verification token must be single-use.');
-const login = await call('/login', { method: 'POST', body: { email: 'member@example.com', password: 'MotMatKhauRieng123!' } }); assert.equal(login.status, 200); assert.equal((await login.json()).member.username, 'thanhvien_1');
-const setCookie = login.headers.get('set-cookie'); assert.match(setCookie, /HttpOnly/); assert.match(setCookie, /Secure/); assert.match(setCookie, /SameSite=Lax/); assert.match(setCookie, /Path=\\//); const cookie = setCookie.split(';')[0];
+const login = await call('/login', { method: 'POST', body: { email: 'member@example.com', password: 'MotMatKhauRieng123!' } }); assert.equal(login.status, 200); const loginPayload = await login.json(); assert.equal(loginPayload.member.username, 'thanhvien_1');
+const setCookie = login.headers.get('set-cookie'); assert.match(setCookie, /HttpOnly/); assert.match(setCookie, /Secure/); assert.match(setCookie, /SameSite=Lax/); assert.match(setCookie, /Path=\//); const cookie = setCookie.split(';')[0];
 const me = await call('/me', { cookie }); assert.equal(me.status, 200); assert.equal((await me.json()).member.username, 'thanhvien_1');
 const sent = await call('/messages', { method: 'POST', cookie, body: { topic: 'automation', body: 'Tôi đang thử một workflow có bước duyệt.' } }); assert.equal(sent.status, 201); assert.equal((await sent.json()).message.topic, 'automation');
 const listed = await call('/messages?topic=automation', { cookie }); assert.equal(listed.status, 200); const listedPayload = await listed.json(); assert.equal(listedPayload.messages.length, 1); assert.equal(listedPayload.messages[0].own, true);
@@ -125,7 +125,7 @@ try {
   assert.equal(unknownReset.status, 200);
   assert.equal((await unknownReset.json()).message, resetRequestPayload.message);
 
-  assert.ok(db.sessions.some((s) => s.member_id === registeredPayload.member.id));
+  assert.ok(db.sessions.some((s) => s.member_id === loginPayload.member.id));
   assert.equal(db.passwordResetTokens.length, 1);
   const resetDone = await call('/password-reset/complete', { method: 'POST', body: { token: resetToken, password: 'MatKhauMoiTotHon123!' } });
   const resetDonePayload = await resetDone.json();
