@@ -60,7 +60,24 @@ class MockD1 {
 const origin = 'https://ai-thuc-chien-blog.manhdungub.workers.dev';
 const db = new MockD1(); const env = { DB: db, ASSETS: { fetch: async () => new Response('asset') }, COMMUNITY_EMAIL_RELAY_URL: 'https://mail-relay.example.test/exec', COMMUNITY_EMAIL_RELAY_SECRET: 'test-shared-secret' };
 const originalFetch = globalThis.fetch; let capturedEmail = null; let relayResult = { ok: true };
-globalThis.fetch = async (input, init = {}) => { if (String(input) === 'https://mail-relay.example.test/exec') { capturedEmail = JSON.parse(init.body); assert.equal(capturedEmail.secret, 'test-shared-secret'); return new Response(JSON.stringify(relayResult), { status: 200, headers: { 'Content-Type': 'application/json' } }); } return originalFetch(input, init); };
+let relayRedirectLocation = 'https://script.googleusercontent.com/macros/echo?user_content_key=test';
+let omitRelayRedirectLocation = false;
+globalThis.fetch = async (input, init = {}) => {
+  if (String(input) === 'https://mail-relay.example.test/exec') {
+    assert.equal(init.method, 'POST');
+    assert.equal(init.redirect, 'manual', 'Apps Script POST must not automatically follow redirects.');
+    capturedEmail = JSON.parse(init.body);
+    assert.equal(capturedEmail.secret, 'test-shared-secret');
+    return new Response(null, { status: 302, headers: omitRelayRedirectLocation ? {} : { Location: relayRedirectLocation } });
+  }
+  const destination = new URL(String(input));
+  assert.equal(destination.origin, 'https://script.googleusercontent.com');
+  assert.equal(init.method, 'GET', 'Apps Script response URL must be fetched with GET.');
+  assert.equal(init.body, undefined, 'Never forward relay POST body or secret to the redirect URL.');
+  assert.equal(init.headers, undefined, 'Never forward application headers to the redirect URL.');
+  assert.equal(init.redirect, 'manual');
+  return new Response(JSON.stringify(relayResult), { status: 200, headers: { 'Content-Type': 'application/json' } });
+};
 const call = (path, { method = 'GET', body, cookie, originHeader = origin, ip = '198.51.100.77' } = {}) => worker.fetch(new Request(`https://example.test/api/community${path}`, { method, headers: { ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(cookie ? { Cookie: cookie } : {}), ...(originHeader ? { Origin: originHeader } : {}), 'CF-Connecting-IP': ip }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }), env);
 const unconfigured = await worker.fetch(new Request('https://example.test/api/community/me'), {}); assert.equal(unconfigured.status, 503); assert.match((await unconfigured.json()).error, /cơ sở dữ liệu/i);
 const badOrigin = await call('/register', { method: 'POST', originHeader: 'https://evil.example', body: {} }); assert.equal(badOrigin.status, 403);
@@ -98,6 +115,24 @@ assert.match((await noRelay.json()).error, /xác nhận email chưa được c�
 assert.deepEqual([db.members.length, db.tokens.length, db.rates.size], countsBeforeNoRelay);
 env.COMMUNITY_EMAIL_RELAY_URL = oldRelayUrl;
 env.COMMUNITY_EMAIL_RELAY_SECRET = oldRelaySecret;
+
+// The Apps Script 302 must be followed only to the exact Googleusercontent HTTPS origin.
+const relayBoundaryCounts = [db.members.length, db.tokens.length];
+relayRedirectLocation = 'https://script.googleusercontent.com:8443/macros/echo?user_content_key=unsafe';
+const unsafePortRegistration = await call('/register', { method: 'POST', body: { username: 'unsafe_port_user', displayName: 'Unsafe Port', email: 'unsafe-port@example.invalid', password: 'Temporary-Unsafe-Port-Password-123!' } });
+assert.equal(unsafePortRegistration.status, 503);
+assert.deepEqual([db.members.length, db.tokens.length], relayBoundaryCounts, 'unsafe redirect port must not leave a pending member or token');
+relayRedirectLocation = 'https://user:pass@script.googleusercontent.com/macros/echo?user_content_key=unsafe';
+const credentialRegistration = await call('/register', { method: 'POST', body: { username: 'credential_user', displayName: 'Credential Redirect', email: 'credential-redirect@example.invalid', password: 'Temporary-Credential-Password-123!' } });
+assert.equal(credentialRegistration.status, 503);
+assert.deepEqual([db.members.length, db.tokens.length], relayBoundaryCounts, 'credential-bearing redirect must not leave a pending member or token');
+relayRedirectLocation = 'https://script.googleusercontent.com/macros/echo?user_content_key=test';
+omitRelayRedirectLocation = true;
+const missingLocationRegistration = await call('/register', { method: 'POST', body: { username: 'missing_location_user', displayName: 'Missing Location', email: 'missing-location@example.invalid', password: 'Temporary-Missing-Location-Password-123!' } });
+assert.equal(missingLocationRegistration.status, 503);
+assert.deepEqual([db.members.length, db.tokens.length], relayBoundaryCounts, 'redirect without Location must not leave a pending member or token');
+omitRelayRedirectLocation = false;
+
 const registered = await call('/register', { method: 'POST', body: { username: 'thanhvien_1', displayName: 'Thành viên thử', email: 'member@example.com', password: 'MotMatKhauRieng123!' } }); assert.equal(registered.status, 201);
 const registeredPayload = await registered.json(); assert.equal(registeredPayload.verificationRequired, true); assert.equal(JSON.stringify(registeredPayload).includes('MotMatKhauRieng123!'), false); assert.equal(registered.headers.get('set-cookie'), null); assert.ok(capturedEmail); assert.equal(capturedEmail.to, 'member@example.com');
 const loginBeforeVerification = await call('/login', { method: 'POST', body: { email: 'member@example.com', password: 'MotMatKhauRieng123!' } }); assert.equal(loginBeforeVerification.status, 403); assert.equal((await loginBeforeVerification.json()).code, 'EMAIL_NOT_VERIFIED');
