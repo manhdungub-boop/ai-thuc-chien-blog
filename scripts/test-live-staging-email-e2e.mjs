@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-const ORIGIN = "https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev";
+const ORIGIN = "https://fix-atomic-email-tokens-202-ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev";
 const action = process.argv[2];
 
 function required(name) {
@@ -99,7 +99,7 @@ function assertLoginSuccess(result, expectedStatus, label) {
 
 assert.equal(
   ORIGIN,
-  "https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev",
+  "https://fix-atomic-email-tokens-202-ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev",
   "This live test must target the isolated branch Preview Worker only."
 );
 
