@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="vi"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Ngân hàng AI: thư viện công cụ AI theo nhu cầu, tính năng, gói miễn phí và giới hạn sử dụng được đối chiếu từ nguồn chính thức.">
+<meta name="theme-color" content="#0b1020"><meta name="robots" content="index,follow"><meta name="author" content="DUNG - AI">
+<link rel="canonical" href="https://ai-thuc-chien-blog.manhdungub.workers.dev/ngan-hang-ai.html"><link rel="icon" type="image/svg+xml" href="favicon.svg">
+<meta property="og:type" content="website"><meta property="og:locale" content="vi_VN"><meta property="og:site_name" content="AI Thực Chiến"><meta property="og:title" content="Ngân hàng AI — Thư viện công cụ AI"><meta property="og:description" content="Tra cứu công cụ AI theo nhu cầu và mức phí."><meta property="og:url" content="https://ai-thuc-chien-blog.manhdungub.workers.dev/ngan-hang-ai.html">
+<meta name="twitter:card" content="summary"><title>Ngân hàng AI — Thư viện công cụ AI | AI Thực Chiến</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap" onload="this.onload=null;this.rel='stylesheet'"><noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap"></noscript>
+<link rel="stylesheet" href="styles.css">
+<style>
+.ai-bank{max-width:1120px;margin:auto;padding-top:58px;padding-bottom:76px}.bank-hero{padding:34px;border:1px solid var(--line);border-radius:20px;background:radial-gradient(circle at 85% 15%,#6f65bb33,transparent 34%),linear-gradient(135deg,#171b35,#102b30)}.bank-hero h1{font:800 clamp(38px,6vw,64px)/1.12 Manrope,sans-serif;letter-spacing:-2px;margin:12px 0}.bank-hero h1 em{color:var(--mint);font-style:normal}.bank-hero p{max-width:760px;color:#c2cbe0;font-size:14px;line-height:1.9;margin:0}.bank-meta{display:flex;gap:9px;flex-wrap:wrap;margin-top:20px}.bank-meta span{border:1px solid #ffffff25;border-radius:999px;padding:7px 11px;color:#dce3f2;font-size:10px}.bank-controls{display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:12px;margin:25px 0 12px}.bank-controls input,.bank-controls select{width:100%;min-height:48px;border:1px solid var(--line);border-radius:10px;background:#10182a;color:var(--ink);font:inherit;font-size:12px;padding:0 14px}.bank-filters{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 18px}.bank-filters button{border:1px solid var(--line);border-radius:999px;background:#111a2c;color:#b9c4da;padding:9px 13px;font:inherit;font-size:10px;cursor:pointer}.bank-filters button[aria-pressed=true]{background:#183630;border-color:#8bf0ce88;color:#baffea}.bank-count{color:var(--muted);font-size:11px;margin:0 0 14px}.bank-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.tool-card{display:flex;flex-direction:column;min-width:0;border:1px solid var(--line);border-radius:15px;background:linear-gradient(155deg,#151e32,#0e1525);padding:19px}.tool-top{display:flex;align-items:center;gap:12px}.tool-mark{display:grid;place-items:center;width:43px;height:43px;flex:0 0 auto;border-radius:13px;background:linear-gradient(135deg,#a99bff,#8bf0ce);color:#101525;font:800 12px Manrope}.tool-top h2{font:700 17px Manrope;margin:0 0 4px}.tool-cat{font-size:9px;color:#9faac3;letter-spacing:.7px;text-transform:uppercase}.tool-card>p{font-size:11px;line-height:1.8;color:#b9c4d8;margin:15px 0}.tool-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto}.tool-tags span{font-size:9px;border-radius:999px;padding:5px 8px;background:#ffffff0b;color:#cbd4e6;border:1px solid #ffffff14}.tool-tags .free{color:#9ff0cf;border-color:#8bf0ce44;background:#17342f}.tool-tags .limited{color:#ffe0a4;border-color:#e8bd6a44;background:#392d1b}.tool-links{display:flex;gap:13px;flex-wrap:wrap;margin-top:16px;padding-top:13px;border-top:1px solid var(--line)}.tool-links a{font-size:10px;color:var(--mint);text-decoration:none}.tool-links a:hover{text-decoration:underline}.bank-note{margin-top:22px;padding:17px;border:1px solid var(--line);border-radius:12px;color:#aeb9ce;font-size:10px;line-height:1.9}.bank-note strong{color:#e7edf8}.bank-empty{grid-column:1/-1;padding:28px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:12px}.tool-card[hidden]{display:none!important}
+@media(max-width:850px){.bank-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:600px){.ai-bank{padding-top:28px}.bank-hero{padding:23px 18px}.bank-controls{grid-template-columns:1fr}.bank-grid{grid-template-columns:1fr}.tool-card{padding:17px}}
+</style>
+<style>
+.bank-controls-extended{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin:22px 0 14px}
+.bank-controls-extended input,.bank-controls-extended select{width:100%;min-width:0;min-height:44px;border:1px solid var(--line);border-radius:11px;background:#141a2c;color:#f2f4fb;padding:10px 12px;font:500 12px 'Be Vietnam Pro',sans-serif}
+.bank-filters{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+.bank-filters button,.bank-pagination button{border:1px solid var(--line);border-radius:999px;background:#171d30;color:#dbe2f2;padding:8px 12px;font:600 11px 'Be Vietnam Pro',sans-serif;cursor:pointer}
+.bank-filters button[aria-pressed=true],.bank-pagination button[aria-current=page]{background:#8bf0ce;color:#102027;border-color:#8bf0ce}
+.bank-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:14px;margin:18px 0 24px}
+.tool-card{min-width:0;border:1px solid var(--line);border-radius:15px;background:#141a2b;padding:17px;display:flex;flex-direction:column;gap:11px}
+.tool-card h2{margin:0;color:#f6f7fc;font-size:17px}.tool-card p{margin:0;color:#b9c3d8;font-size:12px;line-height:1.75}
+.tool-top{display:flex;align-items:center;gap:11px}.tool-mark{display:grid;place-items:center;min-width:42px;height:42px;padding:4px;border-radius:12px;background:#282b49;color:#a9f1d7;font-size:11px;font-weight:800}
+.tool-cat,.tool-meta{color:#9daac3;font-size:10px}.tool-tags{display:flex;flex-wrap:wrap;gap:6px}.tool-tags span{border:1px solid #ffffff20;border-radius:999px;padding:5px 8px;color:#d6dcec;font-size:9px}.tool-tags .free{color:#9bf0cc;border-color:#70d9b54d}.tool-tags .limited{color:#ffd58e;border-color:#f4bf634d}.tool-tags .review{color:#ffd58e;border-color:#f4bf634d}.tool-tags .verified{color:#9bf0cc;border-color:#70d9b54d}
+.tool-links{display:flex;flex-wrap:wrap;gap:12px;margin-top:auto;padding-top:4px}.tool-links a{color:#a9e9d4;font-size:10px;font-weight:700;text-decoration:none}.tool-links a:hover{text-decoration:underline}
+.bank-count{color:#b9c3d8;font-size:12px}.bank-empty{grid-column:1/-1;color:#bac5d9;font-size:13px;padding:22px 4px}
+.bank-pagination{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin:12px 0 28px}.bank-pagination button:disabled{opacity:.35;cursor:not-allowed}.bank-page-label{color:#aab4ca;font-size:11px;padding:0 7px}
+@media(max-width:600px){.bank-controls-extended{grid-template-columns:1fr 1fr}.bank-controls-extended input{grid-column:1/-1}.bank-hero{padding:23px}}
+</style>
+</head><body>
+<a class="skip-link" href="#main-content">Bỏ qua đến nội dung chính</a>
+<header class="site-header"><a class="brand" href="./"><span class="brand-mark">AI</span><span>AI <b>Thực Chiến</b></span></a><a class="header-cta" href="./">← Trang chủ</a></header>
+<main id="main-content" class="section ai-bank">
+<section class="bank-hero"><div class="section-kicker">THƯ VIỆN CÔNG CỤ · DANH MỤC ĐƯỢC RÀ SOÁT ĐỊNH KỲ</div><h1>Ngân hàng <em>AI.</em></h1><p>Tra cứu công cụ theo việc bạn cần làm — từ viết, nghiên cứu, thiết kế, video đến lập trình và tự động hóa. Ưu tiên lựa chọn có thể bắt đầu miễn phí; thông tin gói và giới hạn dẫn về trang chính thức để bạn tự kiểm tra trước khi đăng ký.</p><div class="bank-meta"><span>Danh mục dữ liệu được cập nhật định kỳ</span><span>Nhiều nhóm nhu cầu</span><span>Ưu tiên miễn phí</span><span>Không xếp hạng trả phí</span></div></section>
+<div class="bank-controls bank-controls-extended">
+<label class="sr-only" for="bank-search">Tìm công cụ AI</label><input id="bank-search" type="search" placeholder="Tìm tên, nhà cung cấp, tính năng hoặc nhu cầu…">
+<label class="sr-only" for="bank-cost">Lọc mô hình giá</label><select id="bank-cost"><option value="all">Tất cả mô hình giá</option><option value="free">Miễn phí hoàn toàn</option><option value="freemium">Freemium</option><option value="trial_or_credits">Dùng thử / tín dụng giới hạn</option><option value="paid">Trả phí</option><option value="self_hosted_free_and_cloud_paid">Mã nguồn mở / tự lưu trữ</option><option value="unknown">Chưa rõ mô hình giá</option></select>
+<label class="sr-only" for="bank-license">Lọc giấy phép</label><select id="bank-license"><option value="all">Tất cả giấy phép</option></select>
+<label class="sr-only" for="bank-platform">Lọc nền tảng</label><select id="bank-platform"><option value="all">Tất cả nền tảng</option></select>
+<label class="sr-only" for="bank-verification">Trạng thái xác minh</label><select id="bank-verification"><option value="all">Mọi trạng thái xác minh</option><option value="verified">Đã xác minh</option><option value="needs_review">Cần rà soát</option><option value="stale">Thông tin cũ</option><option value="disputed">Có tranh luận</option></select>
+<label class="sr-only" for="bank-sort">Sắp xếp</label><select id="bank-sort"><option value="name">Tên A–Z</option><option value="vendor">Nhà cung cấp A–Z</option><option value="recent">Kiểm tra gần đây</option></select>
+</div>
+<div class="bank-filters" id="bank-filters" role="group" aria-label="Lọc theo danh mục"><button type="button" data-filter="all" aria-pressed="true">Tất cả</button></div>
+<p class="bank-count" id="bank-count" role="status" aria-live="polite">Đang tải dữ liệu thư viện…</p>
+<section class="bank-grid" id="bank-grid" aria-label="Danh sách công cụ AI"><p class="bank-empty">Đang tải danh mục công cụ AI…</p></section>
+<nav class="bank-pagination" id="bank-pagination" aria-label="Phân trang thư viện"></nav>
+<aside class="bank-note"><strong>Lưu ý chi phí:</strong> “Có gói miễn phí” không có nghĩa là dùng không giới hạn hoặc mọi tính năng đều miễn phí. Một số dịch vụ giới hạn theo ngày/tháng, khu vực, tài khoản hoặc dung lượng. n8n Community Edition cần tự lưu trữ và tuân thủ giấy phép. Kiểm tra trang giá, điều khoản và quyền riêng tư trước khi đưa dữ liệu công việc vào công cụ.</aside>
+<aside class="bank-note"><strong>Nguyên tắc biên tập:</strong> Danh sách không phải bảng xếp hạng. Tính năng, hạn mức và giá có thể thay đổi. Khi trích dẫn nội dung từ trang này, vui lòng ghi rõ tác giả <strong>DUNG - AI</strong> và dẫn liên kết về AI Thực Chiến.</aside>
+</main>
+<footer><a class="brand" href="./"><span class="brand-mark">AI</span><span>AI <b>Thực Chiến</b></span></a><span>Học thật · Thử thật · Tối ưu từng bước · <a href="/thu-vien.html">Thư viện bài viết</a></span><span>© 2026 AI Thực Chiến · DUNG - AI</span></footer>
+<script>
+(()=> {
+const $=id=>document.getElementById(id);
+const grid=$('bank-grid'),count=$('bank-count'),filters=$('bank-filters'),pager=$('bank-pagination');
+const controls={q:$('bank-search'),price:$('bank-cost'),license:$('bank-license'),platform:$('bank-platform'),verification:$('bank-verification'),sort:$('bank-sort')};
+const PAGE_SIZE=24;
+const categoryNames={assistant:'Trợ lý AI',writing:'Viết',research:'Nghiên cứu',search:'Tìm kiếm',documents:'Tài liệu',design:'Thiết kế',image:'Hình ảnh',video:'Video',editing:'Biên tập',coding:'Lập trình',developer:'Phát triển',automation:'Tự động hóa',agents:'AI Agent',integration:'Tích hợp',audio:'Âm thanh',transcription:'Chuyển giọng nói',translation:'Dịch thuật',data:'Dữ liệu',database:'Cơ sở dữ liệu',presentation:'Thuyết trình','3d':'3D'};
+const priceNames={free:'Miễn phí hoàn toàn',freemium:'Freemium',paid:'Trả phí',trial_or_credits:'Dùng thử / tín dụng giới hạn',self_hosted_free_and_cloud_paid:'Tự lưu trữ miễn phí · Cloud có phí',unknown:'Chưa rõ mô hình giá'};
+const priceStatusNames={verified_free:'Miễn phí',verified_free_tier:'Có gói miễn phí',limited_credits:'Tín dụng / hạn mức giới hạn',paid_only:'Chỉ trả phí',self_hosted_free:'Miễn phí khi tự lưu trữ',unknown:'Giá chưa xác minh'};
+const verificationNames={verified:'Đã xác minh',needs_review:'Cần rà soát',stale:'Thông tin quá hạn',disputed:'Thông tin cần đối chiếu'};
+const licenseName=s=>s==='proprietary'?'Độc quyền':s==='mit'?'MIT':s==='apache-2.0'?'Apache-2.0':s==='gpl-3.0'?'GPL-3.0':s==='sustainable_use_license'?'Sustainable Use License':s==='open_source_with_hosted_paid'?'Mã nguồn mở + dịch vụ trả phí':String(s||'Chưa rõ').replaceAll('_',' ');
+let tools=[],category='all',page=1;
+const safeUrl=value=>{try{const u=new URL(value);return ['https:','http:'].includes(u.protocol)?u.href:null}catch{return null}};
+const el=(tag,cls,txt)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(txt!==undefined)n.textContent=txt;return n};
+const option=(select,value,label)=>{const o=el('option','',label);o.value=value;select.append(o)};
+function fillOptions(select,values,formatter){const keep=select.value;[...select.querySelectorAll('option:not(:first-child)')].forEach(n=>n.remove());[...new Set(values.filter(Boolean))].sort().forEach(v=>option(select,v,formatter(v)));if([...select.options].some(o=>o.value===keep))select.value=keep;}
+function buildFilters(){
+const cats=[...new Set(tools.flatMap(t=>Array.isArray(t.categories)?t.categories:[]))].sort();
+filters.replaceChildren();const all=el('button','','Tất cả');all.type='button';all.dataset.filter='all';all.setAttribute('aria-pressed','true');filters.append(all);
+cats.forEach(c=>{const b=el('button','',categoryNames[c]||c);b.type='button';b.dataset.filter=c;b.setAttribute('aria-pressed','false');filters.append(b);});
+fillOptions(controls.license,tools.map(t=>t.license),licenseName);
+fillOptions(controls.platform,tools.flatMap(t=>t.platforms||[]),v=>v.replaceAll('_',' '));
+}
+function makeCard(t){
+const card=el('article','tool-card');card.dataset.id=t.id;
+const top=el('div','tool-top');top.append(el('span','tool-mark',(t.name||'AI').split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase()));
+const heading=el('div');heading.append(el('h2','',t.name||'Chưa có tên'),el('span','tool-cat',categoryNames[t.categories?.[0]]||t.categories?.[0]||'Công cụ AI'));top.append(heading);card.append(top);
+card.append(el('p','',t.description||'Chưa có mô tả.'));
+const tags=el('div','tool-tags');tags.append(el('span','',t.vendor||'Nhà cung cấp chưa rõ'),el('span',t.pricing_status==='limited_credits'?'limited':t.pricing_status==='verified_free'||t.pricing_status==='verified_free_tier'?'free':'',(t.verification_status==='verified'?(priceStatusNames[t.pricing_status]||'Giá chưa rõ'):'Giá cần xác minh')),el('span',t.verification_status==='verified'?'verified':'review',verificationNames[t.verification_status]||'Cần rà soát'));card.append(tags);
+card.append(el('p','',(t.verification_status==='verified'?(priceNames[t.pricing_model]||'Chưa rõ mô hình giá'):'Mô hình giá dự kiến: '+(priceNames[t.pricing_model]||'chưa rõ')+' · cần xác minh')));
+if(t.free_tier_summary)card.append(el('p','',t.verification_status==='verified'?t.free_tier_summary:'Thông tin gói miễn phí chưa xác minh: '+t.free_tier_summary));
+const meta=el('div','tool-meta','Giấy phép: '+licenseName(t.license)+' · Nền tảng: '+(t.platforms||[]).join(', ')+' · Kiểm tra: '+(t.last_verified||'chưa có ngày'));card.append(meta);
+const links=el('div','tool-links');const website=safeUrl(t.website);if(website){const a=el('a','','Website chính thức ↗');a.href=website;a.target='_blank';a.rel='noopener noreferrer';links.append(a);}
+(t.official_sources||[]).slice(1,4).forEach((u,i)=>{const href=safeUrl(u);if(href){const a=el('a','',i===0?'Giá / tài liệu ↗':'Nguồn chính thức ↗');a.href=href;a.target='_blank';a.rel='noopener noreferrer';links.append(a);}});
+card.append(links);return card;
+}
+function filtered(){
+const q=controls.q.value.trim().toLocaleLowerCase('vi');
+let list=tools.filter(t=>(category==='all'||(t.categories||[]).includes(category))&&
+(controls.price.value==='all'||t.pricing_model===controls.price.value)&&
+(controls.license.value==='all'||t.license===controls.license.value)&&
+(controls.platform.value==='all'||(t.platforms||[]).includes(controls.platform.value))&&
+(controls.verification.value==='all'||t.verification_status===controls.verification.value)&&
+(!q||[t.name,t.vendor,t.description,t.free_tier_summary,t.license,...(t.categories||[]),...(t.tags||[])].join(' ').toLocaleLowerCase('vi').includes(q)));
+const sort=controls.sort.value;
+list.sort((a,b)=>sort==='vendor'?String(a.vendor).localeCompare(String(b.vendor),'vi')||a.name.localeCompare(b.name,'vi'):sort==='recent'?String(b.last_verified).localeCompare(String(a.last_verified)):a.name.localeCompare(b.name,'vi'));
+return list;
+}
+function render(){
+const list=filtered(),pages=Math.max(1,Math.ceil(list.length/PAGE_SIZE));page=Math.min(page,pages);
+const shown=list.slice((page-1)*PAGE_SIZE,page*PAGE_SIZE);grid.replaceChildren();
+if(!shown.length)grid.append(el('p','bank-empty','Không tìm thấy công cụ phù hợp. Hãy đổi từ khóa hoặc bộ lọc.'));
+else shown.forEach(t=>grid.append(makeCard(t)));
+count.textContent='Hiển thị '+(list.length?(page-1)*PAGE_SIZE+1:0)+'–'+Math.min(page*PAGE_SIZE,list.length)+' / '+list.length+' công cụ · Tổng danh mục: '+tools.length+'.';
+pager.replaceChildren();
+if(pages>1){const prev=el('button','','← Trước');prev.type='button';prev.disabled=page===1;prev.addEventListener('click',()=>{page--;render()});pager.append(prev);
+pager.append(el('span','bank-page-label','Trang '+page+' / '+pages));
+const next=el('button','','Tiếp →');next.type='button';next.disabled=page===pages;next.addEventListener('click',()=>{page++;render()});pager.append(next);}
+}
+filters.addEventListener('click',e=>{const b=e.target.closest('button[data-filter]');if(!b)return;category=b.dataset.filter;page=1;filters.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));render();});
+Object.values(controls).forEach(c=>c.addEventListener(c===controls.q?'input':'change',()=>{page=1;render()}));
+fetch('/data/ai-tools.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}).then(data=>{
+if(!data||!Array.isArray(data.tools))throw new Error('Sai cấu trúc dữ liệu');
+tools=data.tools.filter(t=>t&&t.status!=='rejected');buildFilters();render();
+}).catch(err=>{grid.replaceChildren(el('p','bank-empty','Chưa tải được dữ liệu thư viện. Vui lòng thử tải lại trang sau.'));count.textContent='Lỗi tải dữ liệu: '+err.message;});
+})();
+</script>
+</body></html>
