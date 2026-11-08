@@ -44,6 +44,7 @@ jobs:
           node scripts/test_worker_retrieval.mjs
           node scripts/test_community_api.mjs
           node scripts/test_email_verification.mjs
+          node scripts/test-password-reset.mjs
           node --test tests/staging-google-oidc-runtime.test.mjs
           node scripts/test_google_oauth_worker_integration.mjs
           node scripts/test_homepage_search.cjs
