@@ -319,7 +319,13 @@ async function sendCommunityEmailVerification(env, recipient, verifyUrl) {
   }
   const result = await response.json().catch(() => null);
   if (!response.ok || result?.ok !== true) {
-    const relayCode = typeof result?.code === "string" && /^[A-Z0-9_]{1,48}$/.test(result.code) ? result.code : "UNKNOWN";
+    const relayCode = typeof result?.code === "string" && /^[A-Z0-9_]{1,48}$/.test(result.code)
+      ? result.code
+      : !response.ok
+        ? "HTTP_" + response.status
+        : !result
+          ? "INVALID_RESPONSE"
+          : "REJECTED";
     const error = new Error("Email relay rejected verification message.");
     error.code = relayCode;
     throw error;
