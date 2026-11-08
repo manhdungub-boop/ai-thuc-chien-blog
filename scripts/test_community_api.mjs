@@ -96,7 +96,7 @@ const db = new MockD1(); const env = { DB: db, ASSETS: { fetch: async () => new 
 const call = (path, { method = 'GET', body, cookie, originHeader = origin } = {}) => worker.fetch(new Request(`${origin}/api/community${path}`, { method, headers: { ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(cookie ? { Cookie: cookie } : {}), ...(originHeader ? { Origin: originHeader } : {}), 'CF-Connecting-IP': '198.51.100.77' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }), env);
 const unconfigured = await worker.fetch(new Request('https://example.test/api/community/me'), {}); assert.equal(unconfigured.status, 503); assert.match((await unconfigured.json()).error, /cơ sở dữ liệu/i);
 const badOrigin = await call('/register', { method: 'POST', originHeader: 'https://evil.example', body: {} }); assert.equal(badOrigin.status, 403);
-const previewOrigin = 'https://fix-email-verification-prev-ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev';
+const previewOrigin = 'https://fix-atomic-email-tokens-202-ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev';
 const previewPreflight = await call('/register', { method: 'OPTIONS', originHeader: previewOrigin }); assert.equal(previewPreflight.status, 200);
 assert.equal(previewPreflight.headers.get('Access-Control-Allow-Origin'), previewOrigin, 'The exact isolated branch Preview origin must be allowed.');
 const previewChatPreflight = await worker.fetch(new Request('https://api.example.test/api/chat', { method: 'OPTIONS', headers: { Origin: previewOrigin } }), {});
