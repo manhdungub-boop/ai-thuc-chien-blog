@@ -117,6 +117,43 @@ jobs:
           echo "A Worker deployment token is configured; proceeding with deployment."
 
 
+      - name: Preflight Production email relay bindings before any D1 migration
+        if: steps.token.outputs.deploy_ready == 'true'
+        shell: bash
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          account_id="92cf091bbac8b4879ec65feb30b4715b"
+          worker_name="ai-thuc-chien-blog"
+          secrets_response="$(mktemp)"
+          settings_response="$(mktemp)"
+          trap 'rm -f "$secrets_response" "$settings_response"' EXIT
+
+          secrets_status="$(curl --silent --show-error --max-time 20 -o "$secrets_response" -w '%{http_code}' \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" \
+            "https://api.cloudflare.com/client/v4/accounts/${account_id}/workers/scripts/${worker_name}/secrets" || true)"
+          if [[ "$secrets_status" != "200" ]] || ! jq -e \
+            '.success == true and any(.result[]?; .name == "COMMUNITY_EMAIL_RELAY_SECRET" and .type == "secret_text")' \
+            "$secrets_response" >/dev/null; then
+            echo "::error::Production email relay secret binding is missing or could not be verified; no D1 migration was run."
+            exit 1
+          fi
+
+          settings_status="$(curl --silent --show-error --max-time 20 -o "$settings_response" -w '%{http_code}' \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" \
+            "https://api.cloudflare.com/client/v4/accounts/${account_id}/workers/scripts/${worker_name}/settings" || true)"
+          if [[ "$settings_status" != "200" ]] || ! jq -e \
+            '.success == true and
+             any(.result.bindings[]?; .name == "COMMUNITY_EMAIL_RELAY_SECRET" and .type == "secret_text") and
+             any(.result.bindings[]?; .name == "COMMUNITY_EMAIL_RELAY_URL" and .type == "plain_text")' \
+            "$settings_response" >/dev/null; then
+            echo "::error::Production email relay URL/secret bindings are missing or could not be verified; no D1 migration was run."
+            exit 1
+          fi
+
+          echo "PASS: Production email relay URL and secret binding names/types are present. Secret values were not requested or printed; no settings were changed."
+
       - name: Verify existing Production D1 and apply pending migrations (explicit approval)
         if: steps.token.outputs.deploy_ready == 'true'
         shell: bash
