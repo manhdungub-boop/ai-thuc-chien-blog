@@ -50,7 +50,7 @@ concurrency:
 jobs:
   deploy:
     # Pushes validate the merge but cannot deploy. Only an explicit manual dispatch may deploy production.
-    if: github.event_name == 'workflow_dispatch' && inputs.confirm_production_worker_and_d1_changes == true
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.confirm_production_worker_and_d1_changes == true
     runs-on: ubuntu-latest
     steps:
       - name: Check out source
@@ -113,55 +113,50 @@ jobs:
           echo "A Worker deployment token is configured; proceeding with deployment."
 
 
-      - name: Provision community D1 and apply schema migrations
+      - name: Verify existing Production D1 and apply pending migrations (explicit approval)
         if: steps.token.outputs.deploy_ready == 'true'
         shell: bash
         env:
           CF_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
         run: |
           set -euo pipefail
-          account_id="92cf091bbac8b4879ec65feb30b4715b"
-          database_name="ai-thuc-chien-community"
-          api="https://api.cloudflare.com/client/v4/accounts/${account_id}/d1/database"
-
-          list_status="$(curl --silent --show-error --output /tmp/d1-list.json --write-out '%{http_code}' \
-            --header "Authorization: Bearer ${CF_API_TOKEN}" \
-            --header 'Content-Type: application/json' "${api}?per_page=100")"
-          if [[ "${list_status}" -lt 200 || "${list_status}" -ge 300 ]] || ! jq -e '.success == true' /tmp/d1-list.json >/dev/null; then
-            echo "Could not list D1 databases. Check that CLOUDFLARE_WORKERS_API_TOKEN has D1:Edit and Workers Scripts:Edit permissions."
-            jq -r '.errors[]?.message // empty' /tmp/d1-list.json || true
-            exit 1
-          fi
-          database_id="$(jq -r --arg name "${database_name}" '.result[]? | select(.name == $name) | .uuid' /tmp/d1-list.json | head -n 1)"
-          if [[ -z "${database_id}" || "${database_id}" == "null" ]]; then
-            echo "Creating the persistent community database for the first time."
-            create_status="$(curl --silent --show-error --output /tmp/d1-create.json --write-out '%{http_code}' \
-              --request POST --header "Authorization: Bearer ${CF_API_TOKEN}" \
-              --header 'Content-Type: application/json' \
-              --data "{\"name\":\"${database_name}\"}" "${api}")"
-            if [[ "${create_status}" -lt 200 || "${create_status}" -ge 300 ]] || ! jq -e '.success == true and (.result.uuid | type == "string")' /tmp/d1-create.json >/dev/null; then
-              echo "Could not create the community D1 database. Check D1:Edit permissions."
-              jq -r '.errors[]?.message // empty' /tmp/d1-create.json || true
-              exit 1
-            fi
-            database_id="$(jq -r '.result.uuid' /tmp/d1-create.json)"
-          else
-            echo "Found the existing community database; preserving its data."
-          fi
-
-          python3 - "${database_id}" "${database_name}" <<'PY'
-          import json, sys
+          config_json="$(python3 - <<'PY'
+          import json
           from pathlib import Path
           config = json.loads(Path("wrangler.jsonc").read_text(encoding="utf-8"))
-          config["d1_databases"] = [{
-              "binding": "DB",
-              "database_name": sys.argv[2],
-              "database_id": sys.argv[1],
-              "migrations_dir": "migrations",
-          }]
+          expected_account = "92cf091bbac8b4879ec65feb30b4715b"
+          expected_id = "fc2517cb-9543-4d7b-98f4-bcd5f3c013e7"
+          expected_name = "ai-thuc-chien-community"
+          databases = [item for item in config.get("d1_databases", []) if item.get("binding") == "DB"]
+          if config.get("account_id") != expected_account or len(databases) != 1:
+              raise SystemExit("Expected exactly one configured Production D1 binding in the reviewed Cloudflare account.")
+          database = databases[0]
+          if database.get("database_id") != expected_id or database.get("database_name") != expected_name:
+              raise SystemExit("Production D1 identity differs from the reviewed target; refusing to create or migrate any database.")
+          database["migrations_dir"] = "migrations"
+          config["d1_databases"] = [database]
+          config.pop("previews", None)
           Path("wrangler.deploy.jsonc").write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          print(json.dumps({"id": expected_id, "name": expected_name}))
           PY
-          npx --yes wrangler@4 d1 migrations apply "${database_name}" --remote --config wrangler.deploy.jsonc
+          )"
+          database_id="$(jq -r '.id' <<< "$config_json")"
+          database_name="$(jq -r '.name' <<< "$config_json")"
+          response="$(mktemp)"
+          status="$(curl --silent --show-error --max-time 20 -o "$response" -w '%{http_code}' \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" \
+            "https://api.cloudflare.com/client/v4/accounts/92cf091bbac8b4879ec65feb30b4715b/d1/database/${database_id}" || true)"
+          if [[ "$status" != "200" ]] || ! jq -e --arg id "$database_id" --arg name "$database_name" \
+            '.success == true and (.result.uuid == $id or .result.id == $id) and .result.name == $name' "$response" >/dev/null; then
+            echo "::error::Cloudflare did not verify the exact existing Production D1 target (HTTP ${status}); no SQL was run."
+            jq -r '.errors[]?.message // empty' "$response" 2>/dev/null || true
+            rm -f "$response"
+            exit 1
+          fi
+          rm -f "$response"
+          echo "PASS: exact existing Production D1 identity verified. No database creation was attempted."
+          npx --yes wrangler@4 d1 migrations apply "$database_name" --remote --config wrangler.deploy.jsonc
 
       - name: Deploy to the existing production Worker
         if: steps.token.outputs.deploy_ready == 'true'
