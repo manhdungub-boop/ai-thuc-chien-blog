@@ -2,7 +2,7 @@ import fs from "node:fs";
 
 const args = process.argv.slice(2);
 const strict = args.includes("--strict");
-const asOfArg = args.find(x => x.startsWith("--as-of="))?.slice(9);
+const asOfArg = args.find(x => x.startsWith("--as-of="))?.slice(8);
 const positionalArgs = args.filter(x => !x.startsWith("--"));
 const mainPath = positionalArgs[0] || "data/ai-tools.json";
 const candidatePath = positionalArgs[1] || "docs/reviews/ai-tools-candidates-2026-11-02.json";

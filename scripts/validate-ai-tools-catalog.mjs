@@ -11,7 +11,15 @@ const allowedStatus = new Set(["active","deprecated","closed","rejected"]);
 const ids = new Set(), names = new Map(), domains = new Map();
 const required = ["id","name","vendor","website","categories","pricing_model","pricing_status","license","platforms","description","free_tier_summary","official_sources","last_verified","verification_status","status","tags"];
 const normalized = value => String(value || "").trim().toLocaleLowerCase("en").replace(/\s+/g," ");
-const hostOf = value => { const u = new URL(value); return u.hostname.toLowerCase().replace(/^www\./,""); };
+const hostOf = value => {
+  const u = new URL(value);
+  const host = u.hostname.toLowerCase().replace(/^www\./, "");
+  if (["github.com", "gitlab.com", "bitbucket.org", "codeberg.org"].includes(host)) {
+    const parts = u.pathname.split("/").filter(Boolean);
+    if (parts.length >= 2) return host + "/" + parts[0].toLowerCase() + "/" + parts[1].toLowerCase();
+  }
+  return host;
+};
 
 if (!catalog || typeof catalog !== "object" || !Array.isArray(catalog.tools)) {
   console.error("Catalog must be an object with a tools array."); process.exit(1);
