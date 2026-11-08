@@ -237,6 +237,25 @@ const shortResetPassword = await call('/password-reset/complete', {
   body: { token: rawResetToken, password: 'short' }
 });
 assert.equal(shortResetPassword.status, 400, 'short replacement passwords must be rejected without consuming the valid token');
+// A D1 batch failure after the password write must roll back the password, preserve the token, and keep sessions active.
+const memberForAtomicReset = db.members.find((m) => m.email === 'member@example.com');
+const originalPasswordHash = memberForAtomicReset.password_hash;
+const sessionsBeforeAtomicReset = db.sessions.filter((s) => s.member_id === memberForAtomicReset.id).length;
+db.failBatchAfter = 0;
+const failedResetBatch = await call('/password-reset/complete', { method: 'POST', ip: '203.0.113.59', body: { token: rawResetToken, password: 'New-Strong-Password-456!' } });
+assert.equal(failedResetBatch.status, 500, 'a D1 batch failure must fail the reset request');
+assert.equal(memberForAtomicReset.password_hash, originalPasswordHash, 'failed batch must roll back password changes');
+assert.ok(db.resetTokens.some((t) => t.token_hash === storedResetToken.token_hash), 'failed batch must preserve the reset token');
+assert.equal(db.sessions.filter((s) => s.member_id === memberForAtomicReset.id).length, sessionsBeforeAtomicReset, 'failed batch must preserve existing sessions');
+
+// A zero-row password update must not consume the token or revoke sessions.
+db.suppressPasswordUpdate = true;
+const zeroRowReset = await call('/password-reset/complete', { method: 'POST', ip: '203.0.113.60', body: { token: rawResetToken, password: 'New-Strong-Password-456!' } });
+assert.equal(zeroRowReset.status, 400);
+assert.ok(db.resetTokens.some((t) => t.token_hash === storedResetToken.token_hash), 'zero-row password update must preserve the reset token');
+assert.equal(db.sessions.filter((s) => s.member_id === memberForAtomicReset.id).length, sessionsBeforeAtomicReset, 'zero-row password update must not revoke sessions');
+db.suppressPasswordUpdate = false;
+
 const resetComplete = await call('/password-reset/complete', { method: 'POST', ip: '203.0.113.52', body: { token: rawResetToken, password: 'New-Strong-Password-456!' } });
 assert.equal(resetComplete.status, 200);
 assert.equal((await resetComplete.json()).ok, true);
