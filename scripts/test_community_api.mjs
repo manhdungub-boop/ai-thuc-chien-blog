@@ -111,6 +111,8 @@ let sentVerificationPayload = null;
 let sentResetPayload = null;
 let failVerificationRelay = true;
 let failVerificationNetwork = false;
+let redirectLocation = 'https://script.googleusercontent.com/macros/echo?user_content_key=test';
+let omitRedirectLocation = false;
 globalThis.fetch = async (url, options) => {
   if (String(url) === env.COMMUNITY_EMAIL_RELAY_URL) {
     assert.equal(options.method, 'POST');
@@ -122,7 +124,7 @@ globalThis.fetch = async (url, options) => {
       if (failVerificationRelay) return new Response(JSON.stringify({ ok: false }), { status: 503, headers: { 'Content-Type': 'application/json' } });
     } else if (payload.subject === 'Đặt lại mật khẩu — AI Thực Chiến') sentResetPayload = payload;
     else throw new Error('Unexpected email relay subject');
-    return new Response(null, { status: 302, headers: { Location: 'https://script.googleusercontent.com/macros/echo?user_content_key=test' } });
+    return new Response(null, { status: 302, headers: omitRedirectLocation ? {} : { Location: redirectLocation } });
   }
   const redirectUrl = new URL(String(url));
   assert.equal(redirectUrl.protocol, 'https:');
@@ -150,6 +152,25 @@ assert.equal(db.members.length, 0, 'Network failure must roll back the pending m
 assert.equal(db.emailVerificationTokens.length, 0, 'Network failure must remove the verification token.');
 assert.equal(db.emailVerificationStatus.length, 0, 'Network failure must remove verification status.');
 failVerificationNetwork = false;
+failVerificationRelay = false;
+redirectLocation = 'https://script.googleusercontent.com:8443/macros/echo?user_content_key=unsafe';
+const unsafeRedirect = await call('/register', { method: 'POST', body: { username: 'unsafe_redirect_user', displayName: 'Unsafe Redirect', email: 'unsafe-redirect@example.com', password: 'MotMatKhauRieng123!' } });
+assert.equal(unsafeRedirect.status, 503, 'A non-standard redirect port must be rejected.');
+assert.equal((await unsafeRedirect.json()).code, 'UNSAFE_REDIRECT');
+assert.equal(db.members.length, 0, 'An unsafe redirect must roll back the pending member.');
+assert.equal(db.emailVerificationTokens.length, 0, 'An unsafe redirect must not leave a verification token.');
+redirectLocation = 'https://user:pass@script.googleusercontent.com/macros/echo?user_content_key=unsafe';
+const credentialRedirect = await call('/register', { method: 'POST', body: { username: 'credential_redirect_user', displayName: 'Credential Redirect', email: 'credential-redirect@example.com', password: 'MotMatKhauRieng123!' } });
+assert.equal(credentialRedirect.status, 503, 'A redirect containing URL credentials must be rejected.');
+assert.equal((await credentialRedirect.json()).code, 'UNSAFE_REDIRECT');
+assert.equal(db.members.length, 0, 'A credential-bearing redirect must roll back the pending member.');
+omitRedirectLocation = true;
+const missingLocation = await call('/register', { method: 'POST', body: { username: 'missing_location_user', displayName: 'Missing Location', email: 'missing-location@example.com', password: 'MotMatKhauRieng123!' } });
+assert.equal(missingLocation.status, 503, 'A redirect without Location must fail closed.');
+assert.equal((await missingLocation.json()).code, 'REDIRECT_MISSING_LOCATION');
+assert.equal(db.members.length, 0, 'A missing redirect Location must roll back the pending member.');
+omitRedirectLocation = false;
+redirectLocation = 'https://script.googleusercontent.com/macros/echo?user_content_key=test';
 const registered = await call('/register', { method: 'POST', body: { username: 'thanhvien_1', displayName: 'Thành viên thử', email: 'member@example.com', password: 'MotMatKhauRieng123!' } }); assert.equal(registered.status, 201);
 const registeredPayload = await registered.json(); assert.equal(registeredPayload.verificationRequired, true); assert.equal(registeredPayload.ok, true); assert.equal(JSON.stringify(registeredPayload).includes('MotMatKhauRieng123!'), false);
 assert.equal(registered.headers.get('set-cookie'), null, 'Pending registration must not create a login session.');
