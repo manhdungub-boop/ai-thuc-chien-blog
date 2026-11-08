@@ -13,7 +13,7 @@ assert.match(html, /fetch\('\/data\/ai-tools\.json'/, 'AI Bank page must load th
 assert.match(html, /DUNG - AI/, 'AI Bank attribution must be preserved');
 const builder = fs.readFileSync(path.join(root, 'scripts', 'build_static_site.cjs'), 'utf8');
 assert.match(builder, /['"]ngan-hang-ai\.html['"]/, 'static builder must include AI Bank page in root assets');
-assert.match(builder, /dist[\\/]ngan-hang-ai\.html|output[\\/]ngan-hang-ai\.html/, 'static builder must verify AI Bank output');
+assert.match(builder, /path\.join\(output,\s*['"]ngan-hang-ai\.html['"]\)/, 'static builder must verify AI Bank output using its output directory');
 const seo = fs.readFileSync(path.join(root, 'scripts', 'generate_seo_feeds.cjs'), 'utf8');
 assert.match(seo, /ngan-hang-ai\.html/, 'SEO feed generator must include AI Bank page');
 const deploy = fs.readFileSync(path.join(root, '.github', 'workflows', 'deploy-preview-worker.yml'), 'utf8');
