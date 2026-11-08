@@ -112,14 +112,25 @@ let sentResetPayload = null;
 let failVerificationRelay = true;
 let failVerificationNetwork = false;
 globalThis.fetch = async (url, options) => {
-  assert.equal(String(url), env.COMMUNITY_EMAIL_RELAY_URL);
-  const payload = JSON.parse(options.body);
-  if (payload.subject === 'Xác nhận email — AI Thực Chiến') {
-    sentVerificationPayload = payload;
-    if (failVerificationNetwork) throw new TypeError('Simulated network connection failure');
-    if (failVerificationRelay) return new Response(JSON.stringify({ ok: false }), { status: 503, headers: { 'Content-Type': 'application/json' } });
-  } else if (payload.subject === 'Đặt lại mật khẩu — AI Thực Chiến') sentResetPayload = payload;
-  else throw new Error('Unexpected email relay subject');
+  if (String(url) === env.COMMUNITY_EMAIL_RELAY_URL) {
+    assert.equal(options.method, 'POST');
+    assert.equal(options.redirect, 'manual', 'Apps Script POST must not auto-follow redirects.');
+    const payload = JSON.parse(options.body);
+    if (payload.subject === 'Xác nhận email — AI Thực Chiến') {
+      sentVerificationPayload = payload;
+      if (failVerificationNetwork) throw new TypeError('Simulated network connection failure');
+      if (failVerificationRelay) return new Response(JSON.stringify({ ok: false }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+    } else if (payload.subject === 'Đặt lại mật khẩu — AI Thực Chiến') sentResetPayload = payload;
+    else throw new Error('Unexpected email relay subject');
+    return new Response(null, { status: 302, headers: { Location: 'https://script.googleusercontent.com/macros/echo?user_content_key=test' } });
+  }
+  const redirectUrl = new URL(String(url));
+  assert.equal(redirectUrl.protocol, 'https:');
+  assert.equal(redirectUrl.hostname, 'script.googleusercontent.com');
+  assert.equal(options.method, 'GET', 'ContentService response URL must be fetched with GET.');
+  assert.equal(options.body, undefined, 'Never forward the POST body or relay secret to the response URL.');
+  assert.equal(options.headers, undefined, 'Never forward application headers to the response URL.');
+  assert.equal(options.redirect, 'manual');
   return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 };
 const relayFailure = await call('/register', { method: 'POST', body: { username: 'relay_fail_user', displayName: 'Relay Failure', email: 'relay-fail@example.com', password: 'MotMatKhauRieng123!' } });
