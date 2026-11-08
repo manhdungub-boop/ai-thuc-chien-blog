@@ -31,6 +31,9 @@ jobs:
       - name: Build static site and SEO feeds
         run: npm run build
 
+      - name: Test AI Bank route packaging and sitemap
+        run: node scripts/test_ai_bank_route.cjs
+
       - name: Check JavaScript syntax
         run: |
           node --check script.js
