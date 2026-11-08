@@ -100,4 +100,15 @@ assert.equal(clearedCookies.length, 0,
   'A callback without its matching transaction cookie must not clear either active OAuth flow.');
 console.log('PASS: invalid callback does not clear cookies from either overlapping OAuth transaction.');
 
+const verification = await request(target + '/google4e45ddcf8facb122.html', {
+  headers: { Accept: 'text/html' },
+});
+assert.equal(verification.status, 200, 'Google Search Console verification file must return HTTP 200 on Preview.');
+assert.equal(
+  (await verification.text()).trim(),
+  'google-site-verification: google4e45ddcf8facb122.html',
+  'Google Search Console verification content must match the repository source.'
+);
+console.log('PASS: Search Console verification asset is served by the isolated Preview Worker.');
+
 console.log('PASS: staging OAuth Preview HTTP smoke tests completed; no user account was created and no email was sent.');
