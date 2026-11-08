@@ -156,6 +156,8 @@ assert.equal(sentVerificationPayload.secret, env.COMMUNITY_EMAIL_RELAY_SECRET);
 assert.equal(sentVerificationPayload.subject, 'Xác nhận email — AI Thực Chiến');
 const verifyUrl = new URL(sentVerificationPayload.verifyUrl); assert.equal(verifyUrl.origin, origin); assert.equal(verifyUrl.pathname, '/');
 const verifyToken = verifyUrl.searchParams.get('verify'); assert.match(verifyToken, /^[A-Za-z0-9_-]{32,80}$/);
+const relayUrlPattern = /^https:\/\/([^/?#]+)\/(?:\?(?:verify|reset)=([A-Za-z0-9_-]{32,80})#cong-dong|#cong-dong\?(?:verify|reset)=([A-Za-z0-9_-]{32,80}))$/;
+assert.match(sentVerificationPayload.verifyUrl, relayUrlPattern, 'Verification email URL must satisfy the existing Apps Script relay URL contract.');
 assert.equal(verifyUrl.hash, '#cong-dong', 'Verification email URL must retain the Apps Script relay-compatible legacy format.');
 assert.ok(sentVerificationPayload.textBody.includes(sentVerificationPayload.verifyUrl));
 assert.ok(sentVerificationPayload.htmlBody.includes('href="' + sentVerificationPayload.verifyUrl + '"'));
@@ -197,6 +199,7 @@ try {
   assert.equal(resetUrl.origin, origin);
   const resetToken = resetUrl.searchParams.get('reset');
   assert.match(resetToken, /^[A-Za-z0-9_-]{32,80}$/);
+  assert.match(sentResetPayload.verifyUrl, relayUrlPattern, 'Password-reset email URL must satisfy the existing Apps Script relay URL contract.');
   assert.ok(sentResetPayload.textBody.includes(sentResetPayload.verifyUrl));
   assert.ok(sentResetPayload.htmlBody.includes('href="' + sentResetPayload.verifyUrl + '"'));
 
