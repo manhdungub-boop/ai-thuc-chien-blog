@@ -335,6 +335,38 @@ async function readJsonPayload(request, maxBytes = 6000) {
     return { ok: true, value };
   } catch (_error) { return { ok: false, status: 400, error: "Dữ liệu gửi không hợp lệ." }; }
 }
+
+async function fetchCommunityEmailRelay(env, payload) {
+  let response = await fetch(env.COMMUNITY_EMAIL_RELAY_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Accept": "application/json" },
+    body: JSON.stringify(payload),
+    redirect: "manual",
+    signal: AbortSignal.timeout(10000),
+  });
+  if (response.status >= 300 && response.status < 400) {
+    const location = response.headers.get("Location");
+    if (!location) {
+      const error = new Error("Email relay redirect is missing its Location header.");
+      error.code = "REDIRECT_MISSING_LOCATION";
+      throw error;
+    }
+    const redirectUrl = new URL(location, env.COMMUNITY_EMAIL_RELAY_URL);
+    if (redirectUrl.protocol !== "https:" ||
+        redirectUrl.origin !== "https://script.googleusercontent.com" ||
+        redirectUrl.username || redirectUrl.password || redirectUrl.port && redirectUrl.port !== "443") {
+      const error = new Error("Email relay returned an untrusted redirect destination.");
+      error.code = "UNSAFE_REDIRECT";
+      throw error;
+    }
+    response = await fetch(redirectUrl.toString(), {
+      method: "GET",
+      redirect: "manual",
+      signal: AbortSignal.timeout(10000),
+    });
+  }
+  return response;
+}
 const COMMUNITY_VERIFICATION_SECONDS = 30 * 60;
 function escapeCommunityHtml(value) {
   return String(value || "").replace(/[&<>\"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[char]);
@@ -348,10 +380,9 @@ async function sendCommunityVerificationEmail(env, email, displayName, token, or
   const safeUrl = escapeCommunityHtml(verifyUrl);
   const textBody = `Chào ${displayName || "bạn"}. Xác nhận email để hoàn tất đăng ký AI Thực Chiến bằng liên kết sau (hết hạn sau 30 phút): ${verifyUrl}. Nếu bạn không yêu cầu đăng ký, hãy bỏ qua email này.`;
   const htmlBody = `<div style="font-family:Arial,sans-serif;line-height:1.65;color:#172033;max-width:560px;margin:auto"><h1>Xác nhận email của bạn</h1><p>Chào ${safeName},</p><p>Để hoàn tất đăng ký cộng đồng AI Thực Chiến, hãy bấm nút bên dưới. Liên kết chỉ có hiệu lực trong 30 phút và chỉ dùng một lần.</p><p><a href="${safeUrl}" style="display:inline-block;padding:12px 20px;background:#85efd0;color:#092a2c;border-radius:8px;text-decoration:none;font-weight:bold">Xác nhận email</a></p><p>Nếu nút không hoạt động, sao chép liên kết này vào trình duyệt:</p><p style="overflow-wrap:anywhere">${safeUrl}</p><p>Nếu bạn không yêu cầu đăng ký, hãy bỏ qua email này.</p></div>`;
-  const response = await fetch(env.COMMUNITY_EMAIL_RELAY_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Accept": "application/json" },
-    body: JSON.stringify({
+  let response;
+  try {
+    response = await fetchCommunityEmailRelay(env, {
       secret: env.COMMUNITY_EMAIL_RELAY_SECRET,
       to: email,
       subject: "Xác nhận email — AI Thực Chiến",
@@ -359,8 +390,13 @@ async function sendCommunityVerificationEmail(env, email, displayName, token, or
       verifyUrl,
       textBody,
       htmlBody,
-    }),
-  });
+    });
+  } catch (cause) {
+    const error = new Error("Email relay request failed.");
+    error.code = typeof cause?.code === "string" && /^[A-Z0-9_]{1,48}$/.test(cause.code)
+      ? cause.code : "NETWORK_ERROR";
+    throw error;
+  }
   let result = {};
   try {
     result = await response.json();
@@ -398,11 +434,23 @@ async function sendCommunityPasswordResetEmail(env, email, displayName, token, o
   const safeUrl = escapeCommunityHtml(resetUrl);
   const textBody = `Chào ${displayName || "bạn"}. Bạn vừa yêu cầu đặt lại mật khẩu AI Thực Chiến. Mở liên kết sau trong vòng 30 phút để tạo mật khẩu mới: ${resetUrl}. Nếu bạn không yêu cầu, hãy bỏ qua email này.`;
   const htmlBody = `<div style="font-family:Arial,sans-serif;line-height:1.65;color:#172033;max-width:560px;margin:auto"><h1>Đặt lại mật khẩu</h1><p>Chào ${safeName},</p><p>Để đặt mật khẩu mới cho tài khoản AI Thực Chiến, hãy bấm nút bên dưới. Liên kết chỉ có hiệu lực trong 30 phút và chỉ dùng một lần.</p><p><a href="${safeUrl}" style="display:inline-block;padding:12px 20px;background:#85efd0;color:#092a2c;border-radius:8px;text-decoration:none;font-weight:bold">Đặt lại mật khẩu</a></p><p>Nếu bạn không yêu cầu, hãy bỏ qua email này.</p></div>`;
-  const response = await fetch(env.COMMUNITY_EMAIL_RELAY_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Accept": "application/json" },
-    body: JSON.stringify({ secret: env.COMMUNITY_EMAIL_RELAY_SECRET, to: email, subject: "Đặt lại mật khẩu — AI Thực Chiến", displayName: displayName || "bạn", verifyUrl: resetUrl, textBody, htmlBody }),
-  });
+  let response;
+  try {
+    response = await fetchCommunityEmailRelay(env, {
+      secret: env.COMMUNITY_EMAIL_RELAY_SECRET,
+      to: email,
+      subject: "Đặt lại mật khẩu — AI Thực Chiến",
+      displayName: displayName || "bạn",
+      verifyUrl: resetUrl,
+      textBody,
+      htmlBody,
+    });
+  } catch (cause) {
+    const error = new Error("Email relay request failed.");
+    error.code = typeof cause?.code === "string" && /^[A-Z0-9_]{1,48}$/.test(cause.code)
+      ? cause.code : "NETWORK_ERROR";
+    throw error;
+  }
   let result = {};
   try { result = await response.json(); } catch { throw new Error(`Email relay returned invalid JSON (HTTP ${response.status})`); }
   if (!response.ok || result?.ok !== true) throw new Error(`Email relay rejected the password reset message (HTTP ${response.status})`);
