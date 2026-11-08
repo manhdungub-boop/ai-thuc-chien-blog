@@ -26,4 +26,18 @@ assert.equal(migrationDb.database_id, preview.database_id, 'preview migration ID
 assert.equal(migrationDb.database_name, preview.database_name, 'preview migration name must match Worker preview name');
 assert.equal(migrationDb.migrations_dir, 'migrations', 'preview migration directory must be explicit');
 assert.notEqual(migrationDb.database_id, prod.database_id, 'preview migration must never target production D1');
+const deployWorkflow = fs.readFileSync('.github/workflows/deploy-cloudflare-workers.yml', 'utf8');
+const productionMigrationWorkflow = fs.readFileSync('.github/workflows/migrate-production-d1.yml', 'utf8');
+assert.equal(prod.database_id, 'fc2517cb-9543-4d7b-98f4-bcd5f3c013e7', 'production D1 ID changed unexpectedly');
+assert.match(deployWorkflow, /if: github\.ref == 'refs\/heads\/main'/, 'production deploy must be restricted to main');
+assert.match(deployWorkflow, /d1 migrations list/, 'production deploy must perform a read-only migration preflight');
+assert.doesNotMatch(deployWorkflow, /d1 migrations apply/, 'production deploy must never apply D1 migrations automatically');
+assert.doesNotMatch(deployWorkflow, /--request POST/, 'production deploy must never create a D1 database automatically');
+assert.match(productionMigrationWorkflow, /workflow_dispatch:/, 'production migration must be manual only');
+assert.doesNotMatch(productionMigrationWorkflow, /^\s+push:/m, 'production migration workflow must not run on push');
+assert.match(productionMigrationWorkflow, /default: list/, 'production migration workflow must default to read-only list mode');
+assert.match(productionMigrationWorkflow, /APPLY_PRODUCTION_D1_MIGRATIONS/, 'production migration apply must require explicit confirmation');
+assert.match(productionMigrationWorkflow, /CLOUDFLARE_PRODUCTION_D1_MIGRATION_TOKEN/, 'production migration apply must use a separate D1 token');
+assert.match(productionMigrationWorkflow, /d1 migrations apply/, 'manual production migration workflow must provide the gated apply operation');
+console.log('PASS: production deploy is read-only for D1; production migrations require manual confirmation and a separate token.');
 console.log('PASS: production and preview D1 bindings are isolated; migration config matches the verified preview DB.');

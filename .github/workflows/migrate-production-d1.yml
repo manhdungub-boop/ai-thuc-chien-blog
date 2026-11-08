@@ -1,0 +1,115 @@
+name: Manage Production D1 Migrations
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "list is read-only; apply executes pending SQL migrations"
+        type: choice
+        options: [list, apply]
+        default: list
+        required: true
+      confirmation:
+        description: "Required only for apply: APPLY_PRODUCTION_D1_MIGRATIONS"
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-d1-migrations
+  cancel-in-progress: false
+
+jobs:
+  production-d1:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 92cf091bbac8b4879ec65feb30b4715b
+    steps:
+      - name: Check out current main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify exact production D1 target (read-only)
+        id: target
+        shell: bash
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${CF_API_TOKEN:-}" ]]; then
+            echo "::error::CLOUDFLARE_WORKERS_API_TOKEN is required for read-only production D1 verification."
+            exit 1
+          fi
+          echo "::add-mask::${CF_API_TOKEN}"
+          config_json="$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+          config = json.loads(Path("wrangler.jsonc").read_text(encoding="utf-8"))
+          databases = [item for item in config.get("d1_databases", []) if item.get("binding") == "DB"]
+          if config.get("account_id") != "92cf091bbac8b4879ec65feb30b4715b" or len(databases) != 1:
+              raise SystemExit("Expected exactly one configured production DB in the expected Cloudflare account.")
+          database = databases[0]
+          expected_id = "fc2517cb-9543-4d7b-98f4-bcd5f3c013e7"
+          expected_name = "ai-thuc-chien-community"
+          if database.get("database_id") != expected_id or database.get("database_name") != expected_name:
+              raise SystemExit("Production D1 identity differs from the reviewed target; refusing to continue.")
+          database["migrations_dir"] = "migrations"
+          config["d1_databases"] = [database]
+          config.pop("previews", None)
+          Path("wrangler.production-d1.jsonc").write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          print(json.dumps({"id": expected_id, "name": expected_name}))
+          PY
+          )"
+          database_id="$(jq -r '.id' <<< "$config_json")"
+          database_name="$(jq -r '.name' <<< "$config_json")"
+          response="$(mktemp)"
+          status="$(curl --silent --show-error --max-time 20 -o "$response" -w '%{http_code}' \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/d1/database/${database_id}" || true)"
+          if [[ "$status" != "200" ]] || ! jq -e --arg id "$database_id" --arg name "$database_name" \
+            '.success == true and (.result.uuid == $id or .result.id == $id) and .result.name == $name' "$response" >/dev/null; then
+            echo "::error::Cloudflare did not verify the exact production D1 target (HTTP ${status}); no SQL was run."
+            jq -r '.errors[]?.message // empty' "$response" 2>/dev/null || true
+            rm -f "$response"
+            exit 1
+          fi
+          rm -f "$response"
+          echo "database_id=${database_id}" >> "$GITHUB_OUTPUT"
+          echo "database_name=${database_name}" >> "$GITHUB_OUTPUT"
+          echo "PASS: exact production D1 identity verified. No SQL was executed."
+
+      - name: List current production migrations (read-only)
+        run: npx --yes wrangler@4 d1 migrations list "${{ steps.target.outputs.database_name }}" --remote --config wrangler.production-d1.jsonc
+
+      - name: Apply pending migrations to Production D1 (explicit approval required)
+        if: inputs.mode == 'apply'
+        shell: bash
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PRODUCTION_D1_MIGRATION_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ "$CONFIRMATION" != "APPLY_PRODUCTION_D1_MIGRATIONS" ]]; then
+            echo "::error::Production D1 migration requires the exact confirmation string APPLY_PRODUCTION_D1_MIGRATIONS. No SQL was executed."
+            exit 1
+          fi
+          if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+            echo "::error::CLOUDFLARE_PRODUCTION_D1_MIGRATION_TOKEN is required for the apply mode. Create a separate D1:Edit token and store it as this repository secret."
+            exit 1
+          fi
+          echo "::add-mask::${CLOUDFLARE_API_TOKEN}"
+          npx --yes wrangler@4 d1 migrations apply "${{ steps.target.outputs.database_name }}" --remote --config wrangler.production-d1.jsonc
+
+      - name: Confirm production migration state after apply (read-only)
+        if: inputs.mode == 'apply'
+        run: npx --yes wrangler@4 d1 migrations list "${{ steps.target.outputs.database_name }}" --remote --config wrangler.production-d1.jsonc
