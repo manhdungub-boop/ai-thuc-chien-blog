@@ -154,11 +154,13 @@ assert.equal(db.emailVerificationTokens.length, 1, 'Duplicate username must not 
 assert.equal(sentVerificationPayload.to, 'member@example.com');
 assert.equal(sentVerificationPayload.secret, env.COMMUNITY_EMAIL_RELAY_SECRET);
 assert.equal(sentVerificationPayload.subject, 'Xác nhận email — AI Thực Chiến');
-const verifyUrl = new URL(sentVerificationPayload.verifyUrl); assert.equal(verifyUrl.origin, origin); assert.equal(verifyUrl.pathname, '/api/community/verify-email');
-const verifyToken = verifyUrl.searchParams.get('token'); assert.match(verifyToken, /^[A-Za-z0-9_-]{32,80}$/); assert.equal(verifyUrl.searchParams.has('verify'), false);
+const verifyUrl = new URL(sentVerificationPayload.verifyUrl); assert.equal(verifyUrl.origin, origin); assert.equal(verifyUrl.pathname, '/');
+const verifyToken = verifyUrl.searchParams.get('verify'); assert.match(verifyToken, /^[A-Za-z0-9_-]{32,80}$/);
+assert.equal(verifyUrl.hash, '#cong-dong', 'Verification email URL must retain the Apps Script relay-compatible legacy format.');
 assert.ok(sentVerificationPayload.textBody.includes(sentVerificationPayload.verifyUrl));
 assert.ok(sentVerificationPayload.htmlBody.includes('href="' + sentVerificationPayload.verifyUrl + '"'));
-const landing = await worker.fetch(new Request(sentVerificationPayload.verifyUrl), env); assert.equal(landing.status, 200);
+const confirmationUrl = new URL('/api/community/verify-email', origin); confirmationUrl.searchParams.set('token', verifyToken);
+const landing = await worker.fetch(new Request(confirmationUrl), env); assert.equal(landing.status, 200);
 const landingHtml = await landing.text();
 assert.match(landingHtml, /Bấm nút bên dưới để xác nhận/);
 assert.match(landingHtml, /id="confirm"/);
