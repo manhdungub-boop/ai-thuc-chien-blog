@@ -163,7 +163,7 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
   const root = document.getElementById('cong-dong');
   if (!root) return;
   const primaryHost = 'ai-thuc-chien-blog.manhdungub.workers.dev';
-  const previewHost = 'ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev';
+  const previewHost = 'fix-atomic-email-tokens-202-ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev';
   const pendingResetToken = new URLSearchParams(window.location.search).get('reset') || '';
   const pendingVerifyToken = new URLSearchParams(window.location.search).get('verify') || '';
   const authPanel = root.querySelector('#community-auth-panel');
