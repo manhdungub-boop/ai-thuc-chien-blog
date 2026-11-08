@@ -29,6 +29,9 @@ jobs:
         with:
           node-version: 22
 
+      - name: Simulate sitemap coverage reconciliation cases
+        run: node --test scripts/test_sitemap_coverage.cjs
+
       - name: Build and validate static assets
         run: npm run build
 
