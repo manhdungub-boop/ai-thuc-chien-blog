@@ -154,11 +154,16 @@ assert.equal(db.emailVerificationTokens.length, 1, 'Duplicate username must not 
 assert.equal(sentVerificationPayload.to, 'member@example.com');
 assert.equal(sentVerificationPayload.secret, env.COMMUNITY_EMAIL_RELAY_SECRET);
 assert.equal(sentVerificationPayload.subject, 'Xác nhận email — AI Thực Chiến');
-const verifyUrl = new URL(sentVerificationPayload.verifyUrl); assert.equal(verifyUrl.origin, origin); assert.equal(verifyUrl.pathname, '/');
-const verifyToken = verifyUrl.searchParams.get('verify'); assert.match(verifyToken, /^[A-Za-z0-9_-]{32,80}$/); assert.equal(verifyUrl.hash, '#cong-dong');
+const verifyUrl = new URL(sentVerificationPayload.verifyUrl); assert.equal(verifyUrl.origin, origin); assert.equal(verifyUrl.pathname, '/api/community/verify-email');
+const verifyToken = verifyUrl.searchParams.get('token'); assert.match(verifyToken, /^[A-Za-z0-9_-]{32,80}$/); assert.equal(verifyUrl.searchParams.has('verify'), false);
 assert.ok(sentVerificationPayload.textBody.includes(sentVerificationPayload.verifyUrl));
 assert.ok(sentVerificationPayload.htmlBody.includes('href="' + sentVerificationPayload.verifyUrl + '"'));
 const landing = await worker.fetch(new Request(sentVerificationPayload.verifyUrl), env); assert.equal(landing.status, 200);
+const landingHtml = await landing.text();
+assert.match(landingHtml, /Bấm nút bên dưới để xác nhận/);
+assert.match(landingHtml, /id="confirm"/);
+assert.equal(db.emailVerificationTokens.length, 1, 'Opening the email link must not consume the token before the user clicks confirm.');
+assert.equal(db.emailVerificationStatus[0].verified_at, null, 'A GET to the confirmation page must not verify the account.');
 const pendingLogin = await call('/login', { method: 'POST', body: { email: 'member@example.com', password: 'MotMatKhauRieng123!' } }); assert.equal(pendingLogin.status, 403);
 db.failBatchAfter = 0;
 const verifyBatchFailure = await call('/verify-email', { method: 'POST', body: { token: verifyToken } });
