@@ -610,6 +610,33 @@ export default {
     try {
       const requestUrl = new URL(request.url);
       const pathname = requestUrl.pathname;
+      if (pathname === "/health") {
+        if (request.method !== "GET" && request.method !== "HEAD") {
+          return withSecurityHeaders(new Response(JSON.stringify({ ok: false, error: "Method not allowed." }), {
+            status: 405,
+            headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "Allow": "GET, HEAD" },
+          }), request);
+        }
+        let databaseReady = false;
+        try {
+          if (env.DB && typeof env.DB.prepare === "function") {
+            const result = await env.DB.prepare("SELECT 1 AS ok").first();
+            databaseReady = result?.ok === 1;
+          }
+        } catch (_healthCheckError) {
+          databaseReady = false;
+        }
+        const emailRelayConfigured = Boolean(env.COMMUNITY_EMAIL_RELAY_URL && env.COMMUNITY_EMAIL_RELAY_SECRET);
+        const ready = databaseReady && emailRelayConfigured;
+        const body = JSON.stringify({
+          ok: ready,
+          checks: { database: databaseReady ? "ready" : "unavailable", emailRelayConfigured },
+        });
+        return withSecurityHeaders(new Response(request.method === "HEAD" ? null : body, {
+          status: ready ? 200 : 503,
+          headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" },
+        }), request);
+      }
       // resolveAssetRequest maps / to /index.html internally, keeping the public URL canonical.
       if (pathname === "/api/chat") return withSecurityHeaders(await handleChat(request, env), request);
       if (pathname === "/api/community" || pathname.startsWith("/api/community/")) {
