@@ -212,7 +212,6 @@ const COMMUNITY_ENCODER = new TextEncoder();
 
 const COMMUNITY_OAUTH_STAGING_ORIGINS = new Set([
   "https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev",
-  "https://feature-required-email-verification-ai-thuc-chien-blog.manhdungub.workers.dev",
 ]);
 const COMMUNITY_OAUTH_STATE_TTL_SECONDS = 600;
 
@@ -654,13 +653,14 @@ async function completeCommunityOAuth(request, env, provider, db) {
   // transaction's cookies. A bad callback must never invalidate another login flow.
   const clearCookies = transactionValid ? communityOAuthClearCookies(provider, state) : [];
   const fail = (reason) => communityOAuthRedirect(request, provider, reason, clearCookies);
-  // Bound callback processing before any provider network request or D1 account mutation.
+  if (!transactionValid) return fail("OAUTH_STATE_INVALID");
+  // Charge the shared IP quota only after proving this callback owns a valid state.
+  // Invalid callbacks must not exhaust the quota for legitimate users behind the same NAT.
   const callbackIp = request.headers.get("CF-Connecting-IP") || "unknown";
   const callbackIpHash = await sha256Base64Url(callbackIp);
   if (!await communityRateLimit(db, "oauth-callback:" + provider + ":" + callbackIpHash, 30, 15 * 60 * 1000)) {
     return fail("OAUTH_CALLBACK_RATE_LIMITED");
   }
-  if (!transactionValid) return fail("OAUTH_STATE_INVALID");
   if (requestUrl.searchParams.has("error")) return fail("cancelled");
   const code = String(requestUrl.searchParams.get("code") || "");
   if (!code || code.length > 2048) return fail("OAUTH_CODE_MISSING");
@@ -886,14 +886,17 @@ async function handleCommunityApi(request, env) {
       // Always use the same public response to avoid exposing which email addresses have accounts.
       const generic = { ok: true, message: "Nếu email này có tài khoản đang chờ xác nhận, chúng tôi sẽ gửi liên kết mới." };
       if (!member || member.email_verified_at) return communityJson(generic, 200, request);
-      if (!env.COMMUNITY_EMAIL_RELAY_URL || !env.COMMUNITY_EMAIL_RELAY_SECRET) return communityJson({ error: "Chức năng gửi email chưa được cấu hình. Vui lòng thử lại sau." }, 503, request);
+      if (!env.COMMUNITY_EMAIL_RELAY_URL || !env.COMMUNITY_EMAIL_RELAY_SECRET) {
+        console.error("community_verification_resend_unavailable", { reason: "relay_not_configured" });
+        return communityJson(generic, 200, request);
+      }
       try {
         const token = await createCommunityVerificationToken(db, member.id);
         await sendCommunityVerificationEmail(env, member.email, member.display_name, token, new URL(request.url).origin);
       } catch (error) {
         await db.prepare("DELETE FROM community_email_verification_tokens WHERE member_id = ?").bind(member.id).run();
         console.error("community_verification_resend_failed", { errorName: error instanceof Error ? error.name : "UnknownError" });
-        return communityJson({ error: "Chưa gửi được email xác nhận. Vui lòng thử lại sau." }, 503, request);
+        return communityJson(generic, 200, request);
       }
       return communityJson(generic, 200, request);
     }

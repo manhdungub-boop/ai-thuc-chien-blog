@@ -580,8 +580,12 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
     setStatus(authStatus, 'Tạo mật khẩu mới. Liên kết chỉ dùng một lần và có hiệu lực 30 phút.', 'success');
   }
   api('/me', { method: 'GET', headers: {} }).then((result) => {
-    showMember(result.member);
-    if (result.member) loadMessages();
+    // A reset link takes precedence over an existing session; keep the reset form visible.
+    if (passwordResetToken) showMember(null);
+    else {
+      showMember(result.member);
+      if (result.member) loadMessages();
+    }
     if (oauthNotice) {
       if (result.member && oauthNotice.kind === 'success') setStatus(memberStatus, oauthNotice.text, 'success');
       else setStatus(authStatus, oauthNotice.text, oauthNotice.kind);

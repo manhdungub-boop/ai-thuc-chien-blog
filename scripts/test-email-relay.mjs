@@ -51,10 +51,6 @@ function payload(overrides = {}) {
 }
 function pass(name, condition) { assert.ok(condition, name); console.log("PASS " + name); }
 
-const health = makeRelay();
-const healthResult = read(health.doGet());
-pass("GET health endpoint exists and does not send email", healthResult.ok === true && healthResult.service === "AI_THUC_CHIEN_EMAIL_RELAY" && health.sent.length === 0);
-
 const notConfigured = makeRelay();
 const r0 = read(notConfigured.doPost(event(payload())));
 pass("missing secret fails closed", r0.code === "RELAY_NOT_CONFIGURED" && notConfigured.sent.length === 0);

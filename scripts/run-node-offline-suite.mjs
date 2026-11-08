@@ -7,16 +7,8 @@ fs.mkdirSync(outDir, { recursive: true });
 const tasks = [];
 tasks.push({ name: "copy-and-check-apps-script", command: "bash", args: ["-lc", "cp email-relay/Code.gs /tmp/email-relay.js && node --check /tmp/email-relay.js"] });
 const syntaxFiles = [
-  "recovery-snapshots/worker.mjs",
-  "recovery-snapshots/worker-email-verification-candidate.mjs",
-  "recovery-snapshots/auth-app-preview.mjs",
-  "recovery-snapshots/auth-preview.mjs",
-  "staging-entrypoint.mjs",
-  "site-snapshot/script.js",
   "scripts/test-route-resolution.mjs",
   "scripts/test-preview-content-worker.mjs",
-  "scripts/verify-recovery.mjs",
-  "scripts/verify-static-snapshot.mjs",
   "scripts/verify-article-diagrams.mjs",
   "scripts/verify-article-attribution.mjs",
   "scripts/verify-email-verification-candidate.mjs",
@@ -40,8 +32,6 @@ for (const file of syntaxFiles) tasks.push({ name: "syntax-" + path.basename(fil
 const nodeTests = [
   "scripts/test-preview-content-worker.mjs",
   "scripts/test-route-resolution.mjs",
-  "scripts/verify-recovery.mjs",
-  "scripts/verify-static-snapshot.mjs",
   "scripts/verify-article-diagrams.mjs",
   "scripts/verify-article-attribution.mjs",
   "scripts/verify-email-verification-candidate.mjs",

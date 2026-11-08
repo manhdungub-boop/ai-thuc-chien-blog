@@ -23,10 +23,14 @@ function doPost(e) {
     const textBody = String(payload.textBody || '');
     const htmlBody = String(payload.htmlBody || '');
     const verifyUrl = String(payload.verifyUrl || '');
-    const verifyMatch = verifyUrl.match(/^https:\/\/([^/?#]+)\/\?(?:verify|reset)=([A-Za-z0-9_-]{32,80})#cong-dong$/);
+    const verifyMatch = verifyUrl.match(/^https:\/\/([^/?#]+)\/(?:#cong-dong\?(?:verify|reset)=|\?verify=)([A-Za-z0-9_-]{32,80})(?:#cong-dong)?$/);
     const verifyHost = verifyMatch ? verifyMatch[1].toLowerCase() : '';
+    const bodyUrls = (textBody + "\n" + htmlBody).match(/(?:https?:)?\/\/[^\s"'<>)]*/gi) || [];
+    const hasUnapprovedBodyUrl = bodyUrls.some((url) => url.replace(/[),.;!?]+$/, '') !== verifyUrl);
+    const hasUnsafeHtmlAction = /<form\b|\baction\s*=|javascript\s*:/i.test(htmlBody);
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient) || recipient.length > 254 ||
-        !textBody || !htmlBody || !verifyMatch || !allowedHosts.includes(verifyHost)) {
+        !textBody || !htmlBody || !verifyMatch || !allowedHosts.includes(verifyHost) ||
+        !textBody.includes(verifyUrl) || !htmlBody.includes(verifyUrl) || hasUnapprovedBodyUrl || hasUnsafeHtmlAction) {
       return output({ ok: false, code: 'INVALID_MESSAGE' });
     }
     if (MailApp.getRemainingDailyQuota() < 1) return output({ ok: false, code: 'DAILY_QUOTA_EXHAUSTED' });
