@@ -26,6 +26,8 @@ assert.ok(worker.includes('route === "password-reset/request"'));
 assert.ok(worker.includes('route === "password-reset/complete"'));
 assert.match(worker, /community_password_reset_tokens/);
 assert.match(worker, /password-reset-email:/);
+assert.ok(worker.includes('const resetUrl = `${origin}/#cong-dong?reset=${encodeURIComponent(token)}`;'), 'password reset links must use the fragment URL format accepted by the email relay');
+assert.ok(!worker.includes('const resetUrl = `${origin}/?reset='), 'password reset tokens must not be placed in the query string rejected by the relay');
 assert.match(worker, /DELETE FROM community_sessions WHERE member_id = \\?/);
 assert.ok(worker.includes('RETURNING member_id'), 'password reset token must be consumed atomically to prevent concurrent replay');
 assert.match(worker, /EMAIL_NOT_VERIFIED/);

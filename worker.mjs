@@ -361,7 +361,7 @@ async function createCommunityVerificationToken(db, memberId) {
 }
 async function sendCommunityPasswordResetEmail(env, email, displayName, token, origin) {
   if (!env.COMMUNITY_EMAIL_RELAY_URL || !env.COMMUNITY_EMAIL_RELAY_SECRET) throw new Error("Password reset email relay is not configured");
-  const resetUrl = `${origin}/?reset=${encodeURIComponent(token)}#cong-dong`;
+  const resetUrl = `${origin}/#cong-dong?reset=${encodeURIComponent(token)}`;
   const safeName = escapeCommunityHtml(displayName || "bạn");
   const safeUrl = escapeCommunityHtml(resetUrl);
   const textBody = `Chào ${displayName || "bạn"}. Bạn vừa yêu cầu đặt lại mật khẩu AI Thực Chiến. Mở liên kết sau trong vòng 30 phút để tạo mật khẩu mới: ${resetUrl}. Nếu bạn không yêu cầu, hãy bỏ qua email này.`;
