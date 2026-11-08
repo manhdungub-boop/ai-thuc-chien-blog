@@ -67,8 +67,8 @@ async function get(pathname) {
 
   const sitemap = pages.get('/sitemap.xml');
   assert.match(sitemap, /<urlset\b[\s\S]*<\/urlset>/i, 'Live sitemap is not a valid URL set');
-  const sitemapUrls = [...sitemap.matchAll(/<loc>\\s*([^<]+)\\s*<\\/loc>/gi)].map((match) => match[1].trim());
-  const sourceArticlePaths = articleFiles.map((name) => `/articles/${name.replace(/\\.html$/, '')}`);
+  const sitemapUrls = [...sitemap.matchAll(/<loc>\s*([^<]+)\s*<\/loc>/gi)].map((match) => match[1].trim());
+  const sourceArticlePaths = articleFiles.map((name) => `/articles/${name.replace(/\.html$/, '')}`);
   const coverage = analyzeSitemapCoverage(sitemap, sourceArticlePaths, siteUrl);
   const articleUrls = coverage.articleUrls;
   if (coverage.unexpectedArticlePaths.length || coverage.missingArticlePaths.length || coverage.duplicateArticlePaths.length || coverage.duplicateAllUrls) {
