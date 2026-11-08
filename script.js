@@ -485,22 +485,11 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
   });
 
   if (pendingVerifyToken) {
-    authTitle.textContent = 'Xác nhận email';
-    authDescription.textContent = 'Đang xác nhận địa chỉ email của bạn…';
-    authForm.hidden = true;
-    resetForm.hidden = true;
-    forgotWrap.hidden = true;
-    setStatus(authStatus, 'Đang xác nhận email…');
-    api('/verify-email', { method: 'POST', body: JSON.stringify({ token: pendingVerifyToken }) }).then(() => {
-      window.history.replaceState(null, '', window.location.pathname + '#cong-dong');
-      authForm.hidden = false;
-      setAuthMode('login');
-      setStatus(authStatus, 'Email đã được xác nhận. Bạn có thể đăng nhập.', 'success');
-    }).catch((error) => {
-      authForm.hidden = false;
-      setAuthMode('login');
-      setStatus(authStatus, error.message, 'error');
-    });
+    // Legacy verification links must never consume a token on page load.
+    // Route them to the explicit confirmation page, which requires a user click.
+    const confirmationUrl = new URL('/api/community/verify-email', window.location.origin);
+    confirmationUrl.searchParams.set('token', pendingVerifyToken);
+    window.location.replace(confirmationUrl.toString());
   } else if (pendingResetToken) {
     authTitle.textContent = 'Đặt lại mật khẩu';
     authDescription.textContent = 'Tạo mật khẩu mới để tiếp tục sử dụng tài khoản.';
