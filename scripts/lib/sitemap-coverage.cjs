@@ -1,7 +1,7 @@
 'use strict';
 
 function analyzeSitemapCoverage(sitemapXml, expectedArticlePaths, baseUrl) {
-  const locs = [...String(sitemapXml).matchAll(/<loc>\\s*([^<]+)\\s*<\\/loc>/gi)].map((m) => m[1].trim());
+  const locs = [...String(sitemapXml).matchAll(/<loc>\s*([^<]+)\s*<\/loc>/gi)].map((m) => m[1].trim());
   const articleUrls = locs.filter((value) => {
     try { return new URL(value, baseUrl).pathname.startsWith('/articles/'); }
     catch { return false; }
@@ -9,7 +9,7 @@ function analyzeSitemapCoverage(sitemapXml, expectedArticlePaths, baseUrl) {
   const canonicalPath = (value) => {
     try {
       const url = new URL(value, baseUrl);
-      return url.pathname.replace(/\\/$/, '');
+      return url.pathname.replace(/\/$/, '');
     } catch { return null; }
   };
   const expected = expectedArticlePaths.map(canonicalPath).filter(Boolean);
