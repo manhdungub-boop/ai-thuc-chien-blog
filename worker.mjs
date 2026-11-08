@@ -292,6 +292,36 @@ async function readJsonPayload(request, maxBytes = 6000) {
   } catch (_error) { return { ok: false, status: 400, error: "Dữ liệu gửi không hợp lệ." }; }
 }
 
+async function fetchCommunityEmailRelay(env, payload) {
+  let response = await fetch(env.COMMUNITY_EMAIL_RELAY_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    redirect: "manual",
+    signal: AbortSignal.timeout(10000),
+  });
+  if (response.status >= 300 && response.status < 400) {
+    const location = response.headers.get("Location");
+    if (!location) {
+      const error = new Error("Email relay redirect is missing its Location header.");
+      error.code = "REDIRECT_MISSING_LOCATION";
+      throw error;
+    }
+    const redirectUrl = new URL(location, env.COMMUNITY_EMAIL_RELAY_URL);
+    if (redirectUrl.protocol !== "https:" || redirectUrl.hostname !== "script.googleusercontent.com") {
+      const error = new Error("Email relay returned an untrusted redirect destination.");
+      error.code = "UNSAFE_REDIRECT";
+      throw error;
+    }
+    response = await fetch(redirectUrl.toString(), {
+      method: "GET",
+      redirect: "manual",
+      signal: AbortSignal.timeout(10000),
+    });
+  }
+  return response;
+}
+
 async function sendCommunityEmailVerification(env, recipient, verifyUrl) {
   if (!env.COMMUNITY_EMAIL_RELAY_URL || !env.COMMUNITY_EMAIL_RELAY_SECRET) {
     const missing = [!env.COMMUNITY_EMAIL_RELAY_URL ? "URL" : "", !env.COMMUNITY_EMAIL_RELAY_SECRET ? "SECRET" : ""].filter(Boolean).join("_");
@@ -306,15 +336,14 @@ async function sendCommunityEmailVerification(env, recipient, verifyUrl) {
     "<p>Liên kết chỉ sử dụng một lần và hết hạn sau 24 giờ. Nếu bạn không đăng ký, hãy bỏ qua email này.</p>";
   let response;
   try {
-    response = await fetch(env.COMMUNITY_EMAIL_RELAY_URL, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ secret: env.COMMUNITY_EMAIL_RELAY_SECRET, to: recipient,
-        subject: "Xác nhận email — AI Thực Chiến", textBody, htmlBody, verifyUrl }),
-      signal: AbortSignal.timeout(10000),
+    response = await fetchCommunityEmailRelay(env, {
+      secret: env.COMMUNITY_EMAIL_RELAY_SECRET, to: recipient,
+      subject: "Xác nhận email — AI Thực Chiến", textBody, htmlBody, verifyUrl,
     });
-  } catch (_error) {
+  } catch (cause) {
     const error = new Error("Email relay request failed.");
-    error.code = "NETWORK_ERROR";
+    error.code = typeof cause?.code === "string" && /^[A-Z0-9_]{1,48}$/.test(cause.code)
+      ? cause.code : "NETWORK_ERROR";
     throw error;
   }
   const result = await response.json().catch(() => null);
@@ -339,12 +368,18 @@ async function sendCommunityPasswordResetEmail(env, recipient, resetUrl) {
   const htmlBody = "<p>Bạn đã yêu cầu đặt lại mật khẩu cho tài khoản AI Thực Chiến.</p>" +
     "<p><a href=\"" + resetUrl + "\">Đặt lại mật khẩu</a></p>" +
     "<p>Liên kết chỉ sử dụng một lần và hết hạn sau 30 phút. Nếu bạn không yêu cầu, hãy bỏ qua email này.</p>";
-  const response = await fetch(env.COMMUNITY_EMAIL_RELAY_URL, {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ secret: env.COMMUNITY_EMAIL_RELAY_SECRET, to: recipient,
-      subject: "Đặt lại mật khẩu — AI Thực Chiến", textBody, htmlBody, verifyUrl: resetUrl }),
-    signal: AbortSignal.timeout(10000),
-  });
+  let response;
+  try {
+    response = await fetchCommunityEmailRelay(env, {
+      secret: env.COMMUNITY_EMAIL_RELAY_SECRET, to: recipient,
+      subject: "Đặt lại mật khẩu — AI Thực Chiến", textBody, htmlBody, verifyUrl: resetUrl,
+    });
+  } catch (cause) {
+    const error = new Error("Email relay request failed.");
+    error.code = typeof cause?.code === "string" && /^[A-Z0-9_]{1,48}$/.test(cause.code)
+      ? cause.code : "NETWORK_ERROR";
+    throw error;
+  }
   const result = await response.json().catch(() => null);
   if (!response.ok || result?.ok !== true) throw new Error("Email relay rejected password-reset message.");
 }
