@@ -7,6 +7,10 @@ on:
     paths:
       - "worker.mjs"
       - "index.html"
+      - "ngan-hang-ai.html"
+      - "data/**"
+      - "scripts/build_static_site.cjs"
+      - "scripts/generate_seo_feeds.cjs"
       - "script.js"
       - "styles.css"
       - ".github/workflows/deploy-preview-worker.yml"
