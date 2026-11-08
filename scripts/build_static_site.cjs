@@ -22,9 +22,15 @@ require('./generate_seo_feeds.cjs')(root);
 
 fs.rmSync(output, { recursive: true, force: true });
 const outputArticles = path.join(output, 'articles');
+const outputData = path.join(output, 'data');
 fs.mkdirSync(outputArticles, { recursive: true });
+fs.mkdirSync(outputData, { recursive: true });
+const catalogSource = path.join(root, 'data', 'ai-tools.json');
+if (!fs.existsSync(catalogSource)) fail('AI catalog source is missing: data/ai-tools.json');
+fs.copyFileSync(catalogSource, path.join(outputData, 'ai-tools.json'));
 for (const name of rootFiles) fs.copyFileSync(path.join(root, name), path.join(output, name));
 for (const name of articles) fs.copyFileSync(path.join(articlesDir, name), path.join(outputArticles, name));
+if (!fs.existsSync(path.join(output, 'data', 'ai-tools.json'))) fail('AI catalog was not included in dist/data/');
 if (!fs.existsSync(path.join(output, '_headers'))) fail('_headers was not included in dist/');
 if (!fs.existsSync(path.join(output, 'google4e45ddcf8facb122.html'))) fail('Search Console verification file was not included in dist/');
 if (fs.readdirSync(outputArticles).filter((name) => name.endsWith('.html')).length !== articles.length) fail('The staged article count differs from the source article count');
