@@ -65,7 +65,7 @@ const relayPayload = {
   subject: 'Xác nhận email — AI Thực Chiến',
   displayName: 'Tester',
   verifyUrl: 'https://ai-thuc-chien-blog.manhdungub.workers.dev/?verify=abcdefghijklmnopqrstuvwxyz0123456789_AB-cd#cong-dong',
-  textBody: 'Confirm your email',
+  textBody: 'Confirm your email: https://ai-thuc-chien-blog.manhdungub.workers.dev/?verify=abcdefghijklmnopqrstuvwxyz0123456789_AB-cd#cong-dong',
   htmlBody: '<a href="https://ai-thuc-chien-blog.manhdungub.workers.dev/?verify=abcdefghijklmnopqrstuvwxyz0123456789_AB-cd#cong-dong">Confirm</a>',
 };
 const relayCall = (payload) => JSON.parse(relaySandbox.doPost({ postData: { contents: JSON.stringify(payload) } }).content);
@@ -80,19 +80,27 @@ assert.equal(relayState.sent[0].htmlBody, relayPayload.htmlBody);
 const resetUrlPayload = {
   ...relayPayload,
   subject: 'Đặt lại mật khẩu — AI Thực Chiến',
-  verifyUrl: 'https://feature-required-email-verification-ai-thuc-chien-blog.manhdungub.workers.dev/?reset=abcdefghijklmnopqrstuvwxyz0123456789_AB-cd#cong-dong',
-  textBody: 'Reset password',
-  htmlBody: '<a href="https://feature-required-email-verification-ai-thuc-chien-blog.manhdungub.workers.dev/?reset=abcdefghijklmnopqrstuvwxyz0123456789_AB-cd#cong-dong">Reset</a>'
+  verifyUrl: 'https://feature-required-email-verification-ai-thuc-chien-blog.manhdungub.workers.dev/#cong-dong?reset=abcdefghijklmnopqrstuvwxyz0123456789_AB-cd',
+  textBody: 'Reset password: https://feature-required-email-verification-ai-thuc-chien-blog.manhdungub.workers.dev/#cong-dong?reset=abcdefghijklmnopqrstuvwxyz0123456789_AB-cd',
+  htmlBody: '<a href="https://feature-required-email-verification-ai-thuc-chien-blog.manhdungub.workers.dev/#cong-dong?reset=abcdefghijklmnopqrstuvwxyz0123456789_AB-cd">Reset</a>'
 };
 assert.deepEqual(relayCall(resetUrlPayload), { ok: true }, 'approved Preview password reset link should be accepted by the relay');
 assert.equal(relayState.sent.length, 2);
-const previewUrlPayload = { ...relayPayload, verifyUrl: 'https://feature-required-email-verification-ai-thuc-chien-blog.manhdungub.workers.dev/?verify=abcdefghijklmnopqrstuvwxyz0123456789_AB-cd#cong-dong' };
+const previewVerifyUrl = 'https://feature-required-email-verification-ai-thuc-chien-blog.manhdungub.workers.dev/#cong-dong?verify=abcdefghijklmnopqrstuvwxyz0123456789_AB-cd';
+const previewUrlPayload = {
+  ...relayPayload,
+  verifyUrl: previewVerifyUrl,
+  textBody: 'Confirm your email: ' + previewVerifyUrl,
+  htmlBody: '<a href="' + previewVerifyUrl + '">Confirm</a>'
+};
 assert.deepEqual(relayCall(previewUrlPayload), { ok: true }, 'configured feature Preview hostname should be allowed');
 assert.equal(relayState.sent.length, 3);
+const authPreviewVerifyUrl = 'https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev/#cong-dong?verify=abcdefghijklmnopqrstuvwxyz0123456789_AB-cd';
 const authPreviewUrlPayload = {
   ...relayPayload,
-  verifyUrl: 'https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev/?verify=abcdefghijklmnopqrstuvwxyz0123456789_AB-cd#cong-dong',
-  htmlBody: '<a href="https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev/?verify=abcdefghijklmnopqrstuvwxyz0123456789_AB-cd#cong-dong">Confirm</a>'
+  verifyUrl: authPreviewVerifyUrl,
+  textBody: 'Confirm your email: ' + authPreviewVerifyUrl,
+  htmlBody: '<a href="' + authPreviewVerifyUrl + '">Confirm</a>'
 };
 assert.deepEqual(relayCall(authPreviewUrlPayload), { ok: true }, 'dedicated OAuth Preview hostname must be allowlisted');
 assert.equal(relayState.sent.length, 4);
