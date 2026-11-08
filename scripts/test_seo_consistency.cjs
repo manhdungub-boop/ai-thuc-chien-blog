@@ -40,6 +40,7 @@ const publicPages = [
   { file: 'index.html', expected: baseUrl + '/' },
   { file: 've-chung-toi.html', expected: baseUrl + '/ve-chung-toi.html' },
   { file: 'thu-vien.html', expected: baseUrl + '/thu-vien.html' },
+  { file: 'ngan-hang-ai.html', expected: baseUrl + '/ngan-hang-ai.html' },
   ...articleFiles.map((file) => ({ file: path.join('articles', file), expected: null }))
 ];
 
@@ -119,6 +120,6 @@ const sitemapArticleUrls = sitemapUrls.filter((url) => url.startsWith(baseUrl + 
 const feedArticleUrls = feedUrls.filter((url) => url.startsWith(baseUrl + '/articles/'));
 assert.equal(sitemapArticleUrls.length, articleFiles.length, 'Generated sitemap article count differs from source article count');
 assert.equal(feedArticleUrls.length, articleFiles.length, 'Generated RSS article count differs from source article count');
-assert.equal(sitemapUrls.length, articleFiles.length + 3, 'Sitemap should contain homepage, about page, topic library, and every article');
+assert.equal(sitemapUrls.length, articleFiles.length + 4, 'Sitemap should contain homepage, about page, topic library, AI Bank, and every article');
 
 console.log('SEO CONSISTENCY PASS: ' + articleFiles.length + ' articles and 3 static pages have valid metadata, JSON-LD, canonical URLs, sitemap/RSS parity, and deployment output.');

@@ -5,7 +5,7 @@ const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
 const output = path.join(root, 'dist');
-const rootFiles = ['index.html', 'thu-vien.html', 've-chung-toi.html', 'feed.xml', 'styles.css', 'script.js', 'robots.txt', 'sitemap.xml', 'favicon.svg', '404.html', 'google4e45ddcf8facb122.html', '_headers'];
+const rootFiles = ['index.html', 'thu-vien.html', 've-chung-toi.html', 'ngan-hang-ai.html', 'feed.xml', 'styles.css', 'script.js', 'robots.txt', 'sitemap.xml', 'favicon.svg', '404.html', 'google4e45ddcf8facb122.html', '_headers'];
 function fail(message) { console.error('STATIC BUILD FAIL:', message); process.exit(1); }
 for (const name of rootFiles) if (!fs.existsSync(path.join(root, name))) fail('Required source file is missing: ' + name);
 const articlesDir = path.join(root, 'articles');
@@ -22,9 +22,16 @@ require('./generate_seo_feeds.cjs')(root);
 
 fs.rmSync(output, { recursive: true, force: true });
 const outputArticles = path.join(output, 'articles');
+const outputData = path.join(output, 'data');
 fs.mkdirSync(outputArticles, { recursive: true });
+fs.mkdirSync(outputData, { recursive: true });
+const catalogSource = path.join(root, 'data', 'ai-tools.json');
+if (!fs.existsSync(catalogSource)) fail('AI catalog source is missing: data/ai-tools.json');
+fs.copyFileSync(catalogSource, path.join(outputData, 'ai-tools.json'));
 for (const name of rootFiles) fs.copyFileSync(path.join(root, name), path.join(output, name));
 for (const name of articles) fs.copyFileSync(path.join(articlesDir, name), path.join(outputArticles, name));
+if (!fs.existsSync(path.join(output, 'data', 'ai-tools.json'))) fail('AI catalog was not included in dist/data/');
+if (!fs.existsSync(path.join(output, 'ngan-hang-ai.html'))) fail('Ngân hàng AI page was not included in dist/');
 if (!fs.existsSync(path.join(output, '_headers'))) fail('_headers was not included in dist/');
 if (!fs.existsSync(path.join(output, 'google4e45ddcf8facb122.html'))) fail('Search Console verification file was not included in dist/');
 if (fs.readdirSync(outputArticles).filter((name) => name.endsWith('.html')).length !== articles.length) fail('The staged article count differs from the source article count');

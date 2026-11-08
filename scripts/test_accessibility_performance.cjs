@@ -15,7 +15,11 @@ for (const file of htmlFiles) {
   assert.match(html, /<main\b[^>]*\bid="main-content"/i, file + ': main landmark needs main-content id');
   assert.ok(html.includes('<link rel="preconnect" href="https://fonts.googleapis.com">'), file + ': missing Google Fonts preconnect');
   assert.ok(html.includes('<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'), file + ': missing font asset preconnect');
-  assert.ok(html.includes('<link href="' + fontUrl + '" rel="stylesheet">'), file + ': font stylesheet must be discoverable from HTML');
+  const fontLinkTags = [...html.matchAll(/<link\b[^>]*>/gi)].map((match) => match[0]);
+  const hasFontStylesheet = fontLinkTags.some((tag) => tag.includes(fontUrl) && /rel=[\"']stylesheet[\"']/i.test(tag));
+  const hasFontPreload = fontLinkTags.some((tag) => tag.includes(fontUrl) && /rel=[\"']preload[\"']/i.test(tag) && /as=[\"']style[\"']/i.test(tag) && /onload=/i.test(tag));
+  assert.ok(hasFontStylesheet || hasFontPreload, file + ': font stylesheet must be discoverable from HTML');
+  if (hasFontPreload) assert.ok(hasFontStylesheet, file + ': font preload must retain a stylesheet fallback');
 }
 const css = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
 assert.doesNotMatch(css, /^\s*@import\b/m, 'Avoid CSS @import because it delays font discovery');

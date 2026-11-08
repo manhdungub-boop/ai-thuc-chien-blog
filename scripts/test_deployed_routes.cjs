@@ -4,6 +4,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { analyzeSitemapCoverage } = require('./lib/sitemap-coverage.cjs');
 
 const siteUrl = (process.env.SITE_URL || 'https://ai-thuc-chien-blog.manhdungub.workers.dev').replace(/\/$/, '');
 const articleDir = path.resolve(__dirname, '..', 'articles');
@@ -39,7 +40,12 @@ async function get(pathname) {
 
   const homepage = pages.get('/');
   assert.match(homepage, /<html\b[^>]*lang=["']vi["']/i, 'Homepage must declare Vietnamese language');
-  assert.match(homepage, /<title[^>]*>\s*AI Thực Chiến\s*[—-]\s*Ứng dụng AI vào việc thật\s*<\/title>/i, 'Root route must return the real homepage title');
+  const homepageTitle = (homepage.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '';
+  if (process.env.ALLOW_BACKUP_TITLE_VARIANT === 'true') {
+    assert.match(homepageTitle, /AI Thực Chiến/i, 'Backup homepage title must identify the AI Thực Chiến site');
+  } else {
+    assert.match(homepage, /<title[^>]*>\s*AI Thực Chiến(?:\s*\|\s*DUNG\s*-\s*AI)?\s*[—-]\s*Ứng dụng AI vào việc thật\s*<\/title>/i, `Primary Worker root route must return the current homepage title; received: ${homepageTitle.trim().slice(0, 160)}`);
+  }
   assert.doesNotMatch(homepage, /LỖI 404|Không tìm thấy trang|Có vẻ đường dẫn/i, 'Root route must never return the branded not-found page');
 
   const about = pages.get('/ve-chung-toi.html');
@@ -62,10 +68,25 @@ async function get(pathname) {
   const sitemap = pages.get('/sitemap.xml');
   assert.match(sitemap, /<urlset\b[\s\S]*<\/urlset>/i, 'Live sitemap is not a valid URL set');
   const sitemapUrls = [...sitemap.matchAll(/<loc>\s*([^<]+)\s*<\/loc>/gi)].map((match) => match[1].trim());
-  const articleUrls = sitemapUrls.filter((url) => { try { return new URL(url).pathname.startsWith('/articles/'); } catch { return false; } });
-  assert.equal(articleUrls.length, articleFiles.length, `Live sitemap article count mismatch: expected ${articleFiles.length}, got ${articleUrls.length}`);
+  const sourceArticlePaths = articleFiles.map((name) => `/articles/${name.replace(/\.html$/, '')}`);
+  const coverage = analyzeSitemapCoverage(sitemap, sourceArticlePaths, siteUrl);
+  const articleUrls = coverage.articleUrls;
+  if (coverage.unexpectedArticlePaths.length || coverage.missingArticlePaths.length || coverage.duplicateArticlePaths.length || coverage.duplicateAllUrls) {
+    console.error('SITEMAP COVERAGE DIFF:');
+    console.error(JSON.stringify({
+      expectedSourceArticleCount: sourceArticlePaths.length,
+      actualSitemapArticleCount: articleUrls.length,
+      unexpectedArticlePaths: coverage.unexpectedArticlePaths,
+      missingArticlePaths: coverage.missingArticlePaths,
+      duplicateArticlePaths: coverage.duplicateArticlePaths,
+      duplicateAllUrls: coverage.duplicateAllUrls
+    }, null, 2));
+  }
+  assert.equal(coverage.unexpectedArticlePaths.length, 0, `Live sitemap contains unexpected article paths: ${coverage.unexpectedArticlePaths.join(', ')}`);
+  assert.equal(coverage.missingArticlePaths.length, 0, `Live sitemap is missing source article paths: ${coverage.missingArticlePaths.join(', ')}`);
+  assert.equal(coverage.duplicateArticlePaths.length, 0, `Live sitemap contains duplicate article paths: ${coverage.duplicateArticlePaths.join(', ')}`);
   assert.ok(sitemapUrls.some((url) => { try { return new URL(url).pathname === '/thu-vien.html'; } catch { return false; } }), 'Live sitemap is missing the library page');
-  assert.equal(new Set(sitemapUrls).size, sitemapUrls.length, 'Live sitemap contains duplicate URLs');
+  assert.equal(coverage.duplicateAllUrls, false, 'Live sitemap contains duplicate URLs');
 
   const feed = pages.get('/feed.xml');
   assert.match(feed, /<rss\b[\s\S]*<\/rss>/i, 'Live RSS feed is not a valid RSS document');

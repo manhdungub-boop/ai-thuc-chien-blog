@@ -1,0 +1,75 @@
+name: Deploy isolated Preview Worker
+
+on:
+  push:
+    branches:
+      - fix/email-verification-preview-20261107
+    paths:
+      - "worker.mjs"
+      - "index.html"
+      - "ngan-hang-ai.html"
+      - "data/**"
+      - "scripts/build_static_site.cjs"
+      - "scripts/generate_seo_feeds.cjs"
+      - "script.js"
+      - "styles.css"
+      - ".github/workflows/deploy-preview-worker.yml"
+      - ".github/workflows/staging-email-preflight.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-ai-thuc-chien-preview
+  cancel-in-progress: false
+
+jobs:
+  deploy-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 92cf091bbac8b4879ec65feb30b4715b
+    steps:
+      - name: Check out selected feature branch
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify preview Worker and D1 configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+            echo "::error::CLOUDFLARE_WORKERS_API_TOKEN is required."
+            exit 1
+          fi
+          echo "::add-mask::${CLOUDFLARE_API_TOKEN}"
+          node <<'NODE'
+          const fs = require('node:fs');
+          const prod = JSON.parse(fs.readFileSync('wrangler.jsonc', 'utf8'));
+          const preview = JSON.parse(fs.readFileSync('wrangler.preview.jsonc', 'utf8'));
+          const prodDb = (prod.d1_databases || []).find(x => x.binding === 'DB');
+          const previewDb = (preview.d1_databases || []).find(x => x.binding === 'DB');
+          if (preview.name !== 'ai-thuc-chien-blog-auth-app-preview') throw new Error('Refusing to deploy: unexpected Worker name.');
+          if (preview.account_id !== process.env.CLOUDFLARE_ACCOUNT_ID) throw new Error('Preview account mismatch.');
+          if (!prodDb || !previewDb || prodDb.database_id === previewDb.database_id) throw new Error('Preview D1 must be distinct from production D1.');
+          if (previewDb.database_id !== '51d814c8-a3fc-4481-a5f1-60bc67617f3c' || previewDb.database_name !== 'ai-thuc-chien-community-preview') throw new Error('Preview D1 identity mismatch.');
+          console.log('PASS: exact isolated Preview Worker and D1 targets verified.');
+          NODE
+
+      - name: Build static assets
+        run: npm run build
+
+      - name: Deploy Preview Worker only
+        run: npx --yes wrangler@4 deploy --config wrangler.preview.jsonc
+
+      - name: Report deployment scope
+        if: always()
+        run: |
+          echo "Target: ai-thuc-chien-blog-auth-app-preview"
+          echo "Production Worker, Production D1, DNS and Production secrets were not targeted."

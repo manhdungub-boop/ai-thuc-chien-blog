@@ -1,0 +1,44 @@
+name: Staging Email Secrets Preflight
+
+on:
+  push:
+    branches:
+      - fix/email-verification-preview-20261107
+    paths:
+      - ".github/workflows/staging-email-preflight.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    name: Check staging secret presence and email alias format
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Validate staging-only secrets without revealing values
+        shell: bash
+        env:
+          STAGING_E2E_EMAIL: ${{ secrets.STAGING_E2E_EMAIL }}
+          STAGING_E2E_PASSWORD: ${{ secrets.STAGING_E2E_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${STAGING_E2E_EMAIL:-}" ]]; then
+            echo "::error::STAGING_E2E_EMAIL is missing."
+            exit 1
+          fi
+
+          if ! printf '%s' "$STAGING_E2E_EMAIL" | grep -Eq '^manhdungub\+staging-e2e-[a-z0-9-]+@gmail\.com$'; then
+            echo "::error::STAGING_E2E_EMAIL is present but does not match the approved staging alias format."
+            exit 1
+          fi
+
+          if [[ -z "${STAGING_E2E_PASSWORD:-}" ]]; then
+            echo "::error::STAGING_E2E_PASSWORD is missing."
+            exit 1
+          fi
+
+          echo "PASS: both staging secrets are present and the email alias format is valid."
+          echo "No secret values were printed. No email was sent and no account or database was modified."

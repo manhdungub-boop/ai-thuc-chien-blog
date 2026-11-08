@@ -81,7 +81,15 @@
         </form>
         <p class="community-status" id="community-auth-status" role="status" aria-live="polite"></p>
         <p class="community-auth-switch"><span id="community-switch-copy">Đã có tài khoản?</span> <button type="button" id="community-switch-mode">Đăng nhập</button></p>
-        <p class="community-privacy-note">Email chỉ dùng để đăng nhập, không hiển thị trong phòng. Tên hiển thị và tin nhắn sẽ được các thành viên đọc. Không dùng lại mật khẩu ở nơi khác. Phiên bản đầu chưa xác minh email hoặc hỗ trợ đặt lại mật khẩu.</p>
+        <p class="community-auth-switch" id="community-forgot-wrap" hidden><button type="button" id="community-forgot-password">Quên mật khẩu?</button></p>
+        <form id="community-reset-form" class="community-auth-form" hidden>
+          <label for="community-reset-password">Mật khẩu mới</label>
+          <input id="community-reset-password" name="newPassword" type="password" minlength="10" maxlength="128" autocomplete="new-password" placeholder="Ít nhất 10 ký tự" required>
+          <button class="button primary community-submit" type="submit">Đặt lại mật khẩu <span>→</span></button>
+          <p class="community-auth-switch"><button type="button" id="community-reset-cancel">Quay lại đăng nhập</button></p>
+        </form>
+        <p class="community-status" id="community-reset-status" role="status" aria-live="polite"></p>
+        <p class="community-privacy-note">Email chỉ dùng để đăng nhập, không hiển thị trong phòng. Tên hiển thị và tin nhắn sẽ được các thành viên đọc. Không dùng lại mật khẩu ở nơi khác. Bạn có thể yêu cầu liên kết đặt lại mật khẩu qua email đã đăng ký.</p>
       </div>
       <div id="community-member-panel" hidden>
         <div class="community-member-avatar" aria-hidden="true">✦</div>
@@ -141,5 +149,5 @@
 <section class="newsletter"><div><div class="section-kicker">HỌC MỘT CHÚT MỖI NGÀY</div><h2>AI hữu ích bắt đầu<br><em>từ việc bạn đang làm.</em></h2></div><p>Chúng tôi đang xây dựng thư viện hướng dẫn thực hành. Hãy quay lại để khám phá các bài viết và quy trình mới.</p><a class="button light" href="#bai-viet">Xem bài viết <span>→</span></a></section>
 </main>
 <footer><a class="brand" href="./"><span class="brand-mark">AI</span><span>AI <b>Thực Chiến</b></span></a><span>Học thật · Thử thật · Tối ưu từng bước · <a href="feed.xml" aria-label="Đăng ký RSS">RSS</a> · <a href="ve-chung-toi.html" aria-label="Đọc nguyên tắc biên tập">Nguyên tắc biên tập</a></span><span>© <span id="year"></span> AI Thực Chiến</span></footer>
-<script src="script.js"></script>
+<script src="script.js?v=8b17b3b"></script>
 </body></html>

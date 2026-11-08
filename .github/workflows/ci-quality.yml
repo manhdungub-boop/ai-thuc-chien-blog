@@ -31,6 +31,9 @@ jobs:
       - name: Build static site and SEO feeds
         run: npm run build
 
+      - name: Test AI Bank route packaging and sitemap
+        run: node scripts/test_ai_bank_route.cjs
+
       - name: Check JavaScript syntax
         run: |
           node --check script.js
@@ -41,7 +44,14 @@ jobs:
           node scripts/test_worker_headers.mjs
           node scripts/test_worker_retrieval.mjs
           node scripts/test_community_api.mjs
+          node scripts/test_health_endpoint.mjs
           node scripts/test_homepage_search.cjs
+
+      - name: Test AI catalog integrity simulations
+        run: node scripts/test_ai_catalog.mjs
+
+      - name: Test community registration frontend contract
+        run: npm run test:community:frontend
 
       - name: Test community D1 schema
         run: python3 scripts/test_community_schema.py

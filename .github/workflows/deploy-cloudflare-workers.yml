@@ -9,6 +9,8 @@ on:
       - "index.html"
       - "ve-chung-toi.html"
       - "thu-vien.html"
+      - "ngan-hang-ai.html"
+      - "data/**"
       - "articles/**"
       - "styles.css"
       - "script.js"
