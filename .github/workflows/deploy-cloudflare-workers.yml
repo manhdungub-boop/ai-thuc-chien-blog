@@ -72,6 +72,8 @@ jobs:
           config = json.loads(Path("wrangler.jsonc").read_text(encoding="utf-8"))
           assert config.get("name") == "ai-thuc-chien-blog", "Refusing to deploy to an unexpected Worker"
           assert config.get("account_id") == "92cf091bbac8b4879ec65feb30b4715b", "Unexpected Cloudflare account"
+          assert config.get("keep_vars") is True, "Worker deploy must preserve per-environment relay URL variables"
+          assert "COMMUNITY_EMAIL_RELAY_SECRET" in config.get("secrets", {}).get("required", []), "Worker deploy must require the email relay secret"
           assets = config.get("assets", {})
           assert config.get("main") == "./worker.mjs", "Worker must load the reviewed security-header wrapper"
           assert assets.get("directory") == "./dist", "Worker assets must come from dist/"

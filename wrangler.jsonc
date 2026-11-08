@@ -6,6 +6,10 @@
   "compatibility_flags": ["assets_navigation_has_no_effect"],
   "workers_dev": true,
   "preview_urls": true,
+  "keep_vars": true,
+  "secrets": {
+    "required": ["COMMUNITY_EMAIL_RELAY_SECRET"]
+  },
   "assets": {
     "directory": "./dist",
     "html_handling": "none",
