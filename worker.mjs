@@ -946,9 +946,23 @@ async function handleCommunityApi(request, env) {
         FROM community_email_verification_tokens t JOIN community_members m ON m.id = t.member_id
         WHERE t.token_hash = ? AND t.expires_at > ? LIMIT 1`).bind(tokenHash, now).first();
       if (!row) return communityJson({ error: "Liên kết xác nhận không hợp lệ, đã dùng hoặc đã hết hạn. Hãy gửi lại email xác nhận." }, 400, request);
-      await db.prepare("DELETE FROM community_email_verification_tokens WHERE token_hash = ?").bind(tokenHash).run();
-      await db.prepare("UPDATE community_members SET email_verified_at = ? WHERE id = ? AND email_verified_at IS NULL").bind(now, row.member_id).run();
-      await db.prepare("DELETE FROM community_email_verification_tokens WHERE member_id = ?").bind(row.member_id).run();
+      if (row.email_verified_at) return communityJson({ error: "Email đã được xác nhận. Bạn có thể đăng nhập." }, 400, request);
+      const verificationResults = await db.batch([
+        db.prepare("UPDATE community_members SET email_verified_at = ? WHERE id = ? AND email_verified_at IS NULL")
+          .bind(now, row.member_id),
+        db.prepare(`DELETE FROM community_email_verification_tokens
+          WHERE token_hash = ? AND EXISTS (
+            SELECT 1 FROM community_members
+            WHERE id = community_email_verification_tokens.member_id AND email_verified_at = ?
+          )`).bind(tokenHash, now),
+        db.prepare(`DELETE FROM community_email_verification_tokens
+          WHERE member_id = ? AND EXISTS (
+            SELECT 1 FROM community_members WHERE id = ? AND email_verified_at = ?
+          )`).bind(row.member_id, row.member_id, now),
+      ]);
+      if (!verificationResults?.[0]?.meta?.changes) {
+        return communityJson({ error: "Liên kết xác nhận không hợp lệ, đã dùng hoặc đã hết hạn. Hãy gửi lại email xác nhận." }, 400, request);
+      }
       return communityJson({ ok: true, message: "Email đã được xác nhận. Bây giờ bạn có thể đăng nhập.", email: row.email }, 200, request);
     }
 
@@ -1029,18 +1043,37 @@ async function handleCommunityApi(request, env) {
       const ipHash = await sha256Base64Url(ip);
       if (!await communityRateLimit(db, `password-reset-complete-ip:${ipHash}`, 10, 15 * 60 * 1000)) return communityJson({ error: "Bạn đã thử quá nhiều lần. Vui lòng thử lại sau." }, 429, request);
       const tokenHash = await sha256Base64Url(token);
-      // Atomically consume the token before changing the password so concurrent replay attempts cannot both succeed.
-      const consumed = await db.prepare(`DELETE FROM community_password_reset_tokens
-        WHERE token_hash = ? AND expires_at > ?
-          AND EXISTS (SELECT 1 FROM community_members m WHERE m.id = community_password_reset_tokens.member_id AND m.email_verified_at IS NOT NULL)
-        RETURNING member_id`).bind(tokenHash, now).first();
-      if (!consumed?.member_id) return communityJson({ error: "Liên kết đặt lại mật khẩu không hợp lệ, đã dùng hoặc đã hết hạn. Hãy yêu cầu liên kết mới." }, 400, request);
       const salt = crypto.getRandomValues(new Uint8Array(16));
+      const passwordSalt = bytesToBase64Url(salt);
       const passwordHash = await hashCommunityPassword(password, salt);
-      await db.prepare("UPDATE community_members SET password_salt = ?, password_hash = ? WHERE id = ?")
-        .bind(bytesToBase64Url(salt), passwordHash, consumed.member_id).run();
-      await db.prepare("DELETE FROM community_password_reset_tokens WHERE member_id = ?").bind(consumed.member_id).run();
-      await db.prepare("DELETE FROM community_sessions WHERE member_id = ?").bind(consumed.member_id).run();
+      // Password update, session revocation, and one-time token consumption commit as one D1 transaction.
+      // The latter two statements are guarded by the exact newly generated salt/hash, so a zero-row
+      // password update cannot consume the token or revoke any session.
+      const resetResults = await db.batch([
+        db.prepare(`UPDATE community_members SET password_salt = ?, password_hash = ?
+          WHERE id = (
+            SELECT member_id FROM community_password_reset_tokens
+            WHERE token_hash = ? AND expires_at > ?
+              AND EXISTS (SELECT 1 FROM community_members m
+                WHERE m.id = community_password_reset_tokens.member_id AND m.email_verified_at IS NOT NULL)
+          )`).bind(passwordSalt, passwordHash, tokenHash, now),
+        db.prepare(`DELETE FROM community_sessions
+          WHERE member_id = (
+            SELECT t.member_id FROM community_password_reset_tokens t
+            JOIN community_members m ON m.id = t.member_id
+            WHERE t.token_hash = ? AND t.expires_at > ?
+              AND m.password_salt = ? AND m.password_hash = ?
+          )`).bind(tokenHash, now, passwordSalt, passwordHash),
+        db.prepare(`DELETE FROM community_password_reset_tokens
+          WHERE token_hash = ? AND expires_at > ?
+            AND EXISTS (SELECT 1 FROM community_members m
+              WHERE m.id = community_password_reset_tokens.member_id
+                AND m.password_salt = ? AND m.password_hash = ?)
+        `).bind(tokenHash, now, passwordSalt, passwordHash),
+      ]);
+      if (!resetResults?.[0]?.meta?.changes) {
+        return communityJson({ error: "Liên kết đặt lại mật khẩu không hợp lệ, đã dùng hoặc đã hết hạn. Hãy yêu cầu liên kết mới." }, 400, request);
+      }
       return communityJson({ ok: true, message: "Mật khẩu đã được đặt lại. Vui lòng đăng nhập bằng mật khẩu mới." }, 200, request);
     }
 
