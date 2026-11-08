@@ -8,19 +8,19 @@ const base = 'https://example.test';
 const xml = (paths) => `<urlset>${paths.map((p) => `<url><loc>${p.startsWith('http') ? p : base + p}</loc></url>`).join('')}</urlset>`;
 
 test('passes when sitemap and source article paths match', () => {
-  const result = analyzeSitemapCoverage(xml(['/articles/a', '/articles/b', '/thu-vien.html']), ['/articles/a.html', '/articles/b.html'], base);
+  const result = analyzeSitemapCoverage(xml(['/articles/a', '/articles/b', '/thu-vien.html']), ['/articles/a', '/articles/b'], base);
   assert.deepEqual(result.unexpectedArticlePaths, []);
   assert.deepEqual(result.missingArticlePaths, []);
   assert.deepEqual(result.duplicateArticlePaths, []);
 });
 
 test('reports unexpected sitemap article paths', () => {
-  const result = analyzeSitemapCoverage(xml(['/articles/a', '/articles/old']), ['/articles/a.html'], base);
+  const result = analyzeSitemapCoverage(xml(['/articles/a', '/articles/old']), ['/articles/a'], base);
   assert.deepEqual(result.unexpectedArticlePaths, ['/articles/old']);
 });
 
 test('reports missing source article paths', () => {
-  const result = analyzeSitemapCoverage(xml(['/articles/a']), ['/articles/a.html', '/articles/b.html'], base);
+  const result = analyzeSitemapCoverage(xml(['/articles/a']), ['/articles/a', '/articles/b'], base);
   assert.deepEqual(result.missingArticlePaths, ['/articles/b']);
 });
 
