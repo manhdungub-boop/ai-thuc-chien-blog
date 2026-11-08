@@ -11,6 +11,13 @@ const expectedPreviewOrigin = 'https://fix-atomic-email-tokens-202-ai-thuc-chien
 assert.equal(originMatch[1], expectedPreviewOrigin, 'Live E2E must target the exact isolated branch Preview Worker deployed for this PR.');
 const expectedPreviewHost = new URL(expectedPreviewOrigin).hostname;
 assert.ok(js.includes("const previewHost = '" + expectedPreviewHost + "';"), 'The community frontend must recognize this PR branch Preview hostname.');
+const legacyVerifyStart = js.indexOf('if (pendingVerifyToken) {', js.indexOf('const isPreviewEmailVerification'));
+const legacyVerifyEnd = js.indexOf('} else if (pendingResetToken) {', legacyVerifyStart);
+assert.ok(legacyVerifyStart >= 0 && legacyVerifyEnd > legacyVerifyStart, 'Legacy verification-link handling must remain explicit.');
+const legacyVerifyHandler = js.slice(legacyVerifyStart, legacyVerifyEnd);
+assert.match(legacyVerifyHandler, /new URL\('\/api\/community\/verify-email'/, 'Legacy verification links must route to the dedicated confirmation page.');
+assert.match(legacyVerifyHandler, /window\.location\.replace\(confirmationUrl\.toString\(\)\)/, 'Legacy verification links must navigate to explicit confirmation.');
+assert.doesNotMatch(legacyVerifyHandler, /api\('\/verify-email'/, 'A page load must never POST a legacy verification token automatically.');
 assert.ok(worker.includes('"' + expectedPreviewOrigin + '"'), 'The isolated branch Preview Worker origin must be allowed by the community API CORS allowlist.');
 assert.ok(!liveE2E.includes('fix-email-verification-prev-ai-thuc-chien-blog-auth-app-preview'), 'Live E2E must not target the superseded Preview hostname.');
  
