@@ -1,0 +1,78 @@
+# PR #77 + PR #87 Authentication Hardening Integration Plan
+
+Date: 2026-11-09
+Target branch: `integration/pr77-auth-hardening-20261109`
+Starting commit: `54888d22b0e70d1ca9f06bac831051eede841eb0` (PR #77 head)
+
+## Scope and safety boundary
+
+This branch is an isolated integration workspace. It is not a deployment target and must not be merged or deployed to Production as part of this work. No Production D1, Worker, DNS, secrets, or real user records may be changed.
+
+## Architecture decision
+
+Use PR #77 as the application baseline. It contains the broader community feature set: member sessions, topic messages, email verification and resend, password reset, and Google OAuth (plus the Facebook identity isolation safeguards in its Worker).
+
+Keep PR #77's canonical verification state in `community_members.email_verified_at`. Do not import PR #85's parallel `community_email_verification_status` table or its migration 0006. Do not replace the PR #77 Worker wholesale with the smaller PR #85 Worker.
+
+Keep the existing PR #77 migrations 0001-0004 as the schema baseline:
+- 0001: community members, sessions, messages, rate limits.
+- 0002: `email_verified_at` plus one-time verification-token table; existing accounts are backfilled as verified.
+- 0003: OAuth accounts.
+- 0004: password-reset tokens.
+
+Before any migration test, validate the complete ordered migration set against a fresh SQLite database and a database populated with representative pre-verification members. Tests must prove existing accounts remain verified and foreign-key cascades remain intact.
+
+## Security changes to port from PR #87
+
+1. Email relay redirect handling:
+   - POST to the configured Apps Script relay with `redirect: "manual"`.
+   - If a 3xx response is returned, require a Location header.
+   - Resolve the destination and allow only the exact HTTPS origin `https://script.googleusercontent.com`; reject credentials and any alternate origin/port.
+   - Follow with a GET that contains no POST body, relay secret, or application headers.
+   - Keep errors sanitized; never log relay URLs, secrets, tokens, or recipient addresses.
+   - Apply the shared helper to both verification and password-reset email delivery.
+
+2. Email verification completion:
+   - Preserve PR #77's `email_verified_at` column.
+   - Replace separate token consumption and member update statements with one D1 batch transaction.
+   - Update only the member whose unexpired token hash matches and whose `email_verified_at` is NULL.
+   - Delete the matching token only when the guarded update succeeds.
+   - Confirm a failed update or failed batch leaves the token available and does not mark the member verified.
+   - Keep the frontend's explicit user confirmation button; merely opening an email link must not consume the token.
+
+3. Password-reset completion:
+   - Replace separate token consumption, password update, session revocation, and token cleanup with one D1 batch transaction.
+   - Update the password only for the member referenced by a valid, unexpired token.
+   - Guard session revocation and token deletion on the new password salt/hash having been written.
+   - A zero-row password update or batch failure must not consume the token or revoke sessions.
+   - Preserve the generic password-reset request response to prevent account enumeration.
+
+4. Preserve PR #77 features:
+   - Keep resend-verification and its rate limits.
+   - Keep OAuth callback/state/nonce protections and provider identity isolation.
+   - Keep existing route and response contracts unless a focused regression test proves a required change.
+
+## Known differences to resolve deliberately
+
+- PR #77 verification token lifetime is 30 minutes; PR #87 uses 24 hours. Choose one policy explicitly and keep Worker, email copy, frontend, and tests consistent. Proposed integration default: 24 hours, subject to review of abuse/rate-limit controls.
+- PR #77's frontend already has a dedicated confirmation button. Do not replace it with an auto-consuming GET.
+- PR #77's relay helper currently assumes a direct JSON response; PR #87's manual redirect guard is the required fix.
+- PR #77's verification and password-reset completion currently perform multiple independent writes; PR #87's transaction guards are required.
+
+## Required tests before a staging Preview build
+
+- Full migration test on fresh and pre-existing database fixtures.
+- Community API offline regression covering registration rollback, resend, verification success, invalid/expired/replayed token, and transaction rollback.
+- Password-reset tests covering successful reset, invalid/expired/replayed token, zero-row password update, batch rollback, and session revocation only after success.
+- Relay tests covering normal response, expected Google redirect, missing Location, untrusted origin, credentials, non-standard port, and ensuring the follow-up GET carries no secret/body/custom headers.
+- Frontend tests proving the explicit confirmation action is required and tokens are removed from the URL after completion.
+- OAuth regression tests proving Google verification rules and Facebook identity isolation remain unchanged.
+- Static site, SEO, accessibility, and content quality gates from PR #77.
+- Preview-only browser E2E with disposable test identity. Email delivery remains unverified until a safe, authorized end-to-end check succeeds.
+
+## Release gates
+
+- No Production migration, Worker deployment, DNS change, secret change, or merge is authorized by this plan.
+- Do not bypass any tool safety block to send email or access account credentials.
+- A successful offline test or Preview deployment does not establish successful email delivery.
+- Keep PR #77, #85, and #87 unchanged until the integration branch passes all required gates and a separate release decision is made.
