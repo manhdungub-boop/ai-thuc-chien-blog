@@ -5,11 +5,13 @@ const html = readFileSync('index.html', 'utf8');
 const js = readFileSync('script.js', 'utf8');
 const liveE2E = readFileSync('scripts/test-live-staging-email-e2e.mjs', 'utf8');
 const worker = readFileSync('worker.mjs', 'utf8');
-const expectedPreviewOrigin = 'https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev';
-assert.ok(liveE2E.includes('const ORIGIN = "' + expectedPreviewOrigin + '";'), 'Live E2E must target the exact isolated Preview Worker deployed by wrangler.preview.jsonc.');
-assert.ok(worker.includes('"' + expectedPreviewOrigin + '"'), 'The isolated Preview Worker origin must be allowed by the community API CORS allowlist.');
-assert.ok(!liveE2E.includes('fix-email-verification-prev-ai-thuc-chien-blog-auth-app-preview'), 'Live E2E must not target a branch-specific hostname that the Preview deployment workflow does not deploy.');
-
+const originMatch = liveE2E.match(/^const ORIGIN = "(https:\/\/[^"]+)";$/m);
+assert.ok(originMatch, 'Live E2E must declare one explicit HTTPS Preview Worker origin.');
+const expectedPreviewOrigin = 'https://fix-atomic-email-tokens-202-ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev';
+assert.equal(originMatch[1], expectedPreviewOrigin, 'Live E2E must target the exact isolated branch Preview Worker deployed for this PR.');
+assert.ok(worker.includes('"' + expectedPreviewOrigin + '"'), 'The isolated branch Preview Worker origin must be allowed by the community API CORS allowlist.');
+assert.ok(!liveE2E.includes('fix-email-verification-prev-ai-thuc-chien-blog-auth-app-preview'), 'Live E2E must not target the superseded Preview hostname.');
+ 
 for (const id of ['community-auth-form', 'community-auth-submit', 'community-auth-status', 'community-email', 'community-password']) {
   assert.ok(html.includes('id="' + id + '"'), 'Missing registration UI element: ' + id);
 }
