@@ -15,7 +15,30 @@ assert.ok(Number(pbkdf2IterationsMatch[1]) <= 100000,
 assert.match(workerSource, /iterations:\s*COMMUNITY_PASSWORD_ITERATIONS/,
   'Password hashing must use the checked PBKDF2 iteration setting');
 class MockD1 {
-  constructor() { this.members = []; this.sessions = []; this.messages = []; this.emailVerificationTokens = []; this.emailVerificationStatus = []; this.passwordResetTokens = []; this.rates = new Map(); }
+  constructor() { this.members = []; this.sessions = []; this.messages = []; this.emailVerificationTokens = []; this.emailVerificationStatus = []; this.passwordResetTokens = []; this.rates = new Map(); this.failBatchAfter = null; }
+  async batch(statements) {
+    const snapshot = {
+      members: structuredClone(this.members), sessions: structuredClone(this.sessions),
+      emailVerificationTokens: structuredClone(this.emailVerificationTokens),
+      emailVerificationStatus: structuredClone(this.emailVerificationStatus),
+      passwordResetTokens: structuredClone(this.passwordResetTokens)
+    };
+    try {
+      const results = [];
+      for (let index = 0; index < statements.length; index += 1) {
+        results.push(await statements[index].run());
+        if (this.failBatchAfter === index) {
+          this.failBatchAfter = null;
+          throw new Error("Simulated D1 batch failure");
+        }
+      }
+      return results;
+    } catch (error) {
+      Object.assign(this, snapshot);
+      this.failBatchAfter = null;
+      throw error;
+    }
+  }
   prepare(sql) {
     const db = this; let args = [];
     return {
@@ -25,7 +48,8 @@ class MockD1 {
         if (q.startsWith('INSERT INTO community_rate_limits')) { const [bucket, windowStart] = args; const old = db.rates.get(bucket); db.rates.set(bucket, { count: old && old.window_start === windowStart ? old.count + 1 : 1, window_start: windowStart }); return { meta: { changes: 1 } }; }
         if (q.startsWith('INSERT INTO community_members')) { const [id, username, email, display_name, password_salt, password_hash, created_at] = args; if (db.members.some((m) => m.email === email || m.username === username)) throw new Error('unique constraint'); db.members.push({ id, username, email, display_name, password_salt, password_hash, created_at }); return { meta: { changes: 1 } }; }
         if (q.startsWith('INSERT INTO community_email_verification_status')) { const [member_id, created_at] = args; db.emailVerificationStatus.push({ member_id, verified_at: null, created_at }); return { meta: { changes: 1 } }; }
-        if (q.startsWith('UPDATE community_email_verification_status SET verified_at = ? WHERE member_id = ?')) { const [verified_at, member_id] = args; const row = db.emailVerificationStatus.find((r) => r.member_id === member_id && r.verified_at === null); if (!row) return { meta: { changes: 0 } }; row.verified_at = verified_at; return { meta: { changes: 1 } }; }
+        if (q.startsWith('UPDATE community_email_verification_status')) { const [verified_at, token_hash, now] = args; const token = db.emailVerificationTokens.find((r) => r.token_hash === token_hash && r.expires_at > now); const row = token && db.emailVerificationStatus.find((r) => r.member_id === token.member_id && r.verified_at === null); if (!row) return { meta: { changes: 0 } }; row.verified_at = verified_at; return { meta: { changes: 1 } }; }
+        if (q.startsWith('DELETE FROM community_email_verification_tokens WHERE token_hash = ? AND expires_at > ?')) { const [token_hash, expires_at, verified_at] = args; const token = db.emailVerificationTokens.find((r) => r.token_hash === token_hash && r.expires_at > expires_at && db.emailVerificationStatus.some((s) => s.member_id === r.member_id && s.verified_at === verified_at)); if (!token) return { meta: { changes: 0 } }; db.emailVerificationTokens = db.emailVerificationTokens.filter((r) => r !== token); return { meta: { changes: 1 } }; }
         if (q.startsWith('INSERT INTO community_email_verification_tokens')) { const [token_hash, member_id, created_at, expires_at] = args; db.emailVerificationTokens.push({ token_hash, member_id, created_at, expires_at }); return { meta: { changes: 1 } }; }
         if (q.startsWith('DELETE FROM community_email_verification_tokens WHERE token_hash = ?')) { const before = db.emailVerificationTokens.length; db.emailVerificationTokens = db.emailVerificationTokens.filter((r) => r.token_hash !== args[0]); return { meta: { changes: before - db.emailVerificationTokens.length } }; }
         if (q.startsWith('DELETE FROM community_email_verification_tokens WHERE member_id = ?')) { const before = db.emailVerificationTokens.length; db.emailVerificationTokens = db.emailVerificationTokens.filter((r) => r.member_id !== args[0]); return { meta: { changes: before - db.emailVerificationTokens.length } }; }
@@ -40,7 +64,9 @@ class MockD1 {
         
         
         
-        if (q.startsWith('UPDATE community_members SET password_salt = ?, password_hash = ? WHERE id = ?')) { const [password_salt, password_hash, id] = args; const member = db.members.find((m) => m.id === id); if (!member) return { meta: { changes: 0 } }; member.password_salt = password_salt; member.password_hash = password_hash; return { meta: { changes: 1 } }; }
+        if (q.startsWith('UPDATE community_members SET password_salt = ?, password_hash = ? WHERE id = (')) { const [password_salt, password_hash, token_hash, now] = args; const token = db.passwordResetTokens.find((r) => r.token_hash === token_hash && r.expires_at > now); const member = token && db.members.find((m) => m.id === token.member_id); if (!member) return { meta: { changes: 0 } }; member.password_salt = password_salt; member.password_hash = password_hash; return { meta: { changes: 1 } }; }
+        if (q.startsWith('DELETE FROM community_sessions WHERE member_id = (')) { const [token_hash, now] = args; const token = db.passwordResetTokens.find((r) => r.token_hash === token_hash && r.expires_at > now); if (!token) return { meta: { changes: 0 } }; const before = db.sessions.length; db.sessions = db.sessions.filter((s) => s.member_id !== token.member_id); return { meta: { changes: before - db.sessions.length } }; }
+        if (q.startsWith('DELETE FROM community_password_reset_tokens WHERE token_hash = ? AND expires_at > ?')) { const [token_hash, now] = args; const before = db.passwordResetTokens.length; db.passwordResetTokens = db.passwordResetTokens.filter((r) => !(r.token_hash === token_hash && r.expires_at > now)); return { meta: { changes: before - db.passwordResetTokens.length } }; }
         if (q.startsWith('DELETE FROM community_sessions WHERE member_id = ?')) { const before = db.sessions.length; db.sessions = db.sessions.filter((s) => s.member_id !== args[0]); return { meta: { changes: before - db.sessions.length } }; }
         if (q.startsWith('DELETE FROM community_sessions WHERE expires_at <=')) { const before = db.sessions.length; db.sessions = db.sessions.filter((s) => s.expires_at > args[0]); return { meta: { changes: before - db.sessions.length } }; }
         if (q.startsWith('DELETE FROM community_sessions WHERE token_hash =')) { const before = db.sessions.length; db.sessions = db.sessions.filter((s) => s.token_hash !== args[0]); return { meta: { changes: before - db.sessions.length } }; }
@@ -134,6 +160,11 @@ assert.ok(sentVerificationPayload.textBody.includes(sentVerificationPayload.veri
 assert.ok(sentVerificationPayload.htmlBody.includes('href="' + sentVerificationPayload.verifyUrl + '"'));
 const landing = await worker.fetch(new Request(sentVerificationPayload.verifyUrl), env); assert.equal(landing.status, 200);
 const pendingLogin = await call('/login', { method: 'POST', body: { email: 'member@example.com', password: 'MotMatKhauRieng123!' } }); assert.equal(pendingLogin.status, 403);
+db.failBatchAfter = 0;
+const verifyBatchFailure = await call('/verify-email', { method: 'POST', body: { token: verifyToken } });
+assert.equal(verifyBatchFailure.status, 500, 'A D1 failure after the verification update must fail the request.');
+assert.equal(db.emailVerificationTokens.length, 1, 'A failed verification transaction must preserve the one-time token.');
+assert.equal(db.emailVerificationStatus[0].verified_at, null, 'A failed verification transaction must roll back the account status.');
 const confirmed = await call('/verify-email', { method: 'POST', body: { token: verifyToken } }); assert.equal(confirmed.status, 200); assert.equal((await confirmed.json()).ok, true);
 assert.equal(db.emailVerificationTokens.length, 0);
 const verificationReplay = await call('/verify-email', { method: 'POST', body: { token: verifyToken } }); assert.equal(verificationReplay.status, 400, 'A verification token must be single-use.');
@@ -168,6 +199,14 @@ try {
 
   assert.ok(db.sessions.some((s) => s.member_id === loginPayload.member.id));
   assert.equal(db.passwordResetTokens.length, 1);
+  db.failBatchAfter = 0;
+  const resetBatchFailure = await call('/password-reset/complete', { method: 'POST', body: { token: resetToken, password: 'MatKhauMoiTotHon123!' } });
+  assert.equal(resetBatchFailure.status, 500, 'A D1 failure after password update must fail the request.');
+  assert.equal(db.passwordResetTokens.length, 1, 'A failed password-reset transaction must preserve the one-time token.');
+  assert.equal(db.sessions.some((s) => s.member_id === loginPayload.member.id), true,
+    'A failed password-reset transaction must preserve existing sessions.');
+  const stillOldPassword = await call('/login', { method: 'POST', body: { email: 'member@example.com', password: 'MotMatKhauRieng123!' } });
+  assert.equal(stillOldPassword.status, 200, 'A failed password-reset transaction must roll back the password change.');
   const resetDone = await call('/password-reset/complete', { method: 'POST', body: { token: resetToken, password: 'MatKhauMoiTotHon123!' } });
   const resetDonePayload = await resetDone.json();
   assert.equal(resetDone.status, 200, 'Password reset failed: ' + JSON.stringify(resetDonePayload));
