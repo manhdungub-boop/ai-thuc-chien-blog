@@ -522,20 +522,35 @@ async function handleCommunityApi(request, env) {
       const tokenHash = await sha256Base64Url(resetToken);
       // Keep password replacement, session revocation and one-time token consumption
       // in one D1 transaction. The token remains valid if any statement fails.
+      const passwordSalt = bytesToBase64Url(salt);
       const results = await db.batch([
         db.prepare(`UPDATE community_members
           SET password_salt = ?, password_hash = ?
           WHERE id = (
             SELECT member_id FROM community_password_reset_tokens
             WHERE token_hash = ? AND expires_at > ?
-          )`).bind(bytesToBase64Url(salt), passwordHash, tokenHash, now),
+          )`).bind(passwordSalt, passwordHash, tokenHash, now),
+        // Guard follow-up writes with the new random salt/hash. A zero-row UPDATE
+        // must not revoke sessions or consume a still-valid reset token.
         db.prepare(`DELETE FROM community_sessions
           WHERE member_id = (
             SELECT member_id FROM community_password_reset_tokens
             WHERE token_hash = ? AND expires_at > ?
-          )`).bind(tokenHash, now),
-        db.prepare("DELETE FROM community_password_reset_tokens WHERE token_hash = ? AND expires_at > ?")
-          .bind(tokenHash, now),
+          )
+          AND EXISTS (
+            SELECT 1 FROM community_members
+            WHERE id = (
+              SELECT member_id FROM community_password_reset_tokens
+              WHERE token_hash = ? AND expires_at > ?
+            ) AND password_salt = ? AND password_hash = ?
+          )`).bind(tokenHash, now, tokenHash, now, passwordSalt, passwordHash),
+        db.prepare(`DELETE FROM community_password_reset_tokens
+          WHERE token_hash = ? AND expires_at > ?
+            AND EXISTS (
+              SELECT 1 FROM community_members
+              WHERE id = community_password_reset_tokens.member_id
+                AND password_salt = ? AND password_hash = ?
+            )`).bind(tokenHash, now, passwordSalt, passwordHash),
       ]);
       if (!results[0]?.meta?.changes || !results[2]?.meta?.changes) {
         return communityJson({ error: "Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn." }, 400, request);
