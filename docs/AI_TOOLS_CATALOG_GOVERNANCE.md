@@ -4,9 +4,10 @@
 Maintain a searchable, extensible directory of hundreds or thousands of AI products. The catalog is data-driven; UI pages must not hard-code one HTML card per tool.
 
 ## Source of truth
-- Seed catalog: `site-snapshot/data/ai-tools.json`
+- Seed catalog: `data/ai-tools.json` (canonical path in this repository).
 - Schema/field contract: documented below and enforced by `scripts/validate-ai-tools-catalog.mjs`
 - Public status: only records with `status=active` AND `verification_status=verified` may be presented as verified listings. `needs_review` is an editorial queue, not a verified claim.
+- Automatic publishing: when a record has passed source, accuracy, deduplication, attribution, safety and catalog CI quality gates, it may be published publicly without another user confirmation. Records that have not passed every gate must remain unpublished or clearly marked as pending review; never promote an unverified price, limit, license or availability claim.
 - Never infer that a tool is free merely because it has a free trial, open-source repository, or a free self-hosted edition.
 
 ## Record requirements
@@ -24,7 +25,7 @@ Each record has a stable lowercase `id`, display name, vendor, official website,
 2. Normalize vendor + official domain + product identity; detect duplicate products and aliases before insertion.
 3. Verify the official website, core use case, pricing tier, geographic/usage limitations, license, and relevant privacy/data terms.
 4. Save official source URLs and `last_verified`; never use search snippets alone as evidence.
-5. New or uncertain records enter `needs_review`; do not publish as verified until a human/editorial check passes.
+5. New or uncertain records enter `needs_review`; do not publish as verified until a human/editorial check passes. Once all required editorial and automated quality gates pass, publish the verified record automatically under the project publishing rule.
 6. Recheck pricing and product status at least every 30 days; prioritize rapidly changing pricing pages and high-traffic listings weekly.
 7. Check outbound links weekly. If a source cannot be reached or a price cannot be verified, mark `stale` or `unknown`; do not silently preserve old pricing as current.
 8. Retain change history in Git commits. Remove from public active results only after confirming a product is closed, deprecated, or unsafe/misleading.
@@ -41,11 +42,11 @@ Each record has a stable lowercase `id`, display name, vendor, official website,
 ## Automation roadmap
 - Phase 1: structured JSON catalog + deterministic validator (this commit).
 - Phase 2: render listing cards from JSON, with pagination/search/filter and detail pages.
-- Phase 3: scheduled discovery and link/pricing checks; candidate changes are generated as a review report or merge request, never auto-published.
+- Phase 3: scheduled discovery and link/pricing checks; uncertain candidates are generated as a review report or merge request and remain unpublished. Entries that pass all evidence, editorial and automated quality gates are published automatically under the project publishing rule.
 - Phase 4: editor review queue, change history, and optional user-submitted suggestions with moderation.
 
 ## Safety and quality gates
-- No automatic public publishing of unreviewed tools or price changes.
+- Never automatically publish unreviewed tools or unverified price changes. Automatically publish records and updates only after their evidence, editorial review and automated quality gates pass.
 - No secrets/API keys in catalog records.
 - A successful file commit is not evidence that CI, browser rendering, or deployment passed.
 - Production changes require separate explicit approval.
