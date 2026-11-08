@@ -9,6 +9,8 @@ const originMatch = liveE2E.match(/^const ORIGIN = "(https:\/\/[^"]+)";$/m);
 assert.ok(originMatch, 'Live E2E must declare one explicit HTTPS Preview Worker origin.');
 const expectedPreviewOrigin = 'https://fix-atomic-email-tokens-202-ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev';
 assert.equal(originMatch[1], expectedPreviewOrigin, 'Live E2E must target the exact isolated branch Preview Worker deployed for this PR.');
+const expectedPreviewHost = new URL(expectedPreviewOrigin).hostname;
+assert.ok(js.includes("const previewHost = '" + expectedPreviewHost + "';"), 'The community frontend must recognize this PR branch Preview hostname.');
 assert.ok(worker.includes('"' + expectedPreviewOrigin + '"'), 'The isolated branch Preview Worker origin must be allowed by the community API CORS allowlist.');
 assert.ok(!liveE2E.includes('fix-email-verification-prev-ai-thuc-chien-blog-auth-app-preview'), 'Live E2E must not target the superseded Preview hostname.');
  
