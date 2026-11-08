@@ -426,9 +426,10 @@ async function handleCommunityApi(request, env) {
           .bind(memberId, now).run();
         await db.prepare("INSERT INTO community_email_verification_tokens (token_hash, member_id, created_at, expires_at) VALUES (?, ?, ?, ?)")
           .bind(verifyTokenHash, memberId, now, expiresAt).run();
-        const verifyUrl = new URL("/", request.url);
-        verifyUrl.searchParams.set("verify", verifyToken);
-        verifyUrl.hash = "cong-dong";
+        // Use an explicit confirmation page so email security scanners that only
+        // open links cannot consume the one-time token before the user acts.
+        const verifyUrl = new URL("/api/community/verify-email", request.url);
+        verifyUrl.searchParams.set("token", verifyToken);
         await sendCommunityEmailVerification(env, email, verifyUrl.toString());
       } catch (error) {
         await db.prepare("DELETE FROM community_members WHERE id = ?").bind(memberId).run().catch(() => {});
