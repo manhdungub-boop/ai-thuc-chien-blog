@@ -308,7 +308,7 @@ async function fetchCommunityEmailRelay(env, payload) {
       throw error;
     }
     const redirectUrl = new URL(location, env.COMMUNITY_EMAIL_RELAY_URL);
-    if (redirectUrl.protocol !== "https:" || redirectUrl.hostname !== "script.googleusercontent.com") {
+    if (redirectUrl.origin !== "https://script.googleusercontent.com" || redirectUrl.username || redirectUrl.password) {
       const error = new Error("Email relay returned an untrusted redirect destination.");
       error.code = "UNSAFE_REDIRECT";
       throw error;
