@@ -114,10 +114,18 @@ function generate(outputDir) {
     throw new Error('Topic library canonical URL does not match /thu-vien.html');
   }
 
+  const bankPath = path.join(outputDir, 'ngan-hang-ai.html');
+  const bankHtml = fs.readFileSync(bankPath, 'utf8');
+  const bank = validatePageMetadata(bankHtml, 'ngan-hang-ai.html');
+  if (bank.canonical !== SITE + '/ngan-hang-ai.html') {
+    throw new Error('AI Bank page canonical URL must match /ngan-hang-ai.html');
+  }
+
   const sitemapEntries = [
     { canonical: SITE + '/' },
     about,
     library,
+    bank,
     ...articles
   ].map((page) => {
     const lines = [
