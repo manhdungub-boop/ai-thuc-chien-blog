@@ -76,6 +76,14 @@ const rejectedOrigin = await worker.fetch(new Request('https://ai-thuc-chien-blo
 }), env);
 assert.equal(rejectedOrigin.status, 403, 'chat API must reject untrusted origins');
 
+const previewOrigin = 'https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev';
+const previewResponse = await worker.fetch(new Request('https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev/api/chat', {
+  method: 'POST', headers: { 'Content-Type': 'application/json', Origin: previewOrigin, 'CF-Connecting-IP': '198.51.100.94' },
+  body: JSON.stringify({ messages: [{ role: 'user', content: 'Xin chào' }] }),
+}), env);
+assert.equal(previewResponse.status, 200, 'dedicated Preview Worker origin must remain able to use chat');
+assert.equal(previewResponse.headers.get('Access-Control-Allow-Origin'), previewOrigin);
+
 let oversizedStreamCancelled = false;
 const oversizedBody = new ReadableStream({
   start(controller) { controller.enqueue(new Uint8Array(12001)); },
