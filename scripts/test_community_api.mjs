@@ -164,7 +164,7 @@ const verificationTokenRow = db.tokens.find((t) => t.member_id === memberAwaitin
 db.failBatchAfter = 0;
 const failedVerificationBatch = await call('/verify-email', { method: 'POST', body: { token: tokenMatch[1] } });
 assert.equal(failedVerificationBatch.status, 500, 'a failed verification D1 batch must fail closed');
-assert.equal(memberAwaitingVerification.email_verified_at, null, 'failed verification batch must not activate the account');
+assert.equal(db.members.find((m) => m.email === 'member@example.com').email_verified_at, null, 'failed verification batch must not activate the account');
 assert.ok(db.tokens.some((t) => t.token_hash === verificationTokenRow.token_hash), 'failed verification batch must preserve the one-time token');
 const verify = await call('/verify-email', { method: 'POST', body: { token: tokenMatch[1] } });
 assert.equal(verify.status, 200);
@@ -255,7 +255,7 @@ const sessionsBeforeAtomicReset = db.sessions.filter((s) => s.member_id === memb
 db.failBatchAfter = 0;
 const failedResetBatch = await call('/password-reset/complete', { method: 'POST', ip: '203.0.113.59', body: { token: rawResetToken, password: 'New-Strong-Password-456!' } });
 assert.equal(failedResetBatch.status, 500, 'a D1 batch failure must fail the reset request');
-assert.equal(memberForAtomicReset.password_hash, originalPasswordHash, 'failed batch must roll back password changes');
+assert.equal(db.members.find((m) => m.email === 'member@example.com').password_hash, originalPasswordHash, 'failed batch must roll back password changes');
 assert.ok(db.resetTokens.some((t) => t.token_hash === storedResetToken.token_hash), 'failed batch must preserve the reset token');
 assert.equal(db.sessions.filter((s) => s.member_id === memberForAtomicReset.id).length, sessionsBeforeAtomicReset, 'failed batch must preserve existing sessions');
 
