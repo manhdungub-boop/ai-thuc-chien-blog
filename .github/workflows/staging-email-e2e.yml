@@ -4,25 +4,15 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: "Staging-only E2E step"
+        description: "Safe staging-only E2E step (token-based steps are intentionally disabled)"
         required: true
         type: choice
         options:
           - register
-          - confirm
           - login
           - request-reset
-          - finish-reset
       registration_run_id:
         description: "Original GitHub run ID from the register step (required except for register)"
-        required: false
-        type: string
-      verify_token:
-        description: "One-time verification token copied from the staging confirmation email"
-        required: false
-        type: string
-      reset_token:
-        description: "One-time password-reset token copied from the staging reset email"
         required: false
         type: string
 
@@ -47,33 +37,28 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Validate inputs and mask one-time tokens
+      - name: Validate safe action inputs
         shell: bash
         env:
           ACTION: ${{ inputs.action }}
           REGISTRATION_RUN_ID: ${{ inputs.registration_run_id }}
-          VERIFY_TOKEN: ${{ inputs.verify_token }}
-          RESET_TOKEN: ${{ inputs.reset_token }}
         run: |
           set -euo pipefail
+          case "$ACTION" in
+            register|login|request-reset) ;;
+            *)
+              echo "Unsupported action. Token-based confirmation/reset completion is disabled until a secure token handoff is implemented."
+              exit 1
+              ;;
+          esac
           if [[ "$ACTION" != "register" ]]; then
             [[ "$REGISTRATION_RUN_ID" =~ ^[0-9]{1,20}$ ]] || { echo "A valid original registration run ID is required."; exit 1; }
-          fi
-          if [[ "$ACTION" == "confirm" ]]; then
-            [[ "$VERIFY_TOKEN" =~ ^[A-Za-z0-9_-]{32,80}$ ]] || { echo "A valid one-time verification token is required."; exit 1; }
-            echo "::add-mask::$VERIFY_TOKEN"
-          fi
-          if [[ "$ACTION" == "finish-reset" ]]; then
-            [[ "$RESET_TOKEN" =~ ^[A-Za-z0-9_-]{32,80}$ ]] || { echo "A valid one-time reset token is required."; exit 1; }
-            echo "::add-mask::$RESET_TOKEN"
           fi
 
       - name: Run staging-only email E2E action
         shell: bash
         env:
           ACTION: ${{ inputs.action }}
-          VERIFY_TOKEN: ${{ inputs.verify_token }}
-          RESET_TOKEN: ${{ inputs.reset_token }}
           STAGING_E2E_EMAIL: ${{ secrets.STAGING_E2E_EMAIL }}
           STAGING_E2E_PASSWORD: ${{ secrets.STAGING_E2E_PASSWORD }}
           CI_PIPELINE_ID: ${{ inputs.registration_run_id || github.run_id }}
@@ -83,13 +68,6 @@ jobs:
           if [[ -z "$STAGING_E2E_EMAIL" || -z "$STAGING_E2E_PASSWORD" ]]; then
             echo "Required staging-only GitHub Actions secrets are missing."
             exit 1
-          fi
-          export STAGING_E2E_VERIFY_TOKEN="$VERIFY_TOKEN"
-          export STAGING_E2E_RESET_TOKEN="$RESET_TOKEN"
-          if [[ "$ACTION" == "finish-reset" ]]; then
-            STAGING_E2E_NEW_PASSWORD="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(24).toString("base64url") + "Aa1")')"
-            echo "::add-mask::$STAGING_E2E_NEW_PASSWORD"
-            export STAGING_E2E_NEW_PASSWORD
           fi
           node scripts/test-live-staging-email-e2e.mjs "$ACTION"
 
@@ -102,4 +80,5 @@ jobs:
           echo "STAGING_E2E_ACTION=$ACTION"
           echo "STAGING_E2E_RUN_ID=$RUN_ID"
           echo "Target: isolated staging Worker only"
+          echo "No raw one-time tokens are accepted as workflow inputs."
           echo "No production deployment, D1 production, DNS, or production secrets are accessed."

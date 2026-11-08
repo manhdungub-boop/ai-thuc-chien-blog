@@ -1,0 +1,73 @@
+name: PR 87 Offline Regression Gate
+
+on:
+  push:
+    branches:
+      - fix/atomic-email-tokens-20261108
+    paths:
+      - "worker.mjs"
+      - "script.js"
+      - "index.html"
+      - "migrations/**"
+      - "scripts/test_community_api.mjs"
+      - "scripts/test_community_schema.py"
+      - "scripts/test_community_frontend.mjs"
+      - "scripts/test_worker_headers.mjs"
+      - "scripts/test_article_quality.cjs"
+      - "scripts/test_seo_consistency.cjs"
+      - "scripts/build_static_site.cjs"
+      - "package.json"
+      - ".github/workflows/pr87-offline-regression.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr87-offline-regression-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  offline-regression:
+    name: Offline regression tests (no secrets, no live email)
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout exact PR branch commit
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Verify transactional community API behavior
+        run: node scripts/test_community_api.mjs
+
+      - name: Verify D1 schema and migration constraints
+        run: python scripts/test_community_schema.py
+
+      - name: Verify community frontend and safe confirmation behavior
+        run: node scripts/test_community_frontend.mjs
+
+      - name: Verify Worker security headers and routing
+        run: node scripts/test_worker_headers.mjs
+
+      - name: Verify article quality
+        run: node scripts/test_article_quality.cjs
+
+      - name: Verify SEO consistency
+        run: node scripts/test_seo_consistency.cjs
+
+      - name: Build static site
+        run: npm run build
+
+      - name: Report safety scope
+        if: always()
+        run: |
+          echo "Scope: offline repository tests only."
+          echo "No GitHub secrets, email relay, live registration, D1, Worker deployment, DNS, or Production resources are accessed."

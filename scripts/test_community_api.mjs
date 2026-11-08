@@ -15,7 +15,30 @@ assert.ok(Number(pbkdf2IterationsMatch[1]) <= 100000,
 assert.match(workerSource, /iterations:\s*COMMUNITY_PASSWORD_ITERATIONS/,
   'Password hashing must use the checked PBKDF2 iteration setting');
 class MockD1 {
-  constructor() { this.members = []; this.sessions = []; this.messages = []; this.emailVerificationTokens = []; this.emailVerificationStatus = []; this.passwordResetTokens = []; this.rates = new Map(); }
+  constructor() { this.members = []; this.sessions = []; this.messages = []; this.emailVerificationTokens = []; this.emailVerificationStatus = []; this.passwordResetTokens = []; this.rates = new Map(); this.failBatchAfter = null; this.suppressPasswordUpdate = false; }
+  async batch(statements) {
+    const snapshot = {
+      members: structuredClone(this.members), sessions: structuredClone(this.sessions),
+      emailVerificationTokens: structuredClone(this.emailVerificationTokens),
+      emailVerificationStatus: structuredClone(this.emailVerificationStatus),
+      passwordResetTokens: structuredClone(this.passwordResetTokens)
+    };
+    try {
+      const results = [];
+      for (let index = 0; index < statements.length; index += 1) {
+        results.push(await statements[index].run());
+        if (this.failBatchAfter === index) {
+          this.failBatchAfter = null;
+          throw new Error("Simulated D1 batch failure");
+        }
+      }
+      return results;
+    } catch (error) {
+      Object.assign(this, snapshot);
+      this.failBatchAfter = null;
+      throw error;
+    }
+  }
   prepare(sql) {
     const db = this; let args = [];
     return {
@@ -25,9 +48,10 @@ class MockD1 {
         if (q.startsWith('INSERT INTO community_rate_limits')) { const [bucket, windowStart] = args; const old = db.rates.get(bucket); db.rates.set(bucket, { count: old && old.window_start === windowStart ? old.count + 1 : 1, window_start: windowStart }); return { meta: { changes: 1 } }; }
         if (q.startsWith('INSERT INTO community_members')) { const [id, username, email, display_name, password_salt, password_hash, created_at] = args; if (db.members.some((m) => m.email === email || m.username === username)) throw new Error('unique constraint'); db.members.push({ id, username, email, display_name, password_salt, password_hash, created_at }); return { meta: { changes: 1 } }; }
         if (q.startsWith('INSERT INTO community_email_verification_status')) { const [member_id, created_at] = args; db.emailVerificationStatus.push({ member_id, verified_at: null, created_at }); return { meta: { changes: 1 } }; }
-        if (q.startsWith('UPDATE community_email_verification_status SET verified_at = ? WHERE member_id = ?')) { const [verified_at, member_id] = args; const row = db.emailVerificationStatus.find((r) => r.member_id === member_id && r.verified_at === null); if (!row) return { meta: { changes: 0 } }; row.verified_at = verified_at; return { meta: { changes: 1 } }; }
+        if (q.startsWith('UPDATE community_email_verification_status')) { const [verified_at, token_hash, now] = args; const token = db.emailVerificationTokens.find((r) => r.token_hash === token_hash && r.expires_at > now); const row = token && db.emailVerificationStatus.find((r) => r.member_id === token.member_id && r.verified_at === null); if (!row) return { meta: { changes: 0 } }; row.verified_at = verified_at; return { meta: { changes: 1 } }; }
+        if (q.startsWith('DELETE FROM community_email_verification_tokens WHERE token_hash = ? AND expires_at > ?')) { const [token_hash, expires_at, verified_at] = args; const token = db.emailVerificationTokens.find((r) => r.token_hash === token_hash && r.expires_at > expires_at && db.emailVerificationStatus.some((s) => s.member_id === r.member_id && s.verified_at === verified_at)); if (!token) return { meta: { changes: 0 } }; db.emailVerificationTokens = db.emailVerificationTokens.filter((r) => r !== token); return { meta: { changes: 1 } }; }
         if (q.startsWith('INSERT INTO community_email_verification_tokens')) { const [token_hash, member_id, created_at, expires_at] = args; db.emailVerificationTokens.push({ token_hash, member_id, created_at, expires_at }); return { meta: { changes: 1 } }; }
-        if (q.startsWith('DELETE FROM community_email_verification_tokens WHERE token_hash = ?')) { const before = db.emailVerificationTokens.length; db.emailVerificationTokens = db.emailVerificationTokens.filter((r) => r.token_hash !== args[0]); return { meta: { changes: before - db.emailVerificationTokens.length } }; }
+        if (q.startsWith('DELETE FROM community_email_verification_tokens WHERE token_hash = ?') && !q.includes('AND expires_at > ?')) { const before = db.emailVerificationTokens.length; db.emailVerificationTokens = db.emailVerificationTokens.filter((r) => r.token_hash !== args[0]); return { meta: { changes: before - db.emailVerificationTokens.length } }; }
         if (q.startsWith('DELETE FROM community_email_verification_tokens WHERE member_id = ?')) { const before = db.emailVerificationTokens.length; db.emailVerificationTokens = db.emailVerificationTokens.filter((r) => r.member_id !== args[0]); return { meta: { changes: before - db.emailVerificationTokens.length } }; }
         if (q.startsWith('DELETE FROM community_members WHERE id = ?')) { const before = db.members.length; db.members = db.members.filter((m) => m.id !== args[0]); db.emailVerificationTokens = db.emailVerificationTokens.filter((r) => r.member_id !== args[0]); db.emailVerificationStatus = db.emailVerificationStatus.filter((r) => r.member_id !== args[0]); return { meta: { changes: before - db.members.length } }; }
         if (q.startsWith('UPDATE community_members SET email_verified_at = ? WHERE id = ?')) { const [email_verified_at, id] = args; const member = db.members.find((m) => m.id === id); if (!member) return { meta: { changes: 0 } }; member.email_verified_at = email_verified_at; return { meta: { changes: 1 } }; }
@@ -36,11 +60,13 @@ class MockD1 {
         if (q.startsWith('INSERT INTO community_password_reset_tokens')) { const [token_hash, member_id, created_at, expires_at] = args; if (db.passwordResetTokens.some((r) => r.token_hash === token_hash)) throw new Error('unique constraint'); db.passwordResetTokens.push({ token_hash, member_id, created_at, expires_at }); return { meta: { changes: 1 } }; }
         if (q.startsWith('DELETE FROM community_password_reset_tokens WHERE member_id = ?')) { const before = db.passwordResetTokens.length; db.passwordResetTokens = db.passwordResetTokens.filter((r) => r.member_id !== args[0]); return { meta: { changes: before - db.passwordResetTokens.length } }; }
         if (q.startsWith('DELETE FROM community_password_reset_tokens WHERE expires_at <= ?')) { const before = db.passwordResetTokens.length; db.passwordResetTokens = db.passwordResetTokens.filter((r) => r.expires_at > args[0]); return { meta: { changes: before - db.passwordResetTokens.length } }; }
-        if (q.startsWith('DELETE FROM community_password_reset_tokens WHERE token_hash = ?')) { const before = db.passwordResetTokens.length; db.passwordResetTokens = db.passwordResetTokens.filter((r) => r.token_hash !== args[0]); return { meta: { changes: before - db.passwordResetTokens.length } }; }
+        if (q.startsWith('DELETE FROM community_password_reset_tokens WHERE token_hash = ?') && !q.includes('AND expires_at > ?')) { const before = db.passwordResetTokens.length; db.passwordResetTokens = db.passwordResetTokens.filter((r) => r.token_hash !== args[0]); return { meta: { changes: before - db.passwordResetTokens.length } }; }
         
         
         
-        if (q.startsWith('UPDATE community_members SET password_salt = ?, password_hash = ? WHERE id = ?')) { const [password_salt, password_hash, id] = args; const member = db.members.find((m) => m.id === id); if (!member) return { meta: { changes: 0 } }; member.password_salt = password_salt; member.password_hash = password_hash; return { meta: { changes: 1 } }; }
+        if (q.startsWith('UPDATE community_members SET password_salt = ?, password_hash = ? WHERE id = (')) { const [password_salt, password_hash, token_hash, now] = args; const token = db.passwordResetTokens.find((r) => r.token_hash === token_hash && r.expires_at > now); const member = token && db.members.find((m) => m.id === token.member_id); if (db.suppressPasswordUpdate || !member) return { meta: { changes: 0 } }; member.password_salt = password_salt; member.password_hash = password_hash; return { meta: { changes: 1 } }; }
+        if (q.startsWith('DELETE FROM community_sessions WHERE member_id = (')) { const [token_hash, now, guard_hash, guard_now, password_salt, password_hash] = args; const token = db.passwordResetTokens.find((r) => r.token_hash === token_hash && r.expires_at > now); const member = token && db.members.find((m) => m.id === token.member_id && m.password_salt === password_salt && m.password_hash === password_hash); if (!token || !member || guard_hash !== token_hash || guard_now !== now) return { meta: { changes: 0 } }; const before = db.sessions.length; db.sessions = db.sessions.filter((s) => s.member_id !== token.member_id); return { meta: { changes: before - db.sessions.length } }; }
+        if (q.startsWith('DELETE FROM community_password_reset_tokens WHERE token_hash = ? AND expires_at > ?')) { const [token_hash, now, password_salt, password_hash] = args; const before = db.passwordResetTokens.length; const token = db.passwordResetTokens.find((r) => r.token_hash === token_hash && r.expires_at > now); const member = token && db.members.find((m) => m.id === token.member_id && m.password_salt === password_salt && m.password_hash === password_hash); if (member) db.passwordResetTokens = db.passwordResetTokens.filter((r) => r !== token); return { meta: { changes: before - db.passwordResetTokens.length } }; }
         if (q.startsWith('DELETE FROM community_sessions WHERE member_id = ?')) { const before = db.sessions.length; db.sessions = db.sessions.filter((s) => s.member_id !== args[0]); return { meta: { changes: before - db.sessions.length } }; }
         if (q.startsWith('DELETE FROM community_sessions WHERE expires_at <=')) { const before = db.sessions.length; db.sessions = db.sessions.filter((s) => s.expires_at > args[0]); return { meta: { changes: before - db.sessions.length } }; }
         if (q.startsWith('DELETE FROM community_sessions WHERE token_hash =')) { const before = db.sessions.length; db.sessions = db.sessions.filter((s) => s.token_hash !== args[0]); return { meta: { changes: before - db.sessions.length } }; }
@@ -67,10 +93,11 @@ class MockD1 {
 }
 const origin = 'https://ai-thuc-chien-blog.manhdungub.workers.dev';
 const db = new MockD1(); const env = { DB: db, ASSETS: { fetch: async () => new Response('asset') }, COMMUNITY_EMAIL_RELAY_URL: 'https://relay.example.test/exec', COMMUNITY_EMAIL_RELAY_SECRET: 'test-only-secret-not-a-real-credential-value' };
-const call = (path, { method = 'GET', body, cookie, originHeader = origin } = {}) => worker.fetch(new Request(`${origin}/api/community${path}`, { method, headers: { ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(cookie ? { Cookie: cookie } : {}), ...(originHeader ? { Origin: originHeader } : {}), 'CF-Connecting-IP': '198.51.100.77' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }), env);
+let testRequestIp = 0;
+const call = (path, { method = 'GET', body, cookie, originHeader = origin } = {}) => worker.fetch(new Request(`${origin}/api/community${path}`, { method, headers: { ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(cookie ? { Cookie: cookie } : {}), ...(originHeader ? { Origin: originHeader } : {}), 'CF-Connecting-IP': `198.51.100.${(testRequestIp++ % 254) + 1}` }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }), env);
 const unconfigured = await worker.fetch(new Request('https://example.test/api/community/me'), {}); assert.equal(unconfigured.status, 503); assert.match((await unconfigured.json()).error, /cơ sở dữ liệu/i);
 const badOrigin = await call('/register', { method: 'POST', originHeader: 'https://evil.example', body: {} }); assert.equal(badOrigin.status, 403);
-const previewOrigin = 'https://fix-email-verification-prev-ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev';
+const previewOrigin = 'https://fix-atomic-email-tokens-202-ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev';
 const previewPreflight = await call('/register', { method: 'OPTIONS', originHeader: previewOrigin }); assert.equal(previewPreflight.status, 200);
 assert.equal(previewPreflight.headers.get('Access-Control-Allow-Origin'), previewOrigin, 'The exact isolated branch Preview origin must be allowed.');
 const previewChatPreflight = await worker.fetch(new Request('https://api.example.test/api/chat', { method: 'OPTIONS', headers: { Origin: previewOrigin } }), {});
@@ -85,20 +112,35 @@ let sentVerificationPayload = null;
 let sentResetPayload = null;
 let failVerificationRelay = true;
 let failVerificationNetwork = false;
+let redirectLocation = 'https://script.googleusercontent.com/macros/echo?user_content_key=test';
+let omitRedirectLocation = false;
 globalThis.fetch = async (url, options) => {
-  assert.equal(String(url), env.COMMUNITY_EMAIL_RELAY_URL);
-  const payload = JSON.parse(options.body);
-  if (payload.subject === 'Xác nhận email — AI Thực Chiến') {
-    sentVerificationPayload = payload;
-    if (failVerificationNetwork) throw new TypeError('Simulated network connection failure');
-    if (failVerificationRelay) return new Response(JSON.stringify({ ok: false }), { status: 503, headers: { 'Content-Type': 'application/json' } });
-  } else if (payload.subject === 'Đặt lại mật khẩu — AI Thực Chiến') sentResetPayload = payload;
-  else throw new Error('Unexpected email relay subject');
+  if (String(url) === env.COMMUNITY_EMAIL_RELAY_URL) {
+    assert.equal(options.method, 'POST');
+    assert.equal(options.redirect, 'manual', 'Apps Script POST must not auto-follow redirects.');
+    const payload = JSON.parse(options.body);
+    if (payload.subject === 'Xác nhận email — AI Thực Chiến') {
+      sentVerificationPayload = payload;
+      if (failVerificationNetwork) throw new TypeError('Simulated network connection failure');
+      if (failVerificationRelay) return new Response(JSON.stringify({ ok: false }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+    } else if (payload.subject === 'Đặt lại mật khẩu — AI Thực Chiến') sentResetPayload = payload;
+    else throw new Error('Unexpected email relay subject');
+    return new Response(null, { status: 302, headers: omitRedirectLocation ? {} : { Location: redirectLocation } });
+  }
+  const redirectUrl = new URL(String(url));
+  assert.equal(redirectUrl.protocol, 'https:');
+  assert.equal(redirectUrl.hostname, 'script.googleusercontent.com');
+  assert.equal(options.method, 'GET', 'ContentService response URL must be fetched with GET.');
+  assert.equal(options.body, undefined, 'Never forward the POST body or relay secret to the response URL.');
+  assert.equal(options.headers, undefined, 'Never forward application headers to the response URL.');
+  assert.equal(options.redirect, 'manual');
   return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 };
 const relayFailure = await call('/register', { method: 'POST', body: { username: 'relay_fail_user', displayName: 'Relay Failure', email: 'relay-fail@example.com', password: 'MotMatKhauRieng123!' } });
 assert.equal(relayFailure.status, 503, 'Email relay failure must be reported to the client.');
-assert.match((await relayFailure.json()).error, /Không thể gửi email xác nhận/i);
+const relayFailurePayload = await relayFailure.json();
+assert.match(relayFailurePayload.error, /Không thể gửi email xác nhận/i);
+assert.equal(relayFailurePayload.code, 'EMAIL_RELAY_HTTP_503', 'Relay HTTP failures must expose a safe status classification without response bodies.');
 assert.equal(db.members.length, 0, 'Failed email delivery must roll back the pending member.');
 assert.equal(db.emailVerificationTokens.length, 0, 'Failed email delivery must remove the verification token.');
 assert.equal(db.emailVerificationStatus.length, 0, 'Failed email delivery must remove verification status.');
@@ -111,6 +153,25 @@ assert.equal(db.members.length, 0, 'Network failure must roll back the pending m
 assert.equal(db.emailVerificationTokens.length, 0, 'Network failure must remove the verification token.');
 assert.equal(db.emailVerificationStatus.length, 0, 'Network failure must remove verification status.');
 failVerificationNetwork = false;
+failVerificationRelay = false;
+redirectLocation = 'https://script.googleusercontent.com:8443/macros/echo?user_content_key=unsafe';
+const unsafeRedirect = await call('/register', { method: 'POST', body: { username: 'unsafe_redirect_user', displayName: 'Unsafe Redirect', email: 'unsafe-redirect@example.com', password: 'MotMatKhauRieng123!' } });
+assert.equal(unsafeRedirect.status, 503, 'A non-standard redirect port must be rejected.');
+assert.equal((await unsafeRedirect.json()).code, 'EMAIL_RELAY_UNSAFE_REDIRECT');
+assert.equal(db.members.length, 0, 'An unsafe redirect must roll back the pending member.');
+assert.equal(db.emailVerificationTokens.length, 0, 'An unsafe redirect must not leave a verification token.');
+redirectLocation = 'https://user:pass@script.googleusercontent.com/macros/echo?user_content_key=unsafe';
+const credentialRedirect = await call('/register', { method: 'POST', body: { username: 'credential_redirect_user', displayName: 'Credential Redirect', email: 'credential-redirect@example.com', password: 'MotMatKhauRieng123!' } });
+assert.equal(credentialRedirect.status, 503, 'A redirect containing URL credentials must be rejected.');
+assert.equal((await credentialRedirect.json()).code, 'EMAIL_RELAY_UNSAFE_REDIRECT');
+assert.equal(db.members.length, 0, 'A credential-bearing redirect must roll back the pending member.');
+omitRedirectLocation = true;
+const missingLocation = await call('/register', { method: 'POST', body: { username: 'missing_location_user', displayName: 'Missing Location', email: 'missing-location@example.com', password: 'MotMatKhauRieng123!' } });
+assert.equal(missingLocation.status, 503, 'A redirect without Location must fail closed.');
+assert.equal((await missingLocation.json()).code, 'EMAIL_RELAY_REDIRECT_MISSING_LOCATION');
+assert.equal(db.members.length, 0, 'A missing redirect Location must roll back the pending member.');
+omitRedirectLocation = false;
+redirectLocation = 'https://script.googleusercontent.com/macros/echo?user_content_key=test';
 const registered = await call('/register', { method: 'POST', body: { username: 'thanhvien_1', displayName: 'Thành viên thử', email: 'member@example.com', password: 'MotMatKhauRieng123!' } }); assert.equal(registered.status, 201);
 const registeredPayload = await registered.json(); assert.equal(registeredPayload.verificationRequired, true); assert.equal(registeredPayload.ok, true); assert.equal(JSON.stringify(registeredPayload).includes('MotMatKhauRieng123!'), false);
 assert.equal(registered.headers.get('set-cookie'), null, 'Pending registration must not create a login session.');
@@ -129,11 +190,25 @@ assert.equal(sentVerificationPayload.to, 'member@example.com');
 assert.equal(sentVerificationPayload.secret, env.COMMUNITY_EMAIL_RELAY_SECRET);
 assert.equal(sentVerificationPayload.subject, 'Xác nhận email — AI Thực Chiến');
 const verifyUrl = new URL(sentVerificationPayload.verifyUrl); assert.equal(verifyUrl.origin, origin); assert.equal(verifyUrl.pathname, '/');
-const verifyToken = verifyUrl.searchParams.get('verify'); assert.match(verifyToken, /^[A-Za-z0-9_-]{32,80}$/); assert.equal(verifyUrl.hash, '#cong-dong');
+const verifyToken = verifyUrl.searchParams.get('verify'); assert.match(verifyToken, /^[A-Za-z0-9_-]{32,80}$/);
+const relayUrlPattern = /^https:\/\/([^/?#]+)\/(?:\?(?:verify|reset)=([A-Za-z0-9_-]{32,80})#cong-dong|#cong-dong\?(?:verify|reset)=([A-Za-z0-9_-]{32,80}))$/;
+assert.match(sentVerificationPayload.verifyUrl, relayUrlPattern, 'Verification email URL must satisfy the existing Apps Script relay URL contract.');
+assert.equal(verifyUrl.hash, '#cong-dong', 'Verification email URL must retain the Apps Script relay-compatible legacy format.');
 assert.ok(sentVerificationPayload.textBody.includes(sentVerificationPayload.verifyUrl));
 assert.ok(sentVerificationPayload.htmlBody.includes('href="' + sentVerificationPayload.verifyUrl + '"'));
-const landing = await worker.fetch(new Request(sentVerificationPayload.verifyUrl), env); assert.equal(landing.status, 200);
+const confirmationUrl = new URL('/api/community/verify-email', origin); confirmationUrl.searchParams.set('token', verifyToken);
+const landing = await worker.fetch(new Request(confirmationUrl), env); assert.equal(landing.status, 200);
+const landingHtml = await landing.text();
+assert.match(landingHtml, /Bấm nút bên dưới để xác nhận/);
+assert.match(landingHtml, /id="confirm"/);
+assert.equal(db.emailVerificationTokens.length, 1, 'Opening the email link must not consume the token before the user clicks confirm.');
+assert.equal(db.emailVerificationStatus[0].verified_at, null, 'A GET to the confirmation page must not verify the account.');
 const pendingLogin = await call('/login', { method: 'POST', body: { email: 'member@example.com', password: 'MotMatKhauRieng123!' } }); assert.equal(pendingLogin.status, 403);
+db.failBatchAfter = 0;
+const verifyBatchFailure = await call('/verify-email', { method: 'POST', body: { token: verifyToken } });
+assert.equal(verifyBatchFailure.status, 500, 'A D1 failure after the verification update must fail the request.');
+assert.equal(db.emailVerificationTokens.length, 1, 'A failed verification transaction must preserve the one-time token.');
+assert.equal(db.emailVerificationStatus[0].verified_at, null, 'A failed verification transaction must roll back the account status.');
 const confirmed = await call('/verify-email', { method: 'POST', body: { token: verifyToken } }); assert.equal(confirmed.status, 200); assert.equal((await confirmed.json()).ok, true);
 assert.equal(db.emailVerificationTokens.length, 0);
 const verificationReplay = await call('/verify-email', { method: 'POST', body: { token: verifyToken } }); assert.equal(verificationReplay.status, 400, 'A verification token must be single-use.');
@@ -159,6 +234,7 @@ try {
   assert.equal(resetUrl.origin, origin);
   const resetToken = resetUrl.searchParams.get('reset');
   assert.match(resetToken, /^[A-Za-z0-9_-]{32,80}$/);
+  assert.match(sentResetPayload.verifyUrl, relayUrlPattern, 'Password-reset email URL must satisfy the existing Apps Script relay URL contract.');
   assert.ok(sentResetPayload.textBody.includes(sentResetPayload.verifyUrl));
   assert.ok(sentResetPayload.htmlBody.includes('href="' + sentResetPayload.verifyUrl + '"'));
 
@@ -168,6 +244,21 @@ try {
 
   assert.ok(db.sessions.some((s) => s.member_id === loginPayload.member.id));
   assert.equal(db.passwordResetTokens.length, 1);
+  db.suppressPasswordUpdate = true;
+  const resetNoop = await call('/password-reset/complete', { method: 'POST', body: { token: resetToken, password: 'MatKhauMoiTotHon123!' } });
+  assert.equal(resetNoop.status, 400, 'A zero-row password update must be rejected.');
+  assert.equal(db.passwordResetTokens.length, 1, 'A zero-row password update must preserve the reset token.');
+  assert.equal(db.sessions.some((s) => s.member_id === loginPayload.member.id), true,
+    'A zero-row password update must preserve existing sessions.');
+  db.suppressPasswordUpdate = false;
+  db.failBatchAfter = 0;
+  const resetBatchFailure = await call('/password-reset/complete', { method: 'POST', body: { token: resetToken, password: 'MatKhauMoiTotHon123!' } });
+  assert.equal(resetBatchFailure.status, 500, 'A D1 failure after password update must fail the request.');
+  assert.equal(db.passwordResetTokens.length, 1, 'A failed password-reset transaction must preserve the one-time token.');
+  assert.equal(db.sessions.some((s) => s.member_id === loginPayload.member.id), true,
+    'A failed password-reset transaction must preserve existing sessions.');
+  const stillOldPassword = await call('/login', { method: 'POST', body: { email: 'member@example.com', password: 'MotMatKhauRieng123!' } });
+  assert.equal(stillOldPassword.status, 200, 'A failed password-reset transaction must roll back the password change.');
   const resetDone = await call('/password-reset/complete', { method: 'POST', body: { token: resetToken, password: 'MatKhauMoiTotHon123!' } });
   const resetDonePayload = await resetDone.json();
   assert.equal(resetDone.status, 200, 'Password reset failed: ' + JSON.stringify(resetDonePayload));

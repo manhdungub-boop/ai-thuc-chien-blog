@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - fix/email-verification-preview-20261107
+      - fix/atomic-email-tokens-20261108
     paths:
       - "worker.mjs"
       - "index.html"

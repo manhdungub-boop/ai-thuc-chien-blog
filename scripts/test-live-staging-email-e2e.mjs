@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-const ORIGIN = "https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev";
+const ORIGIN = "https://fix-atomic-email-tokens-202-ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev";
 const action = process.argv[2];
 
 function required(name) {
@@ -34,9 +34,9 @@ function validateToken(token, name) {
 }
 
 function validatePassword(password, name) {
-  assert.ok(password.length >= 14 && password.length <= 128, name + " must be 14–128 characters.");
-  assert.ok(/[A-Z]/.test(password) && /[a-z]/.test(password) && /[0-9]/.test(password),
-    name + " must include upper/lowercase letters and digits.");
+  // Match the Worker API contract exactly; do not impose stricter CI-only rules
+  // that reject a staging credential the application itself accepts.
+  assert.ok(password.length >= 10 && password.length <= 128, name + " must be 10–128 characters.");
 }
 
 async function post(path, body) {
@@ -99,7 +99,7 @@ function assertLoginSuccess(result, expectedStatus, label) {
 
 assert.equal(
   ORIGIN,
-  "https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev",
+  "https://fix-atomic-email-tokens-202-ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev",
   "This live test must target the isolated branch Preview Worker only."
 );
 
