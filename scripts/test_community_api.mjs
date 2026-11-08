@@ -124,7 +124,9 @@ globalThis.fetch = async (url, options) => {
 };
 const relayFailure = await call('/register', { method: 'POST', body: { username: 'relay_fail_user', displayName: 'Relay Failure', email: 'relay-fail@example.com', password: 'MotMatKhauRieng123!' } });
 assert.equal(relayFailure.status, 503, 'Email relay failure must be reported to the client.');
-assert.match((await relayFailure.json()).error, /Không thể gửi email xác nhận/i);
+const relayFailurePayload = await relayFailure.json();
+assert.match(relayFailurePayload.error, /Không thể gửi email xác nhận/i);
+assert.equal(relayFailurePayload.code, 'EMAIL_RELAY_HTTP_503', 'Relay HTTP failures must expose a safe status classification without response bodies.');
 assert.equal(db.members.length, 0, 'Failed email delivery must roll back the pending member.');
 assert.equal(db.emailVerificationTokens.length, 0, 'Failed email delivery must remove the verification token.');
 assert.equal(db.emailVerificationStatus.length, 0, 'Failed email delivery must remove verification status.');
