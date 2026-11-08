@@ -15,7 +15,7 @@ assert.ok(Number(pbkdf2IterationsMatch[1]) <= 100000,
 assert.match(workerSource, /iterations:\s*COMMUNITY_PASSWORD_ITERATIONS/,
   'Password hashing must use the checked PBKDF2 iteration setting');
 class MockD1 {
-  constructor() { this.members = []; this.sessions = []; this.messages = []; this.emailVerificationTokens = []; this.emailVerificationStatus = []; this.passwordResetTokens = []; this.rates = new Map(); this.failBatchAfter = null; }
+  constructor() { this.members = []; this.sessions = []; this.messages = []; this.emailVerificationTokens = []; this.emailVerificationStatus = []; this.passwordResetTokens = []; this.rates = new Map(); this.failBatchAfter = null; this.suppressPasswordUpdate = false; }
   async batch(statements) {
     const snapshot = {
       members: structuredClone(this.members), sessions: structuredClone(this.sessions),
@@ -64,9 +64,9 @@ class MockD1 {
         
         
         
-        if (q.startsWith('UPDATE community_members SET password_salt = ?, password_hash = ? WHERE id = (')) { const [password_salt, password_hash, token_hash, now] = args; const token = db.passwordResetTokens.find((r) => r.token_hash === token_hash && r.expires_at > now); const member = token && db.members.find((m) => m.id === token.member_id); if (!member) return { meta: { changes: 0 } }; member.password_salt = password_salt; member.password_hash = password_hash; return { meta: { changes: 1 } }; }
-        if (q.startsWith('DELETE FROM community_sessions WHERE member_id = (')) { const [token_hash, now] = args; const token = db.passwordResetTokens.find((r) => r.token_hash === token_hash && r.expires_at > now); if (!token) return { meta: { changes: 0 } }; const before = db.sessions.length; db.sessions = db.sessions.filter((s) => s.member_id !== token.member_id); return { meta: { changes: before - db.sessions.length } }; }
-        if (q.startsWith('DELETE FROM community_password_reset_tokens WHERE token_hash = ? AND expires_at > ?')) { const [token_hash, now] = args; const before = db.passwordResetTokens.length; db.passwordResetTokens = db.passwordResetTokens.filter((r) => !(r.token_hash === token_hash && r.expires_at > now)); return { meta: { changes: before - db.passwordResetTokens.length } }; }
+        if (q.startsWith('UPDATE community_members SET password_salt = ?, password_hash = ? WHERE id = (')) { const [password_salt, password_hash, token_hash, now] = args; const token = db.passwordResetTokens.find((r) => r.token_hash === token_hash && r.expires_at > now); const member = token && db.members.find((m) => m.id === token.member_id); if (db.suppressPasswordUpdate || !member) return { meta: { changes: 0 } }; member.password_salt = password_salt; member.password_hash = password_hash; return { meta: { changes: 1 } }; }
+        if (q.startsWith('DELETE FROM community_sessions WHERE member_id = (')) { const [token_hash, now, guard_hash, guard_now, password_salt, password_hash] = args; const token = db.passwordResetTokens.find((r) => r.token_hash === token_hash && r.expires_at > now); const member = token && db.members.find((m) => m.id === token.member_id && m.password_salt === password_salt && m.password_hash === password_hash); if (!token || !member || guard_hash !== token_hash || guard_now !== now) return { meta: { changes: 0 } }; const before = db.sessions.length; db.sessions = db.sessions.filter((s) => s.member_id !== token.member_id); return { meta: { changes: before - db.sessions.length } }; }
+        if (q.startsWith('DELETE FROM community_password_reset_tokens WHERE token_hash = ? AND expires_at > ?')) { const [token_hash, now, password_salt, password_hash] = args; const before = db.passwordResetTokens.length; const token = db.passwordResetTokens.find((r) => r.token_hash === token_hash && r.expires_at > now); const member = token && db.members.find((m) => m.id === token.member_id && m.password_salt === password_salt && m.password_hash === password_hash); if (member) db.passwordResetTokens = db.passwordResetTokens.filter((r) => r !== token); return { meta: { changes: before - db.passwordResetTokens.length } }; }
         if (q.startsWith('DELETE FROM community_sessions WHERE member_id = ?')) { const before = db.sessions.length; db.sessions = db.sessions.filter((s) => s.member_id !== args[0]); return { meta: { changes: before - db.sessions.length } }; }
         if (q.startsWith('DELETE FROM community_sessions WHERE expires_at <=')) { const before = db.sessions.length; db.sessions = db.sessions.filter((s) => s.expires_at > args[0]); return { meta: { changes: before - db.sessions.length } }; }
         if (q.startsWith('DELETE FROM community_sessions WHERE token_hash =')) { const before = db.sessions.length; db.sessions = db.sessions.filter((s) => s.token_hash !== args[0]); return { meta: { changes: before - db.sessions.length } }; }
@@ -199,6 +199,13 @@ try {
 
   assert.ok(db.sessions.some((s) => s.member_id === loginPayload.member.id));
   assert.equal(db.passwordResetTokens.length, 1);
+  db.suppressPasswordUpdate = true;
+  const resetNoop = await call('/password-reset/complete', { method: 'POST', body: { token: resetToken, password: 'MatKhauMoiTotHon123!' } });
+  assert.equal(resetNoop.status, 400, 'A zero-row password update must be rejected.');
+  assert.equal(db.passwordResetTokens.length, 1, 'A zero-row password update must preserve the reset token.');
+  assert.equal(db.sessions.some((s) => s.member_id === loginPayload.member.id), true,
+    'A zero-row password update must preserve existing sessions.');
+  db.suppressPasswordUpdate = false;
   db.failBatchAfter = 0;
   const resetBatchFailure = await call('/password-reset/complete', { method: 'POST', body: { token: resetToken, password: 'MatKhauMoiTotHon123!' } });
   assert.equal(resetBatchFailure.status, 500, 'A D1 failure after password update must fail the request.');
