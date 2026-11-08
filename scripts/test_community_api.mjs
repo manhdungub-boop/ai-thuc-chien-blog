@@ -158,7 +158,18 @@ omitRelayRedirectLocation = false;
 const registered = await call('/register', { method: 'POST', body: { username: 'thanhvien_1', displayName: 'Thành viên thử', email: 'member@example.com', password: 'MotMatKhauRieng123!' } }); assert.equal(registered.status, 201);
 const registeredPayload = await registered.json(); assert.equal(registeredPayload.verificationRequired, true); assert.equal(JSON.stringify(registeredPayload).includes('MotMatKhauRieng123!'), false); assert.equal(registered.headers.get('set-cookie'), null); assert.ok(capturedEmail); assert.equal(capturedEmail.to, 'member@example.com');
 const loginBeforeVerification = await call('/login', { method: 'POST', body: { email: 'member@example.com', password: 'MotMatKhauRieng123!' } }); assert.equal(loginBeforeVerification.status, 403); assert.equal((await loginBeforeVerification.json()).code, 'EMAIL_NOT_VERIFIED');
-const tokenMatch = capturedEmail.htmlBody.match(/[?]verify=([A-Za-z0-9_-]{32,80})/); assert.ok(tokenMatch, 'verification email must contain a random one-time token'); const verify = await call('/verify-email', { method: 'POST', body: { token: tokenMatch[1] } }); assert.equal(verify.status, 200); assert.equal((await verify.json()).ok, true); assert.equal(db.tokens.length, 0);
+const tokenMatch = capturedEmail.htmlBody.match(/[?]verify=([A-Za-z0-9_-]{32,80})/); assert.ok(tokenMatch, 'verification email must contain a random one-time token');
+const memberAwaitingVerification = db.members.find((m) => m.email === 'member@example.com');
+const verificationTokenRow = db.tokens.find((t) => t.member_id === memberAwaitingVerification.id);
+db.failBatchAfter = 0;
+const failedVerificationBatch = await call('/verify-email', { method: 'POST', body: { token: tokenMatch[1] } });
+assert.equal(failedVerificationBatch.status, 500, 'a failed verification D1 batch must fail closed');
+assert.equal(memberAwaitingVerification.email_verified_at, null, 'failed verification batch must not activate the account');
+assert.ok(db.tokens.some((t) => t.token_hash === verificationTokenRow.token_hash), 'failed verification batch must preserve the one-time token');
+const verify = await call('/verify-email', { method: 'POST', body: { token: tokenMatch[1] } });
+assert.equal(verify.status, 200);
+assert.equal((await verify.json()).ok, true);
+assert.equal(db.tokens.length, 0);
 const replay = await call('/verify-email', { method: 'POST', body: { token: tokenMatch[1] } }); assert.equal(replay.status, 400, 'verification tokens must be single-use');
 
 // Resend is intentionally generic for account privacy and is rate-limited to three requests per email per hour.
