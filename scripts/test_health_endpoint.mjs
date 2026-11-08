@@ -5,6 +5,11 @@ import worker from '../worker.mjs';
 
 const relayUrl = 'https://relay.example.invalid/exec';
 const relaySecret = 'test-secret-that-must-never-be-returned';
+async function readJson(response) {
+  const raw = await response.text();
+  assert.doesNotMatch(raw, /test-secret-that-must-never-be-returned|relay\\.example|private database diagnostic/);
+  return JSON.parse(raw);
+}
 const readyEnv = {
   COMMUNITY_EMAIL_RELAY_URL: relayUrl,
   COMMUNITY_EMAIL_RELAY_SECRET: relaySecret,
@@ -16,7 +21,7 @@ const readyEnv = {
 
 const ready = await worker.fetch(new Request('https://preview.example/health'), readyEnv);
 assert.equal(ready.status, 200);
-assert.deepEqual(await ready.json(), {
+assert.deepEqual(await readJson(ready), {
   ok: true,
   checks: { database: 'ready', emailRelayConfigured: true },
 });
@@ -28,7 +33,7 @@ const missingDatabase = await worker.fetch(new Request('https://preview.example/
   COMMUNITY_EMAIL_RELAY_SECRET: relaySecret,
 });
 assert.equal(missingDatabase.status, 503);
-assert.deepEqual(await missingDatabase.json(), {
+assert.deepEqual(await readJson(missingDatabase), {
   ok: false,
   checks: { database: 'unavailable', emailRelayConfigured: true },
 });
@@ -41,7 +46,7 @@ const databaseFailure = await worker.fetch(new Request('https://preview.example/
   } },
 });
 assert.equal(databaseFailure.status, 503);
-assert.deepEqual(await databaseFailure.json(), {
+assert.deepEqual(await readJson(databaseFailure), {
   ok: false,
   checks: { database: 'unavailable', emailRelayConfigured: true },
 });
@@ -51,7 +56,7 @@ const missingRelay = await worker.fetch(new Request('https://preview.example/hea
   COMMUNITY_EMAIL_RELAY_URL: relayUrl,
 });
 assert.equal(missingRelay.status, 503);
-assert.deepEqual(await missingRelay.json(), {
+assert.deepEqual(await readJson(missingRelay), {
   ok: false,
   checks: { database: 'ready', emailRelayConfigured: false },
 });
@@ -61,7 +66,7 @@ const malformedDatabaseResult = await worker.fetch(new Request('https://preview.
   DB: { prepare: () => ({ first: async () => ({ ok: 0 }) }) },
 });
 assert.equal(malformedDatabaseResult.status, 503);
-assert.deepEqual(await malformedDatabaseResult.json(), {
+assert.deepEqual(await readJson(malformedDatabaseResult), {
   ok: false,
   checks: { database: 'unavailable', emailRelayConfigured: true },
 });
@@ -75,8 +80,4 @@ const head = await worker.fetch(new Request('https://preview.example/health', { 
 assert.equal(head.status, 200);
 assert.equal(await head.text(), '');
 
-for (const response of [ready, missingDatabase, databaseFailure, missingRelay, malformedDatabaseResult, unsupportedMethod, head]) {
-  const text = await response.clone().text();
-  assert.doesNotMatch(text, /test-secret-that-must-never-be-returned|relay\.example|private database diagnostic/);
-}
 console.log('PASS: health endpoint simulations — ready, missing D1, D1 error, missing relay secret, malformed D1 result, method rejection, HEAD, no secret leakage');
