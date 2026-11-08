@@ -1,8 +1,10 @@
 'use strict';
 
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const root = path.resolve(__dirname, '..');
 const sourcePath = path.join(root, 'data', 'ai-tools.json');
@@ -37,7 +39,7 @@ duplicate.tools.push({ ...duplicate.tools[0] });
 assert.throws(() => validate(duplicate), /IDs must be unique/, 'duplicate IDs must fail');
 const incomplete = structuredClone(catalog);
 delete incomplete.tools[0].official_sources;
-assert.throws(() => validate(incomplete), /official_sources/, 'missing source citations must fail');
+assert.throws(() => validate(incomplete), /official sources required/, 'missing source citations must fail');
 assert.throws(() => JSON.parse(raw + '{'), SyntaxError, 'malformed JSON must fail');
 
 console.log('AI CATALOG VALIDATION PASS: ' + count + ' entries; unique IDs, required metadata, HTTPS sources, license/status caveats, duplicate and malformed-data rejection.');
