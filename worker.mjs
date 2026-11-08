@@ -32,8 +32,6 @@ const CHAT_ALLOWED_ORIGINS = new Set([
   "https://ai-thuc-chien-blog.manhdungub.workers.dev",
   "https://ai-thuc-chien-blog.pages.dev",
 ]);
-const CHAT_RECENT_REQUESTS = new Map();
-
 function chatJson(data, status, request) {
   const headers = new Headers({
     "Content-Type": "application/json; charset=utf-8",
@@ -92,9 +90,37 @@ async function retrieveArticleContext(env, requestUrl, question, catalog) {
   return retrieved.slice(0,3).map((item) => "Bài: " + item.title + "\nURL: " + base + item.path + "\nĐoạn liên quan:\n" + item.blocks.map((block) => "- " + block.text).join("\n")).join("\n\n").slice(0,5200);
 }
 
+async function readRequestTextLimited(request, maxBytes) {
+  if (!request.body) return "";
+  const reader = request.body.getReader();
+  const chunks = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel("Request body exceeds the configured limit");
+        return null;
+      }
+      chunks.push(value);
+    }
+  } finally {
+    try { reader.releaseLock(); } catch (_error) { /* Reader may already be released. */ }
+  }
+  const bytes = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+}
+
 async function handleChat(request, env) {
   const origin = request.headers.get("Origin");
-  if (origin && !CHAT_ALLOWED_ORIGINS.has(origin)) {
+  if (!origin || !CHAT_ALLOWED_ORIGINS.has(origin)) {
     return chatJson({ error: "Nguồn yêu cầu không được phép." }, 403, request);
   }
   if (request.method === "OPTIONS") return chatJson({ ok: true }, 200, request);
@@ -102,12 +128,24 @@ async function handleChat(request, env) {
   if (!env.AI || typeof env.AI.run !== "function") {
     return chatJson({ error: "Trợ lý AI chưa được bật ở máy chủ. Vui lòng thử lại sau." }, 503, request);
   }
-  const length = Number(request.headers.get("Content-Length") || 0);
-  if (length > 12000) return chatJson({ error: "Tin nhắn quá dài. Vui lòng rút gọn rồi thử lại." }, 413, request);
+  if (!env.DB) return chatJson({ error: "Dịch vụ đang bận. Vui lòng thử lại sau." }, 503, request);
+  const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+  try {
+    const ipHash = await sha256Base64Url(ip);
+    if (!await communityRateLimit(env.DB, `chat:${ipHash}`, 10, 60 * 1000)) {
+      return chatJson({ error: "Bạn đã gửi quá nhiều câu hỏi. Vui lòng chờ một phút rồi thử lại." }, 429, request);
+    }
+  } catch (_error) {
+    return chatJson({ error: "Không thể kiểm tra giới hạn sử dụng. Vui lòng thử lại sau." }, 503, request);
+  }
+  const lengthHeader = request.headers.get("Content-Length");
+  if (lengthHeader && (!/^\d+$/.test(lengthHeader) || Number(lengthHeader) > 12000)) {
+    return chatJson({ error: "Tin nhắn quá dài. Vui lòng rút gọn rồi thử lại." }, 413, request);
+  }
   let payload;
   try {
-    const raw = await request.text();
-    if (raw.length > 12000) return chatJson({ error: "Nội dung gửi quá lớn." }, 413, request);
+    const raw = await readRequestTextLimited(request, 12000);
+    if (raw === null) return chatJson({ error: "Nội dung gửi quá lớn." }, 413, request);
     payload = JSON.parse(raw);
   } catch (_error) {
     return chatJson({ error: "Dữ liệu gửi không hợp lệ." }, 400, request);
@@ -125,13 +163,6 @@ async function handleChat(request, env) {
   if (messages[messages.length - 1].role !== "user") {
     return chatJson({ error: "Hãy gửi một câu hỏi mới để tiếp tục." }, 400, request);
   }
-  const ip = request.headers.get("CF-Connecting-IP") || "unknown";
-  const now = Date.now();
-  const lastRequest = CHAT_RECENT_REQUESTS.get(ip) || 0;
-  if (now - lastRequest < 1800) return chatJson({ error: "Bạn gửi hơi nhanh. Vui lòng chờ một chút rồi thử lại." }, 429, request);
-  if (CHAT_RECENT_REQUESTS.size > 1000) CHAT_RECENT_REQUESTS.clear();
-  CHAT_RECENT_REQUESTS.set(ip, now);
-
   const articleCatalog = [
     ["Bắt đầu với AI: hướng dẫn thực hành cho người mới", "/articles/bat-dau-voi-ai"],
     ["Thiết kế quy trình AI có bước kiểm duyệt của con người", "/articles/quy-trinh-ai-co-kiem-duyet"],

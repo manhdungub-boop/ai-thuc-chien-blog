@@ -237,12 +237,34 @@ assertSecurityHeaders(httpResponse, false);
 console.log('PASS: security headers on 200/404/500, root and article routing, asset metadata preserved, internal error hidden, HSTS HTTPS-only');
 
 
+const chatRateRows = new Map();
+const chatDb = {
+  prepare(sql) {
+    return { bind(...args) {
+      if (sql.startsWith('INSERT INTO community_rate_limits')) {
+        const [bucket, windowStart] = args;
+        return { run: async () => {
+          const old = chatRateRows.get(bucket);
+          chatRateRows.set(bucket, { count: old && old.window_start === windowStart ? old.count + 1 : 1, window_start: windowStart });
+          return { meta: { changes: 1 } };
+        } };
+      }
+      if (sql.startsWith('SELECT count FROM community_rate_limits')) {
+        const [bucket] = args;
+        return { first: async () => chatRateRows.get(bucket) || null };
+      }
+      throw new Error('Unexpected chat D1 query: ' + sql);
+    } };
+  },
+};
+
 const chatRequest = new Request('https://example.test/api/chat', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json', 'Origin': 'https://ai-thuc-chien-blog.manhdungub.workers.dev', 'CF-Connecting-IP': '198.51.100.44' },
   body: JSON.stringify({ messages: [{ role: 'user', content: 'Tôi nên bắt đầu học AI từ đâu?' }], page: { title: 'Bắt đầu với AI', path: '/articles/bat-dau-voi-ai' } }),
 });
 const chat = await worker.fetch(chatRequest, {
+  DB: chatDb,
   AI: { run: async (model, input) => {
     assert.equal(model, '@cf/meta/llama-3.1-8b-instruct-fast');
     assert.equal(input.messages.at(-1).content, 'Tôi nên bắt đầu học AI từ đâu?');
@@ -266,7 +288,7 @@ assert.equal(badOrigin.status, 403);
 assert.equal((await badOrigin.json()).error, 'Nguồn yêu cầu không được phép.');
 
 const noAi = await worker.fetch(new Request('https://example.test/api/chat', {
-  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'https://ai-thuc-chien-blog.manhdungub.workers.dev' },
   body: JSON.stringify({ messages: [{ role: 'user', content: 'hello' }] }),
 }), { ASSETS: { fetch: async () => new Response('asset') } });
 assert.equal(noAi.status, 503);
