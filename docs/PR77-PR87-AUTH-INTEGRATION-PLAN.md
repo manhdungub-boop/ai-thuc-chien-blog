@@ -76,3 +76,22 @@ Before any migration test, validate the complete ordered migration set against a
 - Do not bypass any tool safety block to send email or access account credentials.
 - A successful offline test or Preview deployment does not establish successful email delivery.
 - Keep PR #77, #85, and #87 unchanged until the integration branch passes all required gates and a separate release decision is made.
+
+
+## Implementation progress (2026-11-09)
+
+- Created the isolated integration branch from PR #77 head.
+- Ported the guarded Apps Script redirect helper into the PR #77 Worker. The initial POST uses manual redirect handling; a redirect is accepted only for the exact HTTPS origin `https://script.googleusercontent.com`, with no URL credentials and no non-standard port. The follow-up GET does not forward the POST body, relay secret, or application headers. Both verification and password-reset email paths use the helper.
+- Converted email verification completion into one D1 batch: guarded member verification, token consumption, and cleanup commit together.
+- Converted password-reset completion into one D1 batch: password update, session revocation, and token consumption. Session/token cleanup is guarded by the newly generated password salt/hash.
+- Expanded the community API test double to model D1 batch rollback and added regression cases for unsafe relay redirects, missing Location, verification transaction rollback, password-reset transaction rollback, and zero-row password-update protection.
+
+### Validation status
+
+- Structural source checks: PASS (expected helper, allowlist, D1 batch paths, guards, and test cases are present).
+- Runtime Node test suite: NOT RUN. The GitHub connector used for this task exposes read operations but no workflow-dispatch action; the isolated container has no network access to retrieve the branch files. Do not treat the added tests as passing until GitHub Actions or another authorized local runner executes them.
+- GitHub Actions run for this integration branch: none observed as of this update.
+- Live email delivery: NOT VERIFIED.
+- Preview deployment and Production: unchanged; no deployment or migration was performed.
+
+Next: run the existing `Static CI Quality Gate` on this branch using an authorized runner, fix any test-double or SQL regressions, then proceed to the remaining OAuth and migration regression checks.
