@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 'use strict';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { runInNewContext } from 'node:vm';
 import worker from '../worker.mjs';
 
 const requiredHeaders = {
