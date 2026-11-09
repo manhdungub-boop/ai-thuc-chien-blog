@@ -293,3 +293,124 @@ const noAi = await worker.fetch(new Request('https://example.test/api/chat', {
 }), { ASSETS: { fetch: async () => new Response('asset') } });
 assert.equal(noAi.status, 503);
 console.log('PASS: reader chat API validation, model call, same-origin policy, no-store, and graceful missing-binding response');
+
+
+// Mock-only successful Google OAuth callback integration coverage.
+// This executes the real callback handler extracted from worker.mjs; all Google
+// network traffic, identity validation, D1 persistence and session creation are
+// deterministic test doubles. No real account, consent screen, email or secret is used.
+const oauthWorkerSource = await readFile(new URL('../worker.mjs', import.meta.url), 'utf8');
+const oauthCallbackMatch = oauthWorkerSource.match(/async function completeCommunityOAuth\\([\\s\\S]*?\\n}\\s*async function handleCommunityApi/);
+assert.ok(oauthCallbackMatch, 'Worker must expose the expected Google OAuth callback implementation');
+const oauthCallbackSource = oauthCallbackMatch[0].replace(/\\s*async function handleCommunityApi$/, '');
+const testOAuthState = 'A'.repeat(43);
+const oauthCalls = { tokenExchange: 0, member: [], session: 0, expectedNonce: '' };
+let oauthCookieMode = 'valid';
+let oauthTokenStatus = 200;
+const oauthSandbox = {
+  URL, URLSearchParams, Response, Headers, AbortSignal, JSON, String, Boolean, Error,
+  fetch: async (input, init = {}) => {
+    oauthCalls.tokenExchange += 1;
+    assert.equal(String(input), 'https://oauth2.googleapis.com/token');
+    assert.equal(init.method, 'POST');
+    assert.equal(init.headers['Content-Type'], 'application/x-www-form-urlencoded');
+    const body = new URLSearchParams(init.body);
+    assert.equal(body.get('client_id'), 'mock-client.apps.googleusercontent.com');
+    assert.equal(body.get('client_secret'), 'mock-client-secret');
+    assert.equal(body.get('code'), 'mock-one-time-code');
+    assert.equal(body.get('code_verifier'), 'mock-pkce-verifier');
+    assert.equal(body.get('grant_type'), 'authorization_code');
+    assert.equal(body.get('redirect_uri'), 'https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev/api/community/oauth/google/callback');
+    return new Response(JSON.stringify(oauthTokenStatus === 200
+      ? { access_token: 'mock-access-token', id_token: 'mock-id-token' }
+      : { error: 'invalid_grant' }), {
+      status: oauthTokenStatus,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  },
+  communityOAuthCookieName: (_provider, kind) => 'mock-' + kind + '-' + testOAuthState,
+  readCommunityOAuthCookie: (_request, name) => {
+    if (name.includes('-state-')) return oauthCookieMode === 'invalid-state' ? 'B'.repeat(43) : testOAuthState;
+    if (name.includes('-verifier-')) return 'mock-pkce-verifier';
+    if (name.includes('-nonce-')) return oauthCookieMode === 'missing-nonce' ? '' : 'mock-nonce';
+    return '';
+  },
+  communityOAuthClearCookies: () => [],
+  communityOAuthRedirect: (_request, _provider, reason, clearCookies) => {
+    const headers = new Headers({ Location: '/community?oauth=' + reason });
+    for (const cookie of clearCookies || []) headers.append('Set-Cookie', cookie);
+    return new Response(null, { status: 302, headers });
+  },
+  communityRateLimit: async () => true,
+  sha256Base64Url: async (value) => 'mock-hash-' + value,
+  communityOAuthReady: () => true,
+  communityOAuthCredentials: () => ({
+    clientId: 'mock-client.apps.googleusercontent.com',
+    clientSecret: 'mock-client-secret',
+  }),
+  validateGoogleOidcIdToken: async (token, clientId, nonce) => {
+    assert.equal(token, 'mock-id-token');
+    assert.equal(clientId, 'mock-client.apps.googleusercontent.com');
+    oauthCalls.expectedNonce = nonce;
+    assert.equal(nonce, 'mock-nonce');
+    return { sub: 'mock-google-subject-123', email: 'oauth-test@example.invalid', name: 'OAuth Test' };
+  },
+  communityOAuthMember: async (_db, provider, providerUserId, email, displayName) => {
+    oauthCalls.member.push({ provider, providerUserId, email, displayName });
+    return { id: 'mock-member-id', username: 'oauth_test', email, display_name: displayName };
+  },
+  createCommunitySession: async (_db, memberId) => {
+    assert.equal(memberId, 'mock-member-id');
+    oauthCalls.session += 1;
+    return 'mock-session-cookie-token';
+  },
+  communityCookie: (token) => 'mock-community-session=' + token + '; Path=/; HttpOnly; Secure; SameSite=Lax',
+};
+const completeMockedOAuth = runInNewContext(
+  oauthCallbackSource + '\\ncompleteCommunityOAuth',
+  oauthSandbox,
+);
+
+const mockOAuthRequest = new Request(
+  'https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev/api/community/oauth/google/callback?state=' +
+    testOAuthState + '&code=mock-one-time-code',
+  { headers: { 'CF-Connecting-IP': '198.51.100.90' } },
+);
+const successfulOAuthResponse = await completeMockedOAuth(mockOAuthRequest, {}, 'google', {});
+assert.equal(successfulOAuthResponse.status, 302, 'valid mocked callback should redirect after successful login');
+assert.equal(successfulOAuthResponse.headers.get('location'), '/community?oauth=success');
+assert.match(successfulOAuthResponse.headers.get('set-cookie') || '', /mock-community-session=mock-session-cookie-token/);
+assert.deepEqual(oauthCalls.member, [{
+  provider: 'google',
+  providerUserId: 'mock-google-subject-123',
+  email: 'oauth-test@example.invalid',
+  displayName: 'OAuth Test',
+}]);
+assert.equal(oauthCalls.session, 1, 'successful OAuth callback should create exactly one session');
+assert.equal(oauthCalls.tokenExchange, 1, 'successful OAuth callback should exchange exactly one authorization code');
+
+// State mismatch must stop before token exchange, member linking or session creation.
+oauthCookieMode = 'invalid-state';
+oauthCalls.tokenExchange = 0;
+oauthCalls.member.length = 0;
+oauthCalls.session = 0;
+const invalidStateResponse = await completeMockedOAuth(mockOAuthRequest, {}, 'google', {});
+assert.equal(invalidStateResponse.status, 302);
+assert.match(invalidStateResponse.headers.get('location') || '', /OAUTH_STATE_INVALID/);
+assert.equal(oauthCalls.tokenExchange, 0);
+assert.equal(oauthCalls.member.length, 0);
+assert.equal(oauthCalls.session, 0);
+
+// Missing transaction nonce must not create/link a member or issue a session.
+oauthCookieMode = 'missing-nonce';
+oauthCalls.tokenExchange = 0;
+oauthCalls.member.length = 0;
+oauthCalls.session = 0;
+const missingNonceResponse = await completeMockedOAuth(mockOAuthRequest, {}, 'google', {});
+assert.equal(missingNonceResponse.status, 302);
+assert.match(missingNonceResponse.headers.get('location') || '', /OAUTH_NONCE_MISSING/);
+assert.equal(oauthCalls.tokenExchange, 1, 'nonce is checked after the token endpoint returns the ID token');
+assert.equal(oauthCalls.member.length, 0);
+assert.equal(oauthCalls.session, 0);
+oauthCookieMode = 'valid';
+console.log('PASS: mocked Google OAuth callback success, PKCE exchange, identity linking, session issuance, state rejection, and nonce rejection');
