@@ -48,6 +48,8 @@ jobs:
           node --test tests/staging-google-oidc-runtime.test.mjs
           node scripts/test_google_oauth_worker_integration.mjs
           node scripts/test_homepage_search.cjs
+          node scripts/verify-release-safety.mjs
+          node --check scripts/check-ai-tools-links.mjs
 
       - name: Test community D1 schema
         run: python3 scripts/test_community_schema.py
