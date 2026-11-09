@@ -35,3 +35,27 @@ This document records a verified migration audit. It does not authorize a merge,
 ## Current next work
 
 Build a GitHub-native integration candidate from the existing GitHub baseline. Selectively reconcile the 69-article snapshot and OAuth test harness without replacing the current runtime or CI. Keep the work in Pull Requests until all required checks are green.
+
+## Mandatory chat handoff and continuity
+
+This rule applies to this repository and all related AI automation work.
+
+1. **Trigger early.** Monitor conversation length and prepare a handoff before the context limit is reached, or immediately when the user asks to transfer work to a new chat. Do not wait for the user to repeat the request.
+2. **Include an operational state snapshot.** Record:
+   - project objective, current scope, and decisions that must remain unchanged;
+   - completed work and outstanding work, with no unsupported completion claims;
+   - repository, branch, exact commit SHA, PR/MR number and URL;
+   - validation results by exact commit, clearly marked PASS, FAIL, IN PROGRESS, BLOCKED, SKIPPED, or NOT RUN;
+   - connected tools/integrations and their verified connection state;
+   - permissions already granted, safety boundaries, and actions not authorized;
+   - blockers, quota/access limits, their observed causes, and the next concrete steps;
+   - relevant source links and preview/staging URLs.
+3. **Preserve continuity.** Carry forward the latest verified state and all user constraints. Do not repeat checks already completed unless the source changed, evidence expired, or a new failure requires retesting. Never turn a user-reported test into a tool-verified result, or vice versa.
+4. **Provide a ready-to-copy continuation instruction.** End the handoff with a short `CONTINUE` instruction that tells the next chat to read the handoff and resume from the exact next step without asking the user to restate known context.
+5. **Resume deterministically.** In a new chat, when the user says “Tiếp tục”, use the latest handoff as the working baseline, verify only what may have changed, and continue with the next safe action.
+6. **Be transparent about chat boundaries.** The assistant cannot open a new chat on the user's behalf. It must prepare the handoff text and clearly tell the user to paste it into the new chat.
+7. **Protect sensitive information.** Do not put passwords, OTPs, API tokens, secret values, private keys, or unnecessary personal data in a handoff. Record only the existence and scope of a secret or permission when operationally necessary.
+
+Suggested final handoff command:
+
+`CONTINUE: Read this handoff, preserve all recorded constraints and approvals, verify the current repository/PR/CI state where it may have changed, then resume from the listed next step. Do not repeat completed checks or perform any unauthorized Production, real-D1, DNS, secret, merge, or destructive action.`
