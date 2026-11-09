@@ -927,7 +927,7 @@ async function handleCommunityApi(request, env) {
         replacementTokenHash = await sha256Base64Url(token);
         await sendCommunityVerificationEmail(env, member.email, member.display_name, token, new URL(request.url).origin);
         // Keep the previous valid link until delivery of its replacement succeeds.
-        await db.prepare("DELETE FROM community_email_verification_tokens WHERE member_id = ? AND token_hash != ?")
+        await db.prepare("DELETE FROM community_email_verification_tokens WHERE member_id = ? AND token_hash <> ?")
           .bind(member.id, replacementTokenHash).run();
       } catch (error) {
         if (replacementTokenHash) {
