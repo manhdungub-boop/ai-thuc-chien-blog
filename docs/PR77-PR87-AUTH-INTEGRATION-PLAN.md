@@ -54,7 +54,7 @@ Before any migration test, validate the complete ordered migration set against a
 
 ## Known differences to resolve deliberately
 
-- PR #77 verification token lifetime is 30 minutes; PR #87 uses 24 hours. Choose one policy explicitly and keep Worker, email copy, frontend, and tests consistent. Proposed integration default: 24 hours, subject to review of abuse/rate-limit controls.
+- PR #77 verification token lifetime is 30 minutes; PR #87 uses 24 hours. The integration deliberately keeps PR #77's existing 30-minute contract; do not change the lifetime without a separate product/security decision.
 - PR #77's frontend already has a dedicated confirmation button. Do not replace it with an auto-consuming GET.
 - PR #77's relay helper currently assumes a direct JSON response; PR #87's manual redirect guard is the required fix.
 - PR #77's verification and password-reset completion currently perform multiple independent writes; PR #87's transaction guards are required.
@@ -89,12 +89,11 @@ Before any migration test, validate the complete ordered migration set against a
 ### Validation status
 
 - Structural source checks: PASS (expected helper, allowlist, D1 batch paths, guards, and test cases are present).
-- Runtime Node test suite: NOT RUN. The GitHub connector used for this task exposes read operations but no workflow-dispatch action; the isolated container has no network access to retrieve the branch files. Do not treat the added tests as passing until GitHub Actions or another authorized local runner executes them.
-- GitHub Actions run for this integration branch: none observed as of this update.
+- Historical checkpoint only: at the time of this section, runtime Node tests had not yet run. This status is superseded by the later CI result recorded below.
 - Live email delivery: NOT VERIFIED.
 - Preview deployment and Production: unchanged; no deployment or migration was performed.
 
-Next: run the existing `Static CI Quality Gate` on this branch using an authorized runner, fix any test-double or SQL regressions, then proceed to the remaining OAuth and migration regression checks.
+Next at that checkpoint: run the existing `Static CI Quality Gate` on this branch using an authorized runner. This was subsequently completed successfully as recorded below.
 
 ## Source and migration audit update (2026-11-09)
 
@@ -134,3 +133,34 @@ Next: run the existing `Static CI Quality Gate` on this branch using an authoriz
 - Static source assertions: PASS. This is source inspection only, not a Node runtime execution.
 - The integration branch still has no workflow run or combined status check reported by the connected GitHub integration. No available authorized workflow-dispatch action was exposed; do not create a large PR to main solely to force CI.
 - Live email, browser E2E, Preview deployment, and remote Preview D1 migration remain NOT VERIFIED / NOT RUN. Production remains untouched.
+
+## Full Static CI execution — PASS (2026-11-09)
+
+- Found the existing `workflow_dispatch` trigger in `.github/workflows/ci-quality.yml` and dispatched the workflow on the isolated integration branch. This was a read-only validation workflow (`permissions: contents: read`) with no deployment, remote D1 migration, DNS, or secret-write steps.
+- Exact tested code commit: `c6aa33e4773f04d6ec10207862fb06a2ae5d7adc`.
+- GitHub Actions run #457 / run ID `42541166250`: SUCCESS.
+  - Run URL: https://github.com/manhdungub-boop/ai-thuc-chien-blog/actions/runs/42541166250
+  - Job `validate`: SUCCESS (job ID `128916180391`).
+  - All 17 validation steps completed with conclusion `success`.
+- Passing checks include:
+  - Static site + SEO feed build; generated output reports 69 homepage-linked articles.
+  - JavaScript syntax and Worker security/runtime tests.
+  - Community API tests, including the verification-token race case, relay redirect restrictions, D1 transaction rollback, and password-reset session revocation.
+  - Community schema and Google OAuth migration tests on local SQLite.
+  - Isolated Preview D1 configuration checks (configuration-only; no remote migration applied).
+  - Content quality, AI Bank catalog/review queue, article attribution/diagrams, SEO, accessibility/performance, copy prompt, article navigation, and homepage article coverage.
+- CI-discovered test issues were corrected on this branch before the successful run:
+  1. Registration tests now use isolated default TEST-NET IPs while explicitly reusing one IP only for rate-limit assertions.
+  2. MockD1 now matches the multiline password-reset session DELETE query, rather than accidentally routing it through a generic handler.
+  3. The password-reset standalone test double now simulates D1 batch commit/rollback and verifies that a failed batch preserves password, sessions, and reset token.
+  4. The email-verification source assertions now validate the atomic D1 batch and normalized multiline SQL instead of obsolete pre-transaction SQL/RETURNING patterns.
+- Branch comparison from PR #77 baseline `54888d22b0e70d1ca9f06bac831051eede841eb0` to tested commit: 22 commits ahead, 0 behind.
+- Important distinction: this PASS is for the offline/static CI workflow and its local SQLite fixtures. It does not prove live email delivery, remote Preview deployment, browser E2E, or successful OAuth with real staging credentials.
+- No remote Preview deployment, remote D1 migration, Production Worker/D1, DNS, or secret changes were made.
+
+### Remaining staging gates
+
+1. Inspect the dedicated staging deployment path and ensure it cannot write secrets or apply migrations before any Preview deployment is considered.
+2. If a safe deployment path is approved, deploy only to `ai-thuc-chien-blog-auth-app-preview` with `ai-thuc-chien-community-preview`; never use the Production Worker/D1.
+3. Run read-only HTTP smoke and isolated OAuth checks on the deployed Preview. Do not attempt real email delivery through a tool path previously blocked by the safety system.
+4. Keep live email delivery marked NOT VERIFIED until a permitted, independent delivery test is available.
