@@ -93,3 +93,6 @@ jobs:
 
       - name: Test homepage article coverage
         run: node scripts/test_homepage_article_coverage.cjs
+
+      - name: Verify secret-bearing workflows are restricted to trusted main
+        run: node scripts/test_workflow_secret_guards.mjs
