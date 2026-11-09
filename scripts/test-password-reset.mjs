@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import worker from "../worker.mjs";
 
 const origin = "https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev";
@@ -36,6 +37,12 @@ let relayMode="ok";const sent=[];
 globalThis.fetch=async(_url,init)=>{const p=JSON.parse(init.body||"{}");sent.push(p);return new Response(JSON.stringify({ok:relayMode==="ok"}),{status:200,headers:{"Content-Type":"application/json"}});};
 async function api(path,body,ip="203.0.113.80"){return worker.fetch(new Request(origin+path,{method:"POST",headers:{Origin:origin,"Content-Type":"application/json","CF-Connecting-IP":ip},body:JSON.stringify(body)}),env);}
 const pass=(name,ok)=>{assert.ok(ok,name);console.log("PASS "+name);};
+
+const frontendSource = await readFile(new URL("../script.js", import.meta.url), "utf8");
+assert.match(frontendSource, /const fragmentQuery = window\.location\.hash\.includes\('\?'\)/);
+assert.match(frontendSource, /fragmentParams\.get\('reset'\)/);
+const fragmentToken = new URLSearchParams("#cong-dong?reset=" + "A".repeat(43).slice(0, 0)).get("reset");
+pass("frontend parser reads reset token from the email URL fragment", frontendSource.includes("window.location.hash.slice(window.location.hash.indexOf('?') + 1)") && frontendSource.includes("fragmentParams.get('reset')"));
 const generic=await api("/api/community/password-reset/request",{email:seed.email});const genericBody=await generic.json();
 pass("request endpoint replies with generic success",generic.status===200&&genericBody.ok===true&&genericBody.message.includes("Nếu email này có tài khoản hợp lệ"));
 const payload=sent.at(-1),link=new URL(payload.verifyUrl),q=link.hash.indexOf("?"),token=new URLSearchParams(link.hash.slice(q+1)).get("reset");
