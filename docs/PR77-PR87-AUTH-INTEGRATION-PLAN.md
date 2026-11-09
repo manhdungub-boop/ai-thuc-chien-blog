@@ -95,3 +95,23 @@ Before any migration test, validate the complete ordered migration set against a
 - Preview deployment and Production: unchanged; no deployment or migration was performed.
 
 Next: run the existing `Static CI Quality Gate` on this branch using an authorized runner, fix any test-double or SQL regressions, then proceed to the remaining OAuth and migration regression checks.
+
+## Source and migration audit update (2026-11-09)
+
+- Re-fetched the integration branch and confirmed it remains 9 commits ahead of PR #77's starting commit, with no divergence behind that baseline.
+- Reviewed Worker relay handling and the verification/password-reset D1 batches against their test-double handlers. The test harness snapshots and restores member, session, verification-token, and reset-token state when a simulated batch statement fails.
+- Reviewed migrations 0001-0004 and executed the fetched migration test sources in an isolated local SQLite workspace:
+  - `scripts/test_community_schema.py`: PASS.
+  - `scripts/test_google_oauth_migration.py`: PASS.
+  - These checks cover the existing-member verification backfill, expected tables, token single-use behavior, topic/member constraints, duplicate Google subject rejection, rejection of non-Google provider rows, and OAuth identity cascade on member deletion.
+- Clarified the apparent Google/Facebook schema mismatch: the active staging OAuth route is Google-only, and the Worker integration test explicitly asserts that a Facebook OAuth route is not enabled. The migration's `CHECK (provider = 'google')` is therefore intentional for the currently exposed feature. The dormant provider-generic helper is not authorization to enable Facebook OAuth; do not broaden the schema or route without a separate security review and tests.
+- Kept the existing PR #77 email-verification lifetime of 30 minutes. The Worker constant and both email bodies state 30 minutes; the earlier proposed 24-hour policy remains unadopted to avoid silently changing the established contract.
+- GitHub Actions workflow runs and combined status checks for current integration head `f598b8a77d3b6ee9324500ecace2e955a88f2f87`: none returned. Node runtime suite, browser E2E, and live email delivery remain NOT VERIFIED.
+- No Worker deployment, D1 migration, DNS change, secret change, or Production action was performed.
+
+### Remaining gates
+
+1. Obtain an authorized GitHub Actions run for this exact integration branch/head; current connector does not expose workflow dispatch.
+2. Execute the Node community API, relay redirect, verification/reset, Google OAuth, and static-site/SEO/content gates on that head.
+3. Review fresh-database and populated-database migration behavior plus foreign-key cascades in the full workflow.
+4. Only after those gates pass, perform Preview-only validation with the separately authorized staging target. Live email remains a separate gate and must not be attempted through a tool path that has been safety-blocked.
