@@ -1,0 +1,1340 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-11-10T00:00:00+07:00",
+  "catalog_policy": {
+    "default_locale": "vi",
+    "currency": "USD",
+    "review_interval_days": 30,
+    "new_entry_status": "needs_review"
+  },
+  "tools": [
+    {
+      "id": "chatgpt",
+      "name": "ChatGPT",
+      "vendor": "OpenAI",
+      "website": "https://chatgpt.com/",
+      "categories": [
+        "assistant",
+        "writing",
+        "image"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "verified_free_tier",
+      "license": "proprietary",
+      "platforms": [
+        "web",
+        "ios",
+        "android",
+        "desktop"
+      ],
+      "description": "Trợ lý AI đa năng cho hỏi đáp, viết, phân tích tệp và sáng tạo nội dung.",
+      "free_tier_summary": "Có gói Free; chat văn bản và các công cụ như tải tệp, phân tích dữ liệu, tạo ảnh, thoại có giới hạn riêng và có thể thay đổi.",
+      "official_sources": [
+        "https://help.openai.com/en/articles/9275245-chatgpt-free-tier-faq",
+        "https://chatgpt.com/vi-VN/pricing/"
+      ],
+      "last_verified": "2026-11-01",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "assistant",
+        "writing",
+        "general-purpose"
+      ]
+    },
+    {
+      "id": "gemini",
+      "name": "Gemini",
+      "vendor": "Google",
+      "website": "https://gemini.google.com/",
+      "categories": [
+        "assistant",
+        "writing",
+        "research"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "verified_free_tier",
+      "license": "proprietary",
+      "platforms": [
+        "web",
+        "ios",
+        "android"
+      ],
+      "description": "Trợ lý AI của Google cho hỏi đáp, viết và xử lý nội dung.",
+      "free_tier_summary": "Có quyền truy cập tiêu chuẩn miễn phí; giới hạn prompt và tính năng có thể thay đổi theo thời điểm, khu vực và gói AI.",
+      "official_sources": [
+        "https://gemini.google.com/",
+        "https://support.google.com/gemini/answer/16275805?hl=en"
+      ],
+      "last_verified": "2026-11-01",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "assistant",
+        "google"
+      ]
+    },
+    {
+      "id": "claude",
+      "name": "Claude",
+      "vendor": "Anthropic",
+      "website": "https://claude.ai/",
+      "categories": [
+        "assistant",
+        "writing",
+        "coding"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "verified_free_tier",
+      "license": "proprietary",
+      "platforms": [
+        "web",
+        "ios",
+        "android",
+        "desktop"
+      ],
+      "description": "Trợ lý AI hỗ trợ soạn thảo, phân tích và lập trình.",
+      "free_tier_summary": "Có gói Free $0 với dung lượng sử dụng giới hạn; các gói trả phí mở rộng hạn mức.",
+      "official_sources": [
+        "https://www.anthropic.com/pricing",
+        "https://support.claude.com/en/articles/11049762-choose-a-claude-plan"
+      ],
+      "last_verified": "2026-11-01",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "assistant",
+        "reasoning",
+        "coding"
+      ]
+    },
+    {
+      "id": "perplexity",
+      "name": "Perplexity",
+      "vendor": "Perplexity AI",
+      "website": "https://www.perplexity.ai/",
+      "categories": [
+        "research",
+        "search"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "verified_free_tier",
+      "license": "proprietary",
+      "platforms": [
+        "web",
+        "ios",
+        "android"
+      ],
+      "description": "Công cụ tìm kiếm và nghiên cứu web có trích dẫn nguồn.",
+      "free_tier_summary": "Có gói Free $0 với lượt sử dụng hằng ngày giới hạn, tìm kiếm cơ bản và trích dẫn trong câu trả lời.",
+      "official_sources": [
+        "https://www.perplexity.ai/enterprise/pricing"
+      ],
+      "last_verified": "2026-11-01",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "search",
+        "research",
+        "citations"
+      ]
+    },
+    {
+      "id": "notebooklm",
+      "name": "NotebookLM",
+      "vendor": "Google",
+      "website": "https://notebooklm.google.com/",
+      "categories": [
+        "research",
+        "documents"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "verified_free_tier",
+      "license": "proprietary",
+      "platforms": [
+        "web"
+      ],
+      "description": "Không gian nghiên cứu dựa trên tài liệu và nguồn do người dùng cung cấp.",
+      "free_tier_summary": "Có gói Standard miễn phí; giới hạn hiện được công bố gồm 100 notebook/người dùng và 50 nguồn/notebook. Hạn mức có thể thay đổi.",
+      "official_sources": [
+        "https://notebooklm.google.com/",
+        "https://support.google.com/gemininotebook/answer/16213268",
+        "https://support.google.com/gemininotebook/answer/17670842"
+      ],
+      "last_verified": "2026-11-01",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "research",
+        "documents",
+        "notebooklm"
+      ]
+    },
+    {
+      "id": "canva",
+      "name": "Canva",
+      "vendor": "Canva",
+      "website": "https://www.canva.com/",
+      "categories": [
+        "design",
+        "image",
+        "presentation"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "verified_free_tier",
+      "license": "proprietary",
+      "platforms": [
+        "web",
+        "ios",
+        "android",
+        "desktop"
+      ],
+      "description": "Nền tảng thiết kế trực quan cho bài đăng, hình ảnh, slide và tài liệu.",
+      "free_tier_summary": "Gói Free $0; hạn mức AI chia sẻ tối đa 20 lượt Standard hoặc Premium AI mỗi tháng theo trang giá hiện hành.",
+      "official_sources": [
+        "https://www.canva.com/pricing/"
+      ],
+      "last_verified": "2026-11-01",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "design",
+        "social",
+        "presentation"
+      ]
+    },
+    {
+      "id": "adobe-firefly",
+      "name": "Adobe Firefly",
+      "vendor": "Adobe",
+      "website": "https://firefly.adobe.com/",
+      "categories": [
+        "image",
+        "design"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "limited_credits",
+      "license": "proprietary",
+      "platforms": [
+        "web"
+      ],
+      "description": "Công cụ tạo và chỉnh sửa hình ảnh, vector, video và audio bằng AI trong hệ sinh thái Adobe; các tính năng tiêu thụ generative credits theo loại tính năng và gói.",
+      "free_tier_summary": "Gói miễn phí được cấp generative credits khi người dùng sử dụng tính năng Firefly lần đầu; credits miễn phí hết hạn sau một tháng kể từ ngày cấp và được cấp lại khi bắt đầu lần sử dụng đầu tiên ở tháng tiếp theo. Số credits và mức tiêu thụ phụ thuộc gói, tính năng và model; credits không cộng dồn. Tính năng premium có thể tiêu thụ nhiều credits, ví dụ Generate Video 1080p/24fps dùng 100 credits mỗi giây theo FAQ Adobe cập nhật 27/10/2026.",
+      "official_sources": [
+        "https://firefly.adobe.com/",
+        "https://helpx.adobe.com/creative-cloud/apps/generative-ai/generative-credits-faq.html"
+      ],
+      "last_verified": "2026-11-05",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "image-generation",
+        "adobe",
+        "design"
+      ]
+    },
+    {
+      "id": "capcut",
+      "name": "CapCut",
+      "vendor": "ByteDance",
+      "website": "https://www.capcut.com/",
+      "categories": [
+        "video",
+        "editing"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "verified_free_tier",
+      "license": "proprietary",
+      "platforms": [
+        "web",
+        "ios",
+        "android",
+        "desktop"
+      ],
+      "description": "Công cụ biên tập video với mẫu và các tính năng AI.",
+      "free_tier_summary": "Có gói Free $0 với công cụ biên tập cơ bản; một số tính năng AI, tài nguyên và mẫu cao cấp cần Pro hoặc tín dụng.",
+      "official_sources": [
+        "https://www.capcut.com/pricing"
+      ],
+      "last_verified": "2026-11-01",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "video-editing",
+        "short-video"
+      ]
+    },
+    {
+      "id": "runway",
+      "name": "Runway",
+      "vendor": "Runway AI",
+      "website": "https://runway.com/",
+      "categories": [
+        "video",
+        "image"
+      ],
+      "pricing_model": "trial_or_credits",
+      "pricing_status": "limited_credits",
+      "license": "proprietary",
+      "platforms": [
+        "web"
+      ],
+      "description": "Nền tảng tạo và chỉnh sửa video, hình ảnh bằng mô hình AI.",
+      "free_tier_summary": "Gói Free $0 cung cấp 125 tín dụng một lần để trải nghiệm; không phải hạn mức tín dụng miễn phí làm mới hằng tháng.",
+      "official_sources": [
+        "https://runway.com/pricing"
+      ],
+      "last_verified": "2026-11-01",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "video-generation",
+        "image-generation"
+      ]
+    },
+    {
+      "id": "google-ai-studio",
+      "name": "Google AI Studio",
+      "vendor": "Google",
+      "website": "https://aistudio.google.com/",
+      "categories": [
+        "coding",
+        "developer",
+        "assistant"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "verified_free_tier",
+      "license": "proprietary",
+      "platforms": [
+        "web"
+      ],
+      "description": "Môi trường thử nghiệm mô hình Gemini, tạo API key và phát triển nguyên mẫu AI.",
+      "free_tier_summary": "Có quyền truy cập miễn phí cho một số model và hạn mức Gemini API; dữ liệu ở Free tier có thể được dùng để cải thiện sản phẩm theo chính sách Google.",
+      "official_sources": [
+        "https://aistudio.google.com/",
+        "https://ai.google.dev/gemini-api/docs/pricing"
+      ],
+      "last_verified": "2026-11-01",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "developer",
+        "gemini",
+        "api"
+      ]
+    },
+    {
+      "id": "activepieces",
+      "name": "Activepieces",
+      "vendor": "Activepieces",
+      "website": "https://www.activepieces.com/",
+      "categories": [
+        "automation",
+        "agents",
+        "integration"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "verified_free_tier",
+      "license": "open_source_with_hosted_paid",
+      "platforms": [
+        "web",
+        "self_hosted"
+      ],
+      "description": "Nền tảng workflow automation kết nối ứng dụng, trigger/action và AI agent.",
+      "free_tier_summary": "Cloud Free $0, không cần thẻ, gồm 100 credits/ngày; lõi Community Edition dùng giấy phép MIT, tính năng enterprise/cloud nâng cao có điều kiện riêng.",
+      "official_sources": [
+        "https://www.activepieces.com/pricing",
+        "https://www.activepieces.com/docs/about/license"
+      ],
+      "last_verified": "2026-11-01",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "automation",
+        "workflow",
+        "agents"
+      ]
+    },
+    {
+      "id": "n8n",
+      "name": "n8n Community Edition",
+      "vendor": "n8n",
+      "website": "https://n8n.io/",
+      "categories": [
+        "automation",
+        "integration",
+        "developer"
+      ],
+      "pricing_model": "self_hosted_free_and_cloud_paid",
+      "pricing_status": "self_hosted_free",
+      "license": "sustainable_use_license",
+      "platforms": [
+        "web",
+        "self_hosted"
+      ],
+      "description": "Nền tảng workflow automation có bản Community Edition tự lưu trữ.",
+      "free_tier_summary": "Community Edition tự lưu trữ miễn phí theo Sustainable Use License; n8n Cloud tính phí. Giấy phép có giới hạn đối với việc cung cấp dịch vụ hoặc cho khách hàng tự cấu hình workflow.",
+      "official_sources": [
+        "https://n8n.io/pricing/",
+        "https://support.n8n.io/article/can-i-use-your-license-for-my-use-case"
+      ],
+      "last_verified": "2026-11-01",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "automation",
+        "workflow",
+        "self-hosted"
+      ]
+    },
+    {
+      "id": "langfuse",
+      "name": "Langfuse",
+      "vendor": "Langfuse",
+      "website": "https://langfuse.com/",
+      "categories": [
+        "observability",
+        "evaluation",
+        "prompt-management",
+        "developer"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "verified_free_tier",
+      "license": "MIT for Langfuse OSS; enterprise-only add-ons and cloud service have separate commercial terms",
+      "platforms": [
+        "web",
+        "docker",
+        "kubernetes",
+        "self_hosted",
+        "cloud",
+        "api"
+      ],
+      "description": "Nền tảng quan sát và đánh giá ứng dụng LLM/AI agent: tracing, token/cost tracking, prompt management, datasets và evaluation.",
+      "free_tier_summary": "Self-hosted core OSS miễn phí, MIT, không giới hạn usage theo trang self-hosted pricing. Langfuse Cloud Hobby miễn phí, không cần thẻ, 50.000 units/tháng, 30 ngày data access và tối đa 2 users; Core/Pro/Enterprise trả phí.",
+      "official_sources": [
+        "https://langfuse.com/",
+        "https://langfuse.com/pricing",
+        "https://langfuse.com/pricing-self-host",
+        "https://langfuse.com/self-hosting",
+        "https://github.com/langfuse/langfuse"
+      ],
+      "last_verified": "2026-11-01",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "llm-observability",
+        "tracing",
+        "evaluation",
+        "prompt-management"
+      ]
+    },
+    {
+      "id": "litellm",
+      "name": "LiteLLM",
+      "vendor": "BerriAI",
+      "website": "https://www.litellm.ai/",
+      "categories": [
+        "developer",
+        "api",
+        "llm-gateway",
+        "cost-management"
+      ],
+      "pricing_model": "self_hosted_free_and_cloud_paid",
+      "pricing_status": "self_hosted_free",
+      "license": "MIT for the open-source LiteLLM SDK and gateway; content under the enterprise/ directory has a separate BerriAI Enterprise license",
+      "platforms": [
+        "python",
+        "docker",
+        "kubernetes",
+        "self_hosted",
+        "api",
+        "cloud"
+      ],
+      "description": "SDK và AI gateway cung cấp giao diện API thống nhất cho nhiều nhà cung cấp mô hình, quản lý key, ngân sách, rate limit, routing, fallback và theo dõi chi phí.",
+      "free_tier_summary": "Open-source SDK/gateway MIT, tự host không có phí license. `enterprise/` được điều chỉnh bởi license riêng và không được dùng trong production nếu không có commercial license; phí inference do model providers tính.",
+      "official_sources": [
+        "https://www.litellm.ai/",
+        "https://docs.litellm.ai/",
+        "https://github.com/BerriAI/litellm",
+        "https://github.com/BerriAI/litellm/blob/main/LICENSE",
+        "https://github.com/BerriAI/litellm/blob/main/enterprise/LICENSE.md",
+        "https://github.com/BerriAI/litellm/blob/main/pyproject.toml"
+      ],
+      "last_verified": "2026-11-01",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "llm-gateway",
+        "multi-provider",
+        "api-proxy",
+        "cost-controls"
+      ]
+    },
+    {
+      "id": "dify",
+      "name": "Dify",
+      "vendor": "LangGenius",
+      "website": "https://dify.ai/",
+      "categories": [
+        "agents",
+        "workflow",
+        "rag",
+        "no-code",
+        "developer"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "limited_credits",
+      "license": "Dify Open Source License, based on Apache-2.0 with additional conditions: operating a multi-tenant environment (one workspace per tenant) requires written authorization; the frontend LOGO/copyright notices cannot be removed or modified without a commercial license. Community self-hosted use must comply with these conditions.",
+      "platforms": [
+        "web",
+        "docker",
+        "self_hosted",
+        "cloud",
+        "api"
+      ],
+      "description": "Nền tảng phát triển ứng dụng LLM và AI agent với workflow visual, knowledge/RAG, prompt, tool integration và API publishing.",
+      "free_tier_summary": "Dify Cloud Sandbox: free, 200 message credits, 1 workspace, 1 member, 5 apps, 50 knowledge documents, 50 MB storage, 10 knowledge requests/min and 3,000 trigger events. Community self-hosted is free but subject to the Dify Open Source License conditions; multi-tenant SaaS or removal of frontend branding requires commercial authorization. Model-provider API usage may cost extra.",
+      "official_sources": [
+        "https://dify.ai/",
+        "https://www.dify.ai/pricing",
+        "https://github.com/alibaba/dify",
+        "https://github.com/alibaba/dify/blob/main/LICENSE",
+        "https://docs.dify.ai/"
+      ],
+      "last_verified": "2026-11-01",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "llm-app-builder",
+        "workflow",
+        "rag",
+        "agent-builder"
+      ]
+    },
+    {
+      "id": "flowise",
+      "name": "Flowise",
+      "vendor": "FlowiseAI",
+      "website": "https://flowiseai.com/",
+      "categories": [
+        "agents",
+        "workflow",
+        "no-code",
+        "developer",
+        "rag"
+      ],
+      "pricing_model": "unknown",
+      "pricing_status": "unknown",
+      "license": "Apache-2.0 for the Flowise source repository; hosted Flowise Cloud pricing and service terms are separate",
+      "platforms": [
+        "nodejs",
+        "docker",
+        "self_hosted",
+        "api"
+      ],
+      "description": "Nền tảng low-code mã nguồn mở để xây dựng LLM chain, RAG pipeline và AI agent bằng giao diện kéo-thả; dự án đã sunset và repository chính thức được lưu trữ.",
+      "free_tier_summary": "Flowise đã thông báo wind-down: code freeze 29/07/2026, repository chuyển Public Archive 10/08/2026 (GitHub ghi archived 13/08/2026), npm packages/Docker images bị đánh dấu deprecated và hỗ trợ chính thức kết thúc 31/08/2026. Mã nguồn Apache-2.0 còn có thể fork/self-host nhưng không khuyến nghị dự án mới; Flowise Cloud pricing/availability không được xác nhận trong lần rà soát này.",
+      "official_sources": [
+        "https://flowiseai.com/sunset",
+        "https://github.com/FlowiseAI/Flowise/discussions/6727",
+        "https://github.com/FlowiseAI/Flowise",
+        "https://github.com/FlowiseAI/Flowise/security",
+        "https://github.com/FlowiseAI/Flowise/blob/main/LICENSE.md"
+      ],
+      "last_verified": "2026-11-05",
+      "verification_status": "needs_review",
+      "status": "deprecated",
+      "tags": [
+        "visual-builder",
+        "agent-workflows",
+        "rag",
+        "low-code",
+        "archived",
+        "deprecated"
+      ]
+    },
+    {
+      "id": "ollama",
+      "name": "Ollama",
+      "vendor": "Ollama",
+      "website": "https://ollama.com/",
+      "categories": [
+        "local-llm",
+        "developer",
+        "inference",
+        "api"
+      ],
+      "pricing_model": "self_hosted_free_and_cloud_paid",
+      "pricing_status": "self_hosted_free",
+      "license": "MIT for the Ollama software repository; each downloaded model has its own model license and provider terms",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux",
+        "docker",
+        "self_hosted",
+        "api",
+        "cloud"
+      ],
+      "description": "Runtime tải và chạy LLM local trên máy cá nhân hoặc server, cung cấp CLI và API tương thích để tích hợp ứng dụng, agent và workflow.",
+      "free_tier_summary": "Ollama Free $0 cho chạy model trên phần cứng của người dùng; Pro $20/tháng, Max $100/tháng (tạm ngừng đăng ký mới), Team $25/seat/tháng, tối thiểu 5 seats. License MIT chỉ áp dụng phần mềm Ollama, không áp dụng model weights.",
+      "official_sources": [
+        "https://ollama.com/",
+        "https://ollama.com/pricing",
+        "https://github.com/ollama/ollama",
+        "https://github.com/ollama/ollama/blob/main/LICENSE",
+        "https://docs.ollama.com/"
+      ],
+      "last_verified": "2026-11-01",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "local-inference",
+        "llm-runtime",
+        "self-hosted",
+        "model-serving"
+      ]
+    },
+    {
+      "id": "openrouter",
+      "name": "OpenRouter",
+      "vendor": "OpenRouter",
+      "website": "https://openrouter.ai/",
+      "categories": [
+        "api",
+        "llm-gateway",
+        "models",
+        "developer"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "limited_credits",
+      "license": "Proprietary hosted API aggregation service; model/provider licenses and API terms remain separate",
+      "platforms": [
+        "web",
+        "api",
+        "cloud"
+      ],
+      "description": "Dịch vụ API gateway tổng hợp nhiều nhà cung cấp LLM, chuẩn hóa API, hỗ trợ routing/fallback và lựa chọn mô hình miễn phí hoặc trả phí.",
+      "free_tier_summary": "Free plan hiện công bố 25+ free models và 4 free providers; free model variants có rate limits 20 requests/min và 50/day (có thể tăng sau khi mua credits). Paid inference tính theo token; Standard có platform fee 5.5% khi mua credits.",
+      "official_sources": [
+        "https://openrouter.ai/",
+        "https://openrouter.ai/pricing",
+        "https://openrouter.ai/collections/free-models",
+        "https://openrouter.ai/docs",
+        "https://openrouter.ai/docs/limits"
+      ],
+      "last_verified": "2026-11-01",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "model-router",
+        "multi-provider",
+        "api",
+        "free-models"
+      ]
+    },
+    {
+      "id": "tesseract-ocr",
+      "name": "Tesseract OCR",
+      "vendor": "Tesseract community",
+      "website": "https://github.com/tesseract-ocr/tesseract",
+      "categories": [
+        "ocr",
+        "documents",
+        "developer",
+        "data"
+      ],
+      "pricing_model": "free",
+      "pricing_status": "self_hosted_free",
+      "license": "Apache-2.0 for Tesseract source code; Leptonica is BSD-2-Clause and other dependencies/traineddata may have their own notices and terms",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux",
+        "cli",
+        "api",
+        "self_hosted"
+      ],
+      "description": "OCR engine mã nguồn mở nhận dạng văn bản in từ ảnh, hỗ trợ nhiều ngôn ngữ, chạy qua command line hoặc API và thường được tích hợp vào pipeline xử lý tài liệu.",
+      "free_tier_summary": "Tesseract source Apache-2.0, tự cài và chạy không mất phí license. Repository ghi rõ Leptonica dùng BSD-2-Clause và dependencies khác có thể có license riêng; traineddata phải rà soát theo gói ngôn ngữ phân phối.",
+      "official_sources": [
+        "https://github.com/tesseract-ocr/tesseract",
+        "https://github.com/tesseract-ocr/tesseract/blob/main/LICENSE",
+        "https://tesseract-ocr.github.io/tessdoc/",
+        "https://github.com/tesseract-ocr/tessdata"
+      ],
+      "last_verified": "2026-11-01",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "ocr",
+        "text-recognition",
+        "open-source",
+        "document-processing"
+      ]
+    },
+    {
+      "id": "easyocr",
+      "name": "EasyOCR",
+      "vendor": "JaidedAI",
+      "website": "https://www.jaided.ai/easyocr",
+      "categories": [
+        "ocr",
+        "documents",
+        "developer",
+        "data"
+      ],
+      "pricing_model": "free",
+      "pricing_status": "self_hosted_free",
+      "license": "Apache-2.0 for the EasyOCR repository/package code. The official model hub lists downloadable pretrained checkpoints but does not state a clear license for each checkpoint on that page; verify each model artifact/training-data notice and PyTorch/CUDA dependency before redistribution or commercial bundling.",
+      "platforms": [
+        "python",
+        "windows",
+        "macos",
+        "linux",
+        "self_hosted",
+        "api"
+      ],
+      "description": "Thư viện Python OCR sẵn dùng, nhận dạng hơn 80 ngôn ngữ và nhiều hệ chữ viết; hỗ trợ CPU/GPU và xuất vùng bounding box cùng text/confidence.",
+      "free_tier_summary": "EasyOCR package/repository dùng Apache-2.0 và có thể chạy local không mất phí API. Trang Model Hub chính thức liệt kê checkpoint có thể tải nhưng không nêu license rõ ràng cho từng checkpoint. Giữ needs_review: cần kiểm tra license/điều kiện của từng weight artifact và dữ liệu huấn luyện trước khi khuyến nghị tái phân phối hoặc đóng gói thương mại.",
+      "official_sources": [
+        "https://github.com/JaidedAI/EasyOCR",
+        "https://github.com/JaidedAI/EasyOCR/blob/master/LICENSE",
+        "https://github.com/JaidedAI/EasyOCR/blob/master/README.md",
+        "https://www.jaided.ai/easyocr",
+        "https://www.jaided.ai/easyocr/modelhub/"
+      ],
+      "last_verified": "2026-11-05",
+      "verification_status": "needs_review",
+      "status": "active",
+      "tags": [
+        "ocr",
+        "multilingual",
+        "python",
+        "image-to-text"
+      ]
+    },
+    {
+      "id": "surya-ocr",
+      "name": "Surya OCR",
+      "vendor": "Datalab",
+      "website": "https://github.com/datalab-to/surya",
+      "categories": [
+        "ocr",
+        "documents",
+        "layout-analysis",
+        "developer"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "self_hosted_free",
+      "license": "Apache-2.0 for the source code; model weights use modified AI Pubs Open Rail-M. The model license restricts use if the affiliated entity generated more than US$5M gross revenue in the prior year or raised more than US$5M total equity/debt funding, except personal/research use; it also restricts any use by entities providing products or services that compete with Datalab or its affiliates. Code license does not override model-weight terms; broader/commercial licenses may be available from Datalab.",
+      "platforms": [
+        "python",
+        "linux",
+        "macos",
+        "self_hosted",
+        "api"
+      ],
+      "description": "Bộ công cụ OCR tài liệu, layout analysis, reading order và table recognition đa ngôn ngữ; hỗ trợ inference local qua vLLM hoặc llama.cpp và dịch vụ Datalab managed.",
+      "free_tier_summary": "The source code is Apache-2.0 and can be self-hosted without a software license fee, but model weights carry separate modified Open Rail-M restrictions: the >US$5M revenue/funding restrictions (with personal/research exceptions) and a restriction on providers competing with Datalab or affiliates. Datalab hosted API is separate; current pricing lists a monthly allowance of US$20 for work email or US$10 for personal email, then pay-as-you-go; Team is US$400/month. Do not treat free code as unrestricted model weights.",
+      "official_sources": [
+        "https://github.com/datalab-to/surya",
+        "https://github.com/datalab-to/surya/blob/master/README.md",
+        "https://github.com/datalab-to/surya/blob/master/pyproject.toml",
+        "https://www.datalab.to/pricing",
+        "https://github.com/datalab-to/surya/blob/master/MODEL_LICENSE"
+      ],
+      "last_verified": "2026-11-01",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "ocr",
+        "layout-analysis",
+        "table-recognition",
+        "document-ai"
+      ]
+    },
+    {
+      "id": "unstructured",
+      "name": "Unstructured",
+      "vendor": "Unstructured Technologies",
+      "website": "https://unstructured.io/",
+      "categories": [
+        "documents",
+        "etl",
+        "rag",
+        "developer",
+        "data"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "verified_free_tier",
+      "license": "Apache-2.0 for the open-source unstructured Python library; Unstructured API/Platform and hosted Transform models have separate service terms and pricing",
+      "platforms": [
+        "python",
+        "docker",
+        "self_hosted",
+        "api",
+        "cloud"
+      ],
+      "description": "Thư viện và nền tảng document ETL để partition, clean, chunk và chuyển đổi PDF, HTML, Word, email cùng nhiều định dạng thành dữ liệu phục vụ RAG/LLM.",
+      "free_tier_summary": "Core open-source library Apache-2.0 và được công bố miễn phí. Hosted API có 10.000 free pages ban đầu, sau đó pay-as-you-go $0.015/page; Business deployment có custom pricing.",
+      "official_sources": [
+        "https://unstructured.io/",
+        "https://github.com/Unstructured-IO/unstructured",
+        "https://github.com/Unstructured-IO/unstructured/blob/main/pyproject.toml",
+        "https://unstructured.io/pricing",
+        "https://github.com/Unstructured-IO/unstructured/blob/main/LICENSE.md"
+      ],
+      "last_verified": "2026-11-01",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "document-etl",
+        "parsing",
+        "rag",
+        "data-ingestion"
+      ]
+    },
+    {
+      "id": "marker-pdf",
+      "name": "Marker",
+      "vendor": "Datalab",
+      "website": "https://github.com/datalab-to/marker",
+      "categories": [
+        "documents",
+        "pdf",
+        "ocr",
+        "developer"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "self_hosted_free",
+      "license": "Apache-2.0 for the source code; model weights use modified AI Pubs Open Rail-M. The model license restricts use if the affiliated entity generated more than US$5M gross revenue in the prior year or raised more than US$5M total equity/debt funding, except personal/research use; it also restricts any use by entities providing products or services that compete with Datalab or its affiliates. Code license does not override model-weight terms; broader/commercial licenses may be available from Datalab.",
+      "platforms": [
+        "python",
+        "linux",
+        "macos",
+        "self_hosted",
+        "api"
+      ],
+      "description": "Công cụ Python chuyển PDF và tài liệu thành Markdown/JSON/HTML, giữ cấu trúc, bảng, công thức và layout để phục vụ RAG, indexing và xử lý tri thức.",
+      "free_tier_summary": "The source code is Apache-2.0 and can be self-hosted without a software license fee, but model weights carry separate modified Open Rail-M restrictions: the >US$5M revenue/funding restrictions (with personal/research exceptions) and a restriction on providers competing with Datalab or affiliates. Datalab hosted API is separate; current pricing lists a monthly allowance of US$20 for work email or US$10 for personal email, then pay-as-you-go; Team is US$400/month. Do not treat free code as unrestricted model weights.",
+      "official_sources": [
+        "https://github.com/datalab-to/marker",
+        "https://github.com/datalab-to/marker/blob/master/README.md",
+        "https://www.datalab.to/pricing",
+        "https://github.com/datalab-to/marker/blob/master/LICENSE",
+        "https://github.com/datalab-to/marker/blob/master/MODEL_LICENSE"
+      ],
+      "last_verified": "2026-11-01",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "pdf-to-markdown",
+        "document-parsing",
+        "ocr",
+        "layout-preservation"
+      ]
+    },
+    {
+      "id": "whisperx",
+      "name": "WhisperX",
+      "vendor": "Max Bain / community",
+      "website": "https://github.com/m-bain/whisperX",
+      "categories": [
+        "audio",
+        "transcription",
+        "speech-to-text",
+        "developer"
+      ],
+      "pricing_model": "free",
+      "pricing_status": "self_hosted_free",
+      "license": "BSD-2-Clause for the upstream m-bain/whisperX code. The upstream README identifies pyannote/speaker-diarization-community-1 as CC-BY-4.0 (gated: accept access conditions and use an HF token); OpenAI Whisper code and weights are MIT; the cited facebook/wav2vec2-large-960h model card is Apache-2.0; Silero VAD is MIT. Other language-specific alignment models and dependency versions must be checked individually.",
+      "platforms": [
+        "python",
+        "linux",
+        "windows",
+        "macos",
+        "self_hosted",
+        "gpu"
+      ],
+      "description": "Pipeline speech-to-text dựa trên Whisper với word-level timestamps, forced alignment và speaker diarization; phù hợp xử lý audio/video local theo batch.",
+      "free_tier_summary": "WhisperX source can be self-hosted without a mandatory API fee. Diarization with pyannote community-1 requires accepting the Hugging Face model conditions and an HF token; that model is CC-BY-4.0. OpenAI Whisper weights are MIT, the cited facebook/wav2vec2-large-960h model is Apache-2.0, and Silero VAD is MIT. Other aligners/model variants and dependency versions can differ; verify the exact components selected for deployment.",
+      "official_sources": [
+        "https://github.com/m-bain/whisperX",
+        "https://github.com/m-bain/whisperX/blob/main/LICENSE",
+        "https://github.com/m-bain/whisperX/blob/main/README.md",
+        "https://github.com/openai/whisper",
+        "https://github.com/openai/whisper/blob/main/LICENSE",
+        "https://huggingface.co/pyannote/speaker-diarization-community-1",
+        "https://huggingface.co/facebook/wav2vec2-large-960h",
+        "https://github.com/snakers4/silero-vad",
+        "https://github.com/snakers4/silero-vad/blob/master/LICENSE",
+        "https://pypi.org/project/whisperx/"
+      ],
+      "last_verified": "2026-11-01",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "speech-recognition",
+        "transcription",
+        "timestamps",
+        "diarization"
+      ]
+    },
+    {
+      "id": "openhands",
+      "name": "OpenHands",
+      "vendor": "All Hands AI",
+      "website": "https://www.openhands.dev/",
+      "categories": [
+        "coding",
+        "agents",
+        "developer",
+        "automation"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "self_hosted_free",
+      "license": "MIT for the OpenHands Agent Canvas repository and the OpenHands Software Agent SDK/Agent Server. The separate OpenHands Enterprise backend repository is commercially licensed under PolyForm Free Trial 1.0.0; use beyond 30 days per calendar year requires a commercial license. Do not conflate the MIT open-source repositories with the Enterprise backend.",
+      "platforms": [
+        "linux",
+        "macos",
+        "docker",
+        "self_hosted",
+        "cloud",
+        "cli",
+        "web"
+      ],
+      "description": "Nền tảng AI coding agent có thể làm việc với repository, terminal, issue tracker và công cụ phát triển; hỗ trợ chạy local, cloud hoặc self-hosted.",
+      "free_tier_summary": "Local OpenHands Open Source is free for one user and includes Agent Canvas, CLI and Software Agent SDK; bring your own LLM key or run a local model (provider/model costs are separate). OpenHands Cloud Individual is free for one user with up to 10 conversations/day and BYOK or provider usage at cost. Enterprise backend is source-available under PolyForm Free Trial, limited to 30 days/calendar year without a commercial license.",
+      "official_sources": [
+        "https://www.openhands.dev/",
+        "https://www.openhands.dev/pricing",
+        "https://github.com/OpenHands/OpenHands",
+        "https://github.com/OpenHands/OpenHands/blob/main/LICENSE",
+        "https://github.com/OpenHands/software-agent-sdk",
+        "https://github.com/OpenHands/software-agent-sdk/blob/main/LICENSE",
+        "https://github.com/OpenHands/enterprise",
+        "https://github.com/OpenHands/enterprise/blob/main/LICENSE"
+      ],
+      "last_verified": "2026-11-01",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "coding-agent",
+        "software-engineering",
+        "terminal",
+        "repository-agent"
+      ]
+    },
+    {
+      "id": "aider",
+      "name": "Aider",
+      "vendor": "Aider-AI",
+      "website": "https://aider.chat/",
+      "categories": [
+        "coding",
+        "developer",
+        "cli",
+        "agents"
+      ],
+      "pricing_model": "free",
+      "pricing_status": "self_hosted_free",
+      "license": "Apache-2.0 for the Aider project; model API/provider usage is billed separately by the selected provider",
+      "platforms": [
+        "python",
+        "windows",
+        "macos",
+        "linux",
+        "cli",
+        "self_hosted",
+        "api"
+      ],
+      "description": "AI pair-programming tool chạy trong terminal, hiểu codebase, sửa file trong Git repository, tạo commit và hỗ trợ nhiều model/provider.",
+      "free_tier_summary": "Aider là phần mềm Apache-2.0, cài và sử dụng miễn phí. Để sinh code cần model local hoặc API key; API inference có thể phát sinh chi phí theo nhà cung cấp. Không có gói cloud bắt buộc cho CLI.",
+      "official_sources": [
+        "https://aider.chat/",
+        "https://github.com/Aider-AI/aider",
+        "https://github.com/Aider-AI/aider/blob/main/LICENSE.txt",
+        "https://aider.chat/docs/"
+      ],
+      "last_verified": "2026-11-01",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "ai-pair-programming",
+        "terminal",
+        "git",
+        "code-editing"
+      ]
+    },
+    {
+      "id": "huggingface-hub",
+      "name": "Hugging Face Hub",
+      "vendor": "Hugging Face",
+      "website": "https://huggingface.co/",
+      "categories": [
+        "models",
+        "datasets",
+        "developer",
+        "platform",
+        "hosting"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "verified_free_tier",
+      "license": "Hosted platform with user-uploaded repositories; each model, dataset, Space and repository carries its own license and terms. Hub software libraries have their own open-source licenses.",
+      "platforms": [
+        "web",
+        "api",
+        "python",
+        "git",
+        "cloud",
+        "cli"
+      ],
+      "description": "Nền tảng lưu trữ và khám phá model, dataset, demo Space và ứng dụng ML; cung cấp Hub API, Git-based model repositories và thư viện Python để tải/đẩy artifacts.",
+      "free_tier_summary": "Có gói tài khoản Free; quota của Hub APIs, Resolvers và Pages được tách riêng theo cửa sổ 5 phút. Tài liệu chính thức ghi rõ giới hạn của tài khoản Free có thể thay đổi theo tình trạng nền tảng; cần kiểm tra Billing dashboard và headers RateLimit/RateLimit-Policy để biết quota thực tế. Một số tính năng compute, inference, storage và nâng cấp phần cứng có thể phát sinh phí; không đồng nhất gói Hub Free với mọi dịch vụ đều miễn phí. License của từng model/dataset/Space do chủ sở hữu repository quy định.",
+      "official_sources": [
+        "https://huggingface.co/",
+        "https://huggingface.co/pricing",
+        "https://huggingface.co/docs/hub/rate-limits",
+        "https://huggingface.co/docs/hub/security",
+        "https://huggingface.co/docs/hub/repositories"
+      ],
+      "last_verified": "2026-11-05",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "model-hub",
+        "datasets",
+        "model-hosting",
+        "ml-community"
+      ]
+    },
+    {
+      "id": "anythingllm",
+      "name": "AnythingLLM",
+      "vendor": "Mintplex Labs",
+      "website": "https://anythingllm.com/",
+      "categories": [
+        "assistant",
+        "documents",
+        "research",
+        "agents"
+      ],
+      "pricing_model": "self_hosted_free_and_cloud_paid",
+      "pricing_status": "self_hosted_free",
+      "license": "mit",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux",
+        "self_hosted",
+        "docker",
+        "cloud"
+      ],
+      "description": "Ứng dụng AI local-first để trò chuyện với tài liệu, xây RAG và AI Agent; có bản desktop chạy trên máy cá nhân và bản Docker tự triển khai.",
+      "free_tier_summary": "Bản desktop và self-hosted Docker có thể dùng miễn phí theo MIT. Dịch vụ Cloud riêng có Basic 50 USD/tháng và Pro 99 USD/tháng tại ngày rà soát; bản Cloud cần khóa API mô hình. Tự host vẫn phải tự bảo vệ mạng, TLS và quyền truy cập; giấy phép model và chi phí inference được tính riêng.",
+      "official_sources": [
+        "https://anythingllm.com/",
+        "https://docs.anythingllm.com/installation-desktop/overview",
+        "https://github.com/Mintplex-Labs/anything-llm",
+        "https://anythingllm.com/cloud"
+      ],
+      "last_verified": "2026-11-10",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "local-ai",
+        "rag",
+        "documents",
+        "agent",
+        "self-hosted"
+      ]
+    },
+    {
+      "id": "opencode",
+      "name": "OpenCode",
+      "vendor": "Anomaly",
+      "website": "https://opencode.ai/",
+      "categories": [
+        "coding",
+        "developer",
+        "agents"
+      ],
+      "pricing_model": "free",
+      "pricing_status": "verified_free",
+      "license": "mit",
+      "platforms": [
+        "terminal",
+        "macos",
+        "windows",
+        "linux",
+        "self_hosted"
+      ],
+      "description": "AI coding agent mã nguồn mở hoạt động trong terminal, hỗ trợ nhiều nhà cung cấp mô hình và quy trình làm việc của lập trình viên.",
+      "free_tier_summary": "Phần mềm OpenCode được phát hành theo MIT và không thu phí license. Điều này không làm cho việc gọi model miễn phí: chi phí token/API phụ thuộc provider, model và cấu hình người dùng. Kiểm tra điều khoản của provider trước khi kết nối.",
+      "official_sources": [
+        "https://opencode.ai/",
+        "https://opencode.ai/docs",
+        "https://github.com/anomalyco/opencode",
+        "https://github.com/anomalyco/opencode/blob/dev/LICENSE"
+      ],
+      "last_verified": "2026-11-10",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "coding-agent",
+        "terminal",
+        "developer",
+        "open-source"
+      ]
+    },
+    {
+      "id": "comfyui",
+      "name": "ComfyUI",
+      "vendor": "Comfy",
+      "website": "https://www.comfy.org/",
+      "categories": [
+        "image",
+        "design",
+        "video",
+        "audio",
+        "automation"
+      ],
+      "pricing_model": "self_hosted_free_and_cloud_paid",
+      "pricing_status": "self_hosted_free",
+      "license": "gpl-3.0",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux",
+        "self_hosted",
+        "cloud",
+        "api"
+      ],
+      "description": "Engine workflow AI dạng node graph để xây dựng quy trình tạo và xử lý ảnh, video, âm thanh và nội dung 3D bằng các model có thể thay thế.",
+      "free_tier_summary": "ComfyUI core có thể tải và chạy local miễn phí. Comfy Cloud và Partner Nodes là dịch vụ tùy chọn dùng credits/chi phí riêng; giấy phép thương mại của từng model, custom node và output phải được kiểm tra độc lập.",
+      "official_sources": [
+        "https://www.comfy.org/download/",
+        "https://support.comfy.org/articles/9806306061-about-comfy",
+        "https://github.com/Comfy-Org/ComfyUI",
+        "https://github.com/Comfy-Org/ComfyUI/blob/master/LICENSE",
+        "https://www.comfy.org/cloud"
+      ],
+      "last_verified": "2026-11-10",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "node-workflow",
+        "image-generation",
+        "video-generation",
+        "local-inference",
+        "creative-ai"
+      ]
+    },
+    {
+      "id": "qdrant",
+      "name": "Qdrant",
+      "vendor": "Qdrant",
+      "website": "https://qdrant.tech/",
+      "categories": [
+        "data",
+        "developer",
+        "search",
+        "documents",
+        "research"
+      ],
+      "pricing_model": "self_hosted_free_and_cloud_paid",
+      "pricing_status": "verified_free_tier",
+      "license": "apache-2.0",
+      "platforms": [
+        "self_hosted",
+        "cloud",
+        "docker",
+        "kubernetes",
+        "api"
+      ],
+      "description": "Cơ sở dữ liệu vector và công cụ tìm kiếm tương đồng/hybrid search, thường dùng làm tầng truy xuất cho ứng dụng RAG và AI Agent.",
+      "free_tier_summary": "Qdrant server mã nguồn mở có thể tự triển khai. Qdrant Cloud công bố gói Free forever cho thử nghiệm/prototype với một node, 0.5 vCPU, 1 GB RAM và 4 GB disk; Standard tính theo mức sử dụng, Premium có mức chi tối thiểu.",
+      "official_sources": [
+        "https://qdrant.tech/",
+        "https://qdrant.tech/pricing/",
+        "https://github.com/qdrant/qdrant",
+        "https://github.com/qdrant/qdrant/blob/master/LICENSE"
+      ],
+      "last_verified": "2026-11-10",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "vector-database",
+        "rag",
+        "semantic-search",
+        "hybrid-search",
+        "developer"
+      ]
+    },
+    {
+      "id": "whisper-cpp",
+      "name": "whisper.cpp",
+      "vendor": "ggml-org",
+      "website": "https://github.com/ggml-org/whisper.cpp",
+      "categories": [
+        "audio",
+        "translation",
+        "developer"
+      ],
+      "pricing_model": "free",
+      "pricing_status": "verified_free",
+      "license": "mit",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux",
+        "ios",
+        "android",
+        "webassembly",
+        "self_hosted",
+        "docker"
+      ],
+      "description": "Triển khai C/C++ hiệu năng cao của Whisper để nhận dạng giọng nói và chuyển âm thanh thành văn bản trên thiết bị, có thể chạy offline sau khi tải model.",
+      "free_tier_summary": "Mã nguồn whisper.cpp theo MIT và có thể build/chạy cục bộ miễn phí; không cần trả phí dịch vụ cloud cho bước inference local. Cần tải model trước, có chi phí phần cứng/điện và phải kiểm tra giấy phép model, thư viện phụ thuộc cùng quyền xử lý bản ghi âm.",
+      "official_sources": [
+        "https://github.com/ggml-org/whisper.cpp",
+        "https://github.com/ggml-org/whisper.cpp/blob/master/LICENSE",
+        "https://github.com/ggml-org/whisper.cpp/releases"
+      ],
+      "last_verified": "2026-11-10",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "speech-to-text",
+        "asr",
+        "local-inference",
+        "offline",
+        "transcription"
+      ]
+    },
+    {
+      "id": "mlflow",
+      "name": "MLflow",
+      "vendor": "Linux Foundation / MLflow",
+      "website": "https://mlflow.org/",
+      "categories": [
+        "data",
+        "developer",
+        "research",
+        "automation"
+      ],
+      "pricing_model": "free",
+      "pricing_status": "verified_free",
+      "license": "apache-2.0",
+      "platforms": [
+        "python",
+        "self_hosted",
+        "web",
+        "api"
+      ],
+      "description": "Nền tảng mã nguồn mở cho vòng đời machine learning và LLMOps: theo dõi thí nghiệm, đánh giá model/agent, tracing, prompt registry và quản lý model.",
+      "free_tier_summary": "MLflow open-source được công bố miễn phí theo Apache-2.0. Khi tự host, người dùng tự chịu chi phí máy chủ/lưu trữ; inference, model provider và dịch vụ hosting bên ngoài có thể tính phí riêng.",
+      "official_sources": [
+        "https://mlflow.org/",
+        "https://mlflow.org/docs/latest/",
+        "https://github.com/mlflow/mlflow",
+        "https://github.com/mlflow/mlflow/blob/master/LICENSE.txt"
+      ],
+      "last_verified": "2026-11-10",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "mlops",
+        "llmops",
+        "evaluation",
+        "observability",
+        "experiment-tracking"
+      ]
+    },
+    {
+      "id": "pydantic-ai",
+      "name": "Pydantic AI",
+      "vendor": "Pydantic Services Inc.",
+      "website": "https://ai.pydantic.dev/",
+      "categories": [
+        "agents",
+        "developer",
+        "coding",
+        "automation"
+      ],
+      "pricing_model": "free",
+      "pricing_status": "verified_free",
+      "license": "mit",
+      "platforms": [
+        "python",
+        "self_hosted",
+        "api",
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "description": "Python SDK mã nguồn mở để xây dựng AI Agent có kiểu dữ liệu, tool calling, structured output và tích hợp nhiều model provider.",
+      "free_tier_summary": "Thư viện Pydantic AI được phát hành theo MIT và có thể cài/chạy trên hạ tầng của người dùng mà không mất phí license. Chi phí gọi model do provider quyết định; Logfire và AI Gateway là dịch vụ riêng. Có thể dùng test model/offline mode cho kiểm thử không gọi API trả phí.",
+      "official_sources": [
+        "https://ai.pydantic.dev/",
+        "https://github.com/pydantic/pydantic-ai",
+        "https://github.com/pydantic/pydantic-ai/blob/main/LICENSE"
+      ],
+      "last_verified": "2026-11-10",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "python-agent-sdk",
+        "typed-agents",
+        "tool-calling",
+        "structured-output",
+        "multimodal"
+      ]
+    },
+    {
+      "id": "haystack",
+      "name": "Haystack",
+      "vendor": "deepset GmbH",
+      "website": "https://haystack.deepset.ai/",
+      "categories": [
+        "agents",
+        "developer",
+        "research",
+        "search",
+        "documents",
+        "automation"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "verified_free_tier",
+      "license": "apache-2.0",
+      "platforms": [
+        "python",
+        "self_hosted",
+        "cloud",
+        "api",
+        "docker",
+        "kubernetes"
+      ],
+      "description": "Framework Python mã nguồn mở để xây pipeline AI, agent, truy xuất tài liệu/RAG và tìm kiếm bằng các component có thể thay thế, mở rộng.",
+      "free_tier_summary": "Framework Haystack có thể tự triển khai theo Apache-2.0. deepset Studio hosted công bố gói 0 USD gồm 1 workspace, 1 user, 100 pipeline hours, 50 files tối đa 10 MB mỗi file và 2 development pipelines; Enterprise báo giá riêng. Hạ tầng và model provider không nằm trong gói framework.",
+      "official_sources": [
+        "https://haystack.deepset.ai/",
+        "https://docs.haystack.deepset.ai/docs/intro",
+        "https://github.com/deepset-ai/haystack",
+        "https://github.com/deepset-ai/haystack/blob/main/LICENSE",
+        "https://www.deepset.ai/pricing"
+      ],
+      "last_verified": "2026-11-10",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "llm-orchestration",
+        "rag",
+        "agent-framework",
+        "pipelines",
+        "python"
+      ]
+    }
+  ]
+}

@@ -107,6 +107,13 @@ function generate(outputDir) {
     throw new Error('About page canonical URL must match the deployed /ve-chung-toi.html route');
   }
 
+  const aiBankPath = path.join(outputDir, 'ngan-hang-ai.html');
+  const aiBankHtml = fs.readFileSync(aiBankPath, 'utf8');
+  const aiBank = validatePageMetadata(aiBankHtml, 'ngan-hang-ai.html');
+  if (aiBank.canonical !== SITE + '/ngan-hang-ai.html') {
+    throw new Error('AI bank canonical URL must match /ngan-hang-ai.html');
+  }
+
   const libraryPath = path.join(outputDir, 'thu-vien.html');
   const libraryHtml = fs.readFileSync(libraryPath, 'utf8');
   const library = validatePageMetadata(libraryHtml, 'thu-vien.html');
@@ -118,6 +125,7 @@ function generate(outputDir) {
     { canonical: SITE + '/' },
     about,
     library,
+    aiBank,
     ...articles
   ].map((page) => {
     const lines = [
@@ -161,7 +169,7 @@ function generate(outputDir) {
 
   fs.writeFileSync(path.join(outputDir, 'sitemap.xml'), sitemap, 'utf8');
   fs.writeFileSync(path.join(outputDir, 'feed.xml'), feed, 'utf8');
-  console.log('SEO FEEDS GENERATED: ' + articles.length + ' homepage-linked articles + homepage + about page.');
+  console.log('SEO FEEDS GENERATED: ' + articles.length + ' homepage-linked articles + homepage + about + library + AI bank pages.');
 }
 
 module.exports = generate;

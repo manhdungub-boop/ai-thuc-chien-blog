@@ -34,12 +34,14 @@ assert.equal(sitemapEntries.length, sitemapUrls.length, 'Sitemap must have one v
 const feedUrls = [...feed.matchAll(/<link>\s*(https?:\/\/[^<]+)\s*<\/link>/g)].map((m) => m[1].trim());
 assert.ok(sitemapUrls.includes(baseUrl + '/'), 'Sitemap must include the homepage');
 assert.ok(sitemapUrls.includes(baseUrl + '/ve-chung-toi.html'), 'Sitemap must include the about/editorial policy page');
+assert.ok(sitemapUrls.includes(baseUrl + '/ngan-hang-ai.html'), 'Sitemap must include the AI bank page');
 assert.equal(new Set(sitemapUrls).size, sitemapUrls.length, 'Sitemap contains duplicate URLs');
 
 const publicPages = [
   { file: 'index.html', expected: baseUrl + '/' },
   { file: 've-chung-toi.html', expected: baseUrl + '/ve-chung-toi.html' },
   { file: 'thu-vien.html', expected: baseUrl + '/thu-vien.html' },
+  { file: 'ngan-hang-ai.html', expected: baseUrl + '/ngan-hang-ai.html' },
   ...articleFiles.map((file) => ({ file: path.join('articles', file), expected: null }))
 ];
 
@@ -59,7 +61,7 @@ for (const page of publicPages) {
   const openGraphDescription = openGraphDescriptionTag.match(/\bcontent=["']([^"']+)["']/i);
   assert.ok(openGraphDescription && openGraphDescription[1].trim().length >= 30, label + ': missing or too-short Open Graph description');
   if (page.file === 'thu-vien.html') {
-    assert.match(source, /48 bài thực hành/i, 'Topic library should show its verified 48-article inventory');
+    assert.match(source, /54 bài được liệt kê/i, 'Topic library should identify the 54 curated article links it displays');
     assert.doesNotMatch(source, /40 hướng dẫn|40 bài thực hành/i, 'Topic library must not retain stale 40-article copy');
   }
   const canonicalTag = (source.match(/<link\b[^>]*rel=["']canonical["'][^>]*>/i) || [])[0] || '';
@@ -119,6 +121,6 @@ const sitemapArticleUrls = sitemapUrls.filter((url) => url.startsWith(baseUrl + 
 const feedArticleUrls = feedUrls.filter((url) => url.startsWith(baseUrl + '/articles/'));
 assert.equal(sitemapArticleUrls.length, articleFiles.length, 'Generated sitemap article count differs from source article count');
 assert.equal(feedArticleUrls.length, articleFiles.length, 'Generated RSS article count differs from source article count');
-assert.equal(sitemapUrls.length, articleFiles.length + 3, 'Sitemap should contain homepage, about page, topic library, and every article');
+assert.equal(sitemapUrls.length, articleFiles.length + 4, 'Sitemap should contain homepage, about page, topic library, AI bank, and every article');
 
-console.log('SEO CONSISTENCY PASS: ' + articleFiles.length + ' articles and 3 static pages have valid metadata, JSON-LD, canonical URLs, sitemap/RSS parity, and deployment output.');
+console.log('SEO CONSISTENCY PASS: ' + articleFiles.length + ' articles and 4 static pages have valid metadata, JSON-LD, canonical URLs, sitemap/RSS parity, and deployment output.');
