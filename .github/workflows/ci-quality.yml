@@ -70,6 +70,9 @@ jobs:
           node scripts/audit-ai-tools-catalog.mjs data/ai-tools.json docs/reviews/ai-tools-candidates-2026-11-02.json --strict
           node scripts/test-ai-tools-catalog-audit.mjs
 
+      - name: Check official AI tool links
+        run: node scripts/check-ai-tools-links.mjs data/ai-tools.json
+
       - name: Verify article authorship, attribution, and diagrams
         run: |
           node scripts/verify-article-attribution.mjs
