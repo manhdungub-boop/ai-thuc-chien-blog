@@ -382,7 +382,6 @@ async function sendCommunityVerificationEmail(env, email, displayName, token, or
   }
 }
 async function createCommunityVerificationToken(db, memberId) {
-  await db.prepare("DELETE FROM community_email_verification_tokens WHERE member_id = ?").bind(memberId).run();
   const token = bytesToBase64Url(crypto.getRandomValues(new Uint8Array(32)));
   const tokenHash = await sha256Base64Url(token);
   const createdAt = new Date();
@@ -922,11 +921,19 @@ async function handleCommunityApi(request, env) {
         console.error("community_verification_resend_unavailable", { reason: "relay_not_configured" });
         return communityJson(generic, 200, request);
       }
+      let replacementTokenHash = "";
       try {
         const token = await createCommunityVerificationToken(db, member.id);
+        replacementTokenHash = await sha256Base64Url(token);
         await sendCommunityVerificationEmail(env, member.email, member.display_name, token, new URL(request.url).origin);
+        // Keep the previous valid link until delivery of its replacement succeeds.
+        await db.prepare("DELETE FROM community_email_verification_tokens WHERE member_id = ? AND token_hash != ?")
+          .bind(member.id, replacementTokenHash).run();
       } catch (error) {
-        await db.prepare("DELETE FROM community_email_verification_tokens WHERE member_id = ?").bind(member.id).run();
+        if (replacementTokenHash) {
+          await db.prepare("DELETE FROM community_email_verification_tokens WHERE member_id = ? AND token_hash = ?")
+            .bind(member.id, replacementTokenHash).run();
+        }
         console.error("community_verification_resend_failed", { errorName: error instanceof Error ? error.name : "UnknownError" });
         return communityJson(generic, 200, request);
       }
