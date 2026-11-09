@@ -122,6 +122,21 @@ assert.match((await resendLimited.json()).error, /quá nhiều lần/i);
 const resendMember = db.members.find((m) => m.email === 'resend@example.com');
 assert.equal(db.tokens.filter((t) => t.member_id === resendMember.id).length, 1, 'resend should replace the prior token rather than accumulating valid tokens');
 
+const failedResendRegistration = await call('/register', { method: 'POST', body: { username: 'resend_fail_user', displayName: 'Resend Fail User', email: 'resend-fail@example.com', password: 'Resend-Fail-Password-123!' } });
+assert.equal(failedResendRegistration.status, 201);
+const failedResendMember = db.members.find((m) => m.email === 'resend-fail@example.com');
+const previousDeliveredToken = capturedEmail.verifyUrl.match(/[?]verify=([A-Za-z0-9_-]{32,80})/);
+assert.ok(previousDeliveredToken, 'initial verification email must contain a token');
+relayResult = { ok: false };
+const failedResendResponse = await call('/resend-verification', { method: 'POST', body: { email: 'resend-fail@example.com' }, ip: '198.51.100.78' });
+assert.equal(failedResendResponse.status, 200, 'failed resend must retain the generic privacy-preserving response');
+assert.equal((await failedResendResponse.json()).ok, true);
+assert.equal(db.tokens.filter((t) => t.member_id === failedResendMember.id).length, 1,
+  'failed resend must remove only the undelivered replacement and preserve the previous token');
+relayResult = { ok: true };
+const priorTokenStillWorks = await call('/verify-email', { method: 'POST', body: { token: previousDeliveredToken[1] }, ip: '198.51.100.79' });
+assert.equal(priorTokenStillWorks.status, 200, 'previously delivered verification link must remain usable after resend failure');
+
 // Password-reset email throttling must not reveal whether an email belongs to an account.
 const resetEmail = 'privacy-reset@example.invalid';
 for (let attempt = 0; attempt < 3; attempt += 1) {
