@@ -1,9 +1,5 @@
 name: Email verification Preview HTTP smoke test
 on:
-  push:
-    branches:
-      - feature/required-email-verification
-      - feature/community-password-reset-preview
   workflow_dispatch:
     inputs:
       preview_url:
@@ -17,10 +13,13 @@ concurrency:
   cancel-in-progress: false
 jobs:
   preview-http-smoke:
+    # Never deploy untrusted feature-branch code with repository secrets.
+    # Manual runs are restricted to the trusted integration snapshot branch.
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/sync/gitlab-completed-work-20261107'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Check out feature branch
+      - name: Check out trusted Preview validation branch
         uses: actions/checkout@v4
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
