@@ -189,3 +189,13 @@ Next at that checkpoint: run the existing `Static CI Quality Gate` on this branc
   - Test summary explicitly confirms no user account was created and no email was sent.
 - Production Worker, Production D1, DNS, and Production secrets were not targeted. No D1 migration was applied.
 - Current distinction: Preview deployment and HTTP/OAuth-start smoke checks are PASS. Actual Google account consent/callback with a real user, browser session end-to-end, and email delivery are not yet verified. Do not claim them as PASS.
+
+## Draft review handoff — PR #88 (2026-11-09)
+
+- Created Draft PR #88: https://github.com/manhdungub-boop/ai-thuc-chien-blog/pull/88
+- Head: `integration/pr77-auth-hardening-20261109` at `eac44fc90f3d0b57bb8276eddf32539b02bdf4fe`.
+- Base: PR #77 branch `sync/gitlab-completed-work-20261107` at exact baseline `54888d22b0e70d1ca9f06bac831051eede841eb0`.
+- GitHub reports PR #88 open, Draft, mergeable=true, merged=false.
+- The PR is intentionally stacked on PR #77, not opened against `main`; it adds six changed files to the PR #77 baseline.
+- PR #77, PR #85, PR #87, and PR #88 all remain Draft/open and unmerged. No PR was marked ready and no merge was performed.
+- PR #88 is a review handoff only. The passing CI and Preview evidence above applies to the exact deployed code commit `2bc5151ff1fa34af55bef72e95e7617ebe4d661e`; the later head changes only update this plan document. Re-run CI if any code or workflow files change.
