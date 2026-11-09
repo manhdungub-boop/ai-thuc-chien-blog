@@ -55,7 +55,7 @@ Mọi nội dung mới hoặc được biên tập lại dưới tên tác giả
 - Checklist gồm: bản quyền, độ chính xác, độ sâu, khả năng làm theo, hình ảnh/sơ đồ, nguồn tham khảo, SEO, hiển thị di động và liên kết nội bộ.
 - Người kiểm tra đánh dấu từng mục đạt/chưa đạt; bản quyền, độ chính xác và quyền sử dụng hình ảnh là điều kiện chặn phát hành.
 - Cuối bài nhắc người sử dụng lại nội dung ghi rõ tác giả **DUNG - AI**.
-- Chỉ chuyển bài sang HTML/preview sau khi hoàn tất kiểm tra; chỉ phát hành công khai sau phê duyệt riêng của người dùng.
+- Chỉ chuyển bài sang HTML/preview sau khi hoàn tất kiểm tra. Khi toàn bộ cổng chất lượng đạt, tự động đưa bài vào lô phát hành công khai, không xin phê duyệt riêng từng bài. Việc merge hoặc deploy Production vẫn phải tuân theo cổng phê duyệt phát hành chung; không tự ý thay đổi Production.
 
 ## Cổng phát hành
 
@@ -65,4 +65,4 @@ Mọi nội dung mới hoặc được biên tập lại dưới tên tác giả
 4. Kiểm tra hình ảnh, sơ đồ, chú thích, alt text, nguồn và giấy phép.
 5. Chuyển Markdown sang HTML theo template website.
 6. Kiểm tra preview, canonical, JSON-LD, RSS, sitemap, liên kết và hiển thị di động.
-7. Chờ phê duyệt riêng trước khi phát hành công khai.
+7. Khi toàn bộ cổng chất lượng đạt, tự động đưa bài vào lô phát hành công khai; không yêu cầu xác nhận từng bài. Việc merge/deploy Production vẫn theo phê duyệt phát hành chung và các guardrail an toàn.
