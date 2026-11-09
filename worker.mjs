@@ -948,8 +948,11 @@ async function handleCommunityApi(request, env) {
       if (!row) return communityJson({ error: "Liên kết xác nhận không hợp lệ, đã dùng hoặc đã hết hạn. Hãy gửi lại email xác nhận." }, 400, request);
       if (row.email_verified_at) return communityJson({ error: "Email đã được xác nhận. Bạn có thể đăng nhập." }, 400, request);
       const verificationResults = await db.batch([
-        db.prepare("UPDATE community_members SET email_verified_at = ? WHERE id = ? AND email_verified_at IS NULL")
-          .bind(now, row.member_id),
+        db.prepare(`UPDATE community_members SET email_verified_at = ? WHERE id = ? AND email_verified_at IS NULL
+          AND EXISTS (
+            SELECT 1 FROM community_email_verification_tokens
+            WHERE token_hash = ? AND member_id = ? AND expires_at > ?
+          )`).bind(now, row.member_id, tokenHash, row.member_id, now),
         db.prepare(`DELETE FROM community_email_verification_tokens
           WHERE token_hash = ? AND EXISTS (
             SELECT 1 FROM community_members
