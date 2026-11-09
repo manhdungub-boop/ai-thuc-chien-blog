@@ -196,8 +196,11 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
   const passwordResetSubmit = root.querySelector('#community-password-reset-submit');
   let pendingVerificationEmail = '';
   const queryParams = new URLSearchParams(window.location.search);
-  const verificationToken = queryParams.get('verify') || '';
-  const passwordResetToken = queryParams.get('reset') || '';
+  // Verification and password-reset emails use /#cong-dong?token=...; query parameters inside the fragment are not in location.search.
+  const fragmentQuery = window.location.hash.includes('?') ? window.location.hash.slice(window.location.hash.indexOf('?') + 1) : '';
+  const fragmentParams = new URLSearchParams(fragmentQuery);
+  const verificationToken = queryParams.get('verify') || fragmentParams.get('verify') || '';
+  const passwordResetToken = queryParams.get('reset') || fragmentParams.get('reset') || '';
   const switchCopy = root.querySelector('#community-switch-copy');
   const switchModeButton = root.querySelector('#community-switch-mode');
   const usernameWrap = root.querySelector('#community-username-wrap');
