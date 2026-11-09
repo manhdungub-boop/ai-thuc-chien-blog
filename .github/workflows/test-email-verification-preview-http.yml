@@ -1,78 +1,33 @@
-name: Email verification Preview HTTP smoke test
+name: Email verification Preview frontend smoke test
+
 on:
   workflow_dispatch:
+
 permissions:
   contents: read
+
 concurrency:
-  group: email-verification-preview-http-smoke
+  group: email-verification-preview-frontend-smoke
   cancel-in-progress: false
+
 jobs:
-  preview-http-smoke:
-    # Trusted-branch manual execution only. Never expose credentials to feature-branch code.
+  preview-frontend-smoke:
+    # Manual smoke test only. This workflow has no deployment or Cloudflare credentials.
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/sync/gitlab-completed-work-20261107'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
-      - name: Check out trusted Preview validation branch
+      - name: Check out source without persisting the GitHub token
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Check test syntax
-        run: |
-          node --check scripts/test_community_preview_http.mjs
-          node --check scripts/test_community_preview_frontend.mjs
-      - name: Build current static assets before credentials are available
-        run: node scripts/build_static_site.cjs
-      - name: Deploy code to isolated Preview without application secrets
-        id: deploy_preview
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          preview_log="$RUNNER_TEMP/preview-deploy.log"
-          npx --yes wrangler@4 preview --name "feature/required-email-verification" 2>&1 | tee "$preview_log"
-          preview_url="$(grep -Eo 'https://feature-required-email-verification-ai-thuc-chien-blog\.manhdungub\.workers\.dev' "$preview_log" | tail -n 1 || true)"
-          deployment_url="$(grep -Eo 'https://[a-f0-9]{8}-ai-thuc-chien-blog\.manhdungub\.workers\.dev' "$preview_log" | tail -n 1 || true)"
-          if [[ -z "$preview_url" || -z "$deployment_url" ]]; then
-            echo "::error::Wrangler did not return both the stable feature Preview URL and exact deployment URL."
-            exit 1
-          fi
-          echo "preview_url=$preview_url" >> "$GITHUB_OUTPUT"
-          echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
-          echo "PREVIEW_CODE_DEPLOY=success (trusted branch source; no relay or OAuth secrets supplied)."
-      - name: Verify Preview contains no relay or OAuth secret bindings
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          secret_list="$RUNNER_TEMP/preview-secret-list.txt"
-          npx --yes wrangler@4 preview secret list --name "feature/required-email-verification" > "$secret_list"
-          if grep -E 'COMMUNITY_EMAIL_RELAY_(URL|SECRET)|GOOGLE_OAUTH_CLIENT_(ID|SECRET)' "$secret_list"; then
-            echo "::error::Preview still contains an application credential binding; stopping smoke tests."
-            exit 1
-          fi
-          echo "PASS: no relay or Google OAuth secret bindings found in the feature Preview."
-      - name: Verify Preview frontend
-        env:
-          PREVIEW_URL: ${{ steps.deploy_preview.outputs.deployment_url }}
-        run: node scripts/test_community_preview_frontend.mjs
-      - name: Read Preview URL flags from Cloudflare API (read-only)
-        env:
-          CLOUDFLARE_WORKERS_BUILDS_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_BUILDS_API_TOKEN }}
-        run: node scripts/diagnose_cloudflare_preview_flags.mjs
-      - name: Inspect Preview D1 verification schema (read-only)
-        env:
-          CLOUDFLARE_WORKERS_BUILDS_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_BUILDS_API_TOKEN }}
-        run: node scripts/diagnose_preview_d1_schema.mjs
-      - name: Smoke-test exact Preview deployment endpoints and CORS (read-only)
-        env:
-          PREVIEW_URL: ${{ steps.deploy_preview.outputs.deployment_url }}
-        run: node scripts/test_community_preview_http.mjs
-      - name: Smoke-test stable feature alias endpoints and CORS (read-only)
+      - name: Check frontend smoke-test syntax
+        run: node --check scripts/test_community_preview_frontend.mjs
+      - name: Verify existing isolated Preview frontend (GET-only)
         env:
           PREVIEW_URL: https://feature-required-email-verification-ai-thuc-chien-blog.manhdungub.workers.dev
-        run: node scripts/test_community_preview_http.mjs
+        run: node scripts/test_community_preview_frontend.mjs
