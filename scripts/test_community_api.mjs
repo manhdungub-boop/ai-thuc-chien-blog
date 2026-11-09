@@ -14,13 +14,41 @@ assert.ok(Number(pbkdf2IterationsMatch[1]) <= 100000,
 assert.match(workerSource, /iterations:\s*COMMUNITY_PASSWORD_ITERATIONS/,
   'Password hashing must use the checked PBKDF2 iteration setting');
 class MockD1 {
-  constructor() { this.members = []; this.sessions = []; this.messages = []; this.tokens = []; this.resetTokens = []; this.rates = new Map(); }
+  constructor() { this.members = []; this.sessions = []; this.messages = []; this.tokens = []; this.resetTokens = []; this.rates = new Map(); this.failBatchAfter = null; this.suppressPasswordUpdate = false; this.invalidateVerificationTokenBeforeBatch = false; }
+  async batch(statements) {
+    // Simulate a concurrent resend/removal after the route's initial SELECT but before its transaction.
+    if (this.invalidateVerificationTokenBeforeBatch) {
+      this.tokens = [];
+      this.invalidateVerificationTokenBeforeBatch = false;
+    }
+    const snapshot = { members: structuredClone(this.members), sessions: structuredClone(this.sessions), tokens: structuredClone(this.tokens), resetTokens: structuredClone(this.resetTokens) };
+    try {
+      const results = [];
+      for (let index = 0; index < statements.length; index += 1) {
+        results.push(await statements[index].run());
+        if (this.failBatchAfter === index) throw new Error('Simulated D1 batch failure');
+      }
+      this.failBatchAfter = null;
+      return results;
+    } catch (error) {
+      this.members = snapshot.members; this.sessions = snapshot.sessions; this.tokens = snapshot.tokens; this.resetTokens = snapshot.resetTokens;
+      this.failBatchAfter = null;
+      throw error;
+    }
+  }
   prepare(sql) {
     const db = this; let args = [];
     return {
       bind(...values) { args = values; return this; },
       async run() {
         const q = sql.replace(/\s+/g, ' ').trim();
+        if (q.startsWith('UPDATE community_members SET email_verified_at = ? WHERE id = ? AND email_verified_at IS NULL AND EXISTS')) { const [verifiedAt, id, tokenHash, tokenMemberId, now] = args; const token = db.tokens.find((t) => t.token_hash === tokenHash && t.member_id === tokenMemberId && t.expires_at > now); const member = db.members.find((m) => m.id === id && id === tokenMemberId && !m.email_verified_at); if (!member || !token) return { meta: { changes: 0 } }; member.email_verified_at = verifiedAt; return { meta: { changes: 1 } }; }
+        if (q.startsWith('DELETE FROM community_email_verification_tokens WHERE token_hash = ? AND EXISTS')) { const [tokenHash, verifiedAt] = args; const token = db.tokens.find((t) => t.token_hash === tokenHash && db.members.some((m) => m.id === t.member_id && m.email_verified_at === verifiedAt)); if (!token) return { meta: { changes: 0 } }; db.tokens = db.tokens.filter((t) => t !== token); return { meta: { changes: 1 } }; }
+        if (q.startsWith('DELETE FROM community_email_verification_tokens WHERE member_id = ? AND EXISTS')) { const [memberId, guardId, verifiedAt] = args; if (!db.members.some((m) => m.id === memberId && m.id === guardId && m.email_verified_at === verifiedAt)) return { meta: { changes: 0 } }; const before = db.tokens.length; db.tokens = db.tokens.filter((t) => t.member_id !== memberId); return { meta: { changes: before - db.tokens.length } }; }
+        if (q.startsWith('UPDATE community_members SET password_salt = ?, password_hash = ? WHERE id = (')) { const [salt, hash, tokenHash, now] = args; const token = db.resetTokens.find((t) => t.token_hash === tokenHash && t.expires_at > now); const member = token && db.members.find((m) => m.id === token.member_id && m.email_verified_at); if (db.suppressPasswordUpdate || !member) return { meta: { changes: 0 } }; member.password_salt = salt; member.password_hash = hash; return { meta: { changes: 1 } }; }
+        if (q.startsWith('DELETE FROM community_sessions WHERE member_id = (')) { const [tokenHash, now, salt, hash] = args; const token = db.resetTokens.find((t) => t.token_hash === tokenHash && t.expires_at > now); const member = token && db.members.find((m) => m.id === token.member_id && m.password_salt === salt && m.password_hash === hash); if (!member) return { meta: { changes: 0 } }; const before = db.sessions.length; db.sessions = db.sessions.filter((s) => s.member_id !== member.id); return { meta: { changes: before - db.sessions.length } }; }
+        if (q.startsWith('DELETE FROM community_password_reset_tokens WHERE member_id = (')) { const [tokenHash, now, salt, hash] = args; const token = db.resetTokens.find((t) => t.token_hash === tokenHash && t.expires_at > now); const member = token && db.members.find((m) => m.id === token.member_id && m.password_salt === salt && m.password_hash === hash); if (!member) return { meta: { changes: 0 } }; const before = db.resetTokens.length; db.resetTokens = db.resetTokens.filter((t) => t.member_id !== member.id); return { meta: { changes: before - db.resetTokens.length } }; }
+        if (q.startsWith('DELETE FROM community_password_reset_tokens WHERE token_hash = ? AND expires_at > ? AND EXISTS')) { const [tokenHash, now, salt, hash] = args; const token = db.resetTokens.find((t) => t.token_hash === tokenHash && t.expires_at > now); const member = token && db.members.find((m) => m.id === token.member_id && m.password_salt === salt && m.password_hash === hash); if (!member) return { meta: { changes: 0 } }; const before = db.resetTokens.length; db.resetTokens = db.resetTokens.filter((t) => t !== token); return { meta: { changes: before - db.resetTokens.length } }; }
         if (q.startsWith('INSERT INTO community_rate_limits')) { const [bucket, windowStart] = args; const old = db.rates.get(bucket); db.rates.set(bucket, { count: old && old.window_start === windowStart ? old.count + 1 : 1, window_start: windowStart }); return { meta: { changes: 1 } }; }
         if (q.startsWith('INSERT INTO community_members')) { const [id, username, email, display_name, password_salt, password_hash, created_at] = args; if (db.members.some((m) => m.email === email || m.username === username)) throw new Error('unique constraint'); db.members.push({ id, username, email, display_name, password_salt, password_hash, created_at, email_verified_at: null }); return { meta: { changes: 1 } }; }
         if (q.startsWith('INSERT INTO community_email_verification_tokens')) { const [token_hash, member_id, created_at, expires_at] = args; db.tokens.push({ token_hash, member_id, created_at, expires_at }); return { meta: { changes: 1 } }; }
@@ -44,6 +72,7 @@ class MockD1 {
       async first() {
         const q = sql.replace(/\s+/g, ' ').trim();
         if (q.startsWith('DELETE FROM community_password_reset_tokens')) { const [tokenHash, now] = args; const tokenIndex = db.resetTokens.findIndex((t) => t.token_hash === tokenHash && t.expires_at > now); if (tokenIndex < 0) return null; const token = db.resetTokens[tokenIndex]; const member = db.members.find((m) => m.id === token.member_id && m.email_verified_at); if (!member) return null; db.resetTokens.splice(tokenIndex, 1); return { member_id: token.member_id }; }
+        if (q.startsWith('SELECT t.member_id FROM community_password_reset_tokens t JOIN community_members m')) { const [tokenHash, now] = args; const token = db.resetTokens.find((t) => t.token_hash === tokenHash && t.expires_at > now); const member = token && db.members.find((m) => m.id === token.member_id && m.email_verified_at); return member ? { member_id: member.id } : null; }
         if (q.startsWith('SELECT count FROM community_rate_limits')) return db.rates.get(args[0]) || null;
         if (q.startsWith('SELECT id, username, email, display_name, password_salt, password_hash, created_at, email_verified_at FROM community_members')) return db.members.find((m) => m.email === args[0]) || null;
         if (q.startsWith('SELECT t.member_id, m.email, m.email_verified_at FROM community_email_verification_tokens')) { const t = db.tokens.find((x) => x.token_hash === args[0] && x.expires_at > args[1]); const m = t && db.members.find((x) => x.id === t.member_id); return m ? { member_id: m.id, email: m.email, email_verified_at: m.email_verified_at } : null; }
@@ -62,8 +91,26 @@ class MockD1 {
 const origin = 'https://ai-thuc-chien-blog.manhdungub.workers.dev';
 const db = new MockD1(); const env = { DB: db, ASSETS: { fetch: async () => new Response('asset') }, COMMUNITY_EMAIL_RELAY_URL: 'https://mail-relay.example.test/exec', COMMUNITY_EMAIL_RELAY_SECRET: 'test-shared-secret' };
 const originalFetch = globalThis.fetch; let capturedEmail = null; let relayResult = { ok: true };
-globalThis.fetch = async (input, init = {}) => { if (String(input) === 'https://mail-relay.example.test/exec') { capturedEmail = JSON.parse(init.body); assert.equal(capturedEmail.secret, 'test-shared-secret'); return new Response(JSON.stringify(relayResult), { status: 200, headers: { 'Content-Type': 'application/json' } }); } return originalFetch(input, init); };
-const call = (path, { method = 'GET', body, cookie, originHeader = origin, ip = '198.51.100.77' } = {}) => worker.fetch(new Request(`https://example.test/api/community${path}`, { method, headers: { ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(cookie ? { Cookie: cookie } : {}), ...(originHeader ? { Origin: originHeader } : {}), 'CF-Connecting-IP': ip }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }), env);
+let relayRedirectLocation = 'https://script.googleusercontent.com/macros/echo?user_content_key=test';
+let omitRelayRedirectLocation = false;
+globalThis.fetch = async (input, init = {}) => {
+  if (String(input) === 'https://mail-relay.example.test/exec') {
+    assert.equal(init.method, 'POST');
+    assert.equal(init.redirect, 'manual', 'Apps Script POST must not automatically follow redirects.');
+    capturedEmail = JSON.parse(init.body);
+    assert.equal(capturedEmail.secret, 'test-shared-secret');
+    return new Response(null, { status: 302, headers: omitRelayRedirectLocation ? {} : { Location: relayRedirectLocation } });
+  }
+  const destination = new URL(String(input));
+  assert.equal(destination.origin, 'https://script.googleusercontent.com');
+  assert.equal(init.method, 'GET', 'Apps Script response URL must be fetched with GET.');
+  assert.equal(init.body, undefined, 'Never forward relay POST body or secret to the redirect URL.');
+  assert.equal(init.headers, undefined, 'Never forward application headers to the redirect URL.');
+  assert.equal(init.redirect, 'manual');
+  return new Response(JSON.stringify(relayResult), { status: 200, headers: { 'Content-Type': 'application/json' } });
+};
+let defaultIpSequence = 1;
+const call = (path, { method = 'GET', body, cookie, originHeader = origin, ip = `198.51.100.${defaultIpSequence++}` } = {}) => worker.fetch(new Request(`https://example.test/api/community${path}`, { method, headers: { ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(cookie ? { Cookie: cookie } : {}), ...(originHeader ? { Origin: originHeader } : {}), 'CF-Connecting-IP': ip }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }), env);
 const unconfigured = await worker.fetch(new Request('https://example.test/api/community/me'), {}); assert.equal(unconfigured.status, 503); assert.match((await unconfigured.json()).error, /cơ sở dữ liệu/i);
 const badOrigin = await call('/register', { method: 'POST', originHeader: 'https://evil.example', body: {} }); assert.equal(badOrigin.status, 403);
 const previewOrigin = 'https://feature-required-email-verification-ai-thuc-chien-blog.workers.dev';
@@ -100,11 +147,72 @@ assert.match((await noRelay.json()).error, /xác nhận email chưa được c�
 assert.deepEqual([db.members.length, db.tokens.length, db.rates.size], countsBeforeNoRelay);
 env.COMMUNITY_EMAIL_RELAY_URL = oldRelayUrl;
 env.COMMUNITY_EMAIL_RELAY_SECRET = oldRelaySecret;
+
+// The Apps Script 302 must be followed only to the exact Googleusercontent HTTPS origin.
+const relayBoundaryCounts = [db.members.length, db.tokens.length];
+relayRedirectLocation = 'https://script.googleusercontent.com:8443/macros/echo?user_content_key=unsafe';
+const unsafePortRegistration = await call('/register', { method: 'POST', body: { username: 'unsafe_port_user', displayName: 'Unsafe Port', email: 'unsafe-port@example.invalid', password: 'Temporary-Unsafe-Port-Password-123!' } });
+assert.equal(unsafePortRegistration.status, 503);
+assert.deepEqual([db.members.length, db.tokens.length], relayBoundaryCounts, 'unsafe redirect port must not leave a pending member or token');
+relayRedirectLocation = 'https://user:pass@script.googleusercontent.com/macros/echo?user_content_key=unsafe';
+const credentialRegistration = await call('/register', { method: 'POST', body: { username: 'credential_user', displayName: 'Credential Redirect', email: 'credential-redirect@example.invalid', password: 'Temporary-Credential-Password-123!' } });
+assert.equal(credentialRegistration.status, 503);
+assert.deepEqual([db.members.length, db.tokens.length], relayBoundaryCounts, 'credential-bearing redirect must not leave a pending member or token');
+relayRedirectLocation = 'https://script.googleusercontent.com/macros/echo?user_content_key=test';
+omitRelayRedirectLocation = true;
+const missingLocationRegistration = await call('/register', { method: 'POST', body: { username: 'missing_location_user', displayName: 'Missing Location', email: 'missing-location@example.invalid', password: 'Temporary-Missing-Location-Password-123!' } });
+assert.equal(missingLocationRegistration.status, 503);
+assert.deepEqual([db.members.length, db.tokens.length], relayBoundaryCounts, 'redirect without Location must not leave a pending member or token');
+omitRelayRedirectLocation = false;
+
 const registered = await call('/register', { method: 'POST', body: { username: 'thanhvien_1', displayName: 'Thành viên thử', email: 'member@example.com', password: 'MotMatKhauRieng123!' } }); assert.equal(registered.status, 201);
 const registeredPayload = await registered.json(); assert.equal(registeredPayload.verificationRequired, true); assert.equal(JSON.stringify(registeredPayload).includes('MotMatKhauRieng123!'), false); assert.equal(registered.headers.get('set-cookie'), null); assert.ok(capturedEmail); assert.equal(capturedEmail.to, 'member@example.com');
 const loginBeforeVerification = await call('/login', { method: 'POST', body: { email: 'member@example.com', password: 'MotMatKhauRieng123!' } }); assert.equal(loginBeforeVerification.status, 403); assert.equal((await loginBeforeVerification.json()).code, 'EMAIL_NOT_VERIFIED');
-const tokenMatch = capturedEmail.htmlBody.match(/[?]verify=([A-Za-z0-9_-]{32,80})/); assert.ok(tokenMatch, 'verification email must contain a random one-time token'); const verify = await call('/verify-email', { method: 'POST', body: { token: tokenMatch[1] } }); assert.equal(verify.status, 200); assert.equal((await verify.json()).ok, true); assert.equal(db.tokens.length, 0);
+const tokenMatch = capturedEmail.htmlBody.match(/[?]verify=([A-Za-z0-9_-]{32,80})/); assert.ok(tokenMatch, 'verification email must contain a random one-time token');
+const memberAwaitingVerification = db.members.find((m) => m.email === 'member@example.com');
+const verificationTokenRow = db.tokens.find((t) => t.member_id === memberAwaitingVerification.id);
+db.failBatchAfter = 0;
+const failedVerificationBatch = await call('/verify-email', { method: 'POST', body: { token: tokenMatch[1] } });
+assert.equal(failedVerificationBatch.status, 500, 'a failed verification D1 batch must fail closed');
+assert.equal(db.members.find((m) => m.email === 'member@example.com').email_verified_at, null, 'failed verification batch must not activate the account');
+assert.ok(db.tokens.some((t) => t.token_hash === verificationTokenRow.token_hash), 'failed verification batch must preserve the one-time token');
+const verify = await call('/verify-email', { method: 'POST', body: { token: tokenMatch[1] } });
+assert.equal(verify.status, 200);
+assert.equal((await verify.json()).ok, true);
+assert.equal(db.tokens.length, 0);
 const replay = await call('/verify-email', { method: 'POST', body: { token: tokenMatch[1] } }); assert.equal(replay.status, 400, 'verification tokens must be single-use');
+
+// A resend/concurrent request may invalidate the token after the initial SELECT.
+// The transactional UPDATE must re-check token hash, member, and expiry before activation.
+const racedRegistration = await call('/register', { method: 'POST', body: { username: 'verify_race_user', displayName: 'Verify Race', email: 'verify-race@example.com', password: 'Verify-Race-Password-123!' } });
+assert.equal(racedRegistration.status, 201);
+const racedToken = capturedEmail.htmlBody.match(/[?]verify=([A-Za-z0-9_-]{32,80})/)[1];
+db.invalidateVerificationTokenBeforeBatch = true;
+const racedVerification = await call('/verify-email', { method: 'POST', body: { token: racedToken } });
+assert.equal(racedVerification.status, 400, 'a token invalidated between lookup and transaction must not verify the member');
+assert.equal(db.members.find((m) => m.email === 'verify-race@example.com').email_verified_at, null,
+  'a missing token at transaction time must leave the member unverified');
+
+
+// Two simultaneous submissions of one verification token must activate the account exactly once.
+const concurrentVerifyRegistration = await call('/register', {
+  method: 'POST',
+  ip: '203.0.113.66',
+  body: { username: 'verify_concurrent_user', displayName: 'Verify Concurrent', email: 'verify-concurrent@example.com', password: 'Verify-Concurrent-Password-123!' }
+});
+assert.equal(concurrentVerifyRegistration.status, 201);
+const concurrentVerifyToken = capturedEmail.htmlBody.match(/[?]verify=([A-Za-z0-9_-]{32,80})/)[1];
+const concurrentVerifyResponses = await Promise.all([
+  call('/verify-email', { method: 'POST', ip: '203.0.113.67', body: { token: concurrentVerifyToken } }),
+  call('/verify-email', { method: 'POST', ip: '203.0.113.68', body: { token: concurrentVerifyToken } })
+]);
+const concurrentVerifyStatuses = concurrentVerifyResponses.map((response) => response.status).sort((a, b) => a - b);
+assert.deepEqual(concurrentVerifyStatuses, [200, 400],
+  'atomic verification must allow exactly one concurrent submission to succeed');
+assert.ok(db.members.find((m) => m.email === 'verify-concurrent@example.com').email_verified_at,
+  'the winning verification request must activate the member');
+assert.equal(db.tokens.some((token) => token.member_id === db.members.find((m) => m.email === 'verify-concurrent@example.com').id), false,
+  'concurrent verification must consume the token exactly once');
 
 // Resend is intentionally generic for account privacy and is rate-limited to three requests per email per hour.
 const resendRegistration = await call('/register', { method: 'POST', body: { username: 'resend_user', displayName: 'Resend User', email: 'resend@example.com', password: 'Resend-Password-123!' } });
@@ -140,18 +248,19 @@ assert.equal(priorTokenStillWorks.status, 200, 'previously delivered verificatio
 
 // Password-reset email throttling must not reveal whether an email belongs to an account.
 const resetEmail = 'privacy-reset@example.invalid';
+const resetThrottleIp = '203.0.113.70';
 for (let attempt = 0; attempt < 3; attempt += 1) {
-  const response = await call('/password-reset/request', { method: 'POST', body: { email: resetEmail } });
+  const response = await call('/password-reset/request', { method: 'POST', ip: resetThrottleIp, body: { email: resetEmail } });
   assert.equal(response.status, 200);
   assert.equal((await response.json()).ok, true);
 }
-const resetEmailLimited = await call('/password-reset/request', { method: 'POST', body: { email: resetEmail } });
+const resetEmailLimited = await call('/password-reset/request', { method: 'POST', ip: resetThrottleIp, body: { email: resetEmail } });
 assert.equal(resetEmailLimited.status, 200, 'email-specific throttling must keep the generic response');
 assert.equal((await resetEmailLimited.json()).ok, true);
 // The IP-wide limit remains enforced independently and applies regardless of the email value.
-const resetOtherEmail = await call('/password-reset/request', { method: 'POST', body: { email: 'another-reset@example.invalid' } });
+const resetOtherEmail = await call('/password-reset/request', { method: 'POST', ip: resetThrottleIp, body: { email: 'another-reset@example.invalid' } });
 assert.equal(resetOtherEmail.status, 200, 'the fifth request from this IP should still be allowed');
-const resetIpLimited = await call('/password-reset/request', { method: 'POST', body: { email: 'third-reset@example.invalid' } });
+const resetIpLimited = await call('/password-reset/request', { method: 'POST', ip: resetThrottleIp, body: { email: 'third-reset@example.invalid' } });
 assert.equal(resetIpLimited.status, 429, 'the sixth request from this IP within one hour must be throttled');
 
 // Expired verification tokens must be rejected and must not activate the member.
@@ -197,6 +306,25 @@ const shortResetPassword = await call('/password-reset/complete', {
   body: { token: rawResetToken, password: 'short' }
 });
 assert.equal(shortResetPassword.status, 400, 'short replacement passwords must be rejected without consuming the valid token');
+// A D1 batch failure after the password write must roll back the password, preserve the token, and keep sessions active.
+const memberForAtomicReset = db.members.find((m) => m.email === 'member@example.com');
+const originalPasswordHash = memberForAtomicReset.password_hash;
+const sessionsBeforeAtomicReset = db.sessions.filter((s) => s.member_id === memberForAtomicReset.id).length;
+db.failBatchAfter = 0;
+const failedResetBatch = await call('/password-reset/complete', { method: 'POST', ip: '203.0.113.59', body: { token: rawResetToken, password: 'New-Strong-Password-456!' } });
+assert.equal(failedResetBatch.status, 500, 'a D1 batch failure must fail the reset request');
+assert.equal(db.members.find((m) => m.email === 'member@example.com').password_hash, originalPasswordHash, 'failed batch must roll back password changes');
+assert.ok(db.resetTokens.some((t) => t.token_hash === storedResetToken.token_hash), 'failed batch must preserve the reset token');
+assert.equal(db.sessions.filter((s) => s.member_id === memberForAtomicReset.id).length, sessionsBeforeAtomicReset, 'failed batch must preserve existing sessions');
+
+// A zero-row password update must not consume the token or revoke sessions.
+db.suppressPasswordUpdate = true;
+const zeroRowReset = await call('/password-reset/complete', { method: 'POST', ip: '203.0.113.60', body: { token: rawResetToken, password: 'New-Strong-Password-456!' } });
+assert.equal(zeroRowReset.status, 400);
+assert.ok(db.resetTokens.some((t) => t.token_hash === storedResetToken.token_hash), 'zero-row password update must preserve the reset token');
+assert.equal(db.sessions.filter((s) => s.member_id === memberForAtomicReset.id).length, sessionsBeforeAtomicReset, 'zero-row password update must not revoke sessions');
+db.suppressPasswordUpdate = false;
+
 const resetComplete = await call('/password-reset/complete', { method: 'POST', ip: '203.0.113.52', body: { token: rawResetToken, password: 'New-Strong-Password-456!' } });
 assert.equal(resetComplete.status, 200);
 assert.equal((await resetComplete.json()).ok, true);
