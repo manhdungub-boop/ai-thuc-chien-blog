@@ -14,8 +14,13 @@ assert.ok(Number(pbkdf2IterationsMatch[1]) <= 100000,
 assert.match(workerSource, /iterations:\s*COMMUNITY_PASSWORD_ITERATIONS/,
   'Password hashing must use the checked PBKDF2 iteration setting');
 class MockD1 {
-  constructor() { this.members = []; this.sessions = []; this.messages = []; this.tokens = []; this.resetTokens = []; this.rates = new Map(); this.failBatchAfter = null; this.suppressPasswordUpdate = false; }
+  constructor() { this.members = []; this.sessions = []; this.messages = []; this.tokens = []; this.resetTokens = []; this.rates = new Map(); this.failBatchAfter = null; this.suppressPasswordUpdate = false; this.invalidateVerificationTokenBeforeBatch = false; }
   async batch(statements) {
+    // Simulate a concurrent resend/removal after the route's initial SELECT but before its transaction.
+    if (this.invalidateVerificationTokenBeforeBatch) {
+      this.tokens = [];
+      this.invalidateVerificationTokenBeforeBatch = false;
+    }
     const snapshot = { members: structuredClone(this.members), sessions: structuredClone(this.sessions), tokens: structuredClone(this.tokens), resetTokens: structuredClone(this.resetTokens) };
     try {
       const results = [];
@@ -37,7 +42,7 @@ class MockD1 {
       bind(...values) { args = values; return this; },
       async run() {
         const q = sql.replace(/\s+/g, ' ').trim();
-        if (q.startsWith('UPDATE community_members SET email_verified_at = ? WHERE id = ? AND email_verified_at IS NULL')) { const [verifiedAt, id] = args; const member = db.members.find((m) => m.id === id && !m.email_verified_at); if (!member) return { meta: { changes: 0 } }; member.email_verified_at = verifiedAt; return { meta: { changes: 1 } }; }
+        if (q.startsWith('UPDATE community_members SET email_verified_at = ? WHERE id = ? AND email_verified_at IS NULL AND EXISTS')) { const [verifiedAt, id, tokenHash, tokenMemberId, now] = args; const token = db.tokens.find((t) => t.token_hash === tokenHash && t.member_id === tokenMemberId && t.expires_at > now); const member = db.members.find((m) => m.id === id && id === tokenMemberId && !m.email_verified_at); if (!member || !token) return { meta: { changes: 0 } }; member.email_verified_at = verifiedAt; return { meta: { changes: 1 } }; }
         if (q.startsWith('DELETE FROM community_email_verification_tokens WHERE token_hash = ? AND EXISTS')) { const [tokenHash, verifiedAt] = args; const token = db.tokens.find((t) => t.token_hash === tokenHash && db.members.some((m) => m.id === t.member_id && m.email_verified_at === verifiedAt)); if (!token) return { meta: { changes: 0 } }; db.tokens = db.tokens.filter((t) => t !== token); return { meta: { changes: 1 } }; }
         if (q.startsWith('DELETE FROM community_email_verification_tokens WHERE member_id = ? AND EXISTS')) { const [memberId, guardId, verifiedAt] = args; if (!db.members.some((m) => m.id === memberId && m.id === guardId && m.email_verified_at === verifiedAt)) return { meta: { changes: 0 } }; const before = db.tokens.length; db.tokens = db.tokens.filter((t) => t.member_id !== memberId); return { meta: { changes: before - db.tokens.length } }; }
         if (q.startsWith('UPDATE community_members SET password_salt = ?, password_hash = ? WHERE id = (')) { const [salt, hash, tokenHash, now] = args; const token = db.resetTokens.find((t) => t.token_hash === tokenHash && t.expires_at > now); const member = token && db.members.find((m) => m.id === token.member_id && m.email_verified_at); if (db.suppressPasswordUpdate || !member) return { meta: { changes: 0 } }; member.password_salt = salt; member.password_hash = hash; return { meta: { changes: 1 } }; }
@@ -171,6 +176,17 @@ assert.equal(verify.status, 200);
 assert.equal((await verify.json()).ok, true);
 assert.equal(db.tokens.length, 0);
 const replay = await call('/verify-email', { method: 'POST', body: { token: tokenMatch[1] } }); assert.equal(replay.status, 400, 'verification tokens must be single-use');
+
+// A resend/concurrent request may invalidate the token after the initial SELECT.
+// The transactional UPDATE must re-check token hash, member, and expiry before activation.
+const racedRegistration = await call('/register', { method: 'POST', body: { username: 'verify_race_user', displayName: 'Verify Race', email: 'verify-race@example.com', password: 'Verify-Race-Password-123!' } });
+assert.equal(racedRegistration.status, 201);
+const racedToken = capturedEmail.htmlBody.match(/[?]verify=([A-Za-z0-9_-]{32,80})/)[1];
+db.invalidateVerificationTokenBeforeBatch = true;
+const racedVerification = await call('/verify-email', { method: 'POST', body: { token: racedToken } });
+assert.equal(racedVerification.status, 400, 'a token invalidated between lookup and transaction must not verify the member');
+assert.equal(db.members.find((m) => m.email === 'verify-race@example.com').email_verified_at, null,
+  'a missing token at transaction time must leave the member unverified');
 
 // Resend is intentionally generic for account privacy and is rate-limited to three requests per email per hour.
 const resendRegistration = await call('/register', { method: 'POST', body: { username: 'resend_user', displayName: 'Resend User', email: 'resend@example.com', password: 'Resend-Password-123!' } });
