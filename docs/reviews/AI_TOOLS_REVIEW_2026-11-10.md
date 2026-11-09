@@ -58,3 +58,5 @@ Các bản ghi Hugging Face Hub và Adobe Firefly hiện đã qua rà soát trư
 - **CI finding / fix:** PR #91 run `42675512813` failed only at `scripts/test-ai-tools-catalog-audit.mjs`: test cố định `--as-of=2026-11-08`, khiến 8 bản ghi được xác minh ngày 10/11 bị xem là ngày tương lai. Test đã được sửa để tự lấy ngày hiện hành theo `Asia/Ho_Chi_Minh`; chạy riêng tại sandbox cho kết quả PASS ngày `2026-11-10`. CI cần chạy lại trên commit sửa test.
 - Không có tài khoản trả phí, API key, trial, credits hoặc dịch vụ trả phí nào được tạo/sử dụng.
 - Chỉ cập nhật nhánh ứng viên; không sửa `main`, không merge PR #91/#92/#93, không deploy Production, không thay đổi D1, DNS hoặc secrets.
+
+- **Audit test correction commit:** `ae055716da4944c4e8ab78c9611d59f145443dcc`. The updated test passed locally using the Vietnam-local date `2026-11-10`; the new GitHub validation run is pending.
