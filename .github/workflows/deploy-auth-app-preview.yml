@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - sync/gitlab-completed-work-20261107
+      - integration/pr77-auth-hardening-20261109
     paths:
       - "worker.mjs"
       - "script.js"
