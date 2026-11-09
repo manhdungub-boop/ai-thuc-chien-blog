@@ -196,7 +196,7 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
   const passwordResetSubmit = root.querySelector('#community-password-reset-submit');
   let pendingVerificationEmail = '';
   const queryParams = new URLSearchParams(window.location.search);
-  // Verification and password-reset emails use /#cong-dong?token=...; query parameters inside the fragment are not in location.search.
+  // Email links may carry reset tokens in the query portion of the URL fragment.
   const fragmentQuery = window.location.hash.includes('?') ? window.location.hash.slice(window.location.hash.indexOf('?') + 1) : '';
   const fragmentParams = new URLSearchParams(fragmentQuery);
   const verificationToken = queryParams.get('verify') || fragmentParams.get('verify') || '';
@@ -607,6 +607,8 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
 
 // Site-wide AI reader assistant. Conversation stays in this tab and is not persisted.
 (() => {
+  // Never expose the Production-only reader assistant inside the isolated Preview environment.
+  if (typeof location !== 'undefined' && location.hostname === 'ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev') return;
   // Keep non-browser test harnesses and partial DOM environments unaffected.
   if (!document.body || typeof document.createElement !== 'function' || typeof document.getElementById !== 'function') return;
   if (document.getElementById('reader-ai-chat')) return;
