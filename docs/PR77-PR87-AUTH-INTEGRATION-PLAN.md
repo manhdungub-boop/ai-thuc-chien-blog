@@ -164,3 +164,28 @@ Next at that checkpoint: run the existing `Static CI Quality Gate` on this branc
 2. If a safe deployment path is approved, deploy only to `ai-thuc-chien-blog-auth-app-preview` with `ai-thuc-chien-community-preview`; never use the Production Worker/D1.
 3. Run read-only HTTP smoke and isolated OAuth checks on the deployed Preview. Do not attempt real email delivery through a tool path previously blocked by the safety system.
 4. Keep live email delivery marked NOT VERIFIED until a permitted, independent delivery test is available.
+
+## Isolated OAuth Preview deployment — PASS (2026-11-09)
+
+- Enabled the existing staging-only workflow for this integration branch as a manual-only dispatch. The integration-specific workflow version does not run automatically on push.
+- Removed the Cloudflare `wrangler secret bulk` step from this integration workflow. Existing Preview secrets are preserved; no secret was created, replaced, rotated, or deleted.
+- Workflow run #14 / ID `42541667811`: SUCCESS.
+  - Run URL: https://github.com/manhdungub-boop/ai-thuc-chien-blog/actions/runs/42541667811
+  - Exact source commit: `2bc5151ff1fa34af55bef72e95e7617ebe4d661e`.
+  - Dedicated Worker deployed: `ai-thuc-chien-blog-auth-app-preview`.
+  - Dedicated D1 target verified read-only: `ai-thuc-chien-community-preview`, ID `51d814c8-a3fc-4481-a5f1-60bc67617f3c`.
+- Safety checks completed:
+  - Cloudflare confirmed the exact Preview D1 identity and that it differs from Production D1.
+  - Wrangler migration listing reported `No migrations to apply!`; no SQL migration was applied.
+  - Deployment config was generated with only the dedicated Preview Worker name and Preview D1 binding.
+  - Existing relay secret and Google OAuth staging credentials were confirmed present but were not rewritten.
+- Post-deployment checks: PASS.
+  - Apps Script no-send probe accepted the shared secret and returned `INVALID_MESSAGE` before `MailApp`; no email was sent.
+  - Preview frontend allowlist, unauthenticated `/api/community/me`, exact-origin credentialed CORS, and Google OAuth provider readiness: PASS.
+  - Facebook OAuth remains disabled.
+  - Two overlapping Google OAuth starts generated six distinct transaction-scoped secure cookies.
+  - Invalid callback did not clear cookies from either active transaction.
+  - Search Console verification asset served correctly.
+  - Test summary explicitly confirms no user account was created and no email was sent.
+- Production Worker, Production D1, DNS, and Production secrets were not targeted. No D1 migration was applied.
+- Current distinction: Preview deployment and HTTP/OAuth-start smoke checks are PASS. Actual Google account consent/callback with a real user, browser session end-to-end, and email delivery are not yet verified. Do not claim them as PASS.
