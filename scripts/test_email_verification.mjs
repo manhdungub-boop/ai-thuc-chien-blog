@@ -40,7 +40,7 @@ assert.ok(normalizedWorker.includes('m.password_salt = ? AND m.password_hash = ?
 assert.match(worker, /EMAIL_NOT_VERIFIED/);
 assert.match(worker, /email_verified_at IS NOT NULL/);
 assert.match(worker, /SHA-256/);
-assert.match(worker, /DELETE FROM community_email_verification_tokens WHERE token_hash = \?/);
+assert.ok(normalizedWorker.includes('DELETE FROM community_email_verification_tokens WHERE token_hash = ?'), 'verification token cleanup must be part of the guarded transaction');
 assert.match(frontend, /community-verify-confirm/);
 assert.match(frontend, /community-resend-verification/);
 assert.match(frontend, /community-forgot-password/);
