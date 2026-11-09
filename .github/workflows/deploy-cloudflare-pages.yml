@@ -60,7 +60,7 @@ jobs:
             exit 1
           fi
           echo "::add-mask::$token"
-          printf 'token=%s\n' >> "$GITHUB_OUTPUT"
+          printf 'token=%s\n' "$token" >> "$GITHUB_OUTPUT"
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v4
