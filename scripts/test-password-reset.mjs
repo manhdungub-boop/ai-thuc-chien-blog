@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import worker from "../worker.mjs";
 
 const origin = "https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev";
@@ -12,19 +11,70 @@ class Statement {
   async first(){return this.db.first(this.sql,this.args);}
 }
 class ResetD1 {
-  constructor(){this.members=new Map([[seed.id,{...seed}]]);this.resetTokens=new Map();this.sessions=new Map([["session-hash",{member_id:seed.id,expires_at:"2099-01-01T00:00:00.000Z"}]]);this.rates=new Map();}
+  constructor(){this.members=new Map([[seed.id,{...seed}]]);this.resetTokens=new Map();this.sessions=new Map([["session-hash",{member_id:seed.id,expires_at:"2099-01-01T00:00:00.000Z"}]]);this.rates=new Map();this.failBatchAfter=null;}
   prepare(sql){return new Statement(this,sql);}
+  async batch(statements){
+    const snapshot={
+      members:new Map([...this.members].map(([id,value])=>[id,structuredClone(value)])),
+      resetTokens:new Map([...this.resetTokens].map(([id,value])=>[id,structuredClone(value)])),
+      sessions:new Map([...this.sessions].map(([id,value])=>[id,structuredClone(value)])),
+    };
+    try{
+      const results=[];
+      for(let index=0;index<statements.length;index++){
+        results.push(await statements[index].run());
+        if(this.failBatchAfter===index)throw new Error("Simulated D1 batch failure");
+      }
+      this.failBatchAfter=null;
+      return results;
+    }catch(error){
+      this.members=snapshot.members;this.resetTokens=snapshot.resetTokens;this.sessions=snapshot.sessions;
+      this.failBatchAfter=null;
+      throw error;
+    }
+  }
   async run(sql,a){
     if(sql.startsWith("insert into community_rate_limits")){const [bucket,windowStart]=a,old=this.rates.get(bucket);this.rates.set(bucket,{window_start:windowStart,count:old&&old.window_start===windowStart?old.count+1:1});return {meta:{changes:1}};}
     if(sql.startsWith("insert into community_password_reset_tokens")){const [token_hash,member_id,created_at,expires_at]=a;this.resetTokens.set(token_hash,{token_hash,member_id,created_at,expires_at});return {meta:{changes:1}};}
     if(sql.startsWith("delete from community_password_reset_tokens where member_id = ?")){const [id,keep]=a;let n=0;for(const [h,t] of this.resetTokens)if(t.member_id===id&&h!==keep){this.resetTokens.delete(h);n++;}return {meta:{changes:n}};}
     if(sql.startsWith("delete from community_password_reset_tokens where token_hash = ? and expires_at <= ?")){const [h,cutoff]=a,t=this.resetTokens.get(h);if(t&&t.expires_at<=cutoff){this.resetTokens.delete(h);return {meta:{changes:1}};}return {meta:{changes:0}};}
+    if(sql.startsWith("update community_members set password_salt = ?, password_hash = ? where id = (")){
+      const [salt,hash,tokenHash,cutoff]=a,token=this.resetTokens.get(tokenHash);
+      const member=token&&token.expires_at>cutoff&&this.members.get(token.member_id);
+      if(!member||!member.email_verified_at)return {meta:{changes:0}};
+      member.password_salt=salt;member.password_hash=hash;return {meta:{changes:1}};
+    }
+    if(sql.startsWith("delete from community_sessions where member_id = (")){
+      const [tokenHash,cutoff,salt,hash]=a,token=this.resetTokens.get(tokenHash);
+      const member=token&&token.expires_at>cutoff&&this.members.get(token.member_id);
+      if(!member||member.password_salt!==salt||member.password_hash!==hash)return {meta:{changes:0}};
+      let n=0;for(const [h,session] of this.sessions)if(session.member_id===member.id){this.sessions.delete(h);n++;}
+      return {meta:{changes:n}};
+    }
+    if(sql.startsWith("delete from community_password_reset_tokens where member_id = (")) {
+      const [tokenHash,cutoff,salt,hash]=a,token=this.resetTokens.get(tokenHash);
+      const member=token&&token.expires_at>cutoff&&this.members.get(token.member_id);
+      if(!member||member.password_salt!==salt||member.password_hash!==hash)return {meta:{changes:0}};
+      let n=0;for(const [h,t] of this.resetTokens)if(t.member_id===member.id){this.resetTokens.delete(h);n++;}
+      return {meta:{changes:n}};
+    }
+    if(sql.startsWith("delete from community_password_reset_tokens where token_hash = ? and expires_at > ? and exists")){
+      const [tokenHash,cutoff,salt,hash]=a,token=this.resetTokens.get(tokenHash);
+      const member=token&&token.expires_at>cutoff&&this.members.get(token.member_id);
+      if(!member||member.password_salt!==salt||member.password_hash!==hash)return {meta:{changes:0}};
+      this.resetTokens.delete(tokenHash);return {meta:{changes:1}};
+    }
     if(sql.startsWith("delete from community_password_reset_tokens where token_hash")){const existed=this.resetTokens.delete(a[0]);return {meta:{changes:existed?1:0}};}
     if(sql.startsWith("update community_members set password_salt = ?, password_hash = ? where id = ?")){const [salt,hash,id]=a,m=this.members.get(id);if(!m)return {meta:{changes:0}};m.password_salt=salt;m.password_hash=hash;return {meta:{changes:1}};}
-    if(sql.startsWith("delete from community_sessions where member_id = ?")){const [id]=a;let n=0;for(const [h,s] of this.sessions)if(s.member_id===id){this.sessions.delete(h);n++;}return {meta:{changes:n}};}
+    if(sql.startsWith("delete from community_sessions where member_id = ?")){const [id]=a;let n=0;for(const [h,session] of this.sessions)if(session.member_id===id){this.sessions.delete(h);n++;}return {meta:{changes:n}};}
     throw new Error("Unsupported mocked run SQL: "+sql);
   }
   async first(sql,a){
+    if(sql.startsWith("select t.member_id from community_password_reset_tokens t join community_members m")) {
+      const [tokenHash,cutoff]=a,token=this.resetTokens.get(tokenHash);
+      const member=token&&token.expires_at>cutoff&&this.members.get(token.member_id);
+      return member&&member.email_verified_at?{member_id:member.id}:null;
+    }
     if(sql.startsWith("select count from community_rate_limits")){const r=this.rates.get(a[0]);return r?{count:r.count}:null;}
     if(sql.startsWith("select id, email, display_name, email_verified_at from community_members where email") || sql.startsWith("select id, email_verified_at from community_members where email")){const m=[...this.members.values()].find(x=>x.email===a[0]);return m?{id:m.id,email_verified_at:m.email_verified_at}:null;}
     if(sql.startsWith("delete from community_password_reset_tokens where token_hash = ? and expires_at > ? and exists")){const [h,cutoff]=a,t=this.resetTokens.get(h);if(!t||t.expires_at<=cutoff)return null;this.resetTokens.delete(h);return {member_id:t.member_id};}
@@ -38,14 +88,19 @@ globalThis.fetch=async(_url,init)=>{const p=JSON.parse(init.body||"{}");sent.pus
 async function api(path,body,ip="203.0.113.80"){return worker.fetch(new Request(origin+path,{method:"POST",headers:{Origin:origin,"Content-Type":"application/json","CF-Connecting-IP":ip},body:JSON.stringify(body)}),env);}
 const pass=(name,ok)=>{assert.ok(ok,name);console.log("PASS "+name);};
 
-const frontendSource = await readFile(new URL("../script.js", import.meta.url), "utf8");
-assert.match(frontendSource, /const fragmentQuery = window\.location\.hash\.includes\('\?'\)/);
+const frontendSource = await (await import("node:fs/promises")).readFile(new URL("../script.js", import.meta.url), "utf8");
 assert.match(frontendSource, /fragmentParams\.get\('reset'\)/);
 const resetTokenFixture = "R".repeat(43);
 const resetEmailFragment = "#cong-dong?reset=" + resetTokenFixture;
-const resetFragmentQuery = resetEmailFragment.includes("?") ? resetEmailFragment.slice(resetEmailFragment.indexOf("?") + 1) : "";
-pass("fragment parser extracts the exact emailed reset token", new URLSearchParams(resetFragmentQuery).get("reset") === resetTokenFixture);
-pass("frontend parser reads reset token from the email URL fragment", frontendSource.includes("window.location.hash.slice(window.location.hash.indexOf('?') + 1)") && frontendSource.includes("fragmentParams.get('reset')"));
+const resetFragmentQuery = resetEmailFragment.slice(resetEmailFragment.indexOf("?") + 1);
+pass("frontend parser extracts the reset token from the email URL fragment", new URLSearchParams(resetFragmentQuery).get("reset") === resetTokenFixture);
+const workerSource = await (await import("node:fs/promises")).readFile(new URL("../worker.mjs", import.meta.url), "utf8");
+const resetRouteStart = workerSource.indexOf('if (route === "password-reset/complete"');
+const resetRouteEnd = workerSource.indexOf('if (route === "login"', resetRouteStart);
+const resetRouteSource = workerSource.slice(resetRouteStart, resetRouteEnd);
+pass("invalid reset tokens are checked before expensive password hashing",
+  resetRouteSource.indexOf("SELECT t.member_id") >= 0 &&
+  resetRouteSource.indexOf("SELECT t.member_id") < resetRouteSource.indexOf("hashCommunityPassword"));
 const generic=await api("/api/community/password-reset/request",{email:seed.email});const genericBody=await generic.json();
 pass("request endpoint replies with generic success",generic.status===200&&genericBody.ok===true&&genericBody.message.includes("Nếu email này có tài khoản hợp lệ"));
 const payload=sent.at(-1),link=new URL(payload.verifyUrl),q=link.hash.indexOf("?"),token=new URLSearchParams(link.hash.slice(q+1)).get("reset");
@@ -66,8 +121,19 @@ const validRequest=await api("/api/community/password-reset/request",{email:seed
 const validLink=new URL(sent.at(-1).verifyUrl);
 const validToken=new URLSearchParams(validLink.hash.slice(validLink.hash.indexOf("?")+1)).get("reset");
 const oldSalt=db.members.get(seed.id).password_salt;
+const oldPasswordHash=db.members.get(seed.id).password_hash;
+const validTokenHash=[...db.resetTokens.keys()][0];
+const siblingTokenHash = "sibling-reset-token-hash";
+db.resetTokens.set(siblingTokenHash, { token_hash: siblingTokenHash, member_id: seed.id, created_at: new Date().toISOString(), expires_at: "2099-01-01T00:00:00.000Z" });
+const sessionsBeforeReset=db.sessions.size;
+db.failBatchAfter=0;
+const failedBatch=await api("/api/community/password-reset/complete",{token:validToken,password:"StrongNewPass456"});
+pass("failed D1 batch rolls back password, session and token changes",failedBatch.status===500&&
+  db.members.get(seed.id).password_salt===oldSalt&&db.members.get(seed.id).password_hash===oldPasswordHash&&
+  db.sessions.size===sessionsBeforeReset&&db.resetTokens.has(validTokenHash));
 const reset=await api("/api/community/password-reset/complete",{token:validToken,password:"StrongNewPass456"}),resetBody=await reset.json();
 pass("valid token updates password and consumes itself",reset.status===200&&resetBody.ok===true&&db.members.get(seed.id).password_salt!==oldSalt&&db.resetTokens.size===0);
+pass("successful reset revokes sibling reset tokens", !db.resetTokens.has(siblingTokenHash) && db.resetTokens.size === 0);
 pass("successful reset revokes all old sessions",db.sessions.size===0);
 const replay=await api("/api/community/password-reset/complete",{token:validToken,password:"AnotherStrongPass789"});
 pass("reset token cannot be replayed",replay.status===400);
