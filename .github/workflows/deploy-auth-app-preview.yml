@@ -41,6 +41,8 @@ jobs:
           node --check scripts/test_email_verification.mjs
       - name: Run email verification static regression checks
         run: node scripts/test_email_verification.mjs
+      - name: Run offline IPv4 and IPv6 address safety regression tests
+        run: node scripts/test_ipv6_address_safety.mjs
       - name: Run worker regression tests
         run: npm run test:worker
       - name: Run article quality regression tests
