@@ -11,16 +11,55 @@ class Statement {
   async first(){return this.db.first(this.sql,this.args);}
 }
 class ResetD1 {
-  constructor(){this.members=new Map([[seed.id,{...seed}]]);this.resetTokens=new Map();this.sessions=new Map([["session-hash",{member_id:seed.id,expires_at:"2099-01-01T00:00:00.000Z"}]]);this.rates=new Map();}
+  constructor(){this.members=new Map([[seed.id,{...seed}]]);this.resetTokens=new Map();this.sessions=new Map([["session-hash",{member_id:seed.id,expires_at:"2099-01-01T00:00:00.000Z"}]]);this.rates=new Map();this.failBatchAfter=null;}
   prepare(sql){return new Statement(this,sql);}
+  async batch(statements){
+    const snapshot={
+      members:new Map([...this.members].map(([id,value])=>[id,structuredClone(value)])),
+      resetTokens:new Map([...this.resetTokens].map(([id,value])=>[id,structuredClone(value)])),
+      sessions:new Map([...this.sessions].map(([id,value])=>[id,structuredClone(value)])),
+    };
+    try{
+      const results=[];
+      for(let index=0;index<statements.length;index++){
+        results.push(await statements[index].run());
+        if(this.failBatchAfter===index)throw new Error("Simulated D1 batch failure");
+      }
+      this.failBatchAfter=null;
+      return results;
+    }catch(error){
+      this.members=snapshot.members;this.resetTokens=snapshot.resetTokens;this.sessions=snapshot.sessions;
+      this.failBatchAfter=null;
+      throw error;
+    }
+  }
   async run(sql,a){
     if(sql.startsWith("insert into community_rate_limits")){const [bucket,windowStart]=a,old=this.rates.get(bucket);this.rates.set(bucket,{window_start:windowStart,count:old&&old.window_start===windowStart?old.count+1:1});return {meta:{changes:1}};}
     if(sql.startsWith("insert into community_password_reset_tokens")){const [token_hash,member_id,created_at,expires_at]=a;this.resetTokens.set(token_hash,{token_hash,member_id,created_at,expires_at});return {meta:{changes:1}};}
     if(sql.startsWith("delete from community_password_reset_tokens where member_id = ?")){const [id,keep]=a;let n=0;for(const [h,t] of this.resetTokens)if(t.member_id===id&&h!==keep){this.resetTokens.delete(h);n++;}return {meta:{changes:n}};}
     if(sql.startsWith("delete from community_password_reset_tokens where token_hash = ? and expires_at <= ?")){const [h,cutoff]=a,t=this.resetTokens.get(h);if(t&&t.expires_at<=cutoff){this.resetTokens.delete(h);return {meta:{changes:1}};}return {meta:{changes:0}};}
+    if(sql.startsWith("update community_members set password_salt = ?, password_hash = ? where id = (")){
+      const [salt,hash,tokenHash,cutoff]=a,token=this.resetTokens.get(tokenHash);
+      const member=token&&token.expires_at>cutoff&&this.members.get(token.member_id);
+      if(!member||!member.email_verified_at)return {meta:{changes:0}};
+      member.password_salt=salt;member.password_hash=hash;return {meta:{changes:1}};
+    }
+    if(sql.startsWith("delete from community_sessions where member_id = (")){
+      const [tokenHash,cutoff,salt,hash]=a,token=this.resetTokens.get(tokenHash);
+      const member=token&&token.expires_at>cutoff&&this.members.get(token.member_id);
+      if(!member||member.password_salt!==salt||member.password_hash!==hash)return {meta:{changes:0}};
+      let n=0;for(const [h,session] of this.sessions)if(session.member_id===member.id){this.sessions.delete(h);n++;}
+      return {meta:{changes:n}};
+    }
+    if(sql.startsWith("delete from community_password_reset_tokens where token_hash = ? and expires_at > ? and exists")){
+      const [tokenHash,cutoff,salt,hash]=a,token=this.resetTokens.get(tokenHash);
+      const member=token&&token.expires_at>cutoff&&this.members.get(token.member_id);
+      if(!member||member.password_salt!==salt||member.password_hash!==hash)return {meta:{changes:0}};
+      this.resetTokens.delete(tokenHash);return {meta:{changes:1}};
+    }
     if(sql.startsWith("delete from community_password_reset_tokens where token_hash")){const existed=this.resetTokens.delete(a[0]);return {meta:{changes:existed?1:0}};}
     if(sql.startsWith("update community_members set password_salt = ?, password_hash = ? where id = ?")){const [salt,hash,id]=a,m=this.members.get(id);if(!m)return {meta:{changes:0}};m.password_salt=salt;m.password_hash=hash;return {meta:{changes:1}};}
-    if(sql.startsWith("delete from community_sessions where member_id = ?")){const [id]=a;let n=0;for(const [h,s] of this.sessions)if(s.member_id===id){this.sessions.delete(h);n++;}return {meta:{changes:n}};}
+    if(sql.startsWith("delete from community_sessions where member_id = ?")){const [id]=a;let n=0;for(const [h,session] of this.sessions)if(session.member_id===id){this.sessions.delete(h);n++;}return {meta:{changes:n}};}
     throw new Error("Unsupported mocked run SQL: "+sql);
   }
   async first(sql,a){
@@ -56,6 +95,14 @@ const validRequest=await api("/api/community/password-reset/request",{email:seed
 const validLink=new URL(sent.at(-1).verifyUrl);
 const validToken=new URLSearchParams(validLink.hash.slice(validLink.hash.indexOf("?")+1)).get("reset");
 const oldSalt=db.members.get(seed.id).password_salt;
+const oldPasswordHash=db.members.get(seed.id).password_hash;
+const validTokenHash=[...db.resetTokens.keys()][0];
+const sessionsBeforeReset=db.sessions.size;
+db.failBatchAfter=0;
+const failedBatch=await api("/api/community/password-reset/complete",{token:validToken,password:"StrongNewPass456"});
+pass("failed D1 batch rolls back password, session and token changes",failedBatch.status===500&&
+  db.members.get(seed.id).password_salt===oldSalt&&db.members.get(seed.id).password_hash===oldPasswordHash&&
+  db.sessions.size===sessionsBeforeReset&&db.resetTokens.has(validTokenHash));
 const reset=await api("/api/community/password-reset/complete",{token:validToken,password:"StrongNewPass456"}),resetBody=await reset.json();
 pass("valid token updates password and consumes itself",reset.status===200&&resetBody.ok===true&&db.members.get(seed.id).password_salt!==oldSalt&&db.resetTokens.size===0);
 pass("successful reset revokes all old sessions",db.sessions.size===0);
