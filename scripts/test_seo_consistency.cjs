@@ -61,7 +61,7 @@ for (const page of publicPages) {
   const openGraphDescription = openGraphDescriptionTag.match(/\bcontent=["']([^"']+)["']/i);
   assert.ok(openGraphDescription && openGraphDescription[1].trim().length >= 30, label + ': missing or too-short Open Graph description');
   if (page.file === 'thu-vien.html') {
-    assert.match(source, /52 bài được liệt kê/i, 'Topic library should identify the 52 curated article links it displays');
+    assert.match(source, /54 bài được liệt kê/i, 'Topic library should identify the 54 curated article links it displays');
     assert.doesNotMatch(source, /40 hướng dẫn|40 bài thực hành/i, 'Topic library must not retain stale 40-article copy');
   }
   const canonicalTag = (source.match(/<link\b[^>]*rel=["']canonical["'][^>]*>/i) || [])[0] || '';
