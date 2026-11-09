@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import net from "node:net";
+import dns from "node:dns/promises";
 
 const file=process.argv[2]||"data/ai-tools.json";
 const limitArg=process.argv.find(x=>x.startsWith("--limit="));
@@ -9,20 +10,42 @@ const catalog=JSON.parse(fs.readFileSync(file,"utf8"));
 if(!Array.isArray(catalog.tools)){console.error("Catalog must contain tools array.");process.exit(2);}
 const urls=[...new Set(catalog.tools.flatMap(t=>[t.website,...(t.official_sources||[])]).filter(Boolean))].slice(0,limit);
 const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-function safePublicUrl(value){
-  let u;try{u=new URL(value)}catch{return null}
-  if(!["http:","https:"].includes(u.protocol)||u.username||u.password)return null;
-  const host=u.hostname.toLowerCase();
-  if(host==="localhost"||host.endsWith(".localhost")||host.endsWith(".local")||host.endsWith(".internal"))return null;
-  const ip=net.isIP(host);
-  if(ip===4){const a=host.split(".").map(Number);if(a[0]===10||a[0]===127||a[0]===0||(a[0]===169&&a[1]===254)||(a[0]===172&&a[1]>=16&&a[1]<=31)||(a[0]===192&&a[1]===168))return null;}
-  if(ip===6&&(host==="::1"||host.startsWith("fc")||host.startsWith("fd")||host.startsWith("fe80:")))return null;
+function isPrivateAddress(address) {
+  const version = net.isIP(address);
+  if (version === 4) {
+    const [a,b] = address.split(".").map(Number);
+    return a === 0 || a === 10 || a === 127 || a >= 224 ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && (b === 0 || b === 168)) ||
+      (a === 198 && (b === 18 || b === 19 || b === 51)) ||
+      (a === 203 && b === 0);
+  }
+  if (version === 6) {
+    const host = address.toLowerCase();
+    return host === "::" || host === "::1" || host.startsWith("fc") || host.startsWith("fd") ||
+      /^fe[89ab]/.test(host) || host.startsWith("ff") || host.startsWith("::ffff:");
+  }
+  return true;
+}
+async function safePublicUrl(value) {
+  let u; try { u = new URL(value); } catch { return null; }
+  if (!["http:", "https:"].includes(u.protocol) || u.username || u.password) return null;
+  const host = u.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal")) return null;
+  const ip = net.isIP(host);
+  if (ip) return isPrivateAddress(host) ? null : u;
+  try {
+    const addresses = await dns.lookup(host, { all: true, verbatim: true });
+    if (!addresses.length || addresses.some(({ address }) => isPrivateAddress(address))) return null;
+  } catch { return null; }
   return u;
 }
 async function request(url,method){
   let current=new URL(url);
   for(let hop=0;hop<=5;hop++){
-    if(!safePublicUrl(current.href))return {status:0,url:current.href,unsafe_redirect:true,body:null};
+    if(!await safePublicUrl(current.href))return {status:0,url:current.href,unsafe_redirect:true,body:null};
     const response=await fetch(current.href,{method,redirect:"manual",signal:AbortSignal.timeout(timeoutMs),headers:{"User-Agent":"AI-Thuc-Chien-Catalog-LinkCheck/1.0",...(method==="GET"?{"Range":"bytes=0-0"}:{})}});
     if([301,302,303,307,308].includes(response.status)){
       const location=response.headers.get("location");
@@ -47,7 +70,7 @@ const manuallyVerifiedOfficialHelpPages = new Set([
 const results=new Array(urls.length);
 let nextIndex=0;
 async function checkOne(i){
-  const original=urls[i],u=safePublicUrl(original);
+  const original=urls[i],u=await safePublicUrl(original);
   if(!u){results[i]={url:original,status:"invalid_or_non_public_url"};return;}
   try{
     let response=await request(u.href,"HEAD");
