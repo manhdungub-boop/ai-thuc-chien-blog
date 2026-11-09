@@ -153,8 +153,8 @@ Mở rộng khi chất lượng đạt ngưỡng, lợi ích ròng dương qua n
 
 ## Nguồn tham khảo
 
-- [NIST AI Risk Management Framework](https://www.nist.gov/itl/ai-risk-management-framework)
-- [FinOps Foundation – Unit Economics](https://www.finops.org/framework/capabilities/unit-economics/)
+- [NIST AI Risk Management Framework](https://www.nist.gov/itl/ai-risk-management-framework) — dùng cho quản trị rủi ro và kiểm soát triển khai; đây không phải công thức kế toán TCO. NIST cho biết AI RMF 1.0 đang được sửa đổi.
+- [FinOps Foundation – Unit Economics](https://www.finops.org/framework/capabilities/unit-economics/) — hướng dẫn xác định unit metrics và liên hệ chi phí công nghệ với giá trị sản phẩm/dịch vụ.
 - [Google Cloud – Pricing calculator](https://cloud.google.com/products/calculator) — công cụ ước tính riêng dịch vụ Google Cloud; không thay thế báo giá của nhà cung cấp khác hoặc phép tính TCO đầy đủ gồm nhân công, bảo trì, kiểm tra và chi phí vận hành.
 
 *Các số liệu trong ví dụ là giả định minh họa. Khi sử dụng lại nội dung, vui lòng ghi rõ tác giả: DUNG - AI.*

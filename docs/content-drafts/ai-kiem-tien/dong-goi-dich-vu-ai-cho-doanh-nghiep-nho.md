@@ -98,8 +98,8 @@ Dùng một quy trình thật nhưng dữ liệu giả lập. Viết một trang
 
 ## Nguồn tham khảo
 
-- [NIST AI Risk Management Framework](https://www.nist.gov/itl/ai-risk-management-framework)
-- [OECD AI Principles](https://oecd.ai/en/ai-principles)
+- [NIST AI Risk Management Framework](https://www.nist.gov/itl/ai-risk-management-framework) — NIST cho biết AI RMF 1.0 đang được sửa đổi; dùng khung này cho quản trị rủi ro và kiểm tra Playbook/cập nhật mới nhất trước khi triển khai.
+- [OECD AI Principles](https://oecd.ai/en/ai-principles) — được cập nhật tháng 05/2024; dùng làm nguyên tắc quản trị AI, không thay thế pháp luật áp dụng tại địa phương.
 - [Google Cloud – Generative AI adoption framework](https://cloud.google.com/blog/products/ai-machine-learning/build-a-transformative-ai-capability-with-ai-adoption-framework) — bài nền tảng đăng ngày 30/06/2020; dùng để tham khảo các nhóm năng lực tổ chức (công nghệ, con người, dữ liệu, quy trình), không xem là hướng dẫn cập nhật sản phẩm hoặc chính sách năm 2026.
 
 *Bài viết cung cấp khung tham khảo, không phải tư vấn pháp lý hoặc cam kết hiệu quả tài chính. Khi sử dụng lại nội dung, vui lòng ghi rõ tác giả: DUNG - AI.*
