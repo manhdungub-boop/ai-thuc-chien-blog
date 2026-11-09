@@ -379,7 +379,7 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
   ]);
   // Cloudflare gives each isolated Preview deployment an 8-character build prefix.
   // Allow only this exact Worker Preview hostname pattern, not arbitrary Workers hosts.
-  const isIsolatedPreviewHost = /^[a-f0-9]{8}-ai-thuc-chien-blog-auth-app-preview\\.manhdungub\\.workers\\.dev$/.test(window.location.hostname);
+  const isIsolatedPreviewHost = /^[a-f0-9]{8}-ai-thuc-chien-blog-auth-app-preview\.manhdungub\.workers\.dev$/.test(window.location.hostname);
   if (!communityAuthHosts.has(window.location.hostname) && !isIsolatedPreviewHost) {
     authPanel.hidden = true;
     memberPanel.hidden = true;
