@@ -28,12 +28,14 @@ assert.match(worker, /community_password_reset_tokens/);
 assert.match(worker, /password-reset-email:/);
 assert.ok(worker.includes('const resetUrl = `${origin}/#cong-dong?reset=${encodeURIComponent(token)}`;'), 'password reset links must use the fragment URL format accepted by the email relay');
 assert.ok(!worker.includes('const resetUrl = `${origin}/?reset='), 'password reset tokens must not be placed in the query string rejected by the relay');
-assert.match(worker, /DELETE FROM community_sessions\\s+WHERE member_id = \\(\\s+SELECT t\\.member_id/);
-assert.match(worker, /const resetResults = await db\\.batch\\(\\[/,
+const normalizedWorker = worker.replace(/\s+/g, ' ');
+assert.ok(normalizedWorker.includes('DELETE FROM community_sessions WHERE member_id = ( SELECT t.member_id'),
+  'session revocation must be guarded by the reset token and newly written password');
+assert.ok(normalizedWorker.includes('const resetResults = await db.batch(['),
   'password, session revocation, and reset-token consumption must use one D1 batch');
-assert.match(worker, /DELETE FROM community_password_reset_tokens\\s+WHERE token_hash = \\? AND expires_at > \\?\\s+AND EXISTS/,
+assert.ok(normalizedWorker.includes('DELETE FROM community_password_reset_tokens WHERE token_hash = ? AND expires_at > ? AND EXISTS'),
   'reset-token consumption must be guarded by the newly written password hash');
-assert.match(worker, /m\\.password_salt = \\? AND m\\.password_hash = \\?/,
+assert.ok(normalizedWorker.includes('m.password_salt = ? AND m.password_hash = ?'),
   'session revocation and token consumption must require the exact new password credentials');
 assert.match(worker, /EMAIL_NOT_VERIFIED/);
 assert.match(worker, /email_verified_at IS NOT NULL/);
