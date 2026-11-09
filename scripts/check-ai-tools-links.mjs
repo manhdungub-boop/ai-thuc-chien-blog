@@ -3,6 +3,7 @@ import net from "node:net";
 import dns from "node:dns/promises";
 import http from "node:http";
 import https from "node:https";
+import { isPrivateAddress } from "./ipv6-address-safety.mjs";
 
 const file=process.argv[2]||"data/ai-tools.json";
 const limitArg=process.argv.find(x=>x.startsWith("--limit="));
@@ -12,25 +13,6 @@ const catalog=JSON.parse(fs.readFileSync(file,"utf8"));
 if(!Array.isArray(catalog.tools)){console.error("Catalog must contain tools array.");process.exit(2);}
 const urls=[...new Set(catalog.tools.flatMap(t=>[t.website,...(t.official_sources||[])]).filter(Boolean))].slice(0,limit);
 const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-function isPrivateAddress(address) {
-  const version = net.isIP(address);
-  if (version === 4) {
-    const [a,b] = address.split(".").map(Number);
-    return a === 0 || a === 10 || a === 127 || a >= 224 ||
-      (a === 100 && b >= 64 && b <= 127) ||
-      (a === 169 && b === 254) ||
-      (a === 172 && b >= 16 && b <= 31) ||
-      (a === 192 && (b === 0 || b === 168)) ||
-      (a === 198 && (b === 18 || b === 19 || b === 51)) ||
-      (a === 203 && b === 0);
-  }
-  if (version === 6) {
-    const host = address.toLowerCase();
-    return host === "::" || host === "::1" || host.startsWith("fc") || host.startsWith("fd") ||
-      /^fe[89ab]/.test(host) || host.startsWith("ff") || host.startsWith("::ffff:");
-  }
-  return true;
-}
 async function safePublicUrl(value) {
   let u; try { u = new URL(value); } catch { return null; }
   if (!["http:", "https:"].includes(u.protocol) || u.username || u.password) return null;
