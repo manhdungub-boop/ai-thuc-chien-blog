@@ -105,7 +105,8 @@ globalThis.fetch = async (input, init = {}) => {
   assert.equal(init.redirect, 'manual');
   return new Response(JSON.stringify(relayResult), { status: 200, headers: { 'Content-Type': 'application/json' } });
 };
-const call = (path, { method = 'GET', body, cookie, originHeader = origin, ip = '198.51.100.77' } = {}) => worker.fetch(new Request(`https://example.test/api/community${path}`, { method, headers: { ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(cookie ? { Cookie: cookie } : {}), ...(originHeader ? { Origin: originHeader } : {}), 'CF-Connecting-IP': ip }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }), env);
+let defaultIpSequence = 1;
+const call = (path, { method = 'GET', body, cookie, originHeader = origin, ip = `198.51.100.${defaultIpSequence++}` } = {}) => worker.fetch(new Request(`https://example.test/api/community${path}`, { method, headers: { ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(cookie ? { Cookie: cookie } : {}), ...(originHeader ? { Origin: originHeader } : {}), 'CF-Connecting-IP': ip }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }), env);
 const unconfigured = await worker.fetch(new Request('https://example.test/api/community/me'), {}); assert.equal(unconfigured.status, 503); assert.match((await unconfigured.json()).error, /cơ sở dữ liệu/i);
 const badOrigin = await call('/register', { method: 'POST', originHeader: 'https://evil.example', body: {} }); assert.equal(badOrigin.status, 403);
 const previewOrigin = 'https://feature-required-email-verification-ai-thuc-chien-blog.workers.dev';
@@ -207,18 +208,19 @@ assert.equal(db.tokens.filter((t) => t.member_id === resendMember.id).length, 1,
 
 // Password-reset email throttling must not reveal whether an email belongs to an account.
 const resetEmail = 'privacy-reset@example.invalid';
+const resetThrottleIp = '203.0.113.70';
 for (let attempt = 0; attempt < 3; attempt += 1) {
-  const response = await call('/password-reset/request', { method: 'POST', body: { email: resetEmail } });
+  const response = await call('/password-reset/request', { method: 'POST', ip: resetThrottleIp, body: { email: resetEmail } });
   assert.equal(response.status, 200);
   assert.equal((await response.json()).ok, true);
 }
-const resetEmailLimited = await call('/password-reset/request', { method: 'POST', body: { email: resetEmail } });
+const resetEmailLimited = await call('/password-reset/request', { method: 'POST', ip: resetThrottleIp, body: { email: resetEmail } });
 assert.equal(resetEmailLimited.status, 200, 'email-specific throttling must keep the generic response');
 assert.equal((await resetEmailLimited.json()).ok, true);
 // The IP-wide limit remains enforced independently and applies regardless of the email value.
-const resetOtherEmail = await call('/password-reset/request', { method: 'POST', body: { email: 'another-reset@example.invalid' } });
+const resetOtherEmail = await call('/password-reset/request', { method: 'POST', ip: resetThrottleIp, body: { email: 'another-reset@example.invalid' } });
 assert.equal(resetOtherEmail.status, 200, 'the fifth request from this IP should still be allowed');
-const resetIpLimited = await call('/password-reset/request', { method: 'POST', body: { email: 'third-reset@example.invalid' } });
+const resetIpLimited = await call('/password-reset/request', { method: 'POST', ip: resetThrottleIp, body: { email: 'third-reset@example.invalid' } });
 assert.equal(resetIpLimited.status, 429, 'the sixth request from this IP within one hour must be throttled');
 
 // Expired verification tokens must be rejected and must not activate the member.
