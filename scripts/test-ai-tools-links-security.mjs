@@ -20,9 +20,9 @@ try {
     timeout: 30000
   });
   assert.equal(run.status, 0, run.stderr || run.stdout);
-  const summaryStart = run.stdout.lastIndexOf("\n{");
+  const summaryStart = run.stdout.indexOf("{");
   assert.ok(summaryStart >= 0, "link checker must emit a JSON summary");
-  const summary = JSON.parse(run.stdout.slice(summaryStart + 1));
+  const summary = JSON.parse(run.stdout.slice(summaryStart));
   assert.equal(summary.checked, 4);
   assert.ok(summary.results.every(result => result.status === "invalid_or_non_public_url"),
     "IPv6 loopback, IPv6 ULA, IPv4 loopback, and DNS-resolved loopback targets must be rejected before fetch");
