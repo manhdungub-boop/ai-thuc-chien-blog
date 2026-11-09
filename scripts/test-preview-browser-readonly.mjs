@@ -56,8 +56,8 @@ try {
   assert.equal(js.status(), 200, "Preview script.js must return HTTP 200.");
   const jsText = await js.text();
   assert.ok(jsText.includes("/oauth/providers"), "Frontend must load OAuth provider readiness.");
-  assert.ok(!jsText.includes("https://ai-thuc-chien-blog.manhdungub.workers.dev/api/chat"),
-    "Preview frontend must not embed the Production chat API.");
+  assert.equal(await page.locator("#reader-ai-chat").count(), 0,
+    "Production-only reader assistant must not render inside the isolated Preview.");
 
   const css = await context.request.get(ORIGIN + "/styles.css", { timeout: 15000 });
   assert.equal(css.status(), 200, "Preview styles.css must return HTTP 200.");
