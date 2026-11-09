@@ -210,6 +210,35 @@ assertSecurityHeaders(httpResponse, false);
 
 console.log('PASS: security headers on 200/404/500, root and article routing, asset metadata preserved, internal error hidden, HSTS HTTPS-only');
 
+// Branch/Preview hosts must not be indexed; the two established public hosts remain indexable.
+async function assetResponseFor(hostname) {
+  return worker.fetch(new Request(`https://${hostname}/ngan-hang-ai.html`), {
+    ASSETS: {
+      fetch: async () => new Response("<!doctype html><title>AI Bank</title>", {
+        status: 200,
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      }),
+    },
+  });
+}
+for (const previewHost of [
+  "feature-preview-ai-thuc-chien-blog.manhdungub.workers.dev",
+  "ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev",
+  "feature-preview.ai-thuc-chien-blog.pages.dev",
+]) {
+  const previewResponse = await assetResponseFor(previewHost);
+  assert.equal(previewResponse.status, 200);
+  assert.equal(previewResponse.headers.get("x-robots-tag"), "noindex, nofollow, noarchive", `Preview host ${previewHost} must be noindex`);
+}
+for (const publicHost of [
+  "ai-thuc-chien-blog.manhdungub.workers.dev",
+  "ai-thuc-chien-blog.pages.dev",
+]) {
+  const publicResponse = await assetResponseFor(publicHost);
+  assert.equal(publicResponse.status, 200);
+  assert.equal(publicResponse.headers.get("x-robots-tag"), null, `Public host ${publicHost} must remain indexable`);
+}
+
 
 const chatRequest = new Request('https://example.test/api/chat', {
   method: 'POST',
@@ -245,3 +274,5 @@ const noAi = await worker.fetch(new Request('https://example.test/api/chat', {
 }), { ASSETS: { fetch: async () => new Response('asset') } });
 assert.equal(noAi.status, 503);
 console.log('PASS: reader chat API validation, model call, same-origin policy, no-store, and graceful missing-binding response');
+
+console.log('PASS: Preview workers.dev/pages.dev hosts are noindex; established public Worker and Pages hosts remain indexable');

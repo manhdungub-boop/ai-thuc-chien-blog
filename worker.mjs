@@ -1,3 +1,8 @@
+const PUBLIC_INDEXABLE_HOSTS = new Set([
+  "ai-thuc-chien-blog.manhdungub.workers.dev",
+  "ai-thuc-chien-blog.pages.dev",
+]);
+
 const SECURITY_HEADERS = Object.freeze({
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY",
@@ -11,6 +16,13 @@ function withSecurityHeaders(response, request) {
   // Keep the homepage from being stored by browsers or intermediary caches. This
   // prevents a previously cached fallback/404 document from masking the live home page.
   const requestUrl = new URL(request.url);
+  const hostname = requestUrl.hostname.toLowerCase();
+  const isCloudflarePreviewHost =
+    (hostname.endsWith(".workers.dev") || hostname.endsWith(".pages.dev")) &&
+    !PUBLIC_INDEXABLE_HOSTS.has(hostname);
+  if (isCloudflarePreviewHost) {
+    headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
+  }
   if (requestUrl.pathname === "/" && response.status === 200 && (headers.get("Content-Type") || "").toLowerCase().includes("text/html")) {
     headers.set("Cache-Control", "no-store, max-age=0");
     headers.set("Pragma", "no-cache");

@@ -31,6 +31,19 @@ jobs:
       - name: Build static site and SEO feeds
         run: npm run build
 
+      - name: Validate AI Bank catalog and UI contract
+        run: |
+          node --check scripts/check-ai-tools-links.mjs
+          node --check scripts/test-ai-tools-links-security.mjs
+          node scripts/validate-ai-tools-catalog.mjs data/ai-tools.json
+          node scripts/audit-ai-tools-catalog.mjs data/ai-tools.json docs/reviews/ai-tools-candidates-2026-11-02.json --strict
+          node scripts/test-ai-tools-catalog-audit.mjs
+          node scripts/test-ai-tools-catalog-ui.mjs
+          node scripts/test-ai-tools-links-security.mjs
+
+      - name: Check official AI tool links
+        run: node scripts/check-ai-tools-links.mjs data/ai-tools.json
+
       - name: Check JavaScript syntax
         run: |
           node --check script.js

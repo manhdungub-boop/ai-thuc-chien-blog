@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-11-01T00:00:00+07:00",
+  "generated_at": "2026-11-10T00:00:00+07:00",
   "catalog_policy": {
     "default_locale": "vi",
     "currency": "USD",
@@ -1007,6 +1007,333 @@
         "datasets",
         "model-hosting",
         "ml-community"
+      ]
+    },
+    {
+      "id": "anythingllm",
+      "name": "AnythingLLM",
+      "vendor": "Mintplex Labs",
+      "website": "https://anythingllm.com/",
+      "categories": [
+        "assistant",
+        "documents",
+        "research",
+        "agents"
+      ],
+      "pricing_model": "self_hosted_free_and_cloud_paid",
+      "pricing_status": "self_hosted_free",
+      "license": "mit",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux",
+        "self_hosted",
+        "docker",
+        "cloud"
+      ],
+      "description": "Ứng dụng AI local-first để trò chuyện với tài liệu, xây RAG và AI Agent; có bản desktop chạy trên máy cá nhân và bản Docker tự triển khai.",
+      "free_tier_summary": "Bản desktop và self-hosted Docker có thể dùng miễn phí theo MIT. Dịch vụ Cloud riêng có Basic 50 USD/tháng và Pro 99 USD/tháng tại ngày rà soát; bản Cloud cần khóa API mô hình. Tự host vẫn phải tự bảo vệ mạng, TLS và quyền truy cập; giấy phép model và chi phí inference được tính riêng.",
+      "official_sources": [
+        "https://anythingllm.com/",
+        "https://docs.anythingllm.com/installation-desktop/overview",
+        "https://github.com/Mintplex-Labs/anything-llm",
+        "https://anythingllm.com/cloud"
+      ],
+      "last_verified": "2026-11-10",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "local-ai",
+        "rag",
+        "documents",
+        "agent",
+        "self-hosted"
+      ]
+    },
+    {
+      "id": "opencode",
+      "name": "OpenCode",
+      "vendor": "Anomaly",
+      "website": "https://opencode.ai/",
+      "categories": [
+        "coding",
+        "developer",
+        "agents"
+      ],
+      "pricing_model": "free",
+      "pricing_status": "verified_free",
+      "license": "mit",
+      "platforms": [
+        "terminal",
+        "macos",
+        "windows",
+        "linux",
+        "self_hosted"
+      ],
+      "description": "AI coding agent mã nguồn mở hoạt động trong terminal, hỗ trợ nhiều nhà cung cấp mô hình và quy trình làm việc của lập trình viên.",
+      "free_tier_summary": "Phần mềm OpenCode được phát hành theo MIT và không thu phí license. Điều này không làm cho việc gọi model miễn phí: chi phí token/API phụ thuộc provider, model và cấu hình người dùng. Kiểm tra điều khoản của provider trước khi kết nối.",
+      "official_sources": [
+        "https://opencode.ai/",
+        "https://opencode.ai/docs",
+        "https://github.com/anomalyco/opencode",
+        "https://github.com/anomalyco/opencode/blob/dev/LICENSE"
+      ],
+      "last_verified": "2026-11-10",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "coding-agent",
+        "terminal",
+        "developer",
+        "open-source"
+      ]
+    },
+    {
+      "id": "comfyui",
+      "name": "ComfyUI",
+      "vendor": "Comfy",
+      "website": "https://www.comfy.org/",
+      "categories": [
+        "image",
+        "design",
+        "video",
+        "audio",
+        "automation"
+      ],
+      "pricing_model": "self_hosted_free_and_cloud_paid",
+      "pricing_status": "self_hosted_free",
+      "license": "gpl-3.0",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux",
+        "self_hosted",
+        "cloud",
+        "api"
+      ],
+      "description": "Engine workflow AI dạng node graph để xây dựng quy trình tạo và xử lý ảnh, video, âm thanh và nội dung 3D bằng các model có thể thay thế.",
+      "free_tier_summary": "ComfyUI core có thể tải và chạy local miễn phí. Comfy Cloud và Partner Nodes là dịch vụ tùy chọn dùng credits/chi phí riêng; giấy phép thương mại của từng model, custom node và output phải được kiểm tra độc lập.",
+      "official_sources": [
+        "https://www.comfy.org/download/",
+        "https://support.comfy.org/articles/9806306061-about-comfy",
+        "https://github.com/Comfy-Org/ComfyUI",
+        "https://github.com/Comfy-Org/ComfyUI/blob/master/LICENSE",
+        "https://www.comfy.org/cloud"
+      ],
+      "last_verified": "2026-11-10",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "node-workflow",
+        "image-generation",
+        "video-generation",
+        "local-inference",
+        "creative-ai"
+      ]
+    },
+    {
+      "id": "qdrant",
+      "name": "Qdrant",
+      "vendor": "Qdrant",
+      "website": "https://qdrant.tech/",
+      "categories": [
+        "data",
+        "developer",
+        "search",
+        "documents",
+        "research"
+      ],
+      "pricing_model": "self_hosted_free_and_cloud_paid",
+      "pricing_status": "verified_free_tier",
+      "license": "apache-2.0",
+      "platforms": [
+        "self_hosted",
+        "cloud",
+        "docker",
+        "kubernetes",
+        "api"
+      ],
+      "description": "Cơ sở dữ liệu vector và công cụ tìm kiếm tương đồng/hybrid search, thường dùng làm tầng truy xuất cho ứng dụng RAG và AI Agent.",
+      "free_tier_summary": "Qdrant server mã nguồn mở có thể tự triển khai. Qdrant Cloud công bố gói Free forever cho thử nghiệm/prototype với một node, 0.5 vCPU, 1 GB RAM và 4 GB disk; Standard tính theo mức sử dụng, Premium có mức chi tối thiểu.",
+      "official_sources": [
+        "https://qdrant.tech/",
+        "https://qdrant.tech/pricing/",
+        "https://github.com/qdrant/qdrant",
+        "https://github.com/qdrant/qdrant/blob/master/LICENSE"
+      ],
+      "last_verified": "2026-11-10",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "vector-database",
+        "rag",
+        "semantic-search",
+        "hybrid-search",
+        "developer"
+      ]
+    },
+    {
+      "id": "whisper-cpp",
+      "name": "whisper.cpp",
+      "vendor": "ggml-org",
+      "website": "https://github.com/ggml-org/whisper.cpp",
+      "categories": [
+        "audio",
+        "translation",
+        "developer"
+      ],
+      "pricing_model": "free",
+      "pricing_status": "verified_free",
+      "license": "mit",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux",
+        "ios",
+        "android",
+        "webassembly",
+        "self_hosted",
+        "docker"
+      ],
+      "description": "Triển khai C/C++ hiệu năng cao của Whisper để nhận dạng giọng nói và chuyển âm thanh thành văn bản trên thiết bị, có thể chạy offline sau khi tải model.",
+      "free_tier_summary": "Mã nguồn whisper.cpp theo MIT và có thể build/chạy cục bộ miễn phí; không cần trả phí dịch vụ cloud cho bước inference local. Cần tải model trước, có chi phí phần cứng/điện và phải kiểm tra giấy phép model, thư viện phụ thuộc cùng quyền xử lý bản ghi âm.",
+      "official_sources": [
+        "https://github.com/ggml-org/whisper.cpp",
+        "https://github.com/ggml-org/whisper.cpp/blob/master/LICENSE",
+        "https://github.com/ggml-org/whisper.cpp/releases"
+      ],
+      "last_verified": "2026-11-10",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "speech-to-text",
+        "asr",
+        "local-inference",
+        "offline",
+        "transcription"
+      ]
+    },
+    {
+      "id": "mlflow",
+      "name": "MLflow",
+      "vendor": "Linux Foundation / MLflow",
+      "website": "https://mlflow.org/",
+      "categories": [
+        "data",
+        "developer",
+        "research",
+        "automation"
+      ],
+      "pricing_model": "free",
+      "pricing_status": "verified_free",
+      "license": "apache-2.0",
+      "platforms": [
+        "python",
+        "self_hosted",
+        "web",
+        "api"
+      ],
+      "description": "Nền tảng mã nguồn mở cho vòng đời machine learning và LLMOps: theo dõi thí nghiệm, đánh giá model/agent, tracing, prompt registry và quản lý model.",
+      "free_tier_summary": "MLflow open-source được công bố miễn phí theo Apache-2.0. Khi tự host, người dùng tự chịu chi phí máy chủ/lưu trữ; inference, model provider và dịch vụ hosting bên ngoài có thể tính phí riêng.",
+      "official_sources": [
+        "https://mlflow.org/",
+        "https://mlflow.org/docs/latest/",
+        "https://github.com/mlflow/mlflow",
+        "https://github.com/mlflow/mlflow/blob/master/LICENSE.txt"
+      ],
+      "last_verified": "2026-11-10",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "mlops",
+        "llmops",
+        "evaluation",
+        "observability",
+        "experiment-tracking"
+      ]
+    },
+    {
+      "id": "pydantic-ai",
+      "name": "Pydantic AI",
+      "vendor": "Pydantic Services Inc.",
+      "website": "https://ai.pydantic.dev/",
+      "categories": [
+        "agents",
+        "developer",
+        "coding",
+        "automation"
+      ],
+      "pricing_model": "free",
+      "pricing_status": "verified_free",
+      "license": "mit",
+      "platforms": [
+        "python",
+        "self_hosted",
+        "api",
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "description": "Python SDK mã nguồn mở để xây dựng AI Agent có kiểu dữ liệu, tool calling, structured output và tích hợp nhiều model provider.",
+      "free_tier_summary": "Thư viện Pydantic AI được phát hành theo MIT và có thể cài/chạy trên hạ tầng của người dùng mà không mất phí license. Chi phí gọi model do provider quyết định; Logfire và AI Gateway là dịch vụ riêng. Có thể dùng test model/offline mode cho kiểm thử không gọi API trả phí.",
+      "official_sources": [
+        "https://ai.pydantic.dev/",
+        "https://github.com/pydantic/pydantic-ai",
+        "https://github.com/pydantic/pydantic-ai/blob/main/LICENSE"
+      ],
+      "last_verified": "2026-11-10",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "python-agent-sdk",
+        "typed-agents",
+        "tool-calling",
+        "structured-output",
+        "multimodal"
+      ]
+    },
+    {
+      "id": "haystack",
+      "name": "Haystack",
+      "vendor": "deepset GmbH",
+      "website": "https://haystack.deepset.ai/",
+      "categories": [
+        "agents",
+        "developer",
+        "research",
+        "search",
+        "documents",
+        "automation"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "verified_free_tier",
+      "license": "apache-2.0",
+      "platforms": [
+        "python",
+        "self_hosted",
+        "cloud",
+        "api",
+        "docker",
+        "kubernetes"
+      ],
+      "description": "Framework Python mã nguồn mở để xây pipeline AI, agent, truy xuất tài liệu/RAG và tìm kiếm bằng các component có thể thay thế, mở rộng.",
+      "free_tier_summary": "Framework Haystack có thể tự triển khai theo Apache-2.0. deepset Studio hosted công bố gói 0 USD gồm 1 workspace, 1 user, 100 pipeline hours, 50 files tối đa 10 MB mỗi file và 2 development pipelines; Enterprise báo giá riêng. Hạ tầng và model provider không nằm trong gói framework.",
+      "official_sources": [
+        "https://haystack.deepset.ai/",
+        "https://docs.haystack.deepset.ai/docs/intro",
+        "https://github.com/deepset-ai/haystack",
+        "https://github.com/deepset-ai/haystack/blob/main/LICENSE",
+        "https://www.deepset.ai/pricing"
+      ],
+      "last_verified": "2026-11-10",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "llm-orchestration",
+        "rag",
+        "agent-framework",
+        "pipelines",
+        "python"
       ]
     }
   ]
