@@ -41,7 +41,6 @@ const pass=(name,ok)=>{assert.ok(ok,name);console.log("PASS "+name);};
 const frontendSource = await readFile(new URL("../script.js", import.meta.url), "utf8");
 assert.match(frontendSource, /const fragmentQuery = window\.location\.hash\.includes\('\?'\)/);
 assert.match(frontendSource, /fragmentParams\.get\('reset'\)/);
-const fragmentToken = new URLSearchParams("#cong-dong?reset=" + "A".repeat(43).slice(0, 0)).get("reset");
 pass("frontend parser reads reset token from the email URL fragment", frontendSource.includes("window.location.hash.slice(window.location.hash.indexOf('?') + 1)") && frontendSource.includes("fragmentParams.get('reset')"));
 const generic=await api("/api/community/password-reset/request",{email:seed.email});const genericBody=await generic.json();
 pass("request endpoint replies with generic success",generic.status===200&&genericBody.ok===true&&genericBody.message.includes("Nếu email này có tài khoản hợp lệ"));
