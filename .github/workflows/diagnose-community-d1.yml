@@ -8,10 +8,13 @@ concurrency:
   cancel-in-progress: false
 jobs:
   inspect:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Check out source
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: Verify production and preview community table schema (read-only)
         env:
           CLOUDFLARE_WORKERS_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
