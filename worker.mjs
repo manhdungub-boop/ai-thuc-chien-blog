@@ -335,6 +335,38 @@ async function readJsonPayload(request, maxBytes = 6000) {
     return { ok: true, value };
   } catch (_error) { return { ok: false, status: 400, error: "Dữ liệu gửi không hợp lệ." }; }
 }
+
+async function fetchCommunityEmailRelay(env, payload) {
+  let response = await fetch(env.COMMUNITY_EMAIL_RELAY_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Accept": "application/json" },
+    body: JSON.stringify(payload),
+    redirect: "manual",
+    signal: AbortSignal.timeout(10000),
+  });
+  if (response.status >= 300 && response.status < 400) {
+    const location = response.headers.get("Location");
+    if (!location) {
+      const error = new Error("Email relay redirect is missing its Location header.");
+      error.code = "REDIRECT_MISSING_LOCATION";
+      throw error;
+    }
+    const redirectUrl = new URL(location, env.COMMUNITY_EMAIL_RELAY_URL);
+    if (redirectUrl.protocol !== "https:" ||
+        redirectUrl.origin !== "https://script.googleusercontent.com" ||
+        redirectUrl.username || redirectUrl.password || redirectUrl.port && redirectUrl.port !== "443") {
+      const error = new Error("Email relay returned an untrusted redirect destination.");
+      error.code = "UNSAFE_REDIRECT";
+      throw error;
+    }
+    response = await fetch(redirectUrl.toString(), {
+      method: "GET",
+      redirect: "manual",
+      signal: AbortSignal.timeout(10000),
+    });
+  }
+  return response;
+}
 const COMMUNITY_VERIFICATION_SECONDS = 30 * 60;
 function escapeCommunityHtml(value) {
   return String(value || "").replace(/[&<>\"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[char]);
@@ -348,10 +380,9 @@ async function sendCommunityVerificationEmail(env, email, displayName, token, or
   const safeUrl = escapeCommunityHtml(verifyUrl);
   const textBody = `Chào ${displayName || "bạn"}. Xác nhận email để hoàn tất đăng ký AI Thực Chiến bằng liên kết sau (hết hạn sau 30 phút): ${verifyUrl}. Nếu bạn không yêu cầu đăng ký, hãy bỏ qua email này.`;
   const htmlBody = `<div style="font-family:Arial,sans-serif;line-height:1.65;color:#172033;max-width:560px;margin:auto"><h1>Xác nhận email của bạn</h1><p>Chào ${safeName},</p><p>Để hoàn tất đăng ký cộng đồng AI Thực Chiến, hãy bấm nút bên dưới. Liên kết chỉ có hiệu lực trong 30 phút và chỉ dùng một lần.</p><p><a href="${safeUrl}" style="display:inline-block;padding:12px 20px;background:#85efd0;color:#092a2c;border-radius:8px;text-decoration:none;font-weight:bold">Xác nhận email</a></p><p>Nếu nút không hoạt động, sao chép liên kết này vào trình duyệt:</p><p style="overflow-wrap:anywhere">${safeUrl}</p><p>Nếu bạn không yêu cầu đăng ký, hãy bỏ qua email này.</p></div>`;
-  const response = await fetch(env.COMMUNITY_EMAIL_RELAY_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Accept": "application/json" },
-    body: JSON.stringify({
+  let response;
+  try {
+    response = await fetchCommunityEmailRelay(env, {
       secret: env.COMMUNITY_EMAIL_RELAY_SECRET,
       to: email,
       subject: "Xác nhận email — AI Thực Chiến",
@@ -359,8 +390,13 @@ async function sendCommunityVerificationEmail(env, email, displayName, token, or
       verifyUrl,
       textBody,
       htmlBody,
-    }),
-  });
+    });
+  } catch (cause) {
+    const error = new Error("Email relay request failed.");
+    error.code = typeof cause?.code === "string" && /^[A-Z0-9_]{1,48}$/.test(cause.code)
+      ? cause.code : "NETWORK_ERROR";
+    throw error;
+  }
   let result = {};
   try {
     result = await response.json();
@@ -397,11 +433,23 @@ async function sendCommunityPasswordResetEmail(env, email, displayName, token, o
   const safeUrl = escapeCommunityHtml(resetUrl);
   const textBody = `Chào ${displayName || "bạn"}. Bạn vừa yêu cầu đặt lại mật khẩu AI Thực Chiến. Mở liên kết sau trong vòng 30 phút để tạo mật khẩu mới: ${resetUrl}. Nếu bạn không yêu cầu, hãy bỏ qua email này.`;
   const htmlBody = `<div style="font-family:Arial,sans-serif;line-height:1.65;color:#172033;max-width:560px;margin:auto"><h1>Đặt lại mật khẩu</h1><p>Chào ${safeName},</p><p>Để đặt mật khẩu mới cho tài khoản AI Thực Chiến, hãy bấm nút bên dưới. Liên kết chỉ có hiệu lực trong 30 phút và chỉ dùng một lần.</p><p><a href="${safeUrl}" style="display:inline-block;padding:12px 20px;background:#85efd0;color:#092a2c;border-radius:8px;text-decoration:none;font-weight:bold">Đặt lại mật khẩu</a></p><p>Nếu bạn không yêu cầu, hãy bỏ qua email này.</p></div>`;
-  const response = await fetch(env.COMMUNITY_EMAIL_RELAY_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Accept": "application/json" },
-    body: JSON.stringify({ secret: env.COMMUNITY_EMAIL_RELAY_SECRET, to: email, subject: "Đặt lại mật khẩu — AI Thực Chiến", displayName: displayName || "bạn", verifyUrl: resetUrl, textBody, htmlBody }),
-  });
+  let response;
+  try {
+    response = await fetchCommunityEmailRelay(env, {
+      secret: env.COMMUNITY_EMAIL_RELAY_SECRET,
+      to: email,
+      subject: "Đặt lại mật khẩu — AI Thực Chiến",
+      displayName: displayName || "bạn",
+      verifyUrl: resetUrl,
+      textBody,
+      htmlBody,
+    });
+  } catch (cause) {
+    const error = new Error("Email relay request failed.");
+    error.code = typeof cause?.code === "string" && /^[A-Z0-9_]{1,48}$/.test(cause.code)
+      ? cause.code : "NETWORK_ERROR";
+    throw error;
+  }
   let result = {};
   try { result = await response.json(); } catch { throw new Error(`Email relay returned invalid JSON (HTTP ${response.status})`); }
   if (!response.ok || result?.ok !== true) throw new Error(`Email relay rejected the password reset message (HTTP ${response.status})`);
@@ -897,9 +945,26 @@ async function handleCommunityApi(request, env) {
         FROM community_email_verification_tokens t JOIN community_members m ON m.id = t.member_id
         WHERE t.token_hash = ? AND t.expires_at > ? LIMIT 1`).bind(tokenHash, now).first();
       if (!row) return communityJson({ error: "Liên kết xác nhận không hợp lệ, đã dùng hoặc đã hết hạn. Hãy gửi lại email xác nhận." }, 400, request);
-      await db.prepare("DELETE FROM community_email_verification_tokens WHERE token_hash = ?").bind(tokenHash).run();
-      await db.prepare("UPDATE community_members SET email_verified_at = ? WHERE id = ? AND email_verified_at IS NULL").bind(now, row.member_id).run();
-      await db.prepare("DELETE FROM community_email_verification_tokens WHERE member_id = ?").bind(row.member_id).run();
+      if (row.email_verified_at) return communityJson({ error: "Email đã được xác nhận. Bạn có thể đăng nhập." }, 400, request);
+      const verificationResults = await db.batch([
+        db.prepare(`UPDATE community_members SET email_verified_at = ? WHERE id = ? AND email_verified_at IS NULL
+          AND EXISTS (
+            SELECT 1 FROM community_email_verification_tokens
+            WHERE token_hash = ? AND member_id = ? AND expires_at > ?
+          )`).bind(now, row.member_id, tokenHash, row.member_id, now),
+        db.prepare(`DELETE FROM community_email_verification_tokens
+          WHERE token_hash = ? AND EXISTS (
+            SELECT 1 FROM community_members
+            WHERE id = community_email_verification_tokens.member_id AND email_verified_at = ?
+          )`).bind(tokenHash, now),
+        db.prepare(`DELETE FROM community_email_verification_tokens
+          WHERE member_id = ? AND EXISTS (
+            SELECT 1 FROM community_members WHERE id = ? AND email_verified_at = ?
+          )`).bind(row.member_id, row.member_id, now),
+      ]);
+      if (!verificationResults?.[0]?.meta?.changes) {
+        return communityJson({ error: "Liên kết xác nhận không hợp lệ, đã dùng hoặc đã hết hạn. Hãy gửi lại email xác nhận." }, 400, request);
+      }
       return communityJson({ ok: true, message: "Email đã được xác nhận. Bây giờ bạn có thể đăng nhập.", email: row.email }, 200, request);
     }
 
@@ -988,18 +1053,46 @@ async function handleCommunityApi(request, env) {
       const ipHash = await sha256Base64Url(ip);
       if (!await communityRateLimit(db, `password-reset-complete-ip:${ipHash}`, 10, 15 * 60 * 1000)) return communityJson({ error: "Bạn đã thử quá nhiều lần. Vui lòng thử lại sau." }, 429, request);
       const tokenHash = await sha256Base64Url(token);
-      // Atomically consume the token before changing the password so concurrent replay attempts cannot both succeed.
-      const consumed = await db.prepare(`DELETE FROM community_password_reset_tokens
-        WHERE token_hash = ? AND expires_at > ?
-          AND EXISTS (SELECT 1 FROM community_members m WHERE m.id = community_password_reset_tokens.member_id AND m.email_verified_at IS NOT NULL)
-        RETURNING member_id`).bind(tokenHash, now).first();
-      if (!consumed?.member_id) return communityJson({ error: "Liên kết đặt lại mật khẩu không hợp lệ, đã dùng hoặc đã hết hạn. Hãy yêu cầu liên kết mới." }, 400, request);
+      const resetTokenRow = await db.prepare(`SELECT t.member_id
+        FROM community_password_reset_tokens t
+        JOIN community_members m ON m.id = t.member_id
+        WHERE t.token_hash = ? AND t.expires_at > ? AND m.email_verified_at IS NOT NULL
+        LIMIT 1`).bind(tokenHash, now).first();
+      if (!resetTokenRow?.member_id) {
+        return communityJson({ error: "Liên kết đặt lại mật khẩu không hợp lệ, đã dùng hoặc đã hết hạn. Hãy yêu cầu liên kết mới." }, 400, request);
+      }
       const salt = crypto.getRandomValues(new Uint8Array(16));
+      const passwordSalt = bytesToBase64Url(salt);
       const passwordHash = await hashCommunityPassword(password, salt);
-      await db.prepare("UPDATE community_members SET password_salt = ?, password_hash = ? WHERE id = ?")
-        .bind(bytesToBase64Url(salt), passwordHash, consumed.member_id).run();
-      await db.prepare("DELETE FROM community_password_reset_tokens WHERE member_id = ?").bind(consumed.member_id).run();
-      await db.prepare("DELETE FROM community_sessions WHERE member_id = ?").bind(consumed.member_id).run();
+      // Password update, session revocation, and one-time token consumption commit as one D1 transaction.
+      // The latter two statements are guarded by the exact newly generated salt/hash, so a zero-row
+      // password update cannot consume the token or revoke any session.
+      const resetResults = await db.batch([
+        db.prepare(`UPDATE community_members SET password_salt = ?, password_hash = ?
+          WHERE id = (
+            SELECT member_id FROM community_password_reset_tokens
+            WHERE token_hash = ? AND expires_at > ?
+              AND EXISTS (SELECT 1 FROM community_members m
+                WHERE m.id = community_password_reset_tokens.member_id AND m.email_verified_at IS NOT NULL)
+          )`).bind(passwordSalt, passwordHash, tokenHash, now),
+        db.prepare(`DELETE FROM community_sessions
+          WHERE member_id = (
+            SELECT t.member_id FROM community_password_reset_tokens t
+            JOIN community_members m ON m.id = t.member_id
+            WHERE t.token_hash = ? AND t.expires_at > ?
+              AND m.password_salt = ? AND m.password_hash = ?
+          )`).bind(tokenHash, now, passwordSalt, passwordHash),
+        db.prepare(`DELETE FROM community_password_reset_tokens
+          WHERE member_id = (
+            SELECT t.member_id FROM community_password_reset_tokens t
+            JOIN community_members m ON m.id = t.member_id
+            WHERE t.token_hash = ? AND t.expires_at > ?
+              AND m.password_salt = ? AND m.password_hash = ?
+          )`).bind(tokenHash, now, passwordSalt, passwordHash),
+      ]);
+      if (!resetResults?.[0]?.meta?.changes) {
+        return communityJson({ error: "Liên kết đặt lại mật khẩu không hợp lệ, đã dùng hoặc đã hết hạn. Hãy yêu cầu liên kết mới." }, 400, request);
+      }
       return communityJson({ ok: true, message: "Mật khẩu đã được đặt lại. Vui lòng đăng nhập bằng mật khẩu mới." }, 200, request);
     }
 
