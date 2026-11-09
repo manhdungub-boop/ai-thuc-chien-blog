@@ -33,8 +33,10 @@ assert.ok(normalizedWorker.includes('DELETE FROM community_sessions WHERE member
   'session revocation must be guarded by the reset token and newly written password');
 assert.ok(normalizedWorker.includes('const resetResults = await db.batch(['),
   'password, session revocation, and reset-token consumption must use one D1 batch');
-assert.ok(normalizedWorker.includes('DELETE FROM community_password_reset_tokens WHERE token_hash = ? AND expires_at > ? AND EXISTS'),
-  'reset-token consumption must be guarded by the newly written password hash');
+assert.ok(normalizedWorker.includes('DELETE FROM community_password_reset_tokens WHERE member_id = ( SELECT t.member_id'),
+  'reset-token consumption must select the member through the matching reset token');
+assert.ok(normalizedWorker.includes('WHERE t.token_hash = ? AND t.expires_at > ? AND m.password_salt = ? AND m.password_hash = ?'),
+  'reset-token consumption must be guarded by the token expiry and newly written password credentials');
 assert.ok(normalizedWorker.includes('m.password_salt = ? AND m.password_hash = ?'),
   'session revocation and token consumption must require the exact new password credentials');
 assert.match(worker, /EMAIL_NOT_VERIFIED/);
