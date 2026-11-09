@@ -2,6 +2,7 @@
 'use strict';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { webcrypto } from 'node:crypto';
 import { runInNewContext } from 'node:vm';
 import worker from '../worker.mjs';
 
@@ -309,8 +310,58 @@ const testOAuthState = 'A'.repeat(43);
 const oauthCalls = { tokenExchange: 0, member: [], session: 0, expectedNonce: '' };
 let oauthCookieMode = 'valid';
 let oauthTokenStatus = 200;
+const oauthDb = {
+  members: [],
+  links: [],
+  prepare(sql) {
+    return { bind: (...args) => ({
+      first: async () => {
+        if (sql.includes('FROM community_oauth_accounts a JOIN community_members m')) {
+          const [provider, providerUserId] = args;
+          const link = this.links.find(item => item.provider === provider && item.provider_user_id === providerUserId);
+          const member = link && this.members.find(item => item.id === link.member_id);
+          return member ? { id: member.id, username: member.username, email: member.email,
+            display_name: member.display_name, created_at: member.created_at } : null;
+        }
+        if (sql.includes('FROM community_members WHERE email = ?')) {
+          const member = this.members.find(item => item.email === args[0]);
+          return member ? { ...member } : null;
+        }
+        throw new Error('Unexpected OAuth mock D1 SELECT: ' + sql);
+      },
+      run: async () => {
+        if (sql.startsWith('INSERT INTO community_members')) {
+          const [id, username, email, displayName, salt, hash, createdAt, verifiedAt] = args;
+          this.members.push({ id, username, email, display_name: displayName, password_salt: salt,
+            password_hash: hash, created_at: createdAt, email_verified_at: verifiedAt });
+          return { meta: { changes: 1 } };
+        }
+        if (sql.startsWith('UPDATE community_members SET email_verified_at')) {
+          const [verifiedAt, id] = args;
+          const member = this.members.find(item => item.id === id);
+          if (member && !member.email_verified_at) member.email_verified_at = verifiedAt;
+          return { meta: { changes: member ? 1 : 0 } };
+        }
+        if (sql.startsWith('INSERT INTO community_oauth_accounts')) {
+          const [provider, providerUserId, memberId, email, createdAt] = args;
+          if (!this.links.some(item => item.provider === provider && item.provider_user_id === providerUserId)) {
+            this.links.push({ provider, provider_user_id: providerUserId, member_id: memberId, email, created_at: createdAt });
+          }
+          return { meta: { changes: 1 } };
+        }
+        throw new Error('Unexpected OAuth mock D1 mutation: ' + sql);
+      },
+    }) };
+  },
+};
+const oauthMemberSourceMatch = oauthWorkerSource.match(/async function communityOAuthMember\\([\\s\\S]*?\\n}\\s*async function completeCommunityOAuth/);
+assert.ok(oauthMemberSourceMatch, 'Worker must contain the Google OAuth member-linking implementation');
+const oauthMemberSource = oauthMemberSourceMatch[0].replace(/\\s*async function completeCommunityOAuth$/, '');
 const oauthSandbox = {
-  URL, URLSearchParams, Response, Headers, AbortSignal, JSON, String, Boolean, Error,
+  URL, URLSearchParams, Response, Headers, AbortSignal, JSON, String, Boolean, Error, Date, Buffer,
+  crypto: webcrypto,
+  bytesToBase64Url: (bytes) => Buffer.from(bytes).toString('base64url'),
+  hashCommunityPassword: async () => 'mock-inaccessible-password-hash',
   COMMUNITY_OAUTH_STAGING_ORIGINS: new Set(['https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev']),
   fetch: async (input, init = {}) => {
     oauthCalls.tokenExchange += 1;
@@ -358,17 +409,19 @@ const oauthSandbox = {
     assert.equal(nonce, 'mock-nonce');
     return { sub: 'mock-google-subject-123', email: 'oauth-test@example.invalid', name: 'OAuth Test' };
   },
-  communityOAuthMember: async (_db, provider, providerUserId, email, displayName) => {
-    oauthCalls.member.push({ provider, providerUserId, email, displayName });
-    return { id: 'mock-member-id', username: 'oauth_test', email, display_name: displayName };
-  },
+  communityOAuthMember: null,
   createCommunitySession: async (_db, memberId) => {
-    assert.equal(memberId, 'mock-member-id');
+    assert.ok(oauthDb.members.some(member => member.id === memberId), 'session must belong to a persisted mock D1 member');
     oauthCalls.session += 1;
     return 'mock-session-cookie-token';
   },
   communityCookie: (token) => 'mock-community-session=' + token + '; Path=/; HttpOnly; Secure; SameSite=Lax',
 };
+const oauthMemberFunction = runInNewContext(
+  oauthMemberSource + '\\ncommunityOAuthMember',
+  oauthSandbox,
+);
+oauthSandbox.communityOAuthMember = oauthMemberFunction;
 const completeMockedOAuth = runInNewContext(
   oauthCallbackSource + '\\ncompleteCommunityOAuth',
   oauthSandbox,
@@ -383,12 +436,12 @@ const successfulOAuthResponse = await completeMockedOAuth(mockOAuthRequest, {}, 
 assert.equal(successfulOAuthResponse.status, 302, 'valid mocked callback should redirect after successful login');
 assert.equal(successfulOAuthResponse.headers.get('location'), '/community?oauth=success');
 assert.match(successfulOAuthResponse.headers.get('set-cookie') || '', /mock-community-session=mock-session-cookie-token/);
-assert.deepEqual(oauthCalls.member, [{
-  provider: 'google',
-  providerUserId: 'mock-google-subject-123',
-  email: 'oauth-test@example.invalid',
-  displayName: 'OAuth Test',
-}]);
+assert.equal(oauthDb.members.length, 1, 'successful callback should persist exactly one mock D1 member');
+assert.equal(oauthDb.members[0].email, 'oauth-test@example.invalid');
+assert.ok(oauthDb.members[0].email_verified_at, 'Google-verified identity should create a verified member');
+assert.equal(oauthDb.links.length, 1, 'successful callback should persist the provider identity link');
+assert.equal(oauthDb.links[0].provider_user_id, 'mock-google-subject-123');
+assert.equal(oauthDb.links[0].member_id, oauthDb.members[0].id);
 assert.equal(oauthCalls.session, 1, 'successful OAuth callback should create exactly one session');
 assert.equal(oauthCalls.tokenExchange, 1, 'successful OAuth callback should exchange exactly one authorization code');
 
