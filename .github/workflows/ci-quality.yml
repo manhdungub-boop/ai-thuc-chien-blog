@@ -7,6 +7,7 @@ on:
   pull_request:
     branches:
       - main
+      - sync/gitlab-completed-work-20261107
   workflow_dispatch:
 
 permissions:
@@ -40,6 +41,7 @@ jobs:
 
       - name: Test Worker runtime and security headers
         run: |
+          node scripts/test-github-production-deploy-guards.mjs
           node scripts/test_worker_headers.mjs
           node scripts/test_worker_retrieval.mjs
           node scripts/test_community_api.mjs

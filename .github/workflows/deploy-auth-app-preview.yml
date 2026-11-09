@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - sync/gitlab-completed-work-20261107
+      - integration/pr77-auth-hardening-20261109
     paths:
       - "worker.mjs"
       - "script.js"
@@ -24,7 +25,7 @@ concurrency:
 
 jobs:
   deploy-staging-preview:
-    if: github.ref == 'refs/heads/sync/gitlab-completed-work-20261107'
+    if: github.ref == 'refs/heads/sync/gitlab-completed-work-20261107' || github.ref == 'refs/heads/integration/pr77-auth-hardening-20261109'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -152,32 +153,8 @@ jobs:
           npx --yes wrangler@4 deploy --config wrangler.auth-preview.jsonc \
             --message "GitHub PR #77 staging-only OAuth validation ${GITHUB_SHA}"
 
-      - name: Configure existing staging-only secret bindings
-        shell: bash
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
-          COMMUNITY_EMAIL_RELAY_SECRET: ${{ secrets.COMMUNITY_EMAIL_RELAY_SECRET }}
-          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
-          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
-        run: |
-          set -euo pipefail
-          umask 077
-          secret_file="$RUNNER_TEMP/auth-preview-secrets.json"
-          trap 'rm -f "$secret_file"' EXIT
-          node - "$secret_file" <<'NODE'
-          const fs = require("node:fs");
-          const path = process.argv[2];
-          const secrets = {
-            COMMUNITY_EMAIL_RELAY_SECRET: process.env.COMMUNITY_EMAIL_RELAY_SECRET,
-            GOOGLE_OAUTH_CLIENT_ID: process.env.GOOGLE_OAUTH_CLIENT_ID,
-            GOOGLE_OAUTH_CLIENT_SECRET: process.env.GOOGLE_OAUTH_CLIENT_SECRET
-          };
-          for (const [name, value] of Object.entries(secrets)) {
-            if (typeof value !== "string" || !value.length) throw new Error("Missing required staging secret: " + name);
-          }
-          fs.writeFileSync(path, JSON.stringify(secrets), {mode: 0o600});
-          NODE
-          npx --yes wrangler@4 secret bulk "$secret_file" --config wrangler.auth-preview.jsonc
+      # Existing Preview secret bindings are intentionally preserved. This integration
+      # workflow does not create, replace, rotate, or delete any Cloudflare secrets.
 
       - name: Verify Apps Script relay endpoint and shared secret without sending email
         env:

@@ -1,0 +1,35 @@
+name: Read-only Browser Smoke — Isolated Auth Preview
+
+on:
+  pull_request:
+    branches:
+      - sync/gitlab-completed-work-20261107
+    types: [opened, synchronize, reopened]
+    paths:
+      - "scripts/test-preview-browser-readonly.mjs"
+      - ".github/workflows/preview-browser-readonly.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: preview-browser-readonly-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  chromium-preview-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Check out pull request source
+        uses: actions/checkout@v4
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install free Playwright test dependency
+        run: npm install --no-save --ignore-scripts playwright
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run read-only browser smoke against dedicated Preview
+        run: node scripts/test-preview-browser-readonly.mjs

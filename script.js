@@ -604,6 +604,8 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
 
 // Site-wide AI reader assistant. Conversation stays in this tab and is not persisted.
 (() => {
+  // Never expose the Production-only reader assistant inside the isolated Preview environment.
+  if (typeof location !== 'undefined' && location.hostname === 'ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev') return;
   // Keep non-browser test harnesses and partial DOM environments unaffected.
   if (!document.body || typeof document.createElement !== 'function' || typeof document.getElementById !== 'function') return;
   if (document.getElementById('reader-ai-chat')) return;

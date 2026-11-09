@@ -9,6 +9,8 @@ permissions:
 
 jobs:
   deploy:
+    # A manual dispatch from a feature or integration ref must never publish to Production Pages.
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Check out source
