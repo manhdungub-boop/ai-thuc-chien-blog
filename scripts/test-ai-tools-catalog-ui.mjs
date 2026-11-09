@@ -58,6 +58,7 @@ for (const token of ["Object.values(controls).forEach", "data-filter", "function
   assert.ok(controller.includes(token), `catalog controller missing expected behavior: ${token}`);
 }
 assert.ok(controller.includes("textContent"), "catalog cards must render text safely");
+assert.ok(controller.includes("tools=data.tools.filter(t=>t&&t.status==='active')"), "default AI Bank results must exclude deprecated and inactive tools");
 assert.ok(worker.includes("resolveAssetRequest"), "staging Worker must resolve static assets");
 assert.ok(worker.includes("env.ASSETS.fetch(resolveAssetRequest(request))"), "Worker must serve static assets through ASSETS binding");
 assert.ok(!page.includes('data-search="chatgpt openai'), "legacy hard-coded tool cards should be removed");
