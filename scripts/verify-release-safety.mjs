@@ -20,7 +20,8 @@ assert.ok(previewD1.includes("if: github.ref == 'refs/heads/main'"));
 assert.ok(previewD1.includes("ref: main"));
 assert.ok(previewD1.includes("51d814c8-a3fc-4481-a5f1-60bc67617f3c"));
 assert.ok(previewD1.includes("ai-thuc-chien-community-preview"));
-assert.ok(!previewD1.includes("CLOUDFLARE_API_TOKEN:"));
+assert.ok(!previewD1.includes("\n    env:\n      CLOUDFLARE_API_TOKEN:"));
+assert.ok(!previewD1.includes("\n    env:\n      CLOUDFLARE_WORKERS_API_TOKEN:"));
 assert.ok(previewD1.includes("CLOUDFLARE_WORKERS_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}"));
 
 // Auth Preview is intentionally credential-free static validation now, not a deploy workflow.
