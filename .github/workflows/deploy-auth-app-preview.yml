@@ -38,11 +38,11 @@ jobs:
       - name: Validate staging-only inputs and secret availability
         shell: bash
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
-          COMMUNITY_EMAIL_RELAY_URL: ${{ secrets.COMMUNITY_EMAIL_RELAY_URL }}
-          COMMUNITY_EMAIL_RELAY_SECRET: ${{ secrets.COMMUNITY_EMAIL_RELAY_SECRET }}
-          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
-          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PREVIEW_API_TOKEN }}
+          COMMUNITY_EMAIL_RELAY_URL: ${{ secrets.COMMUNITY_EMAIL_PREVIEW_RELAY_URL }}
+          COMMUNITY_EMAIL_RELAY_SECRET: ${{ secrets.COMMUNITY_EMAIL_PREVIEW_RELAY_SECRET }}
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_PREVIEW_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_PREVIEW_CLIENT_SECRET }}
         run: |
           set -euo pipefail
           [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]] || { echo "::error::Missing CLOUDFLARE_WORKERS_API_TOKEN."; exit 1; }
@@ -69,13 +69,16 @@ jobs:
 
       - name: Verify exact isolated Preview D1 target (read-only)
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PREVIEW_API_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
           config="$(node <<'NODE'
           const fs = require("node:fs");
           const c = JSON.parse(fs.readFileSync("wrangler.jsonc", "utf8"));
+          // Never execute a branch-controlled Wrangler custom build command while a
+          // Cloudflare credential is present in the deployment step.
+          if (c.build) throw new Error("Safety stop: custom Wrangler build hooks are prohibited in Preview deployment config.");
           const prod = (c.d1_databases || []).find(x => x.binding === "DB");
           const preview = ((c.previews || {}).d1_databases || []).find(x => x.binding === "DB");
           if (!prod || !preview) throw new Error("Expected production and preview D1 declarations.");
@@ -107,18 +110,19 @@ jobs:
 
       - name: List Preview migrations without applying SQL
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PREVIEW_API_TOKEN }}
         run: npx --yes wrangler@4 d1 migrations list "$PREVIEW_D1_NAME" --remote --config wrangler.preview-migrations.jsonc
 
       - name: Generate locked Preview-only Wrangler config
         shell: bash
         env:
-          COMMUNITY_EMAIL_RELAY_URL: ${{ secrets.COMMUNITY_EMAIL_RELAY_URL }}
+          COMMUNITY_EMAIL_RELAY_URL: ${{ secrets.COMMUNITY_EMAIL_PREVIEW_RELAY_URL }}
         run: |
           set -euo pipefail
           node <<'NODE'
           const fs = require("node:fs");
           const c = JSON.parse(fs.readFileSync("wrangler.jsonc", "utf8"));
+          if (c.build) throw new Error("Safety stop: branch-controlled Wrangler build hooks are not permitted.");
           const prod = (c.d1_databases || []).find(x => x.binding === "DB");
           const preview = ((c.previews || {}).d1_databases || []).find(x => x.binding === "DB");
           if (c.account_id !== process.env.CLOUDFLARE_ACCOUNT_ID ||
@@ -141,7 +145,7 @@ jobs:
 
       - name: Deploy current PR code to the dedicated staging Worker only
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PREVIEW_API_TOKEN }}
         run: |
           npx --yes wrangler@4 deploy --config wrangler.auth-preview.jsonc \
             --message "GitHub PR #77 staging-only OAuth validation ${GITHUB_SHA}"
@@ -151,8 +155,8 @@ jobs:
 
       - name: Verify Apps Script relay endpoint and shared secret without sending email
         env:
-          COMMUNITY_EMAIL_RELAY_URL: ${{ secrets.COMMUNITY_EMAIL_RELAY_URL }}
-          COMMUNITY_EMAIL_RELAY_SECRET: ${{ secrets.COMMUNITY_EMAIL_RELAY_SECRET }}
+          COMMUNITY_EMAIL_RELAY_URL: ${{ secrets.COMMUNITY_EMAIL_PREVIEW_RELAY_URL }}
+          COMMUNITY_EMAIL_RELAY_SECRET: ${{ secrets.COMMUNITY_EMAIL_PREVIEW_RELAY_SECRET }}
         run: node scripts/test_email_relay_no_send.mjs
 
       - name: Verify deployed staging Worker and overlapping OAuth flows
