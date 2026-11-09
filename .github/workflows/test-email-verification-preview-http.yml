@@ -28,7 +28,7 @@ jobs:
       - name: Deploy code to isolated Preview without application secrets
         id: deploy_preview
         env:
-          CLOUDFLARE_API_TOKEN: \${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
@@ -45,7 +45,7 @@ jobs:
           echo "PREVIEW_CODE_DEPLOY=success (trusted branch source; no relay or OAuth secrets supplied)."
       - name: Verify Preview contains no relay or OAuth secret bindings
         env:
-          CLOUDFLARE_API_TOKEN: \${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
@@ -58,19 +58,19 @@ jobs:
           echo "PASS: no relay or Google OAuth secret bindings found in the feature Preview."
       - name: Verify Preview frontend
         env:
-          PREVIEW_URL: \${{ steps.deploy_preview.outputs.deployment_url }}
+          PREVIEW_URL: ${{ steps.deploy_preview.outputs.deployment_url }}
         run: node scripts/test_community_preview_frontend.mjs
       - name: Read Preview URL flags from Cloudflare API (read-only)
         env:
-          CLOUDFLARE_WORKERS_BUILDS_API_TOKEN: \${{ secrets.CLOUDFLARE_WORKERS_BUILDS_API_TOKEN }}
+          CLOUDFLARE_WORKERS_BUILDS_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_BUILDS_API_TOKEN }}
         run: node scripts/diagnose_cloudflare_preview_flags.mjs
       - name: Inspect Preview D1 verification schema (read-only)
         env:
-          CLOUDFLARE_WORKERS_BUILDS_API_TOKEN: \${{ secrets.CLOUDFLARE_WORKERS_BUILDS_API_TOKEN }}
+          CLOUDFLARE_WORKERS_BUILDS_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_BUILDS_API_TOKEN }}
         run: node scripts/diagnose_preview_d1_schema.mjs
       - name: Smoke-test exact Preview deployment endpoints and CORS (read-only)
         env:
-          PREVIEW_URL: \${{ steps.deploy_preview.outputs.deployment_url }}
+          PREVIEW_URL: ${{ steps.deploy_preview.outputs.deployment_url }}
         run: node scripts/test_community_preview_http.mjs
       - name: Smoke-test stable feature alias endpoints and CORS (read-only)
         env:
