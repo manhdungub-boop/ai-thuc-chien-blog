@@ -48,7 +48,8 @@ async function safePublicUrl(value) {
 }
 function pinnedRequest(url, method, address) {
   return new Promise((resolve, reject) => {
-    const host = url.hostname.toLowerCase().replace(/^\\[|\\]$/g, "");
+    let host = url.hostname.toLowerCase();
+    if (host.startsWith("[") && host.endsWith("]")) host = host.slice(1, -1);
     const family = net.isIP(address);
     const transport = url.protocol === "https:" ? https : http;
     const options = {
