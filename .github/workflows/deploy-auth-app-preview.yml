@@ -2,6 +2,12 @@ name: Auth Preview security-safe validation
 
 on:
   workflow_dispatch:
+    inputs:
+      source_ref:
+        description: "Branch or commit to validate (runs without credentials)"
+        required: false
+        default: "fix/codex-security-findings-20261109"
+        type: string
 
 permissions:
   contents: read
@@ -16,8 +22,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Check out the selected trusted workflow ref
+      - name: Check out selected source ref without credentials
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref || github.sha }}
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
         with:
@@ -42,6 +50,7 @@ jobs:
         run: |
           {
             echo "## Credential-free Preview validation"
+            echo "- Source ref: ${{ inputs.source_ref || github.sha }}"
             echo "- This workflow performs static/build tests only."
             echo "- No Cloudflare API token, relay secret, Google OAuth credential, or other application secret is exposed."
             echo "- No Worker deployment, D1 operation, DNS change, or Production operation is performed."
