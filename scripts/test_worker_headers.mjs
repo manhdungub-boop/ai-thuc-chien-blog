@@ -309,6 +309,7 @@ let oauthCookieMode = 'valid';
 let oauthTokenStatus = 200;
 const oauthSandbox = {
   URL, URLSearchParams, Response, Headers, AbortSignal, JSON, String, Boolean, Error,
+  COMMUNITY_OAUTH_STAGING_ORIGINS: new Set(['https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev']),
   fetch: async (input, init = {}) => {
     oauthCalls.tokenExchange += 1;
     assert.equal(String(input), 'https://oauth2.googleapis.com/token');
