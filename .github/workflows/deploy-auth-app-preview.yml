@@ -31,9 +31,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-      - name: Install dependencies without credentials
-        run: npm ci
       - name: Build static assets without credentials
         run: npm run build
       - name: Validate Worker and frontend syntax
@@ -46,6 +43,12 @@ jobs:
         run: node scripts/test_email_verification.mjs
       - name: Run worker regression tests
         run: npm run test:worker
+      - name: Run article quality regression tests
+        run: npm run test:content
+      - name: Run SEO consistency regression tests
+        run: npm run test:seo
+      - name: Run community and migration regression tests
+        run: npm run test:community
       - name: Record security boundary
         if: always()
         run: |
