@@ -2,6 +2,15 @@
 'use strict';
 import assert from 'node:assert/strict';
 import worker from '../worker.mjs';
+import { decodeBasicEntities, stripNonContentTags } from '../article-context-utils.mjs';
+
+assert.equal(decodeBasicEntities('&amp;lt;script&amp;gt;'), '&lt;script&gt;', 'entity decoding must not recursively decode newly produced entities');
+assert.equal(decodeBasicEntities('&lt;script&gt;'), '<script>', 'a single encoded entity layer should decode');
+assert.equal(
+  stripNonContentTags('<p>before</p><script>alert(1)</script ><style>.hidden{}</style ><p>after</p>').replace(/\s+/g, ' ').trim(),
+  '<p>before</p> <p>after</p>',
+  'script/style blocks must be removed when closing tags contain whitespace'
+);
 
 const requiredHeaders = {
   'x-content-type-options': 'nosniff',

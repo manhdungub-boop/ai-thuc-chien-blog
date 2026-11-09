@@ -12,18 +12,26 @@ assert.ok(files.length > 0, 'expected at least one article');
 
 function visibleText(html) {
   return html
-    .replace(/<script\b[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style\b[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<head\b[\s\S]*?<\/head>/gi, ' ')
+    .replace(/<script\b[\s\S]*?<\/script\s*>/gi, ' ')
+    .replace(/<style\b[\s\S]*?<\/style\s*>/gi, ' ')
+    .replace(/<head\b[\s\S]*?<\/head\s*>/gi, ' ')
     .replace(/<!--[\s\S]*?-->/g, ' ')
     .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;|&#160;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&(nbsp|#160|amp|quot|#39|apos);/gi, (entity) => ({
+      '&nbsp;': ' ',
+      '&#160;': ' ',
+      '&amp;': '&',
+      '&quot;': '"',
+      '&#39;': "'",
+      '&apos;': "'",
+    })[entity.toLowerCase()] ?? entity)
     .replace(/\s+/g, ' ')
     .trim();
 }
+
+assert.equal(visibleText('<script>alert(1)</script ><p>visible</p>'), 'visible', 'script content with whitespace before its closing > must be excluded');
+assert.equal(visibleText('<style>.hidden{}</style ><p>visible</p>'), 'visible', 'style content with whitespace before its closing > must be excluded');
+assert.equal(visibleText('<p>&amp;quot;</p>'), '&quot;', 'HTML entities must be decoded exactly once');
 
 for (const file of files) {
   const source = fs.readFileSync(path.join(articleDir, file), 'utf8');
