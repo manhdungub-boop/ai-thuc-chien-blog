@@ -1,0 +1,63 @@
+name: Auth Preview security-safe validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: "Branch or commit to validate (runs without credentials)"
+        required: false
+        default: "fix/codex-security-findings-20261109"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: auth-preview-static-validation
+  cancel-in-progress: false
+
+jobs:
+  validate-untrusted-source-without-credentials:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/sync/gitlab-completed-work-20261107'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out selected source ref without credentials
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref || github.sha }}
+          persist-credentials: false
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build static assets without credentials
+        run: npm run build
+      - name: Validate Worker and frontend syntax
+        run: |
+          node --check worker.mjs
+          node --check script.js
+          node --check scripts/test_auth_preview_oauth_http.mjs
+          node --check scripts/test_email_verification.mjs
+      - name: Run email verification static regression checks
+        run: node scripts/test_email_verification.mjs
+      - name: Run offline IPv4 and IPv6 address safety regression tests
+        run: node scripts/test_ipv6_address_safety.mjs
+      - name: Run worker regression tests
+        run: npm run test:worker
+      - name: Run article quality regression tests
+        run: npm run test:content
+      - name: Run SEO consistency regression tests
+        run: npm run test:seo
+      - name: Run community and migration regression tests
+        run: npm run test:community
+      - name: Record security boundary
+        if: always()
+        run: |
+          {
+            echo "## Credential-free Preview validation"
+            echo "- Source ref: ${{ inputs.source_ref || github.sha }}"
+            echo "- This workflow performs static/build tests only."
+            echo "- No Cloudflare API token, relay secret, Google OAuth credential, or other application secret is exposed."
+            echo "- No Worker deployment, D1 operation, DNS change, or Production operation is performed."
+          } >> "$GITHUB_STEP_SUMMARY"

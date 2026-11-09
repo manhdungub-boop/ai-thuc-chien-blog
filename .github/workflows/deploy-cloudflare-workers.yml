@@ -1,5 +1,7 @@
 name: Deploy Cloudflare Workers
 
+# Production deployment is deliberately manual. Merging content or code must never
+# deploy the production Worker or run D1 migrations implicitly.
 on:
   push:
     branches:
@@ -9,6 +11,9 @@ on:
       - "index.html"
       - "ve-chung-toi.html"
       - "thu-vien.html"
+      - "ngan-hang-ai.html"
+      - "data/ai-tools.json"
+      - "illustrations/**"
       - "articles/**"
       - "styles.css"
       - "script.js"
@@ -29,7 +34,12 @@ on:
       - "scripts/test_worker_headers.mjs"
       - ".github/workflows/deploy-cloudflare-workers.yml"
   workflow_dispatch:
-
+    inputs:
+      confirm_production_worker_and_d1_changes:
+        description: "Required: explicitly approve deploying the Production Worker and applying pending Production D1 migrations."
+        required: true
+        type: boolean
+        default: false
 permissions:
   contents: read
 
@@ -39,6 +49,8 @@ concurrency:
 
 jobs:
   deploy:
+    # Pushes validate the merge but cannot deploy. Only an explicit manual dispatch may deploy production.
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.confirm_production_worker_and_d1_changes == true
     runs-on: ubuntu-latest
     steps:
       - name: Check out source
@@ -60,6 +72,8 @@ jobs:
           config = json.loads(Path("wrangler.jsonc").read_text(encoding="utf-8"))
           assert config.get("name") == "ai-thuc-chien-blog", "Refusing to deploy to an unexpected Worker"
           assert config.get("account_id") == "92cf091bbac8b4879ec65feb30b4715b", "Unexpected Cloudflare account"
+          assert config.get("keep_vars") is True, "Worker deploy must preserve per-environment relay URL variables"
+          assert "COMMUNITY_EMAIL_RELAY_SECRET" in config.get("secrets", {}).get("required", []), "Worker deploy must require the email relay secret"
           assets = config.get("assets", {})
           assert config.get("main") == "./worker.mjs", "Worker must load the reviewed security-header wrapper"
           assert assets.get("directory") == "./dist", "Worker assets must come from dist/"
@@ -68,6 +82,8 @@ jobs:
           assert Path("worker.mjs").is_file(), "Worker entrypoint was not included in source"
           assert Path("dist/_headers").is_file(), "Security headers file was not packaged for Pages/static-assets handling"
           assert Path("dist/google4e45ddcf8facb122.html").is_file(), "Search Console verification file was not packaged"
+          verification_content = Path("dist/google4e45ddcf8facb122.html").read_text(encoding="utf-8").strip()
+          assert verification_content == "google-site-verification: google4e45ddcf8facb122.html", "Search Console verification content does not match the expected token"
           assert list(Path("dist/articles").glob("*.html")), "No article pages were packaged"
           for required in ["X-Content-Type-Options: nosniff", "X-Frame-Options: DENY", "Referrer-Policy: strict-origin-when-cross-origin", "Permissions-Policy:", "Strict-Transport-Security: max-age=31536000"]:
               assert required in Path("dist/_headers").read_text(encoding="utf-8"), f"Missing expected header rule: {required}"
@@ -101,7 +117,7 @@ jobs:
           echo "A Worker deployment token is configured; proceeding with deployment."
 
 
-      - name: Provision community D1 and apply schema migrations
+      - name: Preflight Production email relay bindings before any D1 migration
         if: steps.token.outputs.deploy_ready == 'true'
         shell: bash
         env:
@@ -109,47 +125,79 @@ jobs:
         run: |
           set -euo pipefail
           account_id="92cf091bbac8b4879ec65feb30b4715b"
-          database_name="ai-thuc-chien-community"
-          api="https://api.cloudflare.com/client/v4/accounts/${account_id}/d1/database"
+          worker_name="ai-thuc-chien-blog"
+          secrets_response="$(mktemp)"
+          settings_response="$(mktemp)"
+          trap 'rm -f "$secrets_response" "$settings_response"' EXIT
 
-          list_status="$(curl --silent --show-error --output /tmp/d1-list.json --write-out '%{http_code}' \
-            --header "Authorization: Bearer ${CF_API_TOKEN}" \
-            --header 'Content-Type: application/json' "${api}?per_page=100")"
-          if [[ "${list_status}" -lt 200 || "${list_status}" -ge 300 ]] || ! jq -e '.success == true' /tmp/d1-list.json >/dev/null; then
-            echo "Could not list D1 databases. Check that CLOUDFLARE_WORKERS_API_TOKEN has D1:Edit and Workers Scripts:Edit permissions."
-            jq -r '.errors[]?.message // empty' /tmp/d1-list.json || true
+          secrets_status="$(curl --silent --show-error --max-time 20 -o "$secrets_response" -w '%{http_code}' \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" \
+            "https://api.cloudflare.com/client/v4/accounts/${account_id}/workers/scripts/${worker_name}/secrets" || true)"
+          if [[ "$secrets_status" != "200" ]] || ! jq -e \
+            '.success == true and any(.result[]?; .name == "COMMUNITY_EMAIL_RELAY_SECRET" and .type == "secret_text")' \
+            "$secrets_response" >/dev/null; then
+            echo "::error::Production email relay secret binding is missing or could not be verified; no D1 migration was run."
             exit 1
           fi
-          database_id="$(jq -r --arg name "${database_name}" '.result[]? | select(.name == $name) | .uuid' /tmp/d1-list.json | head -n 1)"
-          if [[ -z "${database_id}" || "${database_id}" == "null" ]]; then
-            echo "Creating the persistent community database for the first time."
-            create_status="$(curl --silent --show-error --output /tmp/d1-create.json --write-out '%{http_code}' \
-              --request POST --header "Authorization: Bearer ${CF_API_TOKEN}" \
-              --header 'Content-Type: application/json' \
-              --data "{\"name\":\"${database_name}\"}" "${api}")"
-            if [[ "${create_status}" -lt 200 || "${create_status}" -ge 300 ]] || ! jq -e '.success == true and (.result.uuid | type == "string")' /tmp/d1-create.json >/dev/null; then
-              echo "Could not create the community D1 database. Check D1:Edit permissions."
-              jq -r '.errors[]?.message // empty' /tmp/d1-create.json || true
-              exit 1
-            fi
-            database_id="$(jq -r '.result.uuid' /tmp/d1-create.json)"
-          else
-            echo "Found the existing community database; preserving its data."
+
+          settings_status="$(curl --silent --show-error --max-time 20 -o "$settings_response" -w '%{http_code}' \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" \
+            "https://api.cloudflare.com/client/v4/accounts/${account_id}/workers/scripts/${worker_name}/settings" || true)"
+          if [[ "$settings_status" != "200" ]] || ! jq -e \
+            '.success == true and
+             any(.result.bindings[]?; .name == "COMMUNITY_EMAIL_RELAY_SECRET" and .type == "secret_text") and
+             any(.result.bindings[]?; .name == "COMMUNITY_EMAIL_RELAY_URL" and .type == "plain_text")' \
+            "$settings_response" >/dev/null; then
+            echo "::error::Production email relay URL/secret bindings are missing or could not be verified; no D1 migration was run."
+            exit 1
           fi
 
-          python3 - "${database_id}" "${database_name}" <<'PY'
-          import json, sys
+          echo "PASS: Production email relay URL and secret binding names/types are present. Secret values were not requested or printed; no settings were changed."
+
+      - name: Verify existing Production D1 and apply pending migrations (explicit approval)
+        if: steps.token.outputs.deploy_ready == 'true'
+        shell: bash
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          config_json="$(python3 - <<'PY'
+          import json
           from pathlib import Path
           config = json.loads(Path("wrangler.jsonc").read_text(encoding="utf-8"))
-          config["d1_databases"] = [{
-              "binding": "DB",
-              "database_name": sys.argv[2],
-              "database_id": sys.argv[1],
-              "migrations_dir": "migrations",
-          }]
+          expected_account = "92cf091bbac8b4879ec65feb30b4715b"
+          expected_id = "fc2517cb-9543-4d7b-98f4-bcd5f3c013e7"
+          expected_name = "ai-thuc-chien-community"
+          databases = [item for item in config.get("d1_databases", []) if item.get("binding") == "DB"]
+          if config.get("account_id") != expected_account or len(databases) != 1:
+              raise SystemExit("Expected exactly one configured Production D1 binding in the reviewed Cloudflare account.")
+          database = databases[0]
+          if database.get("database_id") != expected_id or database.get("database_name") != expected_name:
+              raise SystemExit("Production D1 identity differs from the reviewed target; refusing to create or migrate any database.")
+          database["migrations_dir"] = "migrations"
+          config["d1_databases"] = [database]
+          config.pop("previews", None)
           Path("wrangler.deploy.jsonc").write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          print(json.dumps({"id": expected_id, "name": expected_name}))
           PY
-          npx --yes wrangler@4 d1 migrations apply "${database_name}" --remote --config wrangler.deploy.jsonc
+          )"
+          database_id="$(jq -r '.id' <<< "$config_json")"
+          database_name="$(jq -r '.name' <<< "$config_json")"
+          response="$(mktemp)"
+          status="$(curl --silent --show-error --max-time 20 -o "$response" -w '%{http_code}' \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" \
+            "https://api.cloudflare.com/client/v4/accounts/92cf091bbac8b4879ec65feb30b4715b/d1/database/${database_id}" || true)"
+          if [[ "$status" != "200" ]] || ! jq -e --arg id "$database_id" --arg name "$database_name" \
+            '.success == true and (.result.uuid == $id or .result.id == $id) and .result.name == $name' "$response" >/dev/null; then
+            echo "::error::Cloudflare did not verify the exact existing Production D1 target (HTTP ${status}); no SQL was run."
+            jq -r '.errors[]?.message // empty' "$response" 2>/dev/null || true
+            rm -f "$response"
+            exit 1
+          fi
+          rm -f "$response"
+          echo "PASS: exact existing Production D1 identity verified. No database creation was attempted."
+          npx --yes wrangler@4 d1 migrations apply "$database_name" --remote --config wrangler.deploy.jsonc
 
       - name: Deploy to the existing production Worker
         if: steps.token.outputs.deploy_ready == 'true'
@@ -192,5 +240,12 @@ jobs:
               exit 1
             fi
           done
+          verification_body="$(curl --fail --silent --show-error --location --max-time 20 "$host/google4e45ddcf8facb122.html")"
+          expected_verification_body="google-site-verification: google4e45ddcf8facb122.html"
+          if [[ "$verification_body" != "$expected_verification_body" ]]; then
+            echo "FAIL: Search Console verification response body does not match the expected content."
+            exit 1
+          fi
+          echo "PASS: Search Console verification response body exactly matches the expected content."
           echo "WORKER SECURITY PASS: all five headers present; article, sitemap, RSS, and Search Console verification routes return HTTP 200."
           SITE_URL="$host" node scripts/test_deployed_routes.cjs

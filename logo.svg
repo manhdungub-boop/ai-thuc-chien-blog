@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 64 64" role="img" aria-labelledby="logo-title">
+<title id="logo-title">AI Thực Chiến</title>
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a99bff"/><stop offset="1" stop-color="#77e8d1"/></linearGradient></defs>
+<rect width="64" height="64" rx="16" fill="#0b1020"/><rect x="4" y="4" width="56" height="56" rx="13" fill="url(#g)"/>
+<path d="M17 43 27 20h10l10 23h-8l-2.1-5.4H27L25 43Zm12.4-11.5h5.2L32 24z" fill="#0b1020"/>
+</svg>

@@ -35,22 +35,46 @@ jobs:
         run: |
           node --check script.js
           node --check worker.mjs
+          node --check tests/staging-google-oidc-runtime.test.mjs
+          node --check scripts/test_google_oauth_worker_integration.mjs
 
       - name: Test Worker runtime and security headers
         run: |
           node scripts/test_worker_headers.mjs
           node scripts/test_worker_retrieval.mjs
           node scripts/test_community_api.mjs
+          node scripts/test_email_verification.mjs
+          node scripts/test-password-reset.mjs
+          node --test tests/staging-google-oidc-runtime.test.mjs
+          node scripts/test_google_oauth_worker_integration.mjs
           node scripts/test_homepage_search.cjs
 
       - name: Test community D1 schema
         run: python3 scripts/test_community_schema.py
+
+      - name: Rehearse additive Google OAuth migration in local SQLite
+        run: python3 scripts/test_google_oauth_migration.py
 
       - name: Test isolated D1 configuration for previews
         run: node scripts/test_d1_preview_config.cjs
 
       - name: Test article content quality
         run: npm run test:content
+
+      - name: Validate AI bank catalog and review queue
+        run: |
+          node scripts/validate-ai-tools-catalog.mjs data/ai-tools.json
+          node scripts/test-ai-tools-catalog-ui.mjs
+          node scripts/audit-ai-tools-catalog.mjs data/ai-tools.json docs/reviews/ai-tools-candidates-2026-11-02.json --strict
+          node scripts/test-ai-tools-catalog-audit.mjs
+
+      - name: Check official AI tool links
+        run: node scripts/check-ai-tools-links.mjs data/ai-tools.json
+
+      - name: Verify article authorship, attribution, and diagrams
+        run: |
+          node scripts/verify-article-attribution.mjs
+          node scripts/verify-article-diagrams.mjs
 
       - name: Test SEO consistency
         run: npm run test:seo

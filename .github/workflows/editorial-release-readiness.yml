@@ -1,0 +1,49 @@
+name: Editorial Release Readiness
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: editorial-release-readiness-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  editorial-browser-smoke:
+    runs-on: ubuntu-24.04
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.0-noble
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Install pinned browser test runner
+        run: npm install --no-save --package-lock=false --no-audit --no-fund playwright@1.56.0
+
+      - name: Build static release candidate
+        run: npm run build
+
+      - name: Browser-check all 69 articles and AI Bank
+        run: node scripts/test_articles_browser.mjs
+
+      - name: Package validated static candidate and checksum
+        run: |
+          cd dist
+          tar -czf ../release-candidate.tar.gz .
+          cd ..
+          sha256sum release-candidate.tar.gz > release-candidate.sha256
+
+      - name: Preserve release candidate artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ai-thuc-chien-static-release-candidate
+          path: |
+            release-candidate.tar.gz
+            release-candidate.sha256
+          if-no-files-found: error
+          retention-days: 7

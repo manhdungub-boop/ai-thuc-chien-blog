@@ -22,6 +22,32 @@ function assertSecurityHeaders(response, expectHsts = true) {
   }
 }
 
+// Branch Previews must serve their own frontend assets rather than the production Pages copy.
+const beforePreviewFetch = globalThis.fetch;
+let previewPagesCalls = 0;
+globalThis.fetch = async () => {
+  previewPagesCalls += 1;
+  throw new Error('Preview must not fetch the production Pages homepage');
+};
+let previewHomepage;
+try {
+  previewHomepage = await worker.fetch(new Request('https://feature-required-email-verification-ai-thuc-chien-blog.manhdungub.workers.dev/?verify=fake-preview-token#cong-dong'), {
+    ASSETS: { fetch: async (request) => {
+      assert.equal(new URL(request.url).pathname, '/index.html');
+      return new Response('<button id="community-verify-confirm">Xác nhận email</button>', {
+        status: 200,
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      });
+    } },
+  });
+} finally {
+  globalThis.fetch = beforePreviewFetch;
+}
+assert.equal(previewPagesCalls, 0, 'Branch Preview must not call the production Pages fallback');
+assert.equal(previewHomepage.status, 200);
+assert.match(await previewHomepage.text(), /community-verify-confirm/, 'Branch Preview must serve its own verification UI');
+assertSecurityHeaders(previewHomepage);
+
 const beforePrimaryPages = globalThis.fetch;
 let primaryPagesCalls = 0;
 globalThis.fetch = async (input, init = {}) => {
@@ -37,7 +63,7 @@ globalThis.fetch = async (input, init = {}) => {
 };
 let root;
 try {
-  root = await worker.fetch(new Request('https://example.test/'), {
+  root = await worker.fetch(new Request('https://ai-thuc-chien-blog.manhdungub.workers.dev/'), {
     ASSETS: { fetch: async () => { throw new Error('Root should prefer the verified Pages homepage'); } },
   });
 } finally {
@@ -70,7 +96,7 @@ globalThis.fetch = async (input, init = {}) => {
 };
 let recoveredHomepage;
 try {
-  recoveredHomepage = await worker.fetch(new Request('https://example.test/?diag=fallback'), {
+  recoveredHomepage = await worker.fetch(new Request('https://ai-thuc-chien-blog.manhdungub.workers.dev/?diag=fallback'), {
     ASSETS: { fetch: async (request) => {
       assert.equal(new URL(request.url).pathname, '/index.html');
       return new Response('<h1>404</h1>', { status: 404, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
@@ -103,7 +129,7 @@ globalThis.fetch = async (input, init = {}) => {
 };
 let recoveredBranded404;
 try {
-  recoveredBranded404 = await worker.fetch(new Request('https://example.test/?diag=branded-404'), {
+  recoveredBranded404 = await worker.fetch(new Request('https://ai-thuc-chien-blog.manhdungub.workers.dev/?diag=branded-404'), {
     ASSETS: { fetch: async (request) => {
       assert.equal(new URL(request.url).pathname, '/index.html');
       return new Response('<h1>LỖI 404 · KHÔNG TÌM THẤY TRANG</h1><p>Có vẻ đường dẫn đã đi lạc.</p>', {
@@ -211,12 +237,34 @@ assertSecurityHeaders(httpResponse, false);
 console.log('PASS: security headers on 200/404/500, root and article routing, asset metadata preserved, internal error hidden, HSTS HTTPS-only');
 
 
+const chatRateRows = new Map();
+const chatDb = {
+  prepare(sql) {
+    return { bind(...args) {
+      if (sql.startsWith('INSERT INTO community_rate_limits')) {
+        const [bucket, windowStart] = args;
+        return { run: async () => {
+          const old = chatRateRows.get(bucket);
+          chatRateRows.set(bucket, { count: old && old.window_start === windowStart ? old.count + 1 : 1, window_start: windowStart });
+          return { meta: { changes: 1 } };
+        } };
+      }
+      if (sql.startsWith('SELECT count FROM community_rate_limits')) {
+        const [bucket] = args;
+        return { first: async () => chatRateRows.get(bucket) || null };
+      }
+      throw new Error('Unexpected chat D1 query: ' + sql);
+    } };
+  },
+};
+
 const chatRequest = new Request('https://example.test/api/chat', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json', 'Origin': 'https://ai-thuc-chien-blog.manhdungub.workers.dev', 'CF-Connecting-IP': '198.51.100.44' },
   body: JSON.stringify({ messages: [{ role: 'user', content: 'Tôi nên bắt đầu học AI từ đâu?' }], page: { title: 'Bắt đầu với AI', path: '/articles/bat-dau-voi-ai' } }),
 });
 const chat = await worker.fetch(chatRequest, {
+  DB: chatDb,
   AI: { run: async (model, input) => {
     assert.equal(model, '@cf/meta/llama-3.1-8b-instruct-fast');
     assert.equal(input.messages.at(-1).content, 'Tôi nên bắt đầu học AI từ đâu?');
@@ -240,7 +288,7 @@ assert.equal(badOrigin.status, 403);
 assert.equal((await badOrigin.json()).error, 'Nguồn yêu cầu không được phép.');
 
 const noAi = await worker.fetch(new Request('https://example.test/api/chat', {
-  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'https://ai-thuc-chien-blog.manhdungub.workers.dev' },
   body: JSON.stringify({ messages: [{ role: 'user', content: 'hello' }] }),
 }), { ASSETS: { fetch: async () => new Response('asset') } });
 assert.equal(noAi.status, 503);

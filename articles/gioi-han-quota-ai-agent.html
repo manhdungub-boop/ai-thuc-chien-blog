@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Thiết kế giới hạn lượt gọi, token, thời gian và số bước cho AI Agent; phân biệt rate limit với quota hết, xử lý 429/503 và dừng an toàn khi chạm ngưỡng.">
+<meta name="theme-color" content="#0b1020">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<meta name="author" content="DUNG - AI">
+<title>Đặt giới hạn quota cho AI Agent: hard-stop, ngân sách và circuit breaker</title>
+<link rel="canonical" href="https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/gioi-han-quota-ai-agent">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<meta property="og:type" content="article">
+<meta property="og:locale" content="vi_VN">
+<meta property="og:site_name" content="AI Thực Chiến | DUNG - AI">
+<meta property="og:title" content="Đặt giới hạn quota cho AI Agent: hard-stop, ngân sách và circuit breaker">
+<meta property="og:description" content="Thiết kế giới hạn lượt gọi, token, thời gian và số bước cho AI Agent; phân biệt rate limit với quota hết, xử lý 429/503 và dừng an toàn khi chạm ngưỡng.">
+<meta property="og:url" content="https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/gioi-han-quota-ai-agent">
+<meta property="og:image" content="https://ai-thuc-chien-blog.manhdungub.workers.dev/illustrations/ai-agent-quota-guard.svg">
+<meta property="og:image:type" content="image/svg+xml">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Sơ đồ ba lớp giới hạn AI Agent: phân loại quota, đặt hard limit, dừng hoặc retry có kiểm soát.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Đặt giới hạn quota cho AI Agent: hard-stop, ngân sách và circuit breaker">
+<meta name="twitter:description" content="Thiết kế giới hạn lượt gọi, token, thời gian và số bước cho AI Agent; phân biệt rate limit với quota hết, xử lý 429/503 và dừng an toàn khi chạm ngưỡng.">
+<meta name="twitter:image" content="https://ai-thuc-chien-blog.manhdungub.workers.dev/illustrations/ai-agent-quota-guard.svg">
+<meta name="twitter:image:alt" content="Sơ đồ ba lớp giới hạn AI Agent: phân loại quota, đặt hard limit, dừng hoặc retry có kiểm soát.">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Đặt giới hạn quota cho AI Agent: hard-stop, ngân sách và circuit breaker","description":"Thiết kế giới hạn lượt gọi, token, thời gian và số bước cho AI Agent; phân biệt rate limit với quota hết, xử lý 429/503 và dừng an toàn khi chạm ngưỡng.","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/gioi-han-quota-ai-agent","mainEntityOfPage":{"@type":"WebPage","@id":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/gioi-han-quota-ai-agent"},"image":"https://ai-thuc-chien-blog.manhdungub.workers.dev/illustrations/ai-agent-quota-guard.svg","datePublished":"2026-11-02","dateModified":"2026-11-02","inLanguage":"vi-VN","author":{"@type":"Person","name":"DUNG - AI"},"publisher":{"@type":"Organization","name":"AI Thực Chiến","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/","logo":"https://ai-thuc-chien-blog.manhdungub.workers.dev/logo.svg"}}</script>
+<link rel="alternate" type="application/rss+xml" title="AI Thực Chiến RSS" href="../feed.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap"></noscript>
+<link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+<a class="skip-link" href="#main-content">Bỏ qua đến nội dung chính</a>
+<header class="site-header"><div class="container header-inner"><a class="brand" href="../"><span class="brand-mark">AI</span><span>AI <b>Thực Chiến</b></span></a><nav class="main-nav" aria-label="Điều hướng chính"><a href="../">Trang chủ</a><a href="../thu-vien.html">Thư viện</a><a href="../ngan-hang-ai.html">Ngân hàng AI</a></nav></div></header>
+<main class="section" style="max-width:900px;margin:auto" id="main-content">
+
+<div class="section-kicker">AI THỰC HÀNH · QUOTA &amp; AN TOÀN</div>
+<h1 style="font-size:clamp(38px,6vw,64px);letter-spacing:-2px">Đặt giới hạn quota cho AI Agent: hard-stop, ngân sách và circuit breaker</h1>
+<p class="article-byline" style="font-size:14px;color:var(--muted);margin:0 0 10px"><strong>Tác giả:</strong> DUNG - AI</p>
+<section class="article-author-note" aria-label="Ghi chú tác giả và sử dụng nội dung">
+<p>Bài viết do <strong>DUNG - AI</strong> biên soạn cho <strong>AI Thực Chiến Blog</strong>. Tài liệu nhà cung cấp được đối chiếu trực tiếp ngày 02/11/2026; hạn mức có thể thay đổi theo model, project, tổ chức và thời điểm. Khi dẫn lại, vui lòng liên kết về bài viết gốc.</p>
+<p>Các cấu hình và mã trong bài là ví dụ thiết kế, không phải kết quả chạy API thật. Không cần API key, credits hay bật billing để đọc và kiểm thử phần mô phỏng.</p>
+</section>
+<p style="color:var(--muted)">Thiết kế giới hạn lượt gọi, token, thời gian và số bước cho AI Agent; phân biệt rate limit với quota hết, xử lý 429/503 và dừng an toàn khi chạm ngưỡng.</p>
+<figure class="article-diagram" data-article-diagram="gioi-han-quota-ai-agent" role="group" aria-labelledby="article-diagram-title-gioi-han-quota-ai-agent" style="max-width:620px;margin:30px auto;padding:18px;border:1px solid var(--line);border-radius:18px;background:#0b1424">
+<svg viewBox="0 0 600 500" width="100%" height="auto" role="img" aria-labelledby="article-diagram-title-gioi-han-quota-ai-agent article-diagram-desc-gioi-han-quota-ai-agent" style="display:block;max-width:100%;height:auto">
+<title id="article-diagram-title-gioi-han-quota-ai-agent">Sơ đồ thực hành: Đặt giới hạn quota cho AI Agent: hard-stop, ngân sách và circuit breaker</title>
+<desc id="article-diagram-desc-gioi-han-quota-ai-agent">Ba bước chính trong bài viết: 1. Phân biệt rate limit, quota và ngân sách; 2. Thiết kế hard limit cho một lần chạy; 3. Cài bộ chặn lượt gọi và retry có giới hạn</desc>
+<defs><linearGradient id="diagram-accent-gioi-han-quota-ai-agent" x1="0" x2="1"><stop offset="0" stop-color="#55d6b5"/><stop offset="1" stop-color="#8ab4ff"/></linearGradient></defs>
+<text x="300" y="38" text-anchor="middle" fill="#73dfc2" font-size="16" font-weight="700" letter-spacing="2">LỘ TRÌNH THỰC HÀNH</text>
+<rect x="58" y="76" width="484" height="94" rx="18" fill="#14243b" stroke="#36506f" stroke-width="2"/>
+<circle cx="105" cy="123" r="22" fill="url(#diagram-accent-gioi-han-quota-ai-agent)"/>
+<text x="105" y="130" text-anchor="middle" fill="#081421" font-size="19" font-weight="800">1</text>
+<text x="148" y="115" fill="#eef4ff" font-size="19" font-weight="600"><tspan x="148" dy="0">Phân biệt rate limit, quota và</tspan><tspan x="148" dy="24">ngân sách</tspan></text>
+<path d="M300 172 V214" fill="none" stroke="#68d8bd" stroke-width="3" stroke-linecap="round"/>
+<path d="M291 204 L300 215 L309 204" fill="none" stroke="#68d8bd" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="58" y="222" width="484" height="94" rx="18" fill="#14243b" stroke="#36506f" stroke-width="2"/>
+<circle cx="105" cy="269" r="22" fill="url(#diagram-accent-gioi-han-quota-ai-agent)"/>
+<text x="105" y="276" text-anchor="middle" fill="#081421" font-size="19" font-weight="800">2</text>
+<text x="148" y="261" fill="#eef4ff" font-size="19" font-weight="600"><tspan x="148" dy="0">Thiết kế hard limit cho một lần</tspan><tspan x="148" dy="24">chạy</tspan></text>
+<path d="M300 318 V360" fill="none" stroke="#68d8bd" stroke-width="3" stroke-linecap="round"/>
+<path d="M291 350 L300 361 L309 350" fill="none" stroke="#68d8bd" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="58" y="368" width="484" height="94" rx="18" fill="#14243b" stroke="#36506f" stroke-width="2"/>
+<circle cx="105" cy="415" r="22" fill="url(#diagram-accent-gioi-han-quota-ai-agent)"/>
+<text x="105" y="422" text-anchor="middle" fill="#081421" font-size="19" font-weight="800">3</text>
+<text x="148" y="407" fill="#eef4ff" font-size="19" font-weight="600"><tspan x="148" dy="0">Cài bộ chặn lượt gọi và retry có</tspan><tspan x="148" dy="24">giới hạn</tspan></text>
+</svg>
+<figcaption style="margin-top:10px;color:var(--muted);font-size:13px;line-height:1.6">Sơ đồ tóm tắt ba phần chính của bài viết. Đọc hướng dẫn chi tiết và kiểm chứng kết quả trước khi áp dụng vào dữ liệu thật.</figcaption>
+</figure>
+<hr style="border-color:var(--line);margin:32px 0">
+<p><strong>Cập nhật:</strong> 02/11/2026 · <strong>Chủ đề:</strong> AI Agent, quản trị quota và độ tin cậy · <strong>Thời gian đọc:</strong> 12–15 phút</p>
+<p><strong>Đối tượng:</strong> Người mới thiết kế Agent hoặc workflow có gọi mô hình/API, đặc biệt khi cần giữ hệ thống trong hạn mức miễn phí. <strong>Kết quả mong đợi:</strong> mỗi lần chạy có giới hạn lượt gọi, bước, thời gian chờ và đầu ra; biết lúc nào nên chờ, dừng hoặc chuyển người duyệt.</p>
+<p><strong>Chuẩn bị:</strong> một nhiệm vụ nhỏ, tài liệu API chính thức của nhà cung cấp, môi trường JavaScript có Fetch API (Node.js 18+ hoặc tương đương). Phần kiểm thử dùng response giả; không gọi dịch vụ thật.</p>
+
+<h2>1. Phân biệt rate limit, quota và ngân sách</h2>
+<p>Ba khái niệm này liên quan nhưng không thay thế nhau. Nếu gộp chúng thành một con số “lượt dùng”, Agent có thể vẫn vượt ngưỡng dù số request trung bình có vẻ thấp.</p>
+<ul>
+<li><strong>Rate limit</strong> giới hạn tốc độ trong một khoảng thời gian: requests per minute (RPM), tokens per minute (TPM), requests per day (RPD), tokens per day hoặc giới hạn đồng thời. Chạm ngưỡng ngắn hạn thường có thể xử lý bằng giảm tốc độ và chờ đúng thời điểm.</li>
+<li><strong>Quota</strong> là lượng sử dụng được cấp cho một phạm vi và chu kỳ nhất định. Quota có thể gắn với project, tổ chức, model hoặc loại tác vụ; khi đã cạn, retry liên tục không tạo thêm hạn mức.</li>
+<li><strong>Ngân sách ứng dụng</strong> là giới hạn do chính bạn đặt trước khi gọi dịch vụ: tối đa bao nhiêu lần gọi, bao nhiêu bước, bao lâu chờ, bao nhiêu tài liệu và bao nhiêu đầu ra cho một run/ngày.</li>
+<li><strong>Concurrency</strong> là số yêu cầu chạy cùng lúc. Một workflow có thể không vượt tổng lượt theo phút nhưng vẫn tạo burst khi nhiều nhánh cùng gọi model.</li>
+</ul>
+<p>Tài liệu OpenAI mô tả nhiều chiều giới hạn như RPM, RPD, TPM và TPD, đồng thời phân biệt giới hạn tổ chức với project. Tài liệu Gemini dùng RPM, TPM và RPD, áp dụng theo project và thay đổi theo model. Cloudflare Workers AI công bố giới hạn theo loại tác vụ và một số model; tài liệu còn lưu ý suy luận ở local mode bằng Wrangler cũng tính vào giới hạn. Vì vậy, đừng chép một con số từ bài hướng dẫn khác rồi coi đó là quota của tài khoản mình.</p>
+<div style="overflow-x:auto"><table><thead><tr><th>Tín hiệu</th><th>Cách hiểu cần kiểm tra</th><th>Hành động an toàn</th></tr></thead><tbody>
+<tr><td><code>429</code> với mã rate-limit tạm thời hoặc có <code>Retry-After</code></td><td>Request đang đi quá nhanh hoặc chạm cửa sổ giới hạn ngắn.</td><td>Giảm tốc độ; chờ ít nhất thời gian máy chủ yêu cầu; retry có giới hạn.</td></tr>
+<tr><td><code>429</code> kèm <code>insufficient_quota</code>, <code>credit_balance_exhausted</code> hoặc mã billing/spend limit</td><td>Hạn mức sử dụng hoặc ngân sách đã cạn, không phải lỗi cần thử lại liên tục.</td><td>Dừng run, lưu kết quả một phần và chờ chu kỳ reset/người quản trị xử lý. Không bật billing, mua credits hoặc overage.</td></tr>
+<tr><td><code>503</code> hoặc mã overload tạm thời</td><td>Dịch vụ/model đang thiếu năng lực xử lý hoặc tạm thời không sẵn sàng.</td><td>Retry ngắn, có backoff và giới hạn tổng thời gian; mở circuit breaker nếu lỗi lặp lại.</td></tr>
+<tr><td><code>400</code>, <code>401</code>, <code>403</code></td><td>Đầu vào, xác thực hoặc quyền truy cập không hợp lệ.</td><td>Dừng để sửa cấu hình/quyền; không retry cùng request.</td></tr>
+<tr><td><code>429</code> chưa phân loại được</td><td>Chưa biết là rate limit tạm thời hay quota đã hết.</td><td>Fail closed: dừng và đọc mã lỗi, thông tin quota/reset của đúng project/model.</td></tr>
+</tbody></table></div>
+<p>RFC 6585 định nghĩa HTTP 429 cho trường hợp gửi quá nhiều request trong một khoảng thời gian và cho phép máy chủ gửi <code>Retry-After</code>. Nhưng mã HTTP một mình không đủ để kết luận cách phục hồi: cùng một trạng thái 429 có thể mang ý nghĩa khác nhau theo nhà cung cấp và mã lỗi trong response body.</p>
+
+<h2>2. Thiết kế hard limit cho một lần chạy</h2>
+<p>Đừng bắt đầu bằng câu hỏi “nhà cung cấp cho bao nhiêu lượt miễn phí?”. Hãy bắt đầu bằng câu hỏi “một nhiệm vụ cụ thể được phép tiêu thụ tối đa bao nhiêu tài nguyên?”. Sau đó mới đối chiếu giới hạn bên ngoài và chọn ngưỡng thấp hơn.</p>
+<p>Với Agent tóm tắt một nhóm tài liệu, cấu hình khởi điểm để thử bằng dữ liệu giả có thể là:</p>
+<div style="overflow-x:auto"><table><thead><tr><th>Tham số</th><th>Ví dụ minh họa</th><th>Ý nghĩa</th></tr></thead><tbody>
+<tr><td><code>maxAgentSteps</code></td><td>6</td><td>Chặn vòng lặp lập kế hoạch–gọi công cụ–quan sát.</td></tr>
+<tr><td><code>maxCallsPerRun</code></td><td>5</td><td>Tổng số lần gửi request, tính cả retry.</td></tr>
+<tr><td><code>maxAttemptsPerRequest</code></td><td>3</td><td>Số lần thử tối đa cho một request logic.</td></tr>
+<tr><td><code>maxTotalRetryWaitMs</code></td><td>15.000 ms</td><td>Tổng thời gian chờ retry trong run.</td></tr>
+<tr><td><code>maxConcurrentRequests</code></td><td>1</td><td>Không tạo burst từ nhiều nhánh cùng lúc.</td></tr>
+<tr><td><code>maxInputCharsPerRequest</code></td><td>12.000 ký tự</td><td>Giới hạn đầu vào sơ bộ; ký tự không đồng nghĩa token.</td></tr>
+<tr><td><code>maxOutputTokens</code></td><td>800</td><td>Giới hạn đầu ra ở tham số riêng của endpoint/model.</td></tr>
+</tbody></table></div>
+<p><strong>Các con số trên chỉ là cấu hình minh họa, không phải quota được bảo đảm của OpenAI, Google hay Cloudflare.</strong> Chạy pilot bằng mock trước, đo độ dài dữ liệu thật đã được phép xử lý và điều chỉnh ngưỡng theo chất lượng đầu ra. Nếu nhà cung cấp yêu cầu thanh toán hoặc bật billing để tiếp tục, dừng tại đó theo chính sách không phát sinh phí.</p>
+<h3>Đặt giới hạn ở nhiều lớp</h3>
+<ol>
+<li><strong>Lớp Agent:</strong> giới hạn số bước, số lần gọi tool, số tài liệu mỗi lượt, độ dài prompt và kích thước kết quả. Không cho model tự tăng ngân sách hoặc tự thêm công cụ.</li>
+<li><strong>Lớp điều phối:</strong> đếm mọi request trước khi gửi; giới hạn tổng lượt theo run/ngày, số lần retry, tổng thời gian chờ và concurrency. Kiểm tra ngân sách trước mỗi lần gọi, không chỉ ở đầu workflow.</li>
+<li><strong>Lớp nhà cung cấp:</strong> đọc đúng trang Limits/Usage của project, model và tổ chức. Nếu tài khoản có hard spend cap hoặc giới hạn sử dụng, xem đó là lớp bảo vệ bổ sung, không thay thế bộ đếm trong ứng dụng.</li>
+<li><strong>Lớp con người:</strong> yêu cầu duyệt trước hành động ghi, gửi, đăng, mua hoặc thay đổi dữ liệu. Hết ngân sách thì trả kết quả một phần, không tự xin quyền cao hơn.</li>
+</ol>
+<h3>Phân biệt giới hạn theo run và theo ngày</h3>
+<p>Bộ đếm trong bộ nhớ chỉ bảo vệ một tiến trình đang chạy. Nếu tiến trình khởi động lại, bộ đếm có thể trở về 0; nếu có hai worker đồng thời, cả hai có thể cùng đọc “còn 1 lượt” rồi đều gửi request. Với giới hạn theo ngày hoặc nhiều worker, hãy lưu bộ đếm theo khóa rõ ràng như project + model + ngày + run_id trong nơi lưu trữ có thao tác tăng nguyên tử/transaction. Không dùng một bảng tính không có khóa nguyên tử làm cổng chặn duy nhất cho nhiều tiến trình đồng thời.</p>
+<p>Đầu vào ký tự chỉ là ước lượng thô. Khi endpoint hỗ trợ, đặt tham số token đầu ra đúng tên của endpoint: tài liệu OpenAI hiện phân biệt <code>max_output_tokens</code> ở Responses API và <code>max_completion_tokens</code> ở Chat Completions. Đọc usage thực tế trả về để hiệu chỉnh, nhưng không để số liệu sau request thay thế giới hạn trước request.</p>
+
+<h2>3. Cài bộ chặn lượt gọi và retry có giới hạn</h2>
+<p>Đoạn JavaScript dưới đây minh họa một lớp bảo vệ nhỏ. Nó đếm cả lần gọi đầu và lần retry; tôn trọng <code>Retry-After</code> nếu có; dùng exponential backoff cộng jitter khi thiếu header; và mặc định dừng với 429 chưa phân loại. Bộ đếm phải được khởi tạo cho từng run và lưu bền vững nếu cần giới hạn xuyên lần khởi động.</p>
+<pre style="white-space:pre-wrap;overflow-wrap:anywhere;background:#11182a;padding:16px;border-radius:12px;color:#dfe5f5"><code>const HARD_STOP_CODES = new Set([
+  &quot;insufficient_quota&quot;,
+  &quot;credit_balance_exhausted&quot;,
+  &quot;organization_usage_limit_exceeded&quot;,
+  &quot;project_spend_limit_exceeded&quot;
+]);
+
+const sleep = (ms) =&gt; new Promise(resolve =&gt; setTimeout(resolve, ms));
+
+function parseRetryAfter(value) {
+  if (!value) return null;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) &amp;&amp; seconds &gt;= 0) return seconds * 1000;
+  const date = Date.parse(value);
+  return Number.isNaN(date) ? null : Math.max(0, date - Date.now());
+}
+
+function classifyProviderError(status, body) {
+  const code = String(body?.error?.code ?? body?.code ?? &quot;&quot;).toLowerCase();
+  if (HARD_STOP_CODES.has(code)) return &quot;stop&quot;;
+  if (status === 429 &amp;&amp; [&quot;rate_limit_error&quot;, &quot;slow_down&quot;].includes(code)) return &quot;retry&quot;;
+  if ([408, 503, 504].includes(status)) return &quot;retry&quot;;
+  // Mặc định đóng an toàn: 429 chưa phân loại không tự động retry.
+  return &quot;stop&quot;;
+}
+
+async function guardedFetch(url, init, budget, fetchImpl = fetch) {
+  budget.waitedMs ??= 0;
+  for (let attempt = 0; attempt &lt; budget.maxAttempts; attempt += 1) {
+    if (budget.calls &gt;= budget.maxCalls) throw new Error(&quot;BUDGET_EXHAUSTED&quot;);
+    budget.calls += 1; // Tính cả request đầu và mọi lần retry.
+    const response = await fetchImpl(url, init);
+    if (response.ok) return response;
+
+    const body = await response.clone().json().catch(() =&gt; ({}));
+    const action = classifyProviderError(response.status, body);
+    if (action !== &quot;retry&quot; || attempt === budget.maxAttempts - 1) {
+      throw new Error(&quot;REQUEST_STOPPED:&quot; + response.status);
+    }
+
+    const serverWait = parseRetryAfter(response.headers.get(&quot;Retry-After&quot;));
+    const backoff = Math.min(1000 * (2 ** attempt), 8000);
+    const delay = serverWait === null
+      ? backoff + Math.floor(Math.random() * 500)
+      : serverWait + Math.floor(Math.random() * 250);
+
+    if (budget.waitedMs + delay &gt; budget.maxTotalWaitMs) {
+      throw new Error(&quot;DEFER_UNTIL_LATER&quot;);
+    }
+    budget.waitedMs += delay;
+    await sleep(delay);
+  }
+  throw new Error(&quot;RETRY_LIMIT_REACHED&quot;);
+}
+
+const budget = {
+  calls: 0,
+  maxCalls: 5,
+  maxAttempts: 3,
+  waitedMs: 0,
+  maxTotalWaitMs: 15000
+};</code></pre>
+<p><strong>Lưu ý về bộ phân loại:</strong> mã <code>insufficient_quota</code>, <code>credit_balance_exhausted</code> và các mã spend/usage limit là hard stop trong ví dụ. Google Gemini có thể trả <code>RESOURCE_EXHAUSTED</code>; hãy đọc metric, model, project và thông tin reset để phân biệt rate limit tạm thời với quota ngày đã cạn. Chỉ bổ sung mã đó vào nhánh retry sau khi xác minh đúng ngữ nghĩa của response đang dùng. Không biến mọi 429 thành retry tự động.</p>
+<p>Ví dụ này không thay thế SDK chính thức. Nếu SDK đã tự retry, hãy tính số lần thử của SDK vào ngân sách hoặc tắt một tầng retry để tránh retry lồng nhau. OpenAI cũng lưu ý request thất bại vẫn có thể tính vào giới hạn theo phút; gửi lại liên tục có thể làm tình hình xấu hơn.</p>
+<h3>Kiểm thử không gọi API thật</h3>
+<p>Tiêm một hàm <code>fetch</code> giả để mô phỏng response 429 tạm thời rồi 200. Test này không kết nối mạng, không cần API key và không tiêu thụ quota:</p>
+<pre style="white-space:pre-wrap;overflow-wrap:anywhere;background:#11182a;padding:16px;border-radius:12px;color:#dfe5f5"><code>const fakeResponses = [
+  new Response(JSON.stringify({ error: { code: &quot;rate_limit_error&quot; } }), {
+    status: 429,
+    headers: { &quot;Retry-After&quot;: &quot;0&quot; }
+  }),
+  new Response(JSON.stringify({ ok: true }), { status: 200 })
+];
+const mockFetch = async () =&gt; fakeResponses.shift();
+const testBudget = {
+  calls: 0, maxCalls: 3, maxAttempts: 2,
+  waitedMs: 0, maxTotalWaitMs: 1000
+};
+const result = await guardedFetch(
+  &quot;https://mock.invalid/test&quot;, {}, testBudget, mockFetch
+);
+console.assert(result.status === 200);
+console.assert(testBudget.calls === 2);</code></pre>
+<p>Kết quả mong đợi của ví dụ mô phỏng: response cuối có status 200 và bộ đếm bằng 2 vì đã có một request ban đầu cùng một request retry. Đây là kết quả kỳ vọng của mock, không phải bằng chứng đã chạy với dịch vụ bên ngoài.</p>
+
+<h2>4. Đặt circuit breaker để không lặp khi dịch vụ suy giảm</h2>
+<p>Retry xử lý một lỗi tạm thời đơn lẻ; circuit breaker xử lý tình trạng lỗi lặp lại. Có thể mô hình hóa ba trạng thái:</p>
+<ul>
+<li><strong>CLOSED:</strong> cho phép request trong ngân sách. Ghi nhận lỗi tạm thời liên tiếp.</li>
+<li><strong>OPEN:</strong> ngừng gọi dịch vụ trong một khoảng nghỉ; trả trạng thái “deferred” thay vì tiếp tục tiêu thụ lượt.</li>
+<li><strong>HALF-OPEN:</strong> sau thời gian nghỉ, cho phép một request thăm dò. Nếu thành công thì đóng mạch; nếu thất bại thì mở lại.</li>
+</ul>
+<p>Ví dụ thử nghiệm có thể mở mạch sau 3 lỗi tạm thời liên tiếp và chờ 60 giây trước một lần thăm dò. Đây là ngưỡng minh họa, không phải giá trị chuẩn. Không kéo dài thời gian OPEN vô hạn chỉ vì mỗi request mới lại gặp lỗi; lưu thời điểm mở mạch đầu tiên và đặt thời gian thử lại rõ ràng. Hướng dẫn Circuit Breaker của AWS giải thích cách mẫu này ngăn caller liên tục gọi một dịch vụ đang lỗi và cho phép kiểm tra khả năng phục hồi.</p>
+<p>Nếu nhiều worker cùng chạy, trạng thái circuit breaker phải được chia sẻ hoặc điều phối tập trung; biến trong bộ nhớ của một worker không bảo vệ các worker khác. Với thao tác có tác dụng phụ, chỉ retry khi có cơ chế idempotency hoặc xác nhận thao tác trước đó chưa được thực hiện.</p>
+
+<h2>5. Ví dụ mô phỏng: Agent tóm tắt 12 tài liệu công khai</h2>
+<p>Giả sử người dùng yêu cầu tóm tắt 12 tài liệu công khai thành bảng so sánh. Để minh họa, bộ điều phối đặt tối đa 5 request, 6 bước Agent, concurrency bằng 1 và tổng thời gian chờ retry tối đa 15 giây. Đây là kịch bản giả lập, không phải lần chạy thực tế.</p>
+<ol>
+<li>Agent nhận danh sách 12 URL và loại trùng trước khi gọi công cụ.</li>
+<li>Ba tài liệu đầu tiên được đọc và tóm tắt trong giới hạn.</li>
+<li>Request tiếp theo nhận 429 kèm mã quota đã cạn. Bộ phân loại trả về hard stop; Agent không thử lại và không tìm cách đổi project/key để né giới hạn.</li>
+<li>Workflow lưu trạng thái một phần, số request đã dùng và danh sách tài liệu còn lại; chuyển trạng thái sang <code>deferred</code>.</li>
+</ol>
+<div style="overflow-x:auto"><table><thead><tr><th>Trường trạng thái giả lập</th><th>Giá trị</th></tr></thead><tbody>
+<tr><td><code>run_id</code></td><td><code>demo-2026-11-02-001</code></td></tr>
+<tr><td><code>status</code></td><td><code>deferred</code></td></tr>
+<tr><td><code>documents_planned</code></td><td>12</td></tr>
+<tr><td><code>documents_completed</code></td><td>3</td></tr>
+<tr><td><code>calls_used</code></td><td>4</td></tr>
+<tr><td><code>stop_reason</code></td><td><code>quota_exhausted</code></td></tr>
+<tr><td><code>next_safe_action</code></td><td>Chờ reset hoặc người quản trị xác minh; không tự retry.</td></tr>
+</tbody></table></div>
+<p>Đầu ra đúng phải ghi rõ “đã xử lý 3/12 tài liệu”, không được viết “đã hoàn thành báo cáo 12 tài liệu”. Nếu người dùng tiếp tục sau đó, run mới phải đọc trạng thái đã lưu và chỉ xử lý phần còn lại khi quota cho phép; không gửi lại ba tài liệu đã hoàn thành.</p>
+
+<h2>6. Prompt và cấu hình mẫu</h2>
+<p>Prompt dưới đây giúp Agent hiểu giới hạn và cách báo cáo. Tuy nhiên, prompt chỉ là chỉ dẫn; bộ đếm, quyền công cụ, timeout và circuit breaker phải được thực thi ở tầng ứng dụng:</p>
+<pre style="white-space:pre-wrap;overflow-wrap:anywhere;background:#11182a;padding:16px;border-radius:12px;color:#dfe5f5"><code>Vai trò: Bạn là AI Agent xử lý tài liệu công khai trong phạm vi được cấp.
+Mục tiêu: [một kết quả cụ thể, có thể kiểm chứng].
+Nguồn được phép: [danh sách URL hoặc kho dữ liệu đã duyệt].
+
+Ngân sách:
+- Tối đa 6 bước Agent; 5 lượt gọi mạng tính cả retry.
+- Tối đa 3 lần thử cho một request; tổng chờ retry không quá 15 giây.
+- Chỉ 1 request đồng thời; không tự tăng ngân sách hoặc thêm công cụ.
+- Tuân thủ giới hạn đầu vào/đầu ra do bộ điều phối truyền vào.
+
+Quy tắc dừng:
+1. Dừng khi billing/quota đã cạn hoặc quyền bị từ chối.
+2. Với 429 chưa phân loại, không tự retry; báo mã lỗi và chờ người kiểm tra.
+3. Chỉ retry lỗi tạm thời đã được bộ điều phối cho phép.
+4. Hết ngân sách thì trả kết quả một phần và nêu rõ phần chưa làm.
+5. Không đăng, gửi, thanh toán, xóa hoặc ghi dữ liệu thật.
+6. Hành động có tác động bên ngoài phải chờ người có trách nhiệm phê duyệt.
+
+Đầu ra: JSON gồm status, completed_items, remaining_items, calls_used,
+stop_reason, sources và next_safe_action. Không tuyên bố hoàn tất nếu còn thiếu.</code></pre>
+<p>Cấu hình điều phối dạng JSON có thể bắt đầu từ mẫu sau. Các giá trị là ngưỡng nội bộ minh họa, không phải giới hạn của nhà cung cấp:</p>
+<pre style="white-space:pre-wrap;overflow-wrap:anywhere;background:#11182a;padding:16px;border-radius:12px;color:#dfe5f5"><code>{
+  &quot;maxAgentSteps&quot;: 6,
+  &quot;maxCallsPerRun&quot;: 5,
+  &quot;maxAttemptsPerRequest&quot;: 3,
+  &quot;maxTotalRetryWaitMs&quot;: 15000,
+  &quot;maxConcurrentRequests&quot;: 1,
+  &quot;maxInputCharsPerRequest&quot;: 12000,
+  &quot;maxOutputTokens&quot;: 800,
+  &quot;stopOnUnknown429&quot;: true,
+  &quot;stopOnBillingOrQuotaError&quot;: true,
+  &quot;requireHumanApprovalBeforeWrite&quot;: true
+}</code></pre>
+<p>Hãy kiểm tra cấu hình trước khi chạy: nếu <code>maxCallsPerRun</code> bằng 0 thì không gửi request; nếu ngân sách ngày đã hết thì từ chối khởi chạy; nếu không lưu được bộ đếm nguyên tử thì dừng thay vì chạy với giới hạn không đáng tin.</p>
+
+<h2>7. Ma trận kiểm thử trước khi bật thật</h2>
+<div style="overflow-x:auto"><table><thead><tr><th>Ca thử</th><th>Đầu vào mô phỏng</th><th>Kết quả bắt buộc</th></tr></thead><tbody>
+<tr><td>Thành công bình thường</td><td>HTTP 200</td><td>Trả kết quả; bộ đếm tăng đúng 1.</td></tr>
+<tr><td>Chạm hard limit</td><td><code>calls = maxCalls</code></td><td>Dừng trước khi gọi fetch; không có request mới.</td></tr>
+<tr><td>Rate limit tạm thời</td><td>429 có mã đã cho phép retry và <code>Retry-After</code></td><td>Chờ ít nhất thời gian máy chủ yêu cầu; chỉ retry trong ngân sách.</td></tr>
+<tr><td>Quota/billing hết</td><td>429 với <code>insufficient_quota</code> hoặc mã hard stop</td><td>Dừng ngay; không retry và không thay đổi billing.</td></tr>
+<tr><td>Model quá tải</td><td>503 liên tiếp</td><td>Backoff có jitter; mở circuit breaker khi đạt ngưỡng.</td></tr>
+<tr><td>Retry-After quá dài</td><td>Thời gian chờ vượt <code>maxTotalWaitMs</code></td><td>Chuyển deferred; không rút ngắn thời gian chờ để cố gọi sớm.</td></tr>
+<tr><td>Khởi động lại tiến trình</td><td>Run ID đã có bộ đếm lưu bền vững</td><td>Đọc lại số lượt đã dùng; không đặt lại ngân sách về 0.</td></tr>
+<tr><td>Hai worker đồng thời</td><td>Cùng xin lượt cuối</td><td>Chỉ một worker được cấp lượt nhờ thao tác tăng nguyên tử.</td></tr>
+<tr><td>Tool ghi dữ liệu</td><td>Timeout sau khi gửi lệnh ghi</td><td>Không retry mù; kiểm tra idempotency/trạng thái và yêu cầu duyệt nếu cần.</td></tr>
+</tbody></table></div>
+<p>Trước khi dùng dữ liệu thật, chạy toàn bộ ca bằng mock. Sau đó mới thử một tác vụ chỉ đọc, với dữ liệu công khai hoặc giả lập, trong giới hạn đã được người quản trị cho phép. Không dùng quota thật làm môi trường kiểm thử tải.</p>
+
+<h2>8. Lỗi thường gặp và cách khắc phục</h2>
+<ul>
+<li><strong>Chỉ giới hạn RPM:</strong> một request có prompt rất dài vẫn có thể chạm TPM. Giới hạn cả số request, token đầu vào/đầu ra, thời gian và số bước.</li>
+<li><strong>Retry mọi lỗi 429:</strong> quota hoặc billing đã cạn không được giải quyết bằng retry. Phân loại theo status, error code, metric và reset time.</li>
+<li><strong>Retry lồng nhau:</strong> SDK, workflow và Agent đều retry có thể nhân số request. Chỉ định một tầng chịu trách nhiệm và tính tất cả lần thử vào ngân sách.</li>
+<li><strong>Không tính concurrency:</strong> nhiều nhánh cùng chạy tạo burst dù tổng số request theo phút thấp. Bắt đầu với concurrency 1 rồi tăng chỉ sau khi đo.</li>
+<li><strong>Bộ đếm chỉ nằm trong RAM:</strong> restart hoặc chạy nhiều worker làm mất tính nhất quán. Lưu bền vững và dùng thao tác nguyên tử.</li>
+<li><strong>Đặt output limit quá cao:</strong> tham số đầu ra lớn hơn nhu cầu có thể làm tăng lượng token dự trù và thời gian xử lý. Chọn gần với đầu ra cần thiết rồi kiểm thử.</li>
+<li><strong>Không có trạng thái một phần:</strong> khi dừng giữa chừng, workflow dễ chạy lại toàn bộ. Lưu checkpoint theo tài liệu/đối tượng và ghi rõ phần hoàn thành.</li>
+<li><strong>Dùng prompt làm rào chắn duy nhất:</strong> model có thể không tuân thủ. Ràng buộc phải nằm trong code, quyền công cụ và tài khoản.</li>
+</ul>
+
+<h2>9. Checklist vận hành và giới hạn</h2>
+<ul>
+<li>Đã xác định giới hạn theo project, model, tổ chức và chu kỳ; ghi ngày kiểm tra nguồn.</li>
+<li>Mỗi run có ID, số request tối đa, số bước tối đa, concurrency và deadline.</li>
+<li>Mỗi lần retry đều được tính vào ngân sách; không có vòng lặp vô hạn hoặc retry lồng nhau.</li>
+<li>429 chưa phân loại, quota/billing hết và lỗi quyền đều dừng an toàn.</li>
+<li>Retry-After được tôn trọng; tổng thời gian chờ và số lần thử có trần.</li>
+<li>Quota theo ngày được lưu bền vững, có khóa và thao tác tăng nguyên tử.</li>
+<li>Kết quả một phần được đánh dấu rõ; không tuyên bố hoàn tất khi thiếu dữ liệu.</li>
+<li>Tool ghi/gửi/đăng/mua/xóa cần idempotency và phê duyệt theo mức rủi ro.</li>
+<li>Không mua credits, bật overage, nâng cấp hoặc thay đổi billing khi gặp giới hạn.</li>
+</ul>
+<p><strong>Giới hạn:</strong> quota và cách trả lỗi thay đổi theo nhà cung cấp, model, project, gói dịch vụ và thời điểm. Bộ đếm ứng dụng không thể biết chính xác mọi hoạt động khác đang dùng chung project. Token ước lượng từ ký tự có sai số; dữ liệu usage trả về thường đến sau request. Circuit breaker không thay thế giới hạn quyền hoặc kiểm soát chi phí ở tài khoản. Đây là hướng dẫn thiết kế, không phải bảo đảm rằng một nhà cung cấp sẽ luôn trả về cùng mã lỗi.</p>
+<h2>Kết luận</h2>
+<p>Muốn AI Agent chạy an toàn trong hạn mức, hãy đặt hard limit trước khi gọi model, đếm cả retry, giới hạn concurrency, phân loại lỗi và lưu ngân sách theo run. Khi không chắc 429 là lỗi tạm thời hay quota đã cạn, dừng để kiểm tra. Một Agent biết trả kết quả một phần và chờ đúng lúc đáng tin cậy hơn một Agent cố hoàn thành bằng mọi giá.</p>
+
+<h2>Đọc tiếp để triển khai sâu hơn</h2>
+<ul>
+<li><a href="/articles/xu-ly-loi-retry-workflow">Retry API an toàn: phân loại lỗi và backoff có giới hạn</a> — đi sâu vào chiến lược retry cho workflow.</li>
+<li><a href="/articles/so-sanh-goi-mien-phi-ai">So sánh gói miễn phí AI: giới hạn, quyền riêng tư và chi phí ẩn</a> — kiểm tra điều kiện và giới hạn trước khi chọn dịch vụ.</li>
+<li><a href="/articles/do-luong-hieu-qua-workflow-ai">Đo hiệu quả workflow AI: 5 chỉ số và thử nghiệm 7 ngày</a> — đo thời gian, chất lượng, chi phí và lỗi.</li>
+<li><a href="/articles/bao-ve-api-key-automation">Checklist API key cho Airtable và Activepieces: 8 bước an toàn</a> — bảo vệ thông tin xác thực và giới hạn quyền.</li>
+</ul>
+<h2>Tài liệu chính thức tham khảo</h2>
+<ul>
+<li><a href="https://developers.openai.com/api/docs/guides/rate-limits" target="_blank" rel="noopener noreferrer">OpenAI API — Rate limits</a>: các chiều giới hạn, header rate-limit và hướng dẫn giảm lỗi tạm thời. Đối chiếu ngày 02/11/2026.</li>
+<li><a href="https://help.openai.com/en/articles/5955604-troubleshooting-api-rate-limits-and-429-errors" target="_blank" rel="noopener noreferrer">OpenAI Help Center — Troubleshooting API rate limits and 429 errors</a>: phân biệt rate limit tạm thời với credit/usage limit; trang hiển thị cập nhật 29/10/2026. Kiểm tra lại ngày 02/11/2026.</li>
+<li><a href="https://developers.openai.com/api/docs/guides/error-codes" target="_blank" rel="noopener noreferrer">OpenAI API — Error codes</a>: phân loại lỗi 429/503 và mã lỗi liên quan đến credit, spend hoặc usage. Đối chiếu ngày 02/11/2026.</li>
+<li><a href="https://ai.google.dev/gemini-api/docs/rate-limits" target="_blank" rel="noopener noreferrer">Google AI for Developers — Gemini API rate limits</a>: RPM, TPM, RPD và phạm vi project/model. Đối chiếu ngày 02/11/2026.</li>
+<li><a href="https://ai.google.dev/gemini-api/docs/troubleshooting" target="_blank" rel="noopener noreferrer">Google AI for Developers — Troubleshooting guide</a>: chiến lược exponential backoff cho lỗi tạm thời 429/503. Đối chiếu ngày 02/11/2026.</li>
+<li><a href="https://developers.cloudflare.com/workers-ai/platform/limits/" target="_blank" rel="noopener noreferrer">Cloudflare Workers AI — Limits</a>: giới hạn theo task/model; tài liệu ghi cập nhật 17/09/2026. Kiểm tra lại ngày 02/11/2026.</li>
+<li><a href="https://www.rfc-editor.org/rfc/rfc6585.html" target="_blank" rel="noopener noreferrer">IETF — RFC 6585, mục 4: 429 Too Many Requests</a>: định nghĩa HTTP 429 và header Retry-After. Đối chiếu ngày 02/11/2026.</li>
+<li><a href="https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/circuit-breaker.html" target="_blank" rel="noopener noreferrer">AWS Prescriptive Guidance — Circuit breaker pattern</a>: ngăn caller tiếp tục gọi dịch vụ đang lỗi và kiểm tra khả năng phục hồi. Đối chiếu ngày 02/11/2026.</li>
+</ul>
+<p>Hãy mở tài liệu gốc tại thời điểm triển khai để xác nhận mã lỗi, giới hạn và tên tham số đang áp dụng. Bài viết không khẳng định bất kỳ quota miễn phí cố định nào và không khuyến nghị bật thanh toán để vượt giới hạn.</p>
+
+<section class="article-faq" aria-labelledby="faq-quota-agent">
+<h2 id="faq-quota-agent">Câu hỏi thường gặp</h2>
+<h3>Gặp HTTP 429 có phải lúc nào cũng chờ rồi retry?</h3>
+<p>Không. 429 có thể là rate limit tạm thời, nhưng cũng có thể là quota, credit hoặc spend limit đã cạn. Đọc error code và thông tin project/model trước; nếu chưa phân loại được, dừng an toàn thay vì retry mù.</p>
+<h3>Quota miễn phí có phải ngân sách mà Agent có thể tự dùng hết?</h3>
+<p>Không nên coi đó là ngân sách được bảo đảm. Hạn mức có thể thay đổi, dùng chung theo project/tổ chức và bị ảnh hưởng bởi ứng dụng khác. Đặt ngân sách nội bộ thấp hơn, theo dõi bộ đếm và dừng nếu dịch vụ yêu cầu thanh toán.</p>
+<h3>Retry và circuit breaker khác nhau thế nào?</h3>
+<p>Retry thử lại một request lỗi tạm thời trong giới hạn. Circuit breaker ngăn các request mới tiếp tục gọi một dịch vụ đang suy giảm sau nhiều lỗi liên tiếp, rồi chỉ cho phép một lần thăm dò khi hết thời gian nghỉ.</p>
+<h3>Có thể chỉ dùng prompt để giới hạn số lần gọi không?</h3>
+<p>Không. Prompt không phải cơ chế cưỡng chế. Số bước, số request, quyền công cụ, timeout và bộ đếm phải được thực thi ở tầng điều phối; hành động có tác động bên ngoài cần bước phê duyệt phù hợp.</p>
+</section>
+
+<section class="related-articles" aria-labelledby="related-articles-title">
+<div class="related-articles-heading"><p class="section-kicker">ĐỌC TIẾP</p><h2 id="related-articles-title">Bài viết liên quan</h2><p>Đi từ quản trị quota đến retry, lựa chọn công cụ và đo hiệu quả workflow.</p></div>
+<nav class="related-articles-grid" aria-label="Bài viết liên quan">
+<a class="related-article" href="/articles/xu-ly-loi-retry-workflow"><strong>Retry API an toàn</strong><span>Phân loại lỗi, backoff có giới hạn và chống lặp tác dụng phụ.</span></a>
+<a class="related-article" href="/articles/so-sanh-goi-mien-phi-ai"><strong>So sánh gói miễn phí AI</strong><span>Đọc giới hạn, quyền riêng tư và chi phí ẩn trước khi chọn.</span></a>
+<a class="related-article" href="/articles/do-luong-hieu-qua-workflow-ai"><strong>Đo hiệu quả workflow AI</strong><span>Đo chất lượng, thời gian, chi phí và lỗi trước khi mở rộng.</span></a>
+<a class="related-article" href="/articles/bao-ve-api-key-automation"><strong>Bảo vệ API key trong workflow</strong><span>Giới hạn quyền và xử lý an toàn thông tin xác thực.</span></a>
+<a class="related-article" href="/articles/ai-agent-thuc-hanh-tu-thiet-ke-den-kiem-soat"><strong>AI Agent là gì? Hướng dẫn thực hành</strong><span>Thiết kế Agent có nguồn, giới hạn quyền và điểm duyệt.</span></a>
+<a class="related-article" href="/articles/mcp-filesystem-server-an-toan"><strong>MCP Filesystem Server an toàn</strong><span>Giới hạn quyền tệp và kiểm soát thao tác ghi của Agent.</span></a>
+</nav>
+</section>
+<p class="article-library-cta" style="margin:28px 0 12px"><a class="button primary" href="../thu-vien.html">Khám phá thư viện bài viết →</a></p>
+<section class="article-reader-note" aria-labelledby="article-reader-note-title">
+<h2 id="article-reader-note-title">Lời nhắc dành cho độc giả</h2>
+<p>Bài viết là hướng dẫn thiết kế, không phải xác nhận rằng một Agent đã được cài đặt, chạy thử hoặc đạt kết quả trong tài khoản của bạn. Ví dụ mô phỏng và response giả không phải kết quả thực tế. Trước khi áp dụng, hãy kiểm tra tài liệu chính thức, model, project, quota, quyền và chi phí hiện hành. Không nhập dữ liệu nhạy cảm vào dịch vụ chưa được phê duyệt; không bật billing, overage hoặc mua credits chỉ để vượt giới hạn. Thử bằng mock hoặc dữ liệu công khai, đặt hard stop và yêu cầu người có trách nhiệm duyệt trước hành động có tác động bên ngoài.</p>
+<p>Nếu phát hiện tài liệu thay đổi, mã lỗi không còn đúng hoặc liên kết hỏng, hãy đối chiếu nguồn gốc trước khi áp dụng và gửi phản hồi để bài được cập nhật.</p>
+</section>
+<section class="article-copyright" aria-labelledby="article-copyright-title">
+<h2 id="article-copyright-title">Thông báo bản quyền</h2>
+<p>© 2026 <strong>DUNG - AI</strong> · <strong>AI Thực Chiến Blog</strong>. Bảo lưu quyền tác giả đối với phần nội dung và sơ đồ do dự án tự biên soạn, tự thiết kế. Không tự ý sao chép toàn bộ, tái bản hoặc sử dụng thương mại phần nội dung này khi chưa được chủ thể quyền cho phép, trừ các trường hợp pháp luật có quy định khác. Tên thương mại, nhãn hiệu, tài liệu và tài sản của bên thứ ba (nếu có) thuộc quyền của chủ thể tương ứng và chịu sự điều chỉnh của giấy phép/điều khoản riêng.</p>
+</section>
+<section class="article-attribution" aria-labelledby="article-attribution-title">
+<h2 id="article-attribution-title">Ghi nguồn khi trích dẫn và sử dụng</h2>
+<p>Khi trích dẫn hoặc được cho phép sử dụng lại nội dung từ bài viết này, vui lòng ghi rõ tác giả <strong>DUNG - AI</strong>, nguồn <strong>AI Thực Chiến Blog</strong> và đính kèm <a href="https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/gioi-han-quota-ai-agent">liên kết đến bài viết gốc</a>. Việc ghi nguồn không tự động cấp phép sao chép đáng kể, tái xuất bản hoặc sử dụng thương mại; hãy xin phép chủ thể quyền khi pháp luật hoặc giấy phép áp dụng yêu cầu.</p>
+</section>
+</main>
+<footer><a class="brand" href="../"><span class="brand-mark">AI</span><span>AI <b>Thực Chiến</b></span></a><span>Học thật · Thử thật · Tối ưu từng bước · <a href="../feed.xml" aria-label="Đăng ký RSS">RSS</a></span><span>© 2026 AI Thực Chiến</span></footer>
+</body>
+</html>

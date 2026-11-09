@@ -1,9 +1,7 @@
 name: Deploy Cloudflare Pages
 
+# Production Pages deployment requires an explicit manual dispatch.
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
