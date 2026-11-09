@@ -115,3 +115,10 @@ Next: run the existing `Static CI Quality Gate` on this branch using an authoriz
 2. Execute the Node community API, relay redirect, verification/reset, Google OAuth, and static-site/SEO/content gates on that head.
 3. Review fresh-database and populated-database migration behavior plus foreign-key cascades in the full workflow.
 4. Only after those gates pass, perform Preview-only validation with the separately authorized staging target. Live email remains a separate gate and must not be attempted through a tool path that has been safety-blocked.
+
+## Follow-up race-condition hardening (2026-11-09)
+
+- Source review found a narrow time-of-check/time-of-use gap in email verification: the route selected an unexpired token before opening the D1 batch, but the first UPDATE inside the batch only checked member ID and unverified state. A concurrent resend/removal between the SELECT and batch could therefore leave a stale token able to verify the member.
+- Closed the gap in `worker.mjs`: the transactional UPDATE now independently requires the exact token hash, matching member ID, and `expires_at > now` in an `EXISTS` predicate. The token is revalidated at the point of state change, not only before the transaction.
+- Extended `scripts/test_community_api.mjs` so the MockD1 can simulate token invalidation between the initial lookup and batch, and added a regression case asserting the member remains unverified and the request fails closed.
+- Static inspection of the updated Worker SQL, MockD1 handler, and race fixture: PASS. Runtime Node suite: NOT RUN; no GitHub Actions run or status check has been returned for the branch. This change is not represented as runtime-tested.
