@@ -122,3 +122,15 @@ Next: run the existing `Static CI Quality Gate` on this branch using an authoriz
 - Closed the gap in `worker.mjs`: the transactional UPDATE now independently requires the exact token hash, matching member ID, and `expires_at > now` in an `EXISTS` predicate. The token is revalidated at the point of state change, not only before the transaction.
 - Extended `scripts/test_community_api.mjs` so the MockD1 can simulate token invalidation between the initial lookup and batch, and added a regression case asserting the member remains unverified and the request fails closed.
 - Static inspection of the updated Worker SQL, MockD1 handler, and race fixture: PASS. Runtime Node suite: NOT RUN; no GitHub Actions run or status check has been returned for the branch. This change is not represented as runtime-tested.
+
+## Latest source review checkpoint (2026-11-09)
+
+- Current code commits on the integration branch include the verification-token race fix in Worker commit `f258ed0cc2866212315f14fa0b42622fc23bada3` and its regression test in `47adfab11231a4d9fe48ef7f45e7d1684b7e2ee7`.
+- Re-inspected the exact D1 SQL and normalized MockD1 dispatch:
+  - The verification UPDATE checks the token hash, member ID, and expiry inside the same D1 batch as activation and token cleanup.
+  - The MockD1 normalizes whitespace before matching and has a dedicated handler for the new EXISTS query; the race fixture invalidates the token before the batch snapshot and asserts HTTP 400 plus an unverified member.
+  - Password-reset batch still updates password only from an unexpired token for a verified member; session deletion and token deletion both require the newly written salt/hash to match.
+  - Relay POST remains `redirect: manual`; the follow-up GET has no POST body or application headers and is restricted to HTTPS `script.googleusercontent.com`.
+- Static source assertions: PASS. This is source inspection only, not a Node runtime execution.
+- The integration branch still has no workflow run or combined status check reported by the connected GitHub integration. No available authorized workflow-dispatch action was exposed; do not create a large PR to main solely to force CI.
+- Live email, browser E2E, Preview deployment, and remote Preview D1 migration remain NOT VERIFIED / NOT RUN. Production remains untouched.
