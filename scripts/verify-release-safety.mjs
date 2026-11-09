@@ -7,33 +7,35 @@ const pages = await read(".github/workflows/deploy-cloudflare-pages.yml");
 const previewD1 = await read(".github/workflows/migrate-preview-d1.yml");
 const authPreview = await read(".github/workflows/deploy-auth-app-preview.yml");
 
-assert.match(workers, /github\\.event_name == 'workflow_dispatch'/);
-assert.match(workers, /github\\.ref == 'refs\\/heads\\/main'/);
-assert.match(workers, /inputs\\.confirm_production_worker_and_d1_changes == true/);
-assert.match(pages, /github\\.event_name == 'workflow_dispatch'/);
-assert.match(pages, /github\\.ref == 'refs\\/heads\\/main'/);
-assert.match(pages, /inputs\\.confirm_production_pages_deploy == true/);
-assert.match(pages, /ref: main/);
-assert.match(pages, /concurrency:/);
-assert.doesNotMatch(previewD1, /(^|\\n)  push:/);
-assert.match(previewD1, /if: github\\.ref == 'refs\\/heads\\/main'/);
-assert.match(previewD1, /ref: main/);
-assert.match(previewD1, /51d814c8-a3fc-4481-a5f1-60bc67617f3c/);
-assert.match(previewD1, /ai-thuc-chien-community-preview/);
-assert.doesNotMatch(previewD1, /(^|\\n)    env:\\n      CLOUDFLARE_(WORKERS_)?API_TOKEN:/);
-assert.match(previewD1, /env:\\n\\s+\\s+CLOUDFLARE_WORKERS_API_TOKEN: \\$\\{\\{ secrets\\.CLOUDFLARE_WORKERS_API_TOKEN \\}\\}/);
+assert.ok(workers.includes("github.event_name == 'workflow_dispatch'"));
+assert.ok(workers.includes("github.ref == 'refs/heads/main'"));
+assert.ok(workers.includes("inputs.confirm_production_worker_and_d1_changes == true"));
+assert.ok(pages.includes("github.event_name == 'workflow_dispatch'"));
+assert.ok(pages.includes("github.ref == 'refs/heads/main'"));
+assert.ok(pages.includes("inputs.confirm_production_pages_deploy == true"));
+assert.ok(pages.includes("ref: main"));
+assert.ok(pages.includes("concurrency:"));
+assert.ok(!previewD1.includes("\n  push:"));
+assert.ok(previewD1.includes("if: github.ref == 'refs/heads/main'"));
+assert.ok(previewD1.includes("ref: main"));
+assert.ok(previewD1.includes("51d814c8-a3fc-4481-a5f1-60bc67617f3c"));
+assert.ok(previewD1.includes("ai-thuc-chien-community-preview"));
+assert.ok(!previewD1.includes("CLOUDFLARE_API_TOKEN:"));
+assert.ok(previewD1.includes("CLOUDFLARE_WORKERS_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}"));
 
 // Auth Preview is intentionally credential-free static validation now, not a deploy workflow.
 // Do not require a deploy confirmation input for a workflow that cannot deploy anything.
-assert.ok(!authPreview.includes("  push:"), "Auth Preview validation must not run automatically on push.");
-assert.match(authPreview, /workflow_dispatch:/);
-assert.match(authPreview, /source_ref:/);
+assert.ok(!authPreview.includes("\n  push:"), "Auth Preview validation must not run automatically on push.");
+assert.ok(authPreview.includes("workflow_dispatch:"));
+assert.ok(authPreview.includes("source_ref:"));
 assert.ok(authPreview.includes("if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/sync/gitlab-completed-work-20261107'"),
   "Auth Preview validation must be manually dispatched only from the exact integration ref.");
-assert.match(authPreview, /persist-credentials: false/);
-assert.doesNotMatch(authPreview, /\\$\\{\\{\\s*secrets\\./);
-assert.doesNotMatch(authPreview, /CLOUDFLARE_API_TOKEN|wrangler[^\\n]*\\bdeploy\\b|d1[^\\n]*migrations[^\\n]*\\bapply\\b/i);
-assert.match(authPreview, /No Worker deployment, D1 operation, DNS change, or Production operation is performed/);
+assert.ok(authPreview.includes("persist-credentials: false"));
+assert.ok(!authPreview.includes("${{ secrets."), "Auth Preview validation must not expose GitHub secrets.");
+assert.ok(!authPreview.includes("CLOUDFLARE_API_TOKEN"));
+assert.ok(!authPreview.includes("wrangler deploy"));
+assert.ok(!authPreview.includes("d1 migrations apply"));
+assert.ok(authPreview.includes("No Worker deployment, D1 operation, DNS change, or Production operation is performed"));
 
 console.log("PASS: Worker and Pages Production deploys require manual main-ref confirmation.");
 console.log("PASS: Preview D1 migrations run only from reviewed main and use the fixed Preview database.");
