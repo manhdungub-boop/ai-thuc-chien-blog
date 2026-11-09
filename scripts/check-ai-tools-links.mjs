@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import net from "node:net";
 import dns from "node:dns/promises";
+import http from "node:http";
+import https from "node:https";
 
 const file=process.argv[2]||"data/ai-tools.json";
 const limitArg=process.argv.find(x=>x.startsWith("--limit="));
@@ -35,18 +37,61 @@ async function safePublicUrl(value) {
   const host = u.hostname.toLowerCase().replace(/^\[|\]$/g, "");
   if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal")) return null;
   const ip = net.isIP(host);
-  if (ip) return isPrivateAddress(host) ? null : u;
+  if (ip) return isPrivateAddress(host) ? null : { url: u, address: host };
   try {
     const addresses = await dns.lookup(host, { all: true, verbatim: true });
     if (!addresses.length || addresses.some(({ address }) => isPrivateAddress(address))) return null;
+    // Return the validated address and use it for the actual socket connection.
+    // This closes the DNS-check / second-resolution gap that enables DNS rebinding.
+    return { url: u, address: addresses[0].address };
   } catch { return null; }
-  return u;
+}
+function pinnedRequest(url, method, address) {
+  return new Promise((resolve, reject) => {
+    const host = url.hostname.toLowerCase().replace(/^\\[|\\]$/g, "");
+    const family = net.isIP(address);
+    const transport = url.protocol === "https:" ? https : http;
+    const options = {
+      protocol: url.protocol,
+      hostname: host,
+      port: url.port || undefined,
+      path: url.pathname + url.search,
+      method,
+      headers: {
+        Host: url.host,
+        "User-Agent": "AI-Thuc-Chien-Catalog-LinkCheck/1.0",
+        ...(method === "GET" ? { Range: "bytes=0-0" } : {})
+      },
+      lookup: (_hostname, opts, callback) => {
+        if (opts && opts.all) callback(null, [{ address, family }]);
+        else callback(null, address, family);
+      },
+      ...(url.protocol === "https:" && !net.isIP(host) ? { servername: host } : {})
+    };
+    const req = transport.request(options, response => {
+      resolve({
+        status: response.statusCode || 0,
+        url: url.href,
+        headers: { get: name => {
+          const value = response.headers[String(name).toLowerCase()];
+          return Array.isArray(value) ? value[0] : (value ?? null);
+        }},
+        body: { cancel: async () => { response.destroy(); } }
+      });
+    });
+    req.setTimeout(timeoutMs, () => req.destroy(new Error("Request timed out")));
+    req.on("error", reject);
+    req.end();
+  });
 }
 async function request(url,method){
   let current=new URL(url);
   for(let hop=0;hop<=5;hop++){
-    if(!await safePublicUrl(current.href))return {status:0,url:current.href,unsafe_redirect:true,body:null};
-    const response=await fetch(current.href,{method,redirect:"manual",signal:AbortSignal.timeout(timeoutMs),headers:{"User-Agent":"AI-Thuc-Chien-Catalog-LinkCheck/1.0",...(method==="GET"?{"Range":"bytes=0-0"}:{})}});
+    const safe=await safePublicUrl(current.href);
+    if(!safe)return {status:0,url:current.href,unsafe_redirect:true,body:null};
+    let response;
+    try { response=await pinnedRequest(safe.url,method,safe.address); }
+    catch(error) { throw error; }
     if([301,302,303,307,308].includes(response.status)){
       const location=response.headers.get("location");
       await response.body?.cancel().catch(()=>{});
