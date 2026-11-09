@@ -189,6 +189,27 @@ assert.equal(racedVerification.status, 400, 'a token invalidated between lookup 
 assert.equal(db.members.find((m) => m.email === 'verify-race@example.com').email_verified_at, null,
   'a missing token at transaction time must leave the member unverified');
 
+
+// Two simultaneous submissions of one verification token must activate the account exactly once.
+const concurrentVerifyRegistration = await call('/register', {
+  method: 'POST',
+  ip: '203.0.113.66',
+  body: { username: 'verify_concurrent_user', displayName: 'Verify Concurrent', email: 'verify-concurrent@example.com', password: 'Verify-Concurrent-Password-123!' }
+});
+assert.equal(concurrentVerifyRegistration.status, 201);
+const concurrentVerifyToken = capturedEmail.htmlBody.match(/[?]verify=([A-Za-z0-9_-]{32,80})/)[1];
+const concurrentVerifyResponses = await Promise.all([
+  call('/verify-email', { method: 'POST', ip: '203.0.113.67', body: { token: concurrentVerifyToken } }),
+  call('/verify-email', { method: 'POST', ip: '203.0.113.68', body: { token: concurrentVerifyToken } })
+]);
+const concurrentVerifyStatuses = concurrentVerifyResponses.map((response) => response.status).sort((a, b) => a - b);
+assert.deepEqual(concurrentVerifyStatuses, [200, 400],
+  'atomic verification must allow exactly one concurrent submission to succeed');
+assert.ok(db.members.find((m) => m.email === 'verify-concurrent@example.com').email_verified_at,
+  'the winning verification request must activate the member');
+assert.equal(db.tokens.some((token) => token.member_id === db.members.find((m) => m.email === 'verify-concurrent@example.com').id), false,
+  'concurrent verification must consume the token exactly once');
+
 // Resend is intentionally generic for account privacy and is rate-limited to three requests per email per hour.
 const resendRegistration = await call('/register', { method: 'POST', body: { username: 'resend_user', displayName: 'Resend User', email: 'resend@example.com', password: 'Resend-Password-123!' } });
 assert.equal(resendRegistration.status, 201);
