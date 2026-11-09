@@ -119,8 +119,8 @@ async function checkOne(i){
   if(!u){results[i]={url:original,status:"invalid_or_non_public_url"};return;}
   try{
     let response=await request(u.url.href,"HEAD");
-    if([403,405,501].includes(response.status)){await response.body?.cancel().catch(()=>{});response=await request(u.href,"GET");}
-    const code=response.status,finalUrl=response.url||u.href;
+    if([403,405,501].includes(response.status)){await response.body?.cancel().catch(()=>{});response=await request(u.url.href,"GET");}
+    const code=response.status,finalUrl=response.url||u.url.href;
     await response.body?.cancel().catch(()=>{});
     const status=response.unsafe_redirect?"unsafe_redirect_blocked":response.redirect_limit?"redirect_limit":code>=200&&code<300?"reachable":(code===404||code===410)&&manuallyVerifiedOfficialHelpPages.has(original)?"manual_official_page_verified":code===404||code===410?"broken":[401,403,405,429].includes(code)?"blocked_or_method_restricted":code>=500?"server_error_retry_later":"redirect_or_other_inconclusive";
     results[i]={url:original,final_url:finalUrl,http_status:code,status};
