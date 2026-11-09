@@ -199,3 +199,27 @@ Next at that checkpoint: run the existing `Static CI Quality Gate` on this branc
 - The PR is intentionally stacked on PR #77, not opened against `main`; it adds six changed files to the PR #77 baseline.
 - PR #77, PR #85, PR #87, and PR #88 all remain Draft/open and unmerged. No PR was marked ready and no merge was performed.
 - PR #88 is a review handoff only. The passing CI and Preview evidence above applies to the exact deployed code commit `2bc5151ff1fa34af55bef72e95e7617ebe4d661e`; the later head changes only update this plan document. Re-run CI if any code or workflow files change.
+
+
+## Google OAuth callback regression revalidation — PASS (2026-11-09)
+
+- Revalidated PR #88 after the latest integration-branch update. GitHub Actions checked out PR merge commit `0a561bb`, combining source head `5649216b8f75c59ecaf48b3b011957ad9882f465` with the unchanged PR #77 baseline `54888d22b0e70d1ca9f06bac831051eede841eb0`.
+- Staging Google OAuth integration run #109 / ID `42548527323`: SUCCESS.
+  - Run URL: https://github.com/manhdungub-boop/ai-thuc-chien-blog/actions/runs/42548527323
+  - Job `staging-google-oauth`: SUCCESS (job ID `128938694992`).
+  - Syntax checks passed for Worker and OAuth test sources.
+  - Google OIDC security regression: 23/23 passed.
+  - Staging OAuth host allowlist: 2/2 passed.
+  - OAuth route runtime: 5/5 passed.
+- The five route tests explicitly cover:
+  1. Linking a verified Google identity to an existing email account without replacing its password.
+  2. Full mocked `start → callback → D1 identity/session → authenticated /me` flow.
+  3. Isolation of overlapping OAuth transactions when a callback fails or completes.
+  4. Rejecting mismatched state before contacting Google or creating data.
+  5. Rejecting nonce mismatch without persisting an identity or issuing a session.
+- Additive Google OAuth migration rehearsal on in-memory SQLite: PASS. No remote D1 migration was applied.
+- Branch comparison from PR #77 baseline `54888d22b0e70d1ca9f06bac831051eede841eb0` to source head `5649216b8f75c59ecaf48b3b011957ad9882f465`: 31 commits ahead, 0 behind.
+- PR #88 still contains six integration files; review list and inline review-thread list are empty at this checkpoint.
+- The earlier Static CI Quality Gate #458 and isolated Preview deployment #14 remain the recorded evidence for the broader static/content checks and Preview deployment. The Worker source has not changed since the tested Preview code commit `2bc5151ff1fa34af55bef72e95e7617ebe4d661e`; do not infer that this OAuth workflow redeployed Preview.
+- Important distinction: this is a successful mocked OAuth route and local-D1 test, not a real Google consent/callback, real browser session with a user, or live email delivery. Those remain NOT VERIFIED.
+- No Production Worker, Production D1, DNS, secret, real account, or live email action was performed.
