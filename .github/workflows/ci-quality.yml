@@ -7,6 +7,7 @@ on:
   pull_request:
     branches:
       - main
+      - sync/gitlab-completed-work-20261107
   workflow_dispatch:
 
 permissions:
