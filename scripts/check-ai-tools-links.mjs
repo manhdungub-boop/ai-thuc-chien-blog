@@ -118,7 +118,7 @@ async function checkOne(i){
   const original=urls[i],u=await safePublicUrl(original);
   if(!u){results[i]={url:original,status:"invalid_or_non_public_url"};return;}
   try{
-    let response=await request(u.href,"HEAD");
+    let response=await request(u.url.href,"HEAD");
     if([403,405,501].includes(response.status)){await response.body?.cancel().catch(()=>{});response=await request(u.href,"GET");}
     const code=response.status,finalUrl=response.url||u.href;
     await response.body?.cancel().catch(()=>{});
