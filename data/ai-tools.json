@@ -1335,6 +1335,45 @@
         "pipelines",
         "python"
       ]
+    },
+    {
+      "id": "elevenlabs",
+      "name": "ElevenLabs",
+      "vendor": "ElevenLabs",
+      "website": "https://elevenlabs.io/",
+      "categories": [
+        "audio",
+        "voice",
+        "translation",
+        "video"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "limited_credits",
+      "license": "Proprietary hosted service. Under the non-EEA Terms of Service last updated 2026-10-09, free users may use the services and outputs only for non-commercial purposes; paid subscribers may use them commercially subject to the Terms and applicable service-specific policies. Generated output rights and user-content license are governed by the Terms.",
+      "platforms": [
+        "web",
+        "api",
+        "ios",
+        "android"
+      ],
+      "description": "Nền tảng AI tạo giọng nói, chuyển văn bản thành giọng nói, chuyển giọng nói thành văn bản, lồng tiếng, âm thanh và nội dung đa phương tiện.",
+      "free_tier_summary": "Gói Free 0 USD gồm 10.000 credits/tháng; credits dùng chung giữa các sản phẩm và mức tiêu hao tùy tính năng/model. Theo Terms of Service áp dụng ngoài EEA, người dùng miễn phí chỉ được sử dụng dịch vụ và output cho mục đích phi thương mại. Gói Starter có giá niêm yết 6 USD/tháng, gồm 30.000 credits/tháng và Commercial License; giá chưa gồm thuế và có thể thay đổi.",
+      "official_sources": [
+        "https://elevenlabs.io/pricing",
+        "https://elevenlabs.io/terms-of-use",
+        "https://elevenlabs.io/use-policy",
+        "https://elevenlabs.io/docs/help-center/account/general/what-happens-to-my-content-after-my-subscription-ends"
+      ],
+      "last_verified": "2026-11-11",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "text-to-speech",
+        "voice-cloning",
+        "dubbing",
+        "speech-to-text",
+        "audio-generation"
+      ]
     }
   ]
 }
