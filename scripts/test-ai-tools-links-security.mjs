@@ -36,6 +36,10 @@ try {
     "Only exact, manually reviewed publisher URLs may bypass automated 403/404 probe ambiguity.");
   assert.ok(checkerSource.includes('"https://www.perplexity.ai/enterprise/pricing"'),
     "The exact official Perplexity pricing URL must be recorded for manual verification.");
+  assert.ok(checkerSource.includes('"https://github.com/ollama/ollama/blob/main/LICENSE"'),
+    "The exact GitHub license page verified through the repository API must be recorded.");
+  assert.match(checkerSource, /\[401,403,405,429,502,503,504\]\.includes\(code\)/,
+    "Only exact manually verified URLs may be classified as manual after blocked or transient HTTP responses.");
   assert.ok(summary.results.every(result => result.status === "invalid_or_non_public_url"),
     "IPv6 loopback, IPv6 ULA, IPv4 loopback, DNS-resolved loopback, and deprecated 6to4 relay targets must be rejected before fetch");
   console.log("PASS: catalog link checker blocks private IPv4/IPv6 literals, private DNS targets, and deprecated 6to4 relay addresses.");
