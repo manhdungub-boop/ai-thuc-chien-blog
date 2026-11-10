@@ -8,6 +8,7 @@ const previewD1 = await read(".github/workflows/migrate-preview-d1.yml");
 const authPreview = await read(".github/workflows/deploy-auth-app-preview.yml");
 const configureBuilds = await read(".github/workflows/configure-cloudflare-worker-builds.yml");
 const configureBuildsUpdater = await read("scripts/configure_cloudflare_worker_builds.py");
+const legacyPreviewRepair = await read(".github/workflows/repair-cloudflare-branch-preview-triggers.yml");
 
 assert.ok(configureBuilds.includes("preview_trigger_uuid:"));
 assert.ok(configureBuilds.includes("preview_worker_tag:"));
@@ -18,6 +19,10 @@ assert.ok(!configureBuilds.includes("preview_reuse_primary_build_token:"));
 assert.ok(!configureBuildsUpdater.includes("PRODUCTION_TRIGGERS"));
 assert.ok(configureBuildsUpdater.includes("Production Workers Builds triggers are never queried or modified"));
 assert.ok(configureBuildsUpdater.includes("ALLOWED_PREVIEW_DEPLOY_COMMANDS"));
+assert.ok(legacyPreviewRepair.includes("Disabled"));
+assert.ok(!legacyPreviewRepair.includes("${{ secrets."));
+assert.ok(!legacyPreviewRepair.includes("api_mutate"));
+assert.ok(!legacyPreviewRepair.includes("builds/triggers"));
 assert.ok(workers.includes("github.event_name == 'workflow_dispatch'"));
 assert.ok(workers.includes("github.ref == 'refs/heads/main'"));
 assert.ok(workers.includes("inputs.confirm_production_worker_and_d1_changes == true"));

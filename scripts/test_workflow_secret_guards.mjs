@@ -8,12 +8,17 @@ for (const [file, job] of [
   ['configure-cloudflare-worker-builds.yml', 'configure-triggers'],
   ['diagnose-cloudflare-worker-build.yml', 'diagnose'],
   ['diagnose-community-d1.yml', 'inspect'],
-  ['repair-cloudflare-branch-preview-triggers.yml', 'repair-preview-only'],
+  ['repair-cloudflare-branch-preview-triggers.yml', 'disabled'],
   ['verify-cloudflare-deploy-token.yml', 'verify'],
   ['migrate-preview-d1.yml', 'preview-d1'],
 ]) {
   assert.ok(jobGuard(workflow(file), job), file + ': ' + job + ' must run only from refs/heads/main');
 }
+
+const legacyRepair = workflow('repair-cloudflare-branch-preview-triggers.yml');
+assert.ok(legacyRepair.includes('Legacy Cloudflare Branch Preview Trigger Repair (Disabled)'), 'stale Preview repair workflow must be clearly disabled');
+assert.doesNotMatch(legacyRepair, /\$\{\{\s*secrets\./, 'disabled legacy workflow must not receive Cloudflare secrets');
+assert.doesNotMatch(legacyRepair, /api_mutate|curl|builds\/triggers|wrangler deploy/i, 'disabled legacy workflow must not call Cloudflare APIs or deploy');
 
 const configureBuilds = workflow('configure-cloudflare-worker-builds.yml');
 const configureUpdater = readFileSync(new URL('../scripts/configure_cloudflare_worker_builds.py', import.meta.url), 'utf8');
