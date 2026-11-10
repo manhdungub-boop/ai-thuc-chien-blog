@@ -122,10 +122,30 @@ def changes_for(trigger, spec):
     return {key: value for key, value in desired.items() if trigger.get(key) != value}
 
 
+def production_trigger_patch_allowed(spec, confirmed):
+    """Production trigger writes require a separate, explicit workflow confirmation."""
+    return spec.get("kind") != "production" or bool(confirmed)
+
+
+def parse_confirmation(value):
+    normalized = str(value or "").strip().lower()
+    if normalized not in {"", "true", "false", "1", "0", "yes", "no"}:
+        raise ValueError("confirm_production_trigger_changes must be true or false.")
+    return normalized in {"true", "1", "yes"}
+
+
 def main():
     token = os.environ.get("CLOUDFLARE_WORKERS_BUILDS_API_TOKEN", "").strip()
     if not token:
         print("ERROR: set the GitHub Actions secret CLOUDFLARE_WORKERS_BUILDS_API_TOKEN first.", file=sys.stderr)
+        return 2
+
+    try:
+        confirm_production_trigger_changes = parse_confirmation(
+            os.environ.get("CONFIRM_PRODUCTION_TRIGGER_CHANGES", "false")
+        )
+    except ValueError as exc:
+        print("ERROR:", str(exc), file=sys.stderr)
         return 2
 
     preview_uuid = os.environ.get("PREVIEW_TRIGGER_UUID", "").strip()
@@ -164,7 +184,7 @@ def main():
             current[spec["trigger_uuid"]] = trigger
 
         # Optional, explicit recovery path: reuse the verified primary build token only on this preview trigger.
-        # The primary production trigger and secondary production trigger are preflighted above and are never patched.
+        # Production triggers are preflighted above and are only patched after a separate explicit confirmation.
         if reuse_primary_build_token:
             preview = specs[-1]
             if preview.get("kind") != "preview":
@@ -175,9 +195,13 @@ def main():
             preview["use_build_token_uuid"] = primary_token_uuid
             print("TOKEN VERIFIED: reusing the existing primary Worker build token for this preview trigger only.")
 
-        # Apply only the explicitly expected fields; token changes are preview-only and opt-in.
+        # Production trigger writes are disabled unless the workflow input explicitly opts in.
+        # Preview trigger changes remain separately scoped to the exact supplied non-production trigger.
         for spec in specs:
             trigger = current[spec["trigger_uuid"]]
+            if not production_trigger_patch_allowed(spec, confirm_production_trigger_changes):
+                print(f"SKIP: {spec['name']} Production trigger is read-only; explicit confirmation was not supplied.")
+                continue
             patch = changes_for(trigger, spec)
             if patch:
                 api_request(
@@ -193,6 +217,14 @@ def main():
         for spec in specs:
             endpoint = f"/accounts/{ACCOUNT_ID}/builds/workers/{spec['tag']}/triggers"
             trigger = validate_trigger(api_request(endpoint, token) or [], spec)
+            if not production_trigger_patch_allowed(spec, confirm_production_trigger_changes):
+                original = current[spec["trigger_uuid"]]
+                for field in ("build_command", "deploy_command", "build_token_uuid"):
+                    if trigger.get(field) != original.get(field):
+                        raise RuntimeError(f"{spec['name']}: read-only Production trigger field {field} unexpectedly changed")
+                verified[spec["trigger_uuid"]] = trigger
+                print(f"PASS: {spec['name']} Production trigger verified read-only; no changes applied.")
+                continue
             if trigger.get("build_command") != TARGET_BUILD_COMMAND:
                 raise RuntimeError(f"{spec['name']}: build command did not persist")
             if trigger.get("deploy_command") != spec["deploy_command"]:
@@ -219,7 +251,10 @@ def main():
     except (RuntimeError, ValueError) as exc:
         print("ERROR:", str(exc), file=sys.stderr)
         return 1
-    print("SUCCESS: verified trigger configuration complete; production deploys and non-production previews use distinct commands.")
+    if confirm_production_trigger_changes:
+        print("SUCCESS: explicitly confirmed Production trigger updates and separately scoped non-production Preview configuration verified.")
+    else:
+        print("SUCCESS: Production triggers remained read-only; only an explicitly supplied non-production Preview trigger could be updated.")
     return 0
 
 

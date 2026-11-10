@@ -15,6 +15,10 @@ for (const [file, job] of [
   assert.ok(jobGuard(workflow(file), job), file + ': ' + job + ' must run only from refs/heads/main');
 }
 
+const configureBuilds = workflow('configure-cloudflare-worker-builds.yml');
+assert.match(configureBuilds, /confirm_production_trigger_changes:[\s\S]*?default: false/, 'Workers Builds Production changes must default to disabled');
+assert.ok(configureBuilds.includes('CONFIRM_PRODUCTION_TRIGGER_CHANGES: ${{ inputs.confirm_production_trigger_changes }}'), 'Workers Builds updater must receive the explicit Production confirmation');
+
 const health = workflow('health-check.yml');
 const healthGuard = "if: (github.event_name == 'workflow_run' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'";
 assert.equal(health.split('\n').filter((line) => line.trim() === healthGuard).length, 2, 'health-check must gate both Cloudflare-secret steps to main');

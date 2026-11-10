@@ -103,5 +103,8 @@ jobs:
       - name: Test homepage article coverage
         run: node scripts/test_homepage_article_coverage.cjs
 
+      - name: Test Cloudflare Workers Builds trigger safety
+        run: python3 -m unittest discover -s scripts -p 'test_configure_cloudflare_worker_builds.py' -v
+
       - name: Verify secret-bearing workflows are restricted to trusted main
         run: node scripts/test_workflow_secret_guards.mjs

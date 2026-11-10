@@ -11,7 +11,9 @@ from configure_cloudflare_worker_builds import (
     REPO_NAME,
     TARGET_BUILD_COMMAND,
     changes_for,
+    parse_confirmation,
     preview_spec,
+    production_trigger_patch_allowed,
     resolve_primary_build_token,
     validate_trigger,
 )
@@ -96,6 +98,25 @@ class TriggerValidationTests(unittest.TestCase):
         spec = PRODUCTION_TRIGGERS[1]
         trigger = trigger_for(spec, build_command=TARGET_BUILD_COMMAND, deploy_command=EXPECTED_DEPLOY_COMMAND)
         self.assertEqual(changes_for(trigger, spec), {})
+
+    def test_production_trigger_changes_require_explicit_confirmation(self):
+        for spec in PRODUCTION_TRIGGERS:
+            with self.subTest(worker=spec["name"]):
+                self.assertFalse(production_trigger_patch_allowed(spec, False))
+                self.assertTrue(production_trigger_patch_allowed(spec, True))
+
+    def test_preview_trigger_changes_do_not_require_production_confirmation(self):
+        spec = preview_spec("b" * 32, "00000000-0000-4000-8000-000000000001", "feature/example")
+        self.assertTrue(production_trigger_patch_allowed(spec, False))
+
+    def test_production_confirmation_parser_is_opt_in_and_strict(self):
+        self.assertFalse(parse_confirmation(""))
+        self.assertFalse(parse_confirmation("false"))
+        self.assertFalse(parse_confirmation("0"))
+        self.assertTrue(parse_confirmation("true"))
+        self.assertTrue(parse_confirmation("yes"))
+        with self.assertRaisesRegex(ValueError, "must be true or false"):
+            parse_confirmation("unexpected")
 
     def test_only_expected_commands_are_allowed(self):
         self.assertEqual(ALLOWED_DEPLOY_COMMANDS, {EXPECTED_DEPLOY_COMMAND, EXPECTED_PREVIEW_COMMAND})

@@ -6,7 +6,11 @@ const workers = await read(".github/workflows/deploy-cloudflare-workers.yml");
 const pages = await read(".github/workflows/deploy-cloudflare-pages.yml");
 const previewD1 = await read(".github/workflows/migrate-preview-d1.yml");
 const authPreview = await read(".github/workflows/deploy-auth-app-preview.yml");
+const configureBuilds = await read(".github/workflows/configure-cloudflare-worker-builds.yml");
 
+assert.ok(configureBuilds.includes("confirm_production_trigger_changes:"));
+assert.ok(configureBuilds.includes("default: false"));
+assert.ok(configureBuilds.includes("CONFIRM_PRODUCTION_TRIGGER_CHANGES: ${{ inputs.confirm_production_trigger_changes }}"));
 assert.ok(workers.includes("github.event_name == 'workflow_dispatch'"));
 assert.ok(workers.includes("github.ref == 'refs/heads/main'"));
 assert.ok(workers.includes("inputs.confirm_production_worker_and_d1_changes == true"));
