@@ -51,6 +51,7 @@ jobs:
           node scripts/verify-release-safety.mjs
           node --check scripts/check-ai-tools-links.mjs
           node scripts/test-ai-tools-links-security.mjs
+          node scripts/test_ipv6_address_safety.mjs
 
       - name: Test community D1 schema
         run: python3 scripts/test_community_schema.py
