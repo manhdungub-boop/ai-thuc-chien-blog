@@ -63,9 +63,9 @@ function scoreSearchText(text, terms) {
   return score;
 }
 function decodeBasicEntities(text) {
-  return text.replace(/&nbsp;/gi," ").replace(/&amp;/gi,"&").replace(/&lt;/gi,"<").replace(/&gt;/gi,">").replace(/&quot;/gi,'"').replace(/&#39;|&apos;/gi,"'");
-}
-async function retrieveArticleContext(env, requestUrl, question, catalog) {
+  const entities = { "&nbsp;": " ", "&#160;": " ", "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#39;": "'", "&apos;": "'" };
+  return text.replace(/&(?:nbsp|#160|amp|lt|gt|quot|#39|apos);/gi, (entity) => entities[entity.toLowerCase()] ?? entity);
+}async function retrieveArticleContext(env, requestUrl, question, catalog) {
   if (!env.ASSETS || typeof env.ASSETS.fetch !== "function") return "";
   const terms = searchTerms(question);
   if (!terms.length) return "";
