@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-11-11T00:00:00+07:00",
+  "generated_at": "2026-11-11T01:00:00+07:00",
   "catalog_policy": {
     "default_locale": "vi",
     "currency": "USD",
@@ -533,7 +533,7 @@
         "api"
       ],
       "description": "Nền tảng low-code mã nguồn mở để xây dựng LLM chain, RAG pipeline và AI agent bằng giao diện kéo-thả. Dự án đã chính thức wind-down; repository ở trạng thái Public Archive và không còn được đội ngũ cốt lõi duy trì.",
-      "free_tier_summary": "Flowise thông báo ngừng hoạt động: code freeze ngày 29/07/2026; repository chuyển Public Archive ngày 10/08/2026; npm packages và Docker images được đánh dấu deprecated; hỗ trợ chính thức kết thúc ngày 31/08/2026. Mã nguồn Apache-2.0 vẫn có thể fork và tự vận hành, nhưng không khuyến nghị triển khai mới nếu không có đội ngũ tự bảo trì. Giá và khả năng cung cấp Flowise Cloud hiện không được xác nhận; không suy diễn có gói miễn phí hosted.",
+      "free_tier_summary": "Flowise công bố code freeze ngày 29/07/2026 và lịch chuyển repository sang Public Archive ngày 10/08/2026; GitHub xác nhận repository thực tế được archive ngày 13/08/2026. EOL của đội ngũ cốt lõi là 31/08/2026. npm packages và Docker images được đánh dấu deprecated theo thông báo. Mã nguồn Apache-2.0 vẫn có thể fork và tự vận hành, nhưng không khuyến nghị triển khai mới nếu không có đội ngũ tự bảo trì. Giá và khả năng cung cấp Flowise Cloud không được thông báo rõ trong sunset notice; không suy diễn có gói hosted miễn phí.",
       "official_sources": [
         "https://flowiseai.com/sunset",
         "https://github.com/FlowiseAI/Flowise/discussions/6727",
@@ -686,7 +686,7 @@
       ],
       "pricing_model": "free",
       "pricing_status": "self_hosted_free",
-      "license": "Apache-2.0 for the EasyOCR repository/package code. The official model hub lists downloadable pretrained checkpoints but does not state a clear license for each checkpoint on that page; verify each model artifact/training-data notice and PyTorch/CUDA dependency before redistribution or commercial bundling.",
+      "license": "Apache-2.0 for the EasyOCR repository code/package. The official Model Hub links pretrained checkpoints to release assets hosted by the official JaidedAI/EasyOCR GitHub repository, whose LICENSE file is Apache-2.0. This does not independently establish rights to underlying third-party training datasets or external dependencies; review those separately before redistribution beyond the licensed repository artifacts.",
       "platforms": [
         "python",
         "windows",
@@ -696,7 +696,7 @@
         "api"
       ],
       "description": "Thư viện Python OCR đa ngôn ngữ, hỗ trợ hơn 80 ngôn ngữ và có thể chạy local trên CPU/GPU; mã nguồn chính thức hiện công bố phiên bản 1.7.2 (24/09/2024).",
-      "free_tier_summary": "Gói mã nguồn EasyOCR có thể cài và chạy local miễn phí; repository/package dùng Apache-2.0. README chính thức cho biết các pretrained weights được tải từ Model Hub, nhưng trang Model Hub không nêu rõ license riêng cho từng checkpoint và các thành phần/model nguồn được sử dụng. Chỉ xác nhận license của code; không khuyến nghị tái phân phối weights hoặc đóng gói thương mại cho đến khi xác minh license từng artifact và dependency.",
+      "free_tier_summary": "EasyOCR là mã nguồn mở, có thể cài đặt và chạy local miễn phí. Repository LICENSE chính thức là Apache-2.0. Model Hub chính thức liên kết các pretrained checkpoints tới release assets của repository JaidedAI/EasyOCR; repository có LICENSE Apache-2.0. Giấy phép repository không tự động cấp quyền đối với dataset bên thứ ba hoặc các dependency bên ngoài; cần rà soát riêng các thành phần đó trước khi phân phối một gói tích hợp. Không có dịch vụ hosted hay mức phí cloud nào được khẳng định ở đây.",
       "official_sources": [
         "https://github.com/JaidedAI/EasyOCR",
         "https://github.com/JaidedAI/EasyOCR/blob/master/LICENSE",
@@ -705,7 +705,7 @@
         "https://www.jaided.ai/easyocr/modelhub/"
       ],
       "last_verified": "2026-11-11",
-      "verification_status": "needs_review",
+      "verification_status": "verified",
       "status": "active",
       "tags": [
         "ocr",
