@@ -30,7 +30,7 @@ try {
     "Publisher response headers must use a bounded size above Node's small default.");
   assert.match(checkerSource, /\[502,503,504\]\.includes\(response\.status\)/,
     "Transient upstream server failures must receive one bounded retry.");
-  assert.match(checkerSource, /attempt === 1 \? safePublicUrl\(current\.href\)/,
+  assert.match(checkerSource, /attempt === 0 \? safe : await safePublicUrl\(current\.href\)/,
     "Every retry must re-resolve and re-pin the public destination.");
   assert.ok(summary.results.every(result => result.status === "invalid_or_non_public_url"),
     "IPv6 loopback, IPv6 ULA, IPv4 loopback, DNS-resolved loopback, and deprecated 6to4 relay targets must be rejected before fetch");
