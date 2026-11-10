@@ -30,9 +30,9 @@ function visibleText(html) {
 }
 
 assert.equal(visibleText('<script>alert(1)</script ><p>visible</p>'), 'visible', 'script content with whitespace before its closing > must be excluded');
-assert.equal(visibleText('<script>alert(1)</script\\t  bar><p>visible</p>'), 'visible', 'script content with trailing end-tag tokens must be excluded');
+assert.equal(visibleText('<script>alert(1)</script\t  bar><p>visible</p>'), 'visible', 'script content with trailing end-tag tokens must be excluded');
 assert.equal(visibleText('<style>.hidden{}</style ><p>visible</p>'), 'visible', 'style content with whitespace before its closing > must be excluded');
-assert.equal(visibleText('<style>.hidden{}</style\\t  bar><p>visible</p>'), 'visible', 'style content with trailing end-tag tokens must be excluded');
+assert.equal(visibleText('<style>.hidden{}</style\t  bar><p>visible</p>'), 'visible', 'style content with trailing end-tag tokens must be excluded');
 assert.equal(visibleText('<p>&amp;quot;</p>'), '&quot;', 'HTML entities must be decoded exactly once');
 
 for (const file of files) {
