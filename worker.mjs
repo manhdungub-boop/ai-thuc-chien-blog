@@ -1112,6 +1112,10 @@ async function handleCommunityApi(request, env) {
       let valid = false;
       if (row) {
         try { valid = (await hashCommunityPassword(password, base64UrlToBytes(row.password_salt))) === row.password_hash; } catch (_error) { valid = false; }
+      } else {
+        // Match the expensive PBKDF2 work for unknown accounts to reduce timing-based
+        // account enumeration. This fixed salt is public and is never used to store a password.
+        try { await hashCommunityPassword(password, new Uint8Array(16)); } catch (_error) { /* keep the generic response */ }
       }
       if (!valid) return communityJson({ error: "Email hoặc mật khẩu chưa chính xác." }, 401, request);
       if (!row.email_verified_at) return communityJson({ code: "EMAIL_NOT_VERIFIED", error: "Bạn cần xác nhận email trước khi đăng nhập. Hãy mở email hoặc gửi lại liên kết xác nhận." }, 403, request);
