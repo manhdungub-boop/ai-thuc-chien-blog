@@ -205,3 +205,37 @@ Khi hoàn tất kết nối, chỉ dùng thao tác đọc metadata cho Preview D
 ### Decision
 
 **NOT READY FOR RELEASE.** Keep PR #96 Open / Draft. Continue safe read-only verification and exact-scope Preview work after the least-privilege Cloudflare connection becomes Active. No Production resources or credentials were changed.
+
+
+## Addendum — Cloudflare connection activated; credential validation blocked (11/11/2026)
+
+### Exact PR #96 head and CI
+Latest PR #96 head at this check: `d561abcf81ed4d1e0a065d5970e866d763dd4f8a`. PR remains Open / Draft / unmerged.
+
+- Static CI Quality Gate run `42884701911`, job `validate`: SUCCESS. All listed build, Worker, D1 schema/config, OAuth migration rehearsal, AI Bank Chromium, links, article attribution, SEO, accessibility, prompt interactions, navigation and homepage steps completed successfully.
+- CodeQL Offline Security Analysis run `42884702158`: Analyze actions, javascript-typescript and python all SUCCESS, including focused regressions and local SARIF summaries.
+- Staging Google OAuth integration run `42884701909`, job `staging-google-oauth`: SUCCESS. This uses isolated D1 mock and does not prove live Google OAuth.
+
+### Cloudflare connection attempt
+The user confirmed completion of the Composio Cloudflare authorization link. A subsequent Composio connection-list call confirmed account alias `AI Thuc Chien Blog - Preview D1 read-only audit` as `ACTIVE`.
+
+A single read-only `CLOUDFLARE_LIST_ACCOUNTS` metadata request was then attempted through this connection to identify the account before accessing Preview D1. Cloudflare rejected the request with HTTP 400: invalid request headers / invalid format for `X-Auth-Key`. No account metadata was returned. No D1 metadata request, SQL, write, migration, Worker, DNS or secret action was performed.
+
+This is an authentication/configuration failure despite Composio reporting the connection as Active. Do not retry D1 operations or use another credential path until the Cloudflare connection is corrected and validated. No secret value was read or stored.
+
+### Updated release gates
+| Gate | Status | Evidence |
+|---|---|---|
+| Static CI | PASS | Run 42884701911 on exact SHA above |
+| CodeQL (Actions, JS/TS, Python) | PASS | Run 42884702158 on exact SHA above |
+| OAuth mock/integration | PASS | Run 42884701909 on exact SHA above; not live OAuth |
+| Cloudflare connection status | ACTIVE, API AUTH FAILED | Composio list confirms Active; Cloudflare API rejected X-Auth-Key header |
+| Preview D1 metadata | BLOCKED | Account lookup failed before D1 access |
+| Real Google OAuth | BLOCKED | Preview provider credentials not verified |
+| Real email relay delivery | BLOCKED | Preview-only relay credential and delivery E2E not verified |
+| Legacy Preview secret provenance | BLOCKED | Source/traffic ownership unresolved; no secret values read |
+| Independent security review | BLOCKED | CodeMouse account subscription inactive; no independent review evidence |
+| Production release | NOT AUTHORIZED | PR remains Draft; no merge or Production changes |
+
+### Decision
+**NOT READY FOR RELEASE.** Keep PR #96 Open / Draft. The latest exact-head automated CI and CodeQL are green, but live integration, Preview D1 metadata, legacy Worker provenance and independent review remain unresolved. Production remains untouched.
