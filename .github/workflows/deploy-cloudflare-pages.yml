@@ -63,7 +63,7 @@ jobs:
           printf 'token=%s\n' "$token" >> "$GITHUB_OUTPUT"
 
       - name: Deploy to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v4
+        uses: cloudflare/wrangler-action@4e88846969242f7752bcfdaf5511bfbb3985ca47 # v4
         with:
           apiToken: ${{ steps.normalized_token.outputs.token }}
           accountId: 92cf091bbac8b4879ec65feb30b4715b
