@@ -1,4 +1,4 @@
-name: Repair Cloudflare Branch Preview Triggers
+name: Cloudflare Branch Preview Trigger Safety Validation
 
 on:
   workflow_dispatch:
@@ -7,177 +7,20 @@ permissions:
   contents: read
 
 concurrency:
-  group: repair-cloudflare-branch-preview-triggers
+  group: cloudflare-branch-preview-safety-validation
   cancel-in-progress: false
 
 jobs:
-  repair-preview-only:
+  validate-only:
+    # All API mutations are intentionally disabled until exact Preview trigger identities are re-verified.
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 5
     steps:
-      - name: Validate tokens and preview-only trigger targets
-        shell: bash
-        env:
-          CF_WORKERS_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
-          CF_BUILDS_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_BUILDS_API_TOKEN }}
-        run: |
-          set -euo pipefail
-          account_id="92cf091bbac8b4879ec65feb30b4715b"
-          branch="content/four-pillar-guides-2026-10"
-          repo_id="1423636651"
-          repo_name="ai-thuc-chien-blog"
-          tmp="$(mktemp -d)"
-          trap 'rm -rf "$tmp"' EXIT
-
-          if [[ -z "$CF_WORKERS_TOKEN" || -z "$CF_BUILDS_TOKEN" ]]; then
-            echo "::error::Both existing Cloudflare API token secrets are required."
-            exit 1
-          fi
-          echo "::add-mask::$CF_WORKERS_TOKEN"
-          echo "::add-mask::$CF_BUILDS_TOKEN"
-
-          api_get() {
-            local token="$1" url="$2" out="$3"
-            local status
-            status="$(curl --silent --show-error --output "$out" --write-out '%{http_code}' \
-              --header "Authorization: Bearer $token" --header 'Accept: application/json' "$url")"
-            if [[ "$status" -lt 200 || "$status" -ge 300 ]] || ! jq -e '.success == true' "$out" >/dev/null; then
-              echo "::error::Read-only Cloudflare API request failed (HTTP $status)."
-              jq -r '(.errors[]?.message // empty)' "$out" 2>/dev/null || true
-              exit 1
-            fi
-          }
-
-          api_mutate() {
-            local method="$1" token="$2" url="$3" payload_file="$4" out="$5"
-            local status
-            status="$(curl --silent --show-error --output "$out" --write-out '%{http_code}' \
-              --request "$method" --header "Authorization: Bearer $token" \
-              --header 'Content-Type: application/json' --header 'Accept: application/json' \
-              --data-binary "@$payload_file" "$url")"
-            if [[ "$status" -lt 200 || "$status" -ge 300 ]] || ! jq -e '.success == true' "$out" >/dev/null; then
-              echo "::error::Cloudflare update failed (HTTP $status)."
-              jq -r '(.errors[]?.message // empty)' "$out" 2>/dev/null || true
-              exit 1
-            fi
-          }
-
-          api_get "$CF_WORKERS_TOKEN" "https://api.cloudflare.com/client/v4/user/tokens/verify" "$tmp/deploy-token.json"
-          deploy_status="$(jq -r '.result.status // "unknown"' "$tmp/deploy-token.json")"
-          deploy_token_id="$(jq -r '.result.id // empty' "$tmp/deploy-token.json")"
-          if [[ "$deploy_status" != "active" || -z "$deploy_token_id" ]]; then
-            echo "::error::Configured Workers deploy token is not active or did not return a token ID."
-            exit 1
-          fi
-
-          api_get "$CF_BUILDS_TOKEN" "https://api.cloudflare.com/client/v4/user/tokens/verify" "$tmp/builds-token.json"
-          builds_status="$(jq -r '.result.status // "unknown"' "$tmp/builds-token.json")"
-          if [[ "$builds_status" != "active" ]]; then
-            echo "::error::Configured Workers Builds management token is not active."
-            exit 1
-          fi
-
-          api_get "$CF_BUILDS_TOKEN" "https://api.cloudflare.com/client/v4/accounts/${account_id}/builds/tokens" "$tmp/tokens.json"
-          api_get "$CF_BUILDS_TOKEN" "https://api.cloudflare.com/client/v4/accounts/${account_id}/builds/workers/8f7412bd66a14c71b4140f0f5ab21a5a/triggers" "$tmp/primary-preview.json"
-          api_get "$CF_BUILDS_TOKEN" "https://api.cloudflare.com/client/v4/accounts/${account_id}/builds/workers/7b8df5eb004141d3b658b0b3f29fea5c/triggers" "$tmp/experimental-preview.json"
-
-          validate_preview() {
-            local file="$1" uuid="$2" tag="$3" expected_command="$4"
-            jq -e --arg uuid "$uuid" --arg tag "$tag" --arg branch "$branch" \
-              --arg repo "$repo_name" --arg repo_id "$repo_id" --arg cmd "$expected_command" '
-              [.result[]? | select(.trigger_uuid == $uuid)] as $m |
-              ($m | length) == 1 and
-              $m[0].external_script_id == $tag and
-              ($m[0].branch_includes // []) == [$branch] and
-              ($m[0].branch_excludes // [] | index("main") == null) and
-              $m[0].deploy_command == $cmd and
-              $m[0].root_directory == "/" and
-              $m[0].repo_connection.repo_name == $repo and
-              (($m[0].repo_connection.repo_id | tostring) == $repo_id)
-            ' "$file" >/dev/null || {
-              echo "::error::Preview trigger preflight failed for $uuid; no trigger has been changed."
-              exit 1
-            }
-          }
-
-          # Strict preflight: only the two known branch-specific preview trigger UUIDs.
-          # Production triggers fefb9a7f-... and c0af6fef-... are never targeted.
-          validate_preview "$tmp/primary-preview.json" \
-            "820753b3-804f-483b-8d9f-ca37b257b8a9" \
-            "8f7412bd66a14c71b4140f0f5ab21a5a" "npx wrangler deploy"
-          validate_preview "$tmp/experimental-preview.json" \
-            "cafe4ba9-2ed7-431c-8ae1-d35a9e370fe8" \
-            "7b8df5eb004141d3b658b0b3f29fea5c" "npx wrangler preview"
-
-          echo "Preflight passed: both targets are branch-only preview triggers for the expected repository and branch."
-          echo "Production trigger UUIDs are not being modified."
-
-          # Reuse the dedicated preview token if already present and linked to the active deploy token.
-          new_token_name="ai-thuc-chien-branch-preview-active-token"
-          new_token_uuid="$(jq -r --arg name "$new_token_name" --arg id "$deploy_token_id" '
-            [.result[]? | select(.build_token_name == $name and .cloudflare_token_id == $id)][0].build_token_uuid // empty
-          ' "$tmp/tokens.json")"
-
-          if [[ -z "$new_token_uuid" ]]; then
-            jq -n --arg name "$new_token_name" --arg secret "$CF_WORKERS_TOKEN" --arg id "$deploy_token_id" \
-              '{build_token_name:$name, build_token_secret:$secret, cloudflare_token_id:$id}' > "$tmp/create-token.json"
-            api_mutate POST "$CF_BUILDS_TOKEN" \
-              "https://api.cloudflare.com/client/v4/accounts/${account_id}/builds/tokens" \
-              "$tmp/create-token.json" "$tmp/create-token-result.json"
-            new_token_uuid="$(jq -r '.result.build_token_uuid // empty' "$tmp/create-token-result.json")"
-            if [[ ! "$new_token_uuid" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
-              echo "::error::Cloudflare did not return a valid new build-token UUID."
-              exit 1
-            fi
-            echo "Created a new preview build-token reference linked to the active Workers deploy API token."
-          else
-            echo "Reusing the existing preview build-token reference linked to the active Workers deploy API token."
-          fi
-
-          # Repair only the secondary Worker's branch-preview trigger auth.
-          jq -n --arg uuid "$new_token_uuid" '{build_token_uuid:$uuid}' > "$tmp/patch-secondary.json"
-          api_mutate PATCH "$CF_BUILDS_TOKEN" \
-            "https://api.cloudflare.com/client/v4/accounts/${account_id}/builds/triggers/cafe4ba9-2ed7-431c-8ae1-d35a9e370fe8" \
-            "$tmp/patch-secondary.json" "$tmp/patch-secondary-result.json"
-
-          # Apply the documented Wrangler workaround to the primary Worker's branch-only preview trigger.
-          # 'versions upload' does not shift production traffic; the production trigger remains untouched.
-          jq -n --arg command "env -u WRANGLER_CI_MATCH_TAG npx wrangler versions upload" \
-            '{deploy_command:$command}' > "$tmp/patch-primary.json"
-          api_mutate PATCH "$CF_BUILDS_TOKEN" \
-            "https://api.cloudflare.com/client/v4/accounts/${account_id}/builds/triggers/820753b3-804f-483b-8d9f-ca37b257b8a9" \
-            "$tmp/patch-primary.json" "$tmp/patch-primary-result.json"
-
-          # Verify both exact preview-only changes stuck, and no other trigger field was supplied in a patch.
-          api_get "$CF_BUILDS_TOKEN" "https://api.cloudflare.com/client/v4/accounts/${account_id}/builds/workers/8f7412bd66a14c71b4140f0f5ab21a5a/triggers" "$tmp/verify-primary.json"
-          api_get "$CF_BUILDS_TOKEN" "https://api.cloudflare.com/client/v4/accounts/${account_id}/builds/workers/7b8df5eb004141d3b658b0b3f29fea5c/triggers" "$tmp/verify-secondary.json"
-
-          jq -e --arg uuid "820753b3-804f-483b-8d9f-ca37b257b8a9" \
-            --arg cmd "env -u WRANGLER_CI_MATCH_TAG npx wrangler versions upload" \
-            --arg branch "$branch" '[.result[]? | select(.trigger_uuid==$uuid and .branch_includes==[$branch] and .deploy_command==$cmd)] | length == 1' \
-            "$tmp/verify-primary.json" >/dev/null
-          jq -e --arg uuid "cafe4ba9-2ed7-431c-8ae1-d35a9e370fe8" \
-            --arg token "$new_token_uuid" --arg branch "$branch" \
-            '[.result[]? | select(.trigger_uuid==$uuid and .branch_includes==[$branch] and .deploy_command=="npx wrangler preview" and .build_token_uuid==$token)] | length == 1' \
-            "$tmp/verify-secondary.json" >/dev/null
-
-          echo "PASS: preview trigger 820753b3-804f-483b-8d9f-ca37b257b8a9 now uses the no-match-tag versions-upload workaround."
-          echo "PASS: preview trigger cafe4ba9-2ed7-431c-8ae1-d35a9e370fe8 now uses the active deploy token and keeps npx wrangler preview."
-          echo "No production trigger was modified; no deployment/traffic switch was performed."
-          echo
-          echo "Starting test builds for the PR branch and exact reviewed commit."
-          for uuid in \
-            "820753b3-804f-483b-8d9f-ca37b257b8a9" \
-            "cafe4ba9-2ed7-431c-8ae1-d35a9e370fe8"; do
-            jq -n --arg branch "$branch" --arg sha "c3ba77b0bc665b400266b7b5c60018a4af54cf02" \
-              '{branch:$branch,commit_hash:$sha}' > "$tmp/start-build.json"
-            api_mutate POST "$CF_BUILDS_TOKEN" \
-              "https://api.cloudflare.com/client/v4/accounts/${account_id}/builds/triggers/${uuid}/builds" \
-              "$tmp/start-build.json" "$tmp/start-build-result.json"
-            build_uuid="$(jq -r '.result.build_uuid // empty' "$tmp/start-build-result.json")"
-            if [[ ! "$build_uuid" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
-              echo "::error::Could not read the new preview build UUID for trigger $uuid."
-              exit 1
-            fi
-            echo "Started branch-preview build for trigger $uuid; build UUID: $build_uuid"
-          done
+      - name: Check out reviewed source without credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Run offline Workers Builds trigger fixtures
+        run: python -m unittest discover -s scripts -p 'test_configure_cloudflare_worker_builds.py' -v
+      - name: Assert no Cloudflare API mutation path is available
+        run: node scripts/test_workers_builds_workflow_guard.mjs
