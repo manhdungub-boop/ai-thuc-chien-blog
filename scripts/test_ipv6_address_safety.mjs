@@ -5,6 +5,7 @@ const cases = [
   ["127.0.0.1", true, "IPv4 loopback"],
   ["10.1.2.3", true, "IPv4 private"],
   ["8.8.8.8", false, "public IPv4"],
+  ["192.88.99.1", true, "deprecated 6to4 relay anycast"],
   ["::", true, "IPv6 unspecified"],
   ["::1", true, "IPv6 loopback"],
   ["fc00::1", true, "IPv6 unique-local"],
