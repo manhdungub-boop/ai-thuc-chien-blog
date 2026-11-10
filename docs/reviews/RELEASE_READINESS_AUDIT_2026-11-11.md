@@ -165,3 +165,43 @@ Các review threads cũ được giữ nguyên để bảo toàn lịch sử. Ch
 - D1 metadata: BLOCKED bởi thiếu `d1.read`.
 - Live Google OAuth, live email và independent security review: BLOCKED.
 - Release: **NOT READY**. Không merge, không deploy Production, không thay đổi Production Worker/DNS/D1/secrets.
+
+
+## Addendum — xác minh CI mới nhất và trạng thái kết nối Cloudflare (11/11/2026)
+
+### Exact-head verification: `7a45205927ff125081256d7019d5467ec04faec2`
+
+Đã kiểm tra lại PR #96 trực tiếp trên GitHub: Open / Draft, chưa merge; branch `security/release-readiness-hardening-20261110`; base là PR #95; GitHub trả về mergeable=true tại thời điểm truy vấn.
+
+Ba workflow gắn với đúng SHA này đã hoàn tất:
+- Static CI Quality Gate — run `42881695676`, job `validate`: SUCCESS.
+- CodeQL Offline Security Analysis — run `42881695739`, jobs Analyze actions, javascript-typescript và python: SUCCESS.
+- Staging Google OAuth integration — run `42881695740`, job `staging-google-oauth`: SUCCESS.
+
+Static CI job đã chạy build static site/SEO feeds, JavaScript syntax, Worker security headers, D1 schema/config regression, OAuth migration rehearsal, article/content quality, AI Bank catalog, isolated Chromium browser regression, official AI tool links, article attribution/diagrams, SEO, accessibility/performance basics, copy prompt interactions, article navigation và homepage coverage. CodeQL hoàn tất cả ba nhóm phân tích. OAuth workflow là kiểm thử tích hợp với D1 mock cô lập; không chứng minh Google OAuth thật hoặc đăng nhập vào tài khoản Google thật.
+
+PR #96 không có review submissions hoặc inline review threads. Các review findings cũ trên PR #91 vẫn được bảo toàn theo lịch sử; việc mitigation trong PR #96 không tự động đóng các thread của PR #91.
+
+### Cloudflare D1 read-only connection
+
+Đã dùng Composio discovery để tìm đúng các thao tác metadata D1 và Worker metadata. Kết quả xác nhận chưa có Cloudflare connection Active. Đã khởi tạo một kết nối mới có alias `AI Thuc Chien Blog - Preview D1 read-only audit`; trạng thái hiện là `initiated/pending`, chưa Active. Vì vậy chưa gọi bất kỳ Cloudflare tool nào qua Composio.
+
+Khi hoàn tất kết nối, chỉ dùng thao tác đọc metadata cho Preview D1 UUID `51d814c8-a3fc-4481-a5f1-60bc67617f3c`. Không yêu cầu D1 Write, không chạy SQL, không truy cập Production D1. Nếu màn hình cấp quyền yêu cầu quyền ghi hoặc quyền rộng không cần thiết, dừng lại.
+
+### Release gate after exact-head verification
+
+| Gate | Status | Evidence |
+|---|---|---|
+| Static CI | PASS | Run 42881695676 on exact SHA above |
+| CodeQL (Actions, JS/TS, Python) | PASS | Run 42881695739 on exact SHA above |
+| OAuth mock/integration | PASS | Run 42881695740 on exact SHA above; not live Google OAuth |
+| Real Google OAuth | BLOCKED | Preview OAuth credentials/provider configuration not verified |
+| Real email relay delivery | BLOCKED | Preview-only relay credential and delivery E2E not verified |
+| Preview D1 metadata | BLOCKED | Requires authorized Active connection with D1 Read only |
+| Legacy Preview secret provenance | BLOCKED | Binding names/values provenance and traffic ownership remain unresolved; no secret values read |
+| Independent security review | BLOCKED | No independent review submissions on PR #96 |
+| Production release | NOT AUTHORIZED | No merge, Production deployment, DNS, D1 migration or secret changes |
+
+### Decision
+
+**NOT READY FOR RELEASE.** Keep PR #96 Open / Draft. Continue safe read-only verification and exact-scope Preview work after the least-privilege Cloudflare connection becomes Active. No Production resources or credentials were changed.
