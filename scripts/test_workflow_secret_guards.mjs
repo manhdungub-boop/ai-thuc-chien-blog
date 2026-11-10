@@ -15,6 +15,14 @@ for (const [file, job] of [
   assert.ok(jobGuard(workflow(file), job), file + ': ' + job + ' must run only from refs/heads/main');
 }
 
+const codeql = workflow('codeql-security-analysis.yml');
+assert.ok(codeql.includes('security-events: write'), 'CodeQL must have permission to publish scan results');
+assert.ok(codeql.includes('github/codeql-action/init@v4') && codeql.includes('github/codeql-action/analyze@v4'), 'CodeQL must use the supported v4 actions');
+assert.ok(codeql.includes('actions/checkout@v7') && codeql.includes('persist-credentials: false'), 'CodeQL checkout must not persist GitHub credentials');
+assert.ok(codeql.includes('javascript-typescript') && codeql.includes('python') && codeql.includes('actions'), 'CodeQL must scan application code and GitHub Actions workflows');
+assert.doesNotMatch(codeql, /\$\{\{\s*secrets\./, 'CodeQL workflow must not receive application secrets');
+assert.doesNotMatch(codeql, /cloudflare|wrangler|deploy/i, 'CodeQL workflow must not deploy or call Cloudflare');
+
 const legacyRepair = workflow('repair-cloudflare-branch-preview-triggers.yml');
 assert.ok(legacyRepair.includes('Legacy Cloudflare Branch Preview Trigger Repair (Disabled)'), 'stale Preview repair workflow must be clearly disabled');
 assert.doesNotMatch(legacyRepair, /\$\{\{\s*secrets\./, 'disabled legacy workflow must not receive Cloudflare secrets');
