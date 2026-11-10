@@ -50,6 +50,10 @@ for (const slug of slugs) {
   assert.ok(html.includes("BẢN NHÁP – CHƯA XUẤT BẢN"));
   assert.ok(html.includes("Nguồn"));
   assert.match(html,/ghi rõ tác giả|vui lòng ghi rõ tác giả/i);
+  const jsonLdMatch = html.match(/<script\b(?=[^>]*\btype=["']application\/ld\+json["'])[^>]*>([\s\S]*?)<\/script>/i);
+  assert.ok(jsonLdMatch, "draft page must include a JSON-LD script");
+  const draftJsonLd = JSON.parse(jsonLdMatch[1]);
+  assert.equal(new URL(draftJsonLd["@context"]).hostname, "schema.org", "JSON-LD context must resolve to Schema.org");
   const scriptTags = [...html.matchAll(/<script\b[^>]*>/gi)].map(function (m) { return m[0]; });
   assert.equal(scriptTags.length,1,"only the JSON-LD script element is allowed");
   assert.ok(scriptTags[0].includes('type="application/ld+json"'));
