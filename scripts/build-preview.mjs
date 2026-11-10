@@ -48,9 +48,12 @@ await cp(sourceRoot, outputRoot, { recursive: true });
 // The recovery README is repository-only incident context and must never be public.
 await rm(path.join(outputRoot, "RECOVERY-README.txt"), { force: true });
 await rm(path.join(outputRoot, "_headers"), { force: true });
+// Production Search Console ownership proof is not needed and must not be copied to Preview.
+await rm(path.join(outputRoot, "google4e45ddcf8facb122.html"), { force: true });
 // Candidate review records and internal notes must not be exposed by a public preview.
 await rm(path.join(outputRoot, "data", "review"), { recursive: true, force: true });
 await assert.rejects(stat(path.join(outputRoot, "RECOVERY-README.txt")), "preview output must exclude internal recovery notes");
+await assert.rejects(stat(path.join(outputRoot, "google4e45ddcf8facb122.html")), "preview output must exclude the Production Search Console verification file");
 await assert.rejects(stat(path.join(outputRoot, "data", "review")), "preview output must exclude internal catalog review candidates");
 
 async function walk(directory) {
