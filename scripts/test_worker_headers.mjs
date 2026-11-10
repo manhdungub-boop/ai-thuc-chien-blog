@@ -46,6 +46,7 @@ try {
 assert.equal(previewPagesCalls, 0, 'Branch Preview must not call the production Pages fallback');
 assert.equal(previewHomepage.status, 200);
 assert.match(await previewHomepage.text(), /community-verify-confirm/, 'Branch Preview must serve its own verification UI');
+assert.equal(previewHomepage.headers.get('x-robots-tag'), 'noindex, nofollow', 'Branch Preview must not be indexed as a duplicate of Production');
 assertSecurityHeaders(previewHomepage);
 
 const beforePrimaryPages = globalThis.fetch;
@@ -76,6 +77,7 @@ assert.equal(root.headers.get('location'), null, 'Root must not redirect to /ind
 assert.equal(root.headers.get('cache-control'), 'no-store, max-age=0');
 assert.equal(root.headers.get('pragma'), 'no-cache');
 assert.equal(root.headers.get('expires'), '0');
+assert.equal(root.headers.get('x-robots-tag'), null, 'Canonical Production host must remain indexable');
 assertSecurityHeaders(root);
 
 // If the Worker asset binding returns a 404 for the homepage, recover from the
