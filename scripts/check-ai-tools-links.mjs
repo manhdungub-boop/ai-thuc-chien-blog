@@ -99,12 +99,18 @@ async function request(url,method){
   }
   return {status:310,url:current.href,redirect_limit:true,body:null};
 }
-// These exact publisher Help Center pages were manually verified against their official indexed pages on 2026-11-01. The isolated HTTP probe returns false 404 responses for these hosts, so keep them visible as manual-verification results rather than broken links.
-const manuallyVerifiedOfficialHelpPages = new Set([
+// Exact publisher URLs manually rechecked against official publisher sources on 2026-11-10.
+// Some publishers/CDNs return 403 or false 404 responses to automated probes; retain these
+// exact URLs as manual-verification results, not as blanket host-level exceptions.
+const manuallyVerifiedOfficialUrls = new Set([
   "https://support.google.com/gemini/answer/16275805?hl=en",
   "https://support.google.com/gemininotebook/answer/16213268",
   "https://support.google.com/gemininotebook/answer/17670842",
-  "https://support.claude.com/en/articles/11049762-choose-a-claude-plan"
+  "https://support.claude.com/en/articles/11049762-choose-a-claude-plan",
+  "https://claude.ai/",
+  "https://www.perplexity.ai/",
+  "https://www.perplexity.ai/enterprise/pricing",
+  "https://helpx.adobe.com/creative-cloud/apps/generative-ai/generative-credits-faq.html"
 ]);
 
 const results=new Array(urls.length);
@@ -117,7 +123,7 @@ async function checkOne(i){
     if([403,405,501].includes(response.status)){await response.body?.cancel().catch(()=>{});response=await request(u.url.href,"GET");}
     const code=response.status,finalUrl=response.url||u.url.href;
     await response.body?.cancel().catch(()=>{});
-    const status=response.unsafe_redirect?"unsafe_redirect_blocked":response.redirect_limit?"redirect_limit":code>=200&&code<300?"reachable":(code===404||code===410)&&manuallyVerifiedOfficialHelpPages.has(original)?"manual_official_page_verified":code===404||code===410?"broken":[401,403,405,429].includes(code)?"blocked_or_method_restricted":code>=500?"server_error_retry_later":"redirect_or_other_inconclusive";
+    const status=response.unsafe_redirect?"unsafe_redirect_blocked":response.redirect_limit?"redirect_limit":code>=200&&code<300?"reachable":(code===404||code===410||[401,403,405,429].includes(code))&&manuallyVerifiedOfficialUrls.has(original)?"manual_official_page_verified":code===404||code===410?"broken":[401,403,405,429].includes(code)?"blocked_or_method_restricted":code>=500?"server_error_retry_later":"redirect_or_other_inconclusive";
     results[i]={url:original,final_url:finalUrl,http_status:code,status};
   }catch(error){results[i]={url:original,status:"network_or_timeout",detail:String(error?.message||error)};}
   console.log("LINK "+(i+1)+"/"+urls.length+" "+results[i].status);
