@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { extractAttribute, hasUrlWithOrigin } from "./url-assertions.mjs";
 
 const root = process.cwd();
 const sourceRoot = path.join(root, "site-snapshot");
@@ -115,17 +116,19 @@ for (const file of htmlFiles) {
   guardedHtml = guardedHtml.replace(/<script\b(?=[^>]*\btype=["']application\/ld\+json["'])[^>]*>[\s\S]*?<\/script>/gi, rewriteMetadataTag);
   const canonicalTags = guardedHtml.match(/<link\b(?=[^>]*\brel=["']canonical["'])[^>]*>/gi) || [];
   for (const tag of canonicalTags) {
-    assert.ok(tag.includes(previewOrigin), "canonical must point to this preview deployment: " + path.relative(outputRoot, file));
-    assert.ok(!tag.includes(productionSiteOrigin), "canonical must not point to production: " + path.relative(outputRoot, file));
+    const canonicalUrl = new URL(extractAttribute(tag, "href"), previewOrigin);
+    assert.equal(canonicalUrl.origin, previewOrigin, "canonical must point to this preview deployment: " + path.relative(outputRoot, file));
+    assert.notEqual(canonicalUrl.origin, new URL(productionSiteOrigin).origin, "canonical must not point to production: " + path.relative(outputRoot, file));
   }
   const ogUrlTags = guardedHtml.match(/<meta\b(?=[^>]*\bproperty=["']og:url["'])[^>]*>/gi) || [];
   for (const tag of ogUrlTags) {
-    assert.ok(tag.includes(previewOrigin), "og:url must point to this preview deployment: " + path.relative(outputRoot, file));
-    assert.ok(!tag.includes(productionSiteOrigin), "og:url must not point to production: " + path.relative(outputRoot, file));
+    const ogUrl = new URL(extractAttribute(tag, "content"), previewOrigin);
+    assert.equal(ogUrl.origin, previewOrigin, "og:url must point to this preview deployment: " + path.relative(outputRoot, file));
+    assert.notEqual(ogUrl.origin, new URL(productionSiteOrigin).origin, "og:url must not point to production: " + path.relative(outputRoot, file));
   }
   const jsonLdBlocks = guardedHtml.match(/<script\b(?=[^>]*\btype=["']application\/ld\+json["'])[^>]*>[\s\S]*?<\/script>/gi) || [];
   for (const block of jsonLdBlocks) {
-    assert.ok(!block.includes(productionSiteOrigin), "JSON-LD must not reference production canonical URLs: " + path.relative(outputRoot, file));
+    assert.equal(hasUrlWithOrigin(block, productionSiteOrigin), false, "JSON-LD must not reference production canonical URLs: " + path.relative(outputRoot, file));
   }
   guardedHtml = guardedHtml.replace("</head>", previewInteractionStyle + "\n" + previewApiGuard + "\n</head>");
   assert.ok(guardedHtml.includes('id="preview-api-guard"'), "preview API guard must be present: " + path.relative(outputRoot, file));
