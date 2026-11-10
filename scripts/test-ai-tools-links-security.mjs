@@ -25,6 +25,13 @@ try {
   assert.ok(summaryStart >= 0, "link checker must emit a JSON summary");
   const summary = JSON.parse(run.stdout.slice(summaryStart));
   assert.equal(summary.checked, 5);
+  const checkerSource = await import("node:fs/promises").then(({ readFile }) => readFile("scripts/check-ai-tools-links.mjs", "utf8"));
+  assert.match(checkerSource, /maxHeaderSize:\s*64\s*\*\s*1024/,
+    "Publisher response headers must use a bounded size above Node's small default.");
+  assert.match(checkerSource, /\[502,503,504\]\.includes\(response\.status\)/,
+    "Transient upstream server failures must receive one bounded retry.");
+  assert.match(checkerSource, /attempt === 1 \? safePublicUrl\(current\.href\)/,
+    "Every retry must re-resolve and re-pin the public destination.");
   assert.ok(summary.results.every(result => result.status === "invalid_or_non_public_url"),
     "IPv6 loopback, IPv6 ULA, IPv4 loopback, DNS-resolved loopback, and deprecated 6to4 relay targets must be rejected before fetch");
   console.log("PASS: catalog link checker blocks private IPv4/IPv6 literals, private DNS targets, and deprecated 6to4 relay addresses.");
