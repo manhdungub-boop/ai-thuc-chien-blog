@@ -71,9 +71,9 @@ try {
   await page.waitForFunction(() => document.querySelectorAll("#bank-grid .tool-card").length === 24);
 
   await page.locator("#bank-verification").selectOption("needs_review");
-  await page.waitForFunction(() => document.querySelectorAll("#bank-grid .tool-card").length === 1);
+  await page.waitForFunction(() => document.querySelectorAll("#bank-grid .tool-card").length === 0);
   const reviewText = await page.locator("#bank-grid").innerText();
-  assert.ok(reviewText.includes("EasyOCR"), "active needs_review filter must include EasyOCR");
+  assert.ok(!reviewText.includes("EasyOCR"), "verified EasyOCR must not appear in the needs_review filter");
   assert.ok(!reviewText.includes("Flowise"), "deprecated Flowise must stay hidden from public active results");
 
   console.log("PASS Chromium catalog E2E: 36 total records / 35 active; 24+11 pagination; search across 9 additions; canonical IDs; A-Z sort; empty review filter; Preview noindex and candidate isolation.");
