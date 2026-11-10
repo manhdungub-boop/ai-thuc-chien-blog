@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Safely normalize verified Cloudflare Workers Builds production and optional preview triggers."""
+"""Offline-only trigger validation helpers; all Cloudflare API mutation is disabled."""
 import json
 import os
 import re
@@ -23,34 +23,6 @@ PRODUCTION_TRIGGERS = (
      "trigger_uuid": "c0af6fef-ce6b-4516-a092-433c59f2c9a6",
      "branch": "main", "kind": "production", "deploy_command": EXPECTED_DEPLOY_COMMAND},
 )
-
-
-def api_request(path, token, method="GET", payload=None):
-    url = "https://api.cloudflare.com/client/v4" + path
-    body = None if payload is None else json.dumps(payload).encode("utf-8")
-    req = Request(
-        url, data=body, method=method,
-        headers={
-            "Authorization": "Bearer " + token,
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-            "User-Agent": "AI-Thuc-Chien-Build-Config/2.0",
-        },
-    )
-    try:
-        with urlopen(req, timeout=30) as response:
-            data = json.loads(response.read().decode("utf-8"))
-    except HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")[:800]
-        raise RuntimeError(f"Cloudflare API returned HTTP {exc.code}: {detail}") from None
-    except URLError as exc:
-        raise RuntimeError(f"Cloudflare API connection failed: {exc.reason}") from None
-    except json.JSONDecodeError:
-        raise RuntimeError("Cloudflare API returned invalid JSON") from None
-    if not data.get("success"):
-        errors = data.get("errors") or data.get("messages") or []
-        raise RuntimeError("Cloudflare API error: " + json.dumps(errors, ensure_ascii=False)[:800])
-    return data.get("result")
 
 
 def preview_spec(tag, trigger_uuid, branch):
@@ -123,104 +95,11 @@ def changes_for(trigger, spec):
 
 
 def main():
-    token = os.environ.get("CLOUDFLARE_WORKERS_BUILDS_API_TOKEN", "").strip()
-    if not token:
-        print("ERROR: set the GitHub Actions secret CLOUDFLARE_WORKERS_BUILDS_API_TOKEN first.", file=sys.stderr)
-        return 2
-
-    preview_uuid = os.environ.get("PREVIEW_TRIGGER_UUID", "").strip()
-    preview_tag = os.environ.get("PREVIEW_WORKER_TAG", "").strip()
-    preview_branch = os.environ.get("PREVIEW_BRANCH", "").strip()
-    preview_sha = os.environ.get("PREVIEW_COMMIT_SHA", "").strip()
-    reuse_raw = os.environ.get("PREVIEW_REUSE_PRIMARY_BUILD_TOKEN", "false").strip().lower()
-    if reuse_raw not in {"", "true", "false", "1", "0", "yes", "no"}:
-        print("ERROR: preview_reuse_primary_build_token must be true or false.", file=sys.stderr)
-        return 2
-    reuse_primary_build_token = reuse_raw in {"true", "1", "yes"}
-    preview_inputs = (preview_uuid, preview_tag, preview_branch)
-    if any(preview_inputs) and not all(preview_inputs):
-        print("ERROR: preview_trigger_uuid, preview_worker_tag and preview_branch must be supplied together.", file=sys.stderr)
-        return 2
-    if preview_sha and not all(preview_inputs):
-        print("ERROR: preview_commit_sha requires all preview trigger inputs.", file=sys.stderr)
-        return 2
-    if reuse_primary_build_token and not all(preview_inputs):
-        print("ERROR: reusing the primary build token requires an exact preview trigger UUID, Worker tag and branch.", file=sys.stderr)
-        return 2
-    if preview_sha and not re.fullmatch(r"[0-9a-fA-F]{40}", preview_sha):
-        print("ERROR: preview_commit_sha must be a 40-character Git commit SHA.", file=sys.stderr)
-        return 2
-
-    specs = list(PRODUCTION_TRIGGERS)
-    if all(preview_inputs):
-        specs.append(preview_spec(preview_tag, preview_uuid, preview_branch))
-
-    try:
-        # Preflight every trigger before modifying any of them.
-        current = {}
-        for spec in specs:
-            endpoint = f"/accounts/{ACCOUNT_ID}/builds/workers/{spec['tag']}/triggers"
-            trigger = validate_trigger(api_request(endpoint, token) or [], spec)
-            current[spec["trigger_uuid"]] = trigger
-
-        # Optional, explicit recovery path: reuse the verified primary build token only on this preview trigger.
-        # The primary production trigger and secondary production trigger are preflighted above and are never patched.
-        if reuse_primary_build_token:
-            preview = specs[-1]
-            if preview.get("kind") != "preview":
-                raise ValueError("Token reuse can only target a non-production preview trigger")
-            token_records = api_request(f"/accounts/{ACCOUNT_ID}/builds/tokens", token) or []
-            primary_trigger = current[PRODUCTION_TRIGGERS[0]["trigger_uuid"]]
-            primary_token_uuid = resolve_primary_build_token(primary_trigger, token_records)
-            preview["use_build_token_uuid"] = primary_token_uuid
-            print("TOKEN VERIFIED: reusing the existing primary Worker build token for this preview trigger only.")
-
-        # Apply only the explicitly expected fields; token changes are preview-only and opt-in.
-        for spec in specs:
-            trigger = current[spec["trigger_uuid"]]
-            patch = changes_for(trigger, spec)
-            if patch:
-                api_request(
-                    f"/accounts/{ACCOUNT_ID}/builds/triggers/{spec['trigger_uuid']}",
-                    token, method="PATCH", payload=patch,
-                )
-                print(f"UPDATED: {spec['name']} fields: {', '.join(sorted(patch))}")
-            else:
-                print(f"NO CHANGE: {spec['name']} already matches its expected commands")
-
-        # Read back all trigger settings before optionally enqueueing a preview build.
-        verified = {}
-        for spec in specs:
-            endpoint = f"/accounts/{ACCOUNT_ID}/builds/workers/{spec['tag']}/triggers"
-            trigger = validate_trigger(api_request(endpoint, token) or [], spec)
-            if trigger.get("build_command") != TARGET_BUILD_COMMAND:
-                raise RuntimeError(f"{spec['name']}: build command did not persist")
-            if trigger.get("deploy_command") != spec["deploy_command"]:
-                raise RuntimeError(f"{spec['name']}: deploy command did not persist")
-            if spec.get("use_build_token_uuid") and trigger.get("build_token_uuid") != spec["use_build_token_uuid"]:
-                raise RuntimeError(f"{spec['name']}: preview build token did not persist")
-            verified[spec["trigger_uuid"]] = trigger
-            extra = " + verified preview token" if spec.get("use_build_token_uuid") else ""
-            print(f"PASS: {spec['name']} verified ({spec['branch']} -> {spec['deploy_command']}{extra})")
-
-        if preview_sha:
-            spec = specs[-1]
-            # The branch was preflighted as non-production above, so this queues only a preview build.
-            result = api_request(
-                f"/accounts/{ACCOUNT_ID}/builds/triggers/{spec['trigger_uuid']}/builds",
-                token, method="POST",
-                payload={"branch": preview_branch, "commit_hash": preview_sha},
-            ) or {}
-            build_uuid = result.get("build_uuid") if isinstance(result, dict) else None
-            if not build_uuid:
-                raise RuntimeError("Preview build request returned no build UUID")
-            print(f"PREVIEW BUILD QUEUED: {preview_branch} at {preview_sha}; build UUID {build_uuid}")
-
-    except (RuntimeError, ValueError) as exc:
-        print("ERROR:", str(exc), file=sys.stderr)
-        return 1
-    print("SUCCESS: verified trigger configuration complete; production deploys and non-production previews use distinct commands.")
-    return 0
+    print(
+        "DISABLED: Cloudflare Workers Builds changes are locked until the exact Preview Worker tag/trigger UUID pair is independently verified and allowlisted.",
+        file=sys.stderr,
+    )
+    return 2
 
 
 if __name__ == "__main__":
