@@ -1,0 +1,40 @@
+name: CodeQL Action Pinning Review
+
+on:
+  push:
+    branches:
+      - security/pin-third-party-actions-20261110
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: codeql-action-pinning-\${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze-actions:
+    name: Analyze GitHub Actions workflows
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out source without persisting credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@0911ee96d2d6c8def97122c36c5cadd93829a4b4 # v4.39.3
+        with:
+          languages: actions
+          queries: security-extended
+
+      - name: Analyze workflows without uploading SARIF
+        uses: github/codeql-action/analyze@0911ee96d2d6c8def97122c36c5cadd93829a4b4 # v4.39.3
+        with:
+          category: /language:actions
+          output: \${{ github.workspace }}/codeql-results
+          upload: never
+          wait-for-processing: false
