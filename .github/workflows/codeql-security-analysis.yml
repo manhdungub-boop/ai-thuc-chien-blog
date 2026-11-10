@@ -46,6 +46,40 @@ jobs:
           output: ${{ github.workspace }}/codeql-results
           upload: never
           wait-for-processing: false
+      - name: Run focused HTML and SEO regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/test_article_quality.cjs
+          node scripts/test_seo_consistency.cjs
+          python3 - <<'PY'
+          import importlib.util
+          import tempfile
+          from pathlib import Path
+
+          root = Path.cwd()
+          targets = [
+              ("article_similarity", root / "scripts/audit-article-similarity.py", "article_words"),
+              ("draft_similarity", root / "scripts/audit-draft-similarity.py", "published_words"),
+          ]
+          html = "<p>visible phrase</p><script>secret_script_marker</script\\t  bar><style>secret_style_marker</style\\t  bar><p>retained phrase</p>"
+          with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".html", delete=False) as stream:
+              stream.write(html)
+              fixture = Path(stream.name)
+          try:
+              for name, script, function_name in targets:
+                  spec = importlib.util.spec_from_file_location(name, script)
+                  module = importlib.util.module_from_spec(spec)
+                  spec.loader.exec_module(module)
+                  words = module.__dict__[function_name](fixture)
+                  joined = " ".join(words)
+                  assert "visible" in joined and "retained" in joined, name
+                  assert "secret_script_marker" not in joined, name
+                  assert "secret_style_marker" not in joined, name
+          finally:
+              fixture.unlink(missing_ok=True)
+          print("PASS: Python similarity filters exclude adversarial script/style end tags")
+          PY
       - name: Summarize local SARIF findings
         if: always()
         shell: bash
