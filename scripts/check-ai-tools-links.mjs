@@ -123,7 +123,14 @@ const manuallyVerifiedOfficialUrls = new Set([
   "https://github.com/anomalyco/opencode/blob/dev/LICENSE",
   "https://github.com/qdrant/qdrant/blob/master/LICENSE",
   "https://github.com/mlflow/mlflow/blob/master/LICENSE.txt",
-  "https://github.com/pydantic/pydantic-ai/blob/main/LICENSE"
+  "https://github.com/pydantic/pydantic-ai/blob/main/LICENSE",
+  // Exact GitHub 503 URLs independently fetched through the GitHub contents API on 2026-11-10.
+  // These file contents were confirmed at the listed upstream blob SHAs; exceptions remain URL-specific.
+  "https://github.com/BerriAI/litellm/blob/main/enterprise/LICENSE.md", // c8607439adfe19df15cf78a04e5964237a89b9bc
+  "https://github.com/JaidedAI/EasyOCR/blob/master/README.md", // d7e7853811a65d0373c5dc77d2c91402c963d0fa
+  "https://github.com/Unstructured-IO/unstructured/blob/main/LICENSE.md", // b807bcb4281598fdb402807621127fad312b3f74
+  "https://github.com/m-bain/whisperX/blob/main/README.md", // d66fd7e7d429de3125d1a8a45d89ef21bc3640bb
+  "https://github.com/OpenHands/OpenHands/blob/main/LICENSE" // f6f60f52368bcc96f82fbe59ec65049c2c3af9db
 ]);
 
 const results=new Array(urls.length);
