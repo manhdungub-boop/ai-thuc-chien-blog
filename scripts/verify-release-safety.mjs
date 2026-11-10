@@ -37,4 +37,4 @@ assert.ok(emailPreview.includes("scripts/test_community_preview_frontend.mjs"));
 console.log("PASS: Worker and Pages Production deploys require manual main-ref confirmation.");
 console.log("PASS: Preview D1 migrations run only from reviewed main and use the fixed Preview database.");
 console.log("PASS: Cloudflare tokens are scoped to individual Preview verification/migration steps.");
-console.log("PASS: Auth Preview deploy is manual, explicitly confirmed, and locked to the dedicated Preview ref.");
+console.log("PASS: Auth Preview validation is manual, credential-free, and non-deploying.");
