@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-11-10T00:00:00+07:00",
+  "generated_at": "2026-11-11T00:00:00+07:00",
   "catalog_policy": {
     "default_locale": "vi",
     "currency": "USD",
@@ -525,15 +525,15 @@
       ],
       "pricing_model": "unknown",
       "pricing_status": "unknown",
-      "license": "Apache-2.0 for the Flowise source repository; hosted Flowise Cloud pricing and service terms are separate",
+      "license": "Apache-2.0 cho mã nguồn repository Flowise; điều khoản và giá của Flowise Cloud là riêng biệt và hiện không được xác minh.",
       "platforms": [
         "nodejs",
         "docker",
         "self_hosted",
         "api"
       ],
-      "description": "Nền tảng low-code mã nguồn mở để xây dựng LLM chain, RAG pipeline và AI agent bằng giao diện kéo-thả; dự án đã sunset và repository chính thức được lưu trữ.",
-      "free_tier_summary": "Flowise đã thông báo wind-down: code freeze 29/07/2026, repository chuyển Public Archive 10/08/2026 (GitHub ghi archived 13/08/2026), npm packages/Docker images bị đánh dấu deprecated và hỗ trợ chính thức kết thúc 31/08/2026. Mã nguồn Apache-2.0 còn có thể fork/self-host nhưng không khuyến nghị dự án mới; Flowise Cloud pricing/availability không được xác nhận trong lần rà soát này.",
+      "description": "Nền tảng low-code mã nguồn mở để xây dựng LLM chain, RAG pipeline và AI agent bằng giao diện kéo-thả. Dự án đã chính thức wind-down; repository ở trạng thái Public Archive và không còn được đội ngũ cốt lõi duy trì.",
+      "free_tier_summary": "Flowise thông báo ngừng hoạt động: code freeze ngày 29/07/2026; repository chuyển Public Archive ngày 10/08/2026; npm packages và Docker images được đánh dấu deprecated; hỗ trợ chính thức kết thúc ngày 31/08/2026. Mã nguồn Apache-2.0 vẫn có thể fork và tự vận hành, nhưng không khuyến nghị triển khai mới nếu không có đội ngũ tự bảo trì. Giá và khả năng cung cấp Flowise Cloud hiện không được xác nhận; không suy diễn có gói miễn phí hosted.",
       "official_sources": [
         "https://flowiseai.com/sunset",
         "https://github.com/FlowiseAI/Flowise/discussions/6727",
@@ -541,8 +541,8 @@
         "https://github.com/FlowiseAI/Flowise/security",
         "https://github.com/FlowiseAI/Flowise/blob/main/LICENSE.md"
       ],
-      "last_verified": "2026-11-05",
-      "verification_status": "needs_review",
+      "last_verified": "2026-11-11",
+      "verification_status": "verified",
       "status": "deprecated",
       "tags": [
         "visual-builder",
