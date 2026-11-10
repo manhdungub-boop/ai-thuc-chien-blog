@@ -27,10 +27,13 @@ assert.match(authPreview, /workflow_dispatch:/);
 assert.match(authPreview, /persist-credentials: false/);
 assert.doesNotMatch(authPreview, /CLOUDFLARE_API_TOKEN|COMMUNITY_EMAIL_RELAY_SECRET|GOOGLE_OAUTH_CLIENT_SECRET|wrangler deploy|sync\/gitlab/i,
   "Auth Preview validation must be credential-free, GitHub-only, and non-deploying.");
-assert.match(emailPreview, /workflow_dispatch:/);
-assert.doesNotMatch(emailPreview, /(^|\\n)  push:|secrets\\.|CLOUDFLARE_API_TOKEN|wrangler (?:preview|deploy|secret)/,
-  "Email Preview smoke workflow must be manual-only and credential-free.");
-assert.match(emailPreview, /test_community_preview_frontend\\.mjs/);
+assert.ok(emailPreview.includes("workflow_dispatch:"), "Email Preview smoke must be manual-only.");
+assert.ok(!emailPreview.includes("push:"), "Email Preview smoke must not run on branch pushes.");
+assert.ok(!emailPreview.includes("secrets.") && !emailPreview.includes("CLOUDFLARE_API_TOKEN"),
+  "Email Preview smoke must not expose application or Cloudflare credentials.");
+assert.ok(!/wrangler (?:preview|deploy|secret)/.test(emailPreview),
+  "Email Preview smoke must not deploy or configure secrets.");
+assert.ok(emailPreview.includes("scripts/test_community_preview_frontend.mjs"));
 console.log("PASS: Worker and Pages Production deploys require manual main-ref confirmation.");
 console.log("PASS: Preview D1 migrations run only from reviewed main and use the fixed Preview database.");
 console.log("PASS: Cloudflare tokens are scoped to individual Preview verification/migration steps.");
