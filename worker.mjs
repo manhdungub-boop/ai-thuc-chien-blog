@@ -11,6 +11,11 @@ function withSecurityHeaders(response, request) {
   // Keep the homepage from being stored by browsers or intermediary caches. This
   // prevents a previously cached fallback/404 document from masking the live home page.
   const requestUrl = new URL(request.url);
+  // Only the canonical production Worker host may be indexed. Branch Previews,
+  // the Pages fallback, and other workers.dev aliases must not compete with it.
+  if (requestUrl.hostname !== "ai-thuc-chien-blog.manhdungub.workers.dev") {
+    headers.set("X-Robots-Tag", "noindex, nofollow");
+  }
   if (requestUrl.pathname === "/" && response.status === 200 && (headers.get("Content-Type") || "").toLowerCase().includes("text/html")) {
     headers.set("Cache-Control", "no-store, max-age=0");
     headers.set("Pragma", "no-cache");
