@@ -63,6 +63,7 @@ for (const [name, workflow] of checkoutWorkflows) {
     assert.match(block, /persist-credentials:\s*false/, name + " must not persist the GitHub checkout token.");
   }
 }
+console.log("PASS: all six Cloudflare workflows with checkout disable persisted GitHub credentials.");
 assert.doesNotMatch(configureBuilds, /secrets\.|api\.cloudflare\.com|wrangler (?:deploy|preview)/);
 console.log("PASS: all Cloudflare secret-bearing diagnostics require trusted-main dispatch and explicit confirmation.");
 console.log("PASS: legacy trigger repair is disabled; Workers Builds updater is offline-only.");
