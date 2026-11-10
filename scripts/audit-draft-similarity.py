@@ -34,7 +34,7 @@ def words_from_text(source: str) -> list[str]:
 def published_words(path: Path) -> list[str]:
     source = path.read_text(encoding="utf-8")
     source = re.sub(r"<figure\b[\s\S]*?</figure>", " ", source, flags=re.I)
-    source = re.sub(r"<script\b[\s\S]*?</script\s*>|<style\b[\s\S]*?</style\s*>", " ", source, flags=re.I)
+    source = re.sub(r"<script\b[\s\S]*?</script[^>]*>|<style\b[\s\S]*?</style[^>]*>", " ", source, flags=re.I)
     source = re.sub(r'<section\b[^>]*class=["\'][^"\']*(?:article-faq|related-articles|article-author-note)[^"\']*["\'][\s\S]*?</section>', " ", source, flags=re.I)
     source = re.sub(r"<h2\b[^>]*>\s*(?:Nguồn tham khảo chính thức|Tài liệu chính thức tham khảo|Nguồn tham khảo|Tài liệu tham khảo)\s*</h2>[\s\S]*$", " ", source, flags=re.I)
     first_rule = re.search(r"<hr\b[^>]*>", source, flags=re.I)
