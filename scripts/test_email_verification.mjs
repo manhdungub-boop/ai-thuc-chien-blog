@@ -52,7 +52,8 @@ assert.ok(frontend.includes("fragmentParams.get('verify')"), 'frontend must read
 assert.ok(frontend.includes("password-reset/complete"));
 assert.match(frontend, /verificationRequired/);
 assert.ok(frontend.includes("const communityAuthHosts = new Set([\n    primaryHost,\n    'feature-required-email-verification-ai-thuc-chien-blog.manhdungub.workers.dev',\n    'ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev'\n  ]);"), 'documented feature and OAuth Preview hosts must expose auth controls for end-to-end testing');
-assert.match(frontend, /if \(!communityAuthHosts\.has\(window\.location\.hostname\)\)/, 'unrecognized hosts must keep community auth controls hidden');
+assert.ok(frontend.includes('const isIsolatedPreviewHost = /^[a-f0-9]{8}-ai-thuc-chien-blog-auth-app-preview\\.manhdungub\\.workers\\.dev$/.test(window.location.hostname);'), 'only the exact eight-hex isolated Preview hostname pattern may expose auth controls');
+assert.ok(frontend.includes('if (!communityAuthHosts.has(window.location.hostname) && !isIsolatedPreviewHost)'), 'unrecognized hosts must keep community auth controls hidden');
 assert.match(html, /id="community-verify-confirm"/);
 assert.match(html, /id="community-resend-verification"/);
 assert.match(migration, /ALTER TABLE community_members ADD COLUMN email_verified_at TEXT/);

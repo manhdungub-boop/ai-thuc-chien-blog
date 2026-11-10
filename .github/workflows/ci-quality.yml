@@ -28,6 +28,14 @@ jobs:
         with:
           node-version: 22
 
+      - name: Set up pinned Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: "1.4.4"
+
+      - name: Verify exact dependency graph from committed lockfile
+        run: bun install --frozen-lockfile --ignore-scripts --no-progress
+
       - name: Build static site and SEO feeds
         run: npm run build
 
@@ -51,6 +59,7 @@ jobs:
           node scripts/verify-release-safety.mjs
           node --check scripts/check-ai-tools-links.mjs
           node scripts/test-ai-tools-links-security.mjs
+          node scripts/test_ipv6_address_safety.mjs
 
       - name: Test community D1 schema
         run: python3 scripts/test_community_schema.py
@@ -93,3 +102,9 @@ jobs:
 
       - name: Test homepage article coverage
         run: node scripts/test_homepage_article_coverage.cjs
+
+      - name: Test Cloudflare Workers Builds trigger safety
+        run: python3 -m unittest discover -s scripts -p 'test_configure_cloudflare_worker_builds.py' -v
+
+      - name: Verify secret-bearing workflows are restricted to trusted main
+        run: node scripts/test_workflow_secret_guards.mjs

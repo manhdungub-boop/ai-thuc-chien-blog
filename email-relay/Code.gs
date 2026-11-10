@@ -9,7 +9,7 @@ function doPost(e) {
     const properties = PropertiesService.getScriptProperties();
     const expected = String(properties.getProperty('COMMUNITY_EMAIL_RELAY_SECRET') || '');
     if (expected.length < 32) return output({ ok: false, code: 'RELAY_NOT_CONFIGURED' });
-    const allowedHosts = String(properties.getProperty('COMMUNITY_EMAIL_ALLOWED_HOSTS') || 'ai-thuc-chien-blog.manhdungub.workers.dev')
+    const allowedHosts = String(properties.getProperty('COMMUNITY_EMAIL_ALLOWED_HOSTS') || '')
       .split(',').map((host) => host.trim().toLowerCase()).filter(Boolean);
     const raw = e && e.postData && e.postData.contents ? e.postData.contents : '';
     if (!raw || raw.length > 25000) return output({ ok: false, code: 'INVALID_REQUEST' });

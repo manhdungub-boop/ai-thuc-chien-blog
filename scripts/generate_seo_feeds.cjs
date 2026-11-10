@@ -36,7 +36,8 @@ function getLastModified(html) {
 
 function getTitle(html) {
   const match = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-  return match ? match[1].replace(/<[^>]+>/g, '').trim() : '';
+  // Keep title text intact here; escapeXml() encodes markup at the XML output boundary.
+  return match ? match[1].trim() : '';
 }
 
 function getCanonical(html, file) {

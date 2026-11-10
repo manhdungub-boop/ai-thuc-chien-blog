@@ -108,7 +108,9 @@ assert.doesNotMatch(robots, /Disallow:\s*\//i);
 
 const sitemap = await readFile(path.join(output, "sitemap.xml"), "utf8");
 assert.equal((sitemap.match(/<url>/g) || []).length, 73, "sitemap must contain the 69 articles and four public pages");
-assert.ok(sitemap.includes(productionOrigin), "sitemap must use production canonical URLs");
+const sitemapLocations = [...sitemap.matchAll(new RegExp("<loc>([^<]+)</loc>", "gi"))].map((match) => new URL(match[1]));
+assert.equal(sitemapLocations.length, 73, "sitemap must contain 73 canonical locations");
+assert.ok(sitemapLocations.every((location) => location.origin === new URL(productionOrigin).origin), "sitemap locations must use the production canonical origin");
 assert.doesNotMatch(sitemap, /pages\.dev|auth-app-preview/i);
 
 await assert.rejects(stat(path.join(output, "data", "review")), "review candidate data must be excluded");

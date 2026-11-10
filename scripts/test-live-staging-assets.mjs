@@ -1,3 +1,4 @@
+import { hasExactUrlReference } from "./url-assertions.mjs";
 const origin = process.env.STAGING_URL || "https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev";
 const expected = [
   { path: "/script.js", markers: ["oauth/providers", "Tiếp tục với Google", "socialGoogleButton", "const apiUrl = '/api/chat';"] },
@@ -22,7 +23,7 @@ for (const check of expected) {
       throw new Error(`${check.path}: thiếu dấu hiệu ${JSON.stringify(marker)}`);
     }
   }
-  if (check.path === "/script.js" && body.includes("https://ai-thuc-chien-blog.manhdungub.workers.dev/api/chat")) {
+  if (check.path === "/script.js" && hasExactUrlReference(body, "https://ai-thuc-chien-blog.manhdungub.workers.dev/api/chat")) {
     throw new Error("Staging script.js must not call the Production chat API.");
   }
   process.stdout.write(`PASS live asset ${check.path}\n`);
@@ -42,7 +43,7 @@ if (!articleResponse.headers.get("x-robots-tag")?.match(/noindex/i)) {
 if (!articleHtml.includes("5 cách bắt đầu dùng AI")) {
   throw new Error("Staging article route did not serve the expected article content.");
 }
-if (articleHtml.includes("https://ai-thuc-chien-blog.manhdungub.workers.dev/api/chat")) {
+if (hasExactUrlReference(articleHtml, "https://ai-thuc-chien-blog.manhdungub.workers.dev/api/chat")) {
   throw new Error("Staging article HTML must not embed the Production chat API URL.");
 }
 process.stdout.write("PASS staging article route is noindex and does not embed the Production chat API URL\n");

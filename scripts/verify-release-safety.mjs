@@ -6,29 +6,68 @@ const workers = await read(".github/workflows/deploy-cloudflare-workers.yml");
 const pages = await read(".github/workflows/deploy-cloudflare-pages.yml");
 const previewD1 = await read(".github/workflows/migrate-preview-d1.yml");
 const authPreview = await read(".github/workflows/deploy-auth-app-preview.yml");
+const configureBuilds = await read(".github/workflows/configure-cloudflare-worker-builds.yml");
+const configureBuildsUpdater = await read("scripts/configure_cloudflare_worker_builds.py");
+const legacyPreviewRepair = await read(".github/workflows/repair-cloudflare-branch-preview-triggers.yml");
+const codeqlWorkflow = await read(".github/workflows/codeql-security-analysis.yml");
 
-assert.match(workers, /github\.event_name == 'workflow_dispatch'/);
-assert.match(workers, /github\.ref == 'refs\/heads\/main'/);
-assert.match(workers, /inputs\.confirm_production_worker_and_d1_changes == true/);
-assert.match(pages, /github\.event_name == 'workflow_dispatch'/);
-assert.match(pages, /github\.ref == 'refs\/heads\/main'/);
-assert.match(pages, /inputs\.confirm_production_pages_deploy == true/);
-assert.match(pages, /ref: main/);
-assert.match(pages, /concurrency:/);
-assert.doesNotMatch(previewD1, /(^|\n)  push:/);
-assert.match(previewD1, /if: github\.ref == 'refs\/heads\/main'/);
-assert.match(previewD1, /ref: main/);
-assert.match(previewD1, /51d814c8-a3fc-4481-a5f1-60bc67617f3c/);
-assert.match(previewD1, /ai-thuc-chien-community-preview/);
-assert.doesNotMatch(previewD1, /(^|\n)    env:\n      CLOUDFLARE_(WORKERS_)?API_TOKEN:/);
-assert.match(previewD1, /env:\n\s+\s+CLOUDFLARE_WORKERS_API_TOKEN: \$\{\{ secrets\.CLOUDFLARE_WORKERS_API_TOKEN \}\}/);
-assert.ok(!authPreview.includes("  push:"), "Auth Preview must not deploy automatically on push.");
-assert.ok(authPreview.includes("confirm_preview_deploy:"), "Auth Preview must require an explicit confirmation input.");
-assert.ok(authPreview.includes("if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/sync/gitlab-completed-work-20261107' && inputs.confirm_preview_deploy == true"),
-  "Auth Preview must be manually dispatched from the exact integration ref with explicit confirmation.");
-assert.ok(authPreview.includes('PREVIEW_D1_ID: "51d814c8-a3fc-4481-a5f1-60bc67617f3c"'),
-  "Auth Preview must remain locked to the dedicated Preview D1.");
-console.log("PASS: Worker and Pages Production deploys require manual main-ref confirmation.");
+assert.ok(configureBuilds.includes("preview_trigger_uuid:"));
+assert.ok(configureBuilds.includes("preview_worker_tag:"));
+assert.ok(configureBuilds.includes("preview_branch:"));
+assert.ok(!configureBuilds.includes("confirm_production_trigger_changes:"));
+assert.ok(!configureBuilds.includes("CONFIRM_PRODUCTION_TRIGGER_CHANGES:"));
+assert.ok(!configureBuilds.includes("preview_reuse_primary_build_token:"));
+assert.ok(!configureBuildsUpdater.includes("PRODUCTION_TRIGGERS"));
+assert.ok(configureBuildsUpdater.includes("Production Workers Builds triggers are never queried or modified"));
+assert.ok(configureBuildsUpdater.includes("ALLOWED_PREVIEW_DEPLOY_COMMANDS"));
+assert.ok(legacyPreviewRepair.includes("Disabled"));
+assert.ok(!legacyPreviewRepair.includes("${{ secrets."));
+assert.ok(!legacyPreviewRepair.includes("api_mutate"));
+assert.ok(!legacyPreviewRepair.includes("builds/triggers"));
+assert.ok(codeqlWorkflow.includes("upload: never"));
+assert.ok(codeqlWorkflow.includes("codeql-results"));
+assert.ok(codeqlWorkflow.includes("tee -a \"$GITHUB_STEP_SUMMARY\""));
+assert.ok(!codeqlWorkflow.includes("security-events: write"));
+assert.ok(codeqlWorkflow.includes("github/codeql-action/init@0911ee96d2d6c8def97122c36c5cadd93829a4b4"));
+assert.ok(codeqlWorkflow.includes("github/codeql-action/analyze@0911ee96d2d6c8def97122c36c5cadd93829a4b4"));
+assert.ok(codeqlWorkflow.includes("persist-credentials: false"));
+assert.ok(!codeqlWorkflow.includes("${{ secrets."));
+// The workflow may mention Cloudflare in regression-test labels/assertions.
+// Guard only executable action references and commands that can invoke a service.
+assert.doesNotMatch(codeqlWorkflow, /^\s*uses:\s*[^#\n]*(?:cloudflare|wrangler)/im);
+assert.doesNotMatch(codeqlWorkflow, /^\s*(?:wrangler\s+deploy|curl\b[^\n]*api\.cloudflare\.com)/im);
+assert.ok(workers.includes("github.event_name == 'workflow_dispatch'"));
+assert.ok(workers.includes("github.ref == 'refs/heads/main'"));
+assert.ok(workers.includes("inputs.confirm_production_worker_and_d1_changes == true"));
+assert.ok(pages.includes("github.event_name == 'workflow_dispatch'"));
+assert.ok(pages.includes("github.ref == 'refs/heads/main'"));
+assert.ok(pages.includes("inputs.confirm_production_pages_deploy == true"));
+assert.ok(pages.includes("ref: main"));
+assert.ok(pages.includes("concurrency:"));
+assert.ok(!previewD1.includes("\n  push:"));
+assert.ok(previewD1.includes("if: github.ref == 'refs/heads/main'"));
+assert.ok(previewD1.includes("ref: main"));
+assert.ok(previewD1.includes("51d814c8-a3fc-4481-a5f1-60bc67617f3c"));
+assert.ok(previewD1.includes("ai-thuc-chien-community-preview"));
+assert.ok(!previewD1.includes("\n    env:\n      CLOUDFLARE_API_TOKEN:"));
+assert.ok(!previewD1.includes("\n    env:\n      CLOUDFLARE_WORKERS_API_TOKEN:"));
+assert.ok(previewD1.includes("CLOUDFLARE_WORKERS_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}"));
+
+// Auth Preview is intentionally credential-free static validation now, not a deploy workflow.
+// Do not require a deploy confirmation input for a workflow that cannot deploy anything.
+assert.ok(!authPreview.includes("\n  push:"), "Auth Preview validation must not run automatically on push.");
+assert.ok(authPreview.includes("workflow_dispatch:"));
+assert.ok(authPreview.includes("source_ref:"));
+assert.ok(authPreview.includes("if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/sync/gitlab-completed-work-20261107'"),
+  "Auth Preview validation must be manually dispatched only from the exact integration ref.");
+assert.ok(authPreview.includes("persist-credentials: false"));
+assert.ok(!authPreview.includes("${{ secrets."), "Auth Preview validation must not expose GitHub secrets.");
+assert.ok(!authPreview.includes("CLOUDFLARE_API_TOKEN"));
+assert.ok(!authPreview.includes("wrangler deploy"));
+assert.ok(!authPreview.includes("d1 migrations apply"));
+assert.ok(authPreview.includes("No Worker deployment, D1 operation, DNS change, or Production operation is performed"));
+
+console.log("PASS: Worker and Pages Production deploys require manual main-ref confirmation; Workers Builds updater is Preview-only.");
 console.log("PASS: Preview D1 migrations run only from reviewed main and use the fixed Preview database.");
 console.log("PASS: Cloudflare tokens are scoped to individual Preview verification/migration steps.");
-console.log("PASS: Auth Preview deploy is manual, explicitly confirmed, and locked to the dedicated Preview ref.");
+console.log("PASS: Auth Preview workflow is restricted to credential-free static validation and cannot deploy or mutate Cloudflare resources.");
