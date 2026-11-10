@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { hasExactUrlReference } from "./url-assertions.mjs";
 
 const origin = "https://ai-thuc-chien-blog-auth-isolated-20261104.manhdungub.workers.dev";
 async function get(path) {
@@ -26,7 +27,7 @@ assert.equal(script.response.status, 200);
 for (const marker of ["oauth/providers", "socialGoogleButton", "ai-thuc-chien-blog-auth-isolated-20261104.manhdungub.workers.dev"]) {
   assert.ok(script.body.includes(marker), "script.js missing marker: " + marker);
 }
-assert.ok(!script.body.includes("https://ai-thuc-chien-blog.manhdungub.workers.dev/api/chat"));
+assert.equal(hasExactUrlReference(script.body, "https://ai-thuc-chien-blog.manhdungub.workers.dev/api/chat"), false);
 console.log("PASS isolated frontend contains isolated auth host and no Production chat API URL.");
 
 const styles = await get("/styles.css");
