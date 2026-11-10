@@ -3,7 +3,7 @@ import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promi
 import path from "node:path";
 
 const root = process.cwd();
-const sourceRoot = path.join(root, "site-snapshot");
+const sourceRoot = path.resolve(root, process.env.PREVIEW_SOURCE_DIR || "site-snapshot");
 const outputRoot = path.join(root, "preview-output");
 const robotsMeta = '<meta name="robots" content="noindex,nofollow,noarchive">';
 const productionSiteOrigin = "https://ai-thuc-chien-blog.manhdungub.workers.dev";
