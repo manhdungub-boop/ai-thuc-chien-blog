@@ -6,6 +6,7 @@ const workers = await read(".github/workflows/deploy-cloudflare-workers.yml");
 const pages = await read(".github/workflows/deploy-cloudflare-pages.yml");
 const previewD1 = await read(".github/workflows/migrate-preview-d1.yml");
 const authPreview = await read(".github/workflows/deploy-auth-app-preview.yml");
+const emailPreview = await read(".github/workflows/test-email-verification-preview-http.yml");
 
 assert.match(workers, /github\.event_name == 'workflow_dispatch'/);
 assert.match(workers, /github\.ref == 'refs\/heads\/main'/);
@@ -26,6 +27,10 @@ assert.match(authPreview, /workflow_dispatch:/);
 assert.match(authPreview, /persist-credentials: false/);
 assert.doesNotMatch(authPreview, /CLOUDFLARE_API_TOKEN|COMMUNITY_EMAIL_RELAY_SECRET|GOOGLE_OAUTH_CLIENT_SECRET|wrangler deploy|sync\/gitlab/i,
   "Auth Preview validation must be credential-free, GitHub-only, and non-deploying.");
+assert.match(emailPreview, /workflow_dispatch:/);
+assert.doesNotMatch(emailPreview, /(^|\\n)  push:|secrets\\.|CLOUDFLARE_API_TOKEN|wrangler (?:preview|deploy|secret)/,
+  "Email Preview smoke workflow must be manual-only and credential-free.");
+assert.match(emailPreview, /test_community_preview_frontend\\.mjs/);
 console.log("PASS: Worker and Pages Production deploys require manual main-ref confirmation.");
 console.log("PASS: Preview D1 migrations run only from reviewed main and use the fixed Preview database.");
 console.log("PASS: Cloudflare tokens are scoped to individual Preview verification/migration steps.");
