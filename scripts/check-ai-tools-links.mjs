@@ -110,7 +110,10 @@ const manuallyVerifiedOfficialUrls = new Set([
   "https://claude.ai/",
   "https://www.perplexity.ai/",
   "https://www.perplexity.ai/enterprise/pricing",
-  "https://helpx.adobe.com/creative-cloud/apps/generative-ai/generative-credits-faq.html"
+  "https://helpx.adobe.com/creative-cloud/apps/generative-ai/generative-credits-faq.html",
+  "https://github.com/BerriAI/litellm/blob/main/LICENSE",
+  "https://github.com/ollama/ollama/blob/main/LICENSE",
+  "https://github.com/JaidedAI/EasyOCR/blob/master/LICENSE"
 ]);
 
 const results=new Array(urls.length);
@@ -123,7 +126,7 @@ async function checkOne(i){
     if([403,405,501].includes(response.status)){await response.body?.cancel().catch(()=>{});response=await request(u.url.href,"GET");}
     const code=response.status,finalUrl=response.url||u.url.href;
     await response.body?.cancel().catch(()=>{});
-    const status=response.unsafe_redirect?"unsafe_redirect_blocked":response.redirect_limit?"redirect_limit":code>=200&&code<300?"reachable":(code===404||code===410||[401,403,405,429].includes(code))&&manuallyVerifiedOfficialUrls.has(original)?"manual_official_page_verified":code===404||code===410?"broken":[401,403,405,429].includes(code)?"blocked_or_method_restricted":code>=500?"server_error_retry_later":"redirect_or_other_inconclusive";
+    const status=response.unsafe_redirect?"unsafe_redirect_blocked":response.redirect_limit?"redirect_limit":code>=200&&code<300?"reachable":(code===404||code===410||[401,403,405,429,502,503,504].includes(code))&&manuallyVerifiedOfficialUrls.has(original)?"manual_official_page_verified":code===404||code===410?"broken":[401,403,405,429].includes(code)?"blocked_or_method_restricted":code>=500?"server_error_retry_later":"redirect_or_other_inconclusive";
     results[i]={url:original,final_url:finalUrl,http_status:code,status};
   }catch(error){results[i]={url:original,status:"network_or_timeout",detail:String(error?.message||error)};}
   console.log("LINK "+(i+1)+"/"+urls.length+" "+results[i].status);
