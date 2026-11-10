@@ -65,7 +65,7 @@ try {
   assert.match(await page.locator("#bank-grid .tool-card h2").first().innerText(), /^Activepieces$/);
 
   await page.locator("#bank-pagination button").last().click();
-  await page.waitForFunction(() => document.querySelectorAll("#bank-grid .tool-card").length === 10);
+  await page.waitForFunction(() => document.querySelectorAll("#bank-grid .tool-card").length === 11);
   assert.match(await page.locator("#bank-pagination").innerText(), /Trang 2 \/ 2/);
   await page.locator("#bank-pagination button").first().click();
   await page.waitForFunction(() => document.querySelectorAll("#bank-grid .tool-card").length === 24);
@@ -76,7 +76,7 @@ try {
   assert.ok(reviewText.includes("EasyOCR"), "active needs_review filter must include EasyOCR");
   assert.ok(!reviewText.includes("Flowise"), "deprecated Flowise must stay hidden from public active results");
 
-  console.log("PASS Chromium catalog E2E: 36 total records / 35 active; 24+10 pagination; search across 8 additions; canonical IDs; A-Z sort; accurate review filter; Preview noindex and candidate isolation.");
+  console.log("PASS Chromium catalog E2E: 36 total records / 35 active; 24+11 pagination; search across 9 additions; canonical IDs; A-Z sort; accurate review filter; Preview noindex and candidate isolation.");
 } finally {
   await browser.close();
 }
