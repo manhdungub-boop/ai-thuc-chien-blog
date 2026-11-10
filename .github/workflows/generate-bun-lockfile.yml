@@ -1,0 +1,42 @@
+name: Generate Bun lockfile (credential-free)
+
+on:
+  push:
+    branches:
+      - fix/codex-security-findings-20261109
+    paths:
+      - ".github/workflows/generate-bun-lockfile.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    if: github.ref == 'refs/heads/fix/codex-security-findings-20261109'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out source without persisted credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up the Bun version used by Cloudflare Preview
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.4"
+
+      - name: Generate lockfile without installing packages or running lifecycle scripts
+        run: bun install --lockfile-only --ignore-scripts --no-progress
+
+      - name: Emit lockfile for controlled review
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s bun.lock
+          echo "LOCKFILE_SHA256_BEGIN"
+          sha256sum bun.lock
+          echo "LOCKFILE_BASE64_BEGIN"
+          base64 -w0 bun.lock
+          echo
+          echo "LOCKFILE_BASE64_END"
