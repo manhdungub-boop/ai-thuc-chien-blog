@@ -40,6 +40,9 @@ function pinnedRequest(url, method, address) {
       port: url.port || undefined,
       path: url.pathname + url.search,
       method,
+      // Some publisher/CDN endpoints return large but legitimate response headers.
+      // Keep a bounded larger limit so Node does not misclassify them as network failures.
+      maxHeaderSize: 64 * 1024,
       headers: {
         Host: url.host,
         "User-Agent": "AI-Thuc-Chien-Catalog-LinkCheck/1.0",
@@ -73,8 +76,17 @@ async function request(url,method){
     const safe=await safePublicUrl(current.href);
     if(!safe)return {status:0,url:current.href,unsafe_redirect:true,body:null};
     let response;
-    try { response=await pinnedRequest(safe.url,method,safe.address); }
-    catch(error) { throw error; }
+    try {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        // Re-resolve and re-pin on each bounded retry; never reuse an unchecked DNS result.
+        const retrySafe = attempt === 0 ? safe : await safePublicUrl(current.href);
+        if (!retrySafe) return {status:0,url:current.href,unsafe_redirect:true,body:null};
+        response = await pinnedRequest(retrySafe.url, method, retrySafe.address);
+        if (![502,503,504].includes(response.status) || attempt === 1) break;
+        await response.body?.cancel().catch(()=>{});
+        await wait(500);
+      }
+    } catch(error) { throw error; }
     if([301,302,303,307,308].includes(response.status)){
       const location=response.headers.get("location");
       await response.body?.cancel().catch(()=>{});
