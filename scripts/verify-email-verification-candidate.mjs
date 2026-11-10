@@ -22,9 +22,9 @@ assert.match(worker, /const tokenHash = await sha256Base64Url\(token\)/,
   "Email verification bearer tokens must be hashed before storage.");
 assert.match(worker, /const COMMUNITY_VERIFICATION_SECONDS = 30 \* 60/,
   "Email verification tokens must have a bounded lifetime.");
-assert.match(worker, /DELETE FROM community_email_verification_tokens WHERE token_hash = \? AND expires_at > \?/,
+assert.match(worker, /WHERE t\.token_hash = \? AND t\.expires_at > \? LIMIT 1/,
   "Verification must consume a valid token.");
-assert.match(worker, /DELETE FROM community_email_verification_tokens WHERE member_id = \?/,
+assert.match(worker, /DELETE FROM community_email_verification_tokens\s+WHERE member_id = \?/,
   "Verification tokens must be removed after account verification.");
 assert.match(worker, /EMAIL_VERIFICATION_REQUIRED/,
   "Unverified accounts must not establish a session.");
