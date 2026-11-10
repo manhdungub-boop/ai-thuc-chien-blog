@@ -12,7 +12,8 @@ try {
       { website: "http://[::1]/" },
       { website: "http://[fd00::1]/" },
       { website: "http://127.0.0.1/" },
-      { website: "http://localhost./" }
+      { website: "http://localhost./" },
+      { website: "http://192.88.99.1/" }
     ]
   }));
   const run = spawnSync(process.execPath, ["scripts/check-ai-tools-links.mjs", fixture], {
@@ -23,10 +24,10 @@ try {
   const summaryStart = run.stdout.indexOf("{");
   assert.ok(summaryStart >= 0, "link checker must emit a JSON summary");
   const summary = JSON.parse(run.stdout.slice(summaryStart));
-  assert.equal(summary.checked, 4);
+  assert.equal(summary.checked, 5);
   assert.ok(summary.results.every(result => result.status === "invalid_or_non_public_url"),
-    "IPv6 loopback, IPv6 ULA, IPv4 loopback, and DNS-resolved loopback targets must be rejected before fetch");
-  console.log("PASS: catalog link checker blocks private IPv4/IPv6 literals and hostnames resolving to private addresses.");
+    "IPv6 loopback, IPv6 ULA, IPv4 loopback, DNS-resolved loopback, and deprecated 6to4 relay targets must be rejected before fetch");
+  console.log("PASS: catalog link checker blocks private IPv4/IPv6 literals, private DNS targets, and deprecated 6to4 relay addresses.");
 } finally {
   rmSync(directory, { recursive: true, force: true });
 }
