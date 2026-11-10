@@ -12,33 +12,33 @@ const workers = await read("deploy-cloudflare-workers.yml");
 const previewD1 = await read("migrate-preview-d1.yml");
 const configureBuilds = await read("configure-cloudflare-worker-builds.yml");
 
-const trustedMain = /github\.ref == 'refs\/heads\/main'/;
-const explicitConfirm = /inputs\.[a-z0-9_]+ == true/;
-
-assert.equal((health.match(/if: \(github\.event_name == 'workflow_run' && github\.event\.workflow_run\.head_branch == 'main'\) \|\| \(github\.event_name == 'workflow_dispatch' && github\.ref == 'refs\/heads\/main'\)/g) || []).length, 2,
+const healthGuard = "if: (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')";
+assert.equal(health.split(healthGuard).length - 1, 2,
   "Both health-check steps carrying the Cloudflare token must be restricted to successful main workflow runs or manual main dispatch.");
-assert.match(diagnoseBuild, /confirm_read_only_diagnosis:[\s\S]*?default: false/);
-assert.match(diagnoseBuild, trustedMain);
-assert.match(diagnoseBuild, explicitConfirm);
-assert.match(diagnoseD1, /confirm_read_only_diagnosis:[\s\S]*?default: false/);
-assert.match(diagnoseD1, trustedMain);
-assert.match(diagnoseD1, explicitConfirm);
-assert.match(diagnoseD1, /ref: main/);
-assert.match(diagnoseD1, /persist-credentials: false/);
-assert.match(verifyToken, /confirm_read_only_token_check:[\s\S]*?default: false/);
-assert.match(verifyToken, trustedMain);
-assert.match(verifyToken, explicitConfirm);
+
+assert.ok(diagnoseBuild.includes("confirm_read_only_diagnosis:"));
+assert.ok(diagnoseBuild.includes("default: false"));
+assert.ok(diagnoseBuild.includes("if: github.ref == 'refs/heads/main' && inputs.confirm_read_only_diagnosis == true"));
+assert.ok(diagnoseD1.includes("confirm_read_only_diagnosis:"));
+assert.ok(diagnoseD1.includes("default: false"));
+assert.ok(diagnoseD1.includes("if: github.ref == 'refs/heads/main' && inputs.confirm_read_only_diagnosis == true"));
+assert.ok(diagnoseD1.includes("ref: main"));
+assert.ok(diagnoseD1.includes("persist-credentials: false"));
+assert.ok(verifyToken.includes("confirm_read_only_token_check:"));
+assert.ok(verifyToken.includes("default: false"));
+assert.ok(verifyToken.includes("if: github.ref == 'refs/heads/main' && inputs.confirm_read_only_token_check == true"));
+
 assert.doesNotMatch(repairLegacy, /secrets\.|api\.cloudflare\.com|curl\b|--request\s+(?:POST|PATCH|PUT|DELETE)|api_mutate/i,
   "Legacy trigger repair must not access secrets or mutate Cloudflare.");
-assert.match(repairLegacy, /Disabled: legacy trigger repair has unverified Worker identity/);
-assert.match(pages, /github\.ref == 'refs\/heads\/main'/);
-assert.match(pages, /confirm_production_pages_deploy == true/);
-assert.match(workers, /github\.ref == 'refs\/heads\/main'/);
-assert.match(workers, /confirm_production_worker_and_d1_changes == true/);
-assert.match(previewD1, trustedMain);
-assert.match(previewD1, /ref: main/);
-assert.match(previewD1, /51d814c8-a3fc-4481-a5f1-60bc67617f3c/);
-assert.match(configureBuilds, /test_configure_cloudflare_worker_builds\.py/);
+assert.ok(repairLegacy.includes("Disabled: legacy trigger repair has unverified Worker identity"));
+assert.ok(pages.includes("github.ref == 'refs/heads/main'"));
+assert.ok(pages.includes("confirm_production_pages_deploy == true"));
+assert.ok(workers.includes("github.ref == 'refs/heads/main'"));
+assert.ok(workers.includes("confirm_production_worker_and_d1_changes == true"));
+assert.ok(previewD1.includes("github.ref == 'refs/heads/main'"));
+assert.ok(previewD1.includes("ref: main"));
+assert.ok(previewD1.includes("51d814c8-a3fc-4481-a5f1-60bc67617f3c"));
+assert.ok(configureBuilds.includes("test_configure_cloudflare_worker_builds.py"));
 assert.doesNotMatch(configureBuilds, /secrets\.|api\.cloudflare\.com|wrangler (?:deploy|preview)/);
 console.log("PASS: all Cloudflare secret-bearing diagnostics require trusted-main dispatch and explicit confirmation.");
 console.log("PASS: legacy trigger repair is disabled; Workers Builds updater is offline-only.");
