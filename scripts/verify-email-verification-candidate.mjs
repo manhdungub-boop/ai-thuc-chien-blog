@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { hasExactUrlReference } from "./url-assertions.mjs";
 
 const read = (p) => readFile(new URL(p, import.meta.url), "utf8");
 const candidate = await read("../recovery-snapshots/worker-email-verification-candidate.mjs");
@@ -41,7 +42,7 @@ const checks = [
   ["login blocks unverified members", loginBlock.includes("EMAIL_VERIFICATION_REQUIRED")],
   ["frontend requires an explicit click so link previews cannot consume verification tokens", frontend.includes("fragmentVerifyParams.get('verify')") && frontend.includes("confirmEmailButton.addEventListener('click'") && candidate.includes("confirmEmailButton.addEventListener('click'") && frontend.includes("Nhấn nút bên dưới để xác nhận email.") && candidate.includes("Nhấn nút bên dưới để xác nhận email.") && !frontend.includes("if (verificationToken) {\n    api('/verify-email'")],
   ["frontend exposes resend action", html.includes('id="community-resend-verification"') && frontend.includes("api('/resend-verification'")],
-  ["preview origin is limited to explicit allowlist", candidate.includes("https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev") && frontend.includes("ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev")],
+  ["preview origin is limited to explicit allowlist", hasExactUrlReference(candidate, "https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev/") && frontend.includes("ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev")],
   ["relay code checks the shared secret and allowed hosts", relay.includes("COMMUNITY_EMAIL_RELAY_SECRET") && relay.includes("COMMUNITY_EMAIL_ALLOWED_HOSTS")],
   ["Apps Script uses V8 and only the MailApp send scope", relayManifest.runtimeVersion === "V8" && relayManifest.oauthScopes.length === 1 && relayManifest.oauthScopes[0] === "https://www.googleapis.com/auth/script.send_mail"],
 
