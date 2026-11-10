@@ -16,7 +16,9 @@ for (const [file, job] of [
 }
 
 const codeql = workflow('codeql-security-analysis.yml');
-assert.ok(codeql.includes('security-events: write'), 'CodeQL must have permission to publish scan results');
+assert.ok(codeql.includes('upload: never'), 'CodeQL must not upload SARIF while default setup is enabled');
+assert.ok(codeql.includes('codeql-results') && codeql.includes('GITHUB_STEP_SUMMARY'), 'CodeQL must retain local SARIF and summarize findings in the workflow');
+assert.ok(!codeql.includes('security-events: write'), 'Offline CodeQL must not request Code Scanning write permission');
 assert.ok(codeql.includes('github/codeql-action/init@v4') && codeql.includes('github/codeql-action/analyze@v4'), 'CodeQL must use the supported v4 actions');
 assert.ok(codeql.includes('actions/checkout@v7') && codeql.includes('persist-credentials: false'), 'CodeQL checkout must not persist GitHub credentials');
 assert.ok(codeql.includes('javascript-typescript') && codeql.includes('python') && codeql.includes('actions'), 'CodeQL must scan application code and GitHub Actions workflows');

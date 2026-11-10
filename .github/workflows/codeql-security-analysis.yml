@@ -1,4 +1,4 @@
-name: CodeQL Security Analysis
+name: CodeQL Offline Security Analysis
 
 on:
   push:
@@ -12,7 +12,6 @@ on:
 permissions:
   actions: read
   contents: read
-  security-events: write
 
 concurrency:
   group: codeql-${{ github.workflow }}-${{ github.ref }}
@@ -40,7 +39,43 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           queries: security-extended
-      - name: Run CodeQL analysis
+      - name: Run CodeQL analysis without uploading SARIF
         uses: github/codeql-action/analyze@v4
         with:
           category: "/language:${{ matrix.language }}"
+          output: ${{ github.workspace }}/codeql-results
+          upload: never
+          wait-for-processing: false
+      - name: Summarize local SARIF findings
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import glob, json, os
+          files = sorted(glob.glob("codeql-results/*.sarif"))
+          if not files:
+              print("## CodeQL results")
+              print("No SARIF output was produced; inspect the analysis step logs.")
+              raise SystemExit(1)
+          findings = []
+          for path in files:
+              with open(path, encoding="utf-8") as stream:
+                  data = json.load(stream)
+              for run in data.get("runs", []):
+                  for item in run.get("results", []):
+                      locations = item.get("locations") or [{}]
+                      loc = locations[0].get("physicalLocation", {})
+                      artifact = loc.get("artifactLocation", {}).get("uri", "unknown")
+                      line = loc.get("region", {}).get("startLine", "?")
+                      props = item.get("properties", {})
+                      severity = props.get("security-severity") or item.get("level", "unspecified")
+                      findings.append((severity, item.get("ruleId", "unknown"), artifact, line))
+          print(f"## CodeQL findings: {len(findings)}")
+          print("SARIF remains local to the runner; no upload to Code Scanning was attempted.")
+          if not findings:
+              print("No findings were reported by this language analysis.")
+          for severity, rule, path, line in findings[:100]:
+              print(f"- **{severity}** `{rule}` — `{path}:{line}`")
+          if len(findings) > 100:
+              print(f"- ... and {len(findings) - 100} additional findings; inspect the job artifact/logs.")
+          PY
