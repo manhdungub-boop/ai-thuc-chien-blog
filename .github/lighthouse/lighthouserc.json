@@ -12,7 +12,11 @@
           "disabled": false
         },
         "throttlingMethod": "simulate"
-      }
+      },
+      "url": [
+        "https://ai-thuc-chien-blog.pages.dev/",
+        "https://ai-thuc-chien-blog.pages.dev/articles/do-luong-hieu-qua-blog"
+      ]
     },
     "upload": {
       "target": "filesystem",
