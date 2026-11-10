@@ -44,6 +44,25 @@ assert.ok(previewD1.includes("github.ref == 'refs/heads/main'"));
 assert.ok(previewD1.includes("ref: main"));
 assert.ok(previewD1.includes("51d814c8-a3fc-4481-a5f1-60bc67617f3c"));
 assert.ok(configureBuilds.includes("test_configure_cloudflare_worker_builds.py"));
+
+const checkoutWorkflows = [
+  ["health-check.yml", health],
+  ["diagnose-community-d1.yml", diagnoseD1],
+  ["deploy-cloudflare-pages.yml", pages],
+  ["deploy-cloudflare-workers.yml", workers],
+  ["migrate-preview-d1.yml", previewD1],
+  ["configure-cloudflare-worker-builds.yml", configureBuilds]
+];
+for (const [name, workflow] of checkoutWorkflows) {
+  const lines = workflow.split("\\n");
+  const checkoutIndexes = lines.map((line, index) => line.includes("uses: actions/checkout@") ? index : -1).filter(index => index >= 0);
+  assert.ok(checkoutIndexes.length > 0, name + " must retain an explicit checkout step.");
+  for (const index of checkoutIndexes) {
+    const nextStep = lines.findIndex((line, offset) => offset > index && /^\\s*- name:/.test(line));
+    const block = lines.slice(index, nextStep >= 0 ? nextStep : lines.length).join("\\n");
+    assert.match(block, /persist-credentials:\\s*false/, name + " must not persist the GitHub checkout token.");
+  }
+}
 assert.doesNotMatch(configureBuilds, /secrets\.|api\.cloudflare\.com|wrangler (?:deploy|preview)/);
 console.log("PASS: all Cloudflare secret-bearing diagnostics require trusted-main dispatch and explicit confirmation.");
 console.log("PASS: legacy trigger repair is disabled; Workers Builds updater is offline-only.");
