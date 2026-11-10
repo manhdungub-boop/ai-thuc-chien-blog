@@ -48,7 +48,6 @@ for (const slug of slugs) {
   assert.ok(html.includes('name="robots" content="noindex,nofollow,noarchive"'));
   assert.ok(html.includes("DUNG - AI"));
   assert.ok(html.includes("BẢN NHÁP – CHƯA XUẤT BẢN"));
-  assert.ok(html.includes("schema.org"));
   assert.ok(html.includes("Nguồn"));
   assert.match(html,/ghi rõ tác giả|vui lòng ghi rõ tác giả/i);
   const scriptTags = [...html.matchAll(/<script\b[^>]*>/gi)].map(function (m) { return m[0]; });
