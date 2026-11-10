@@ -16,8 +16,16 @@ for (const [file, job] of [
 }
 
 const configureBuilds = workflow('configure-cloudflare-worker-builds.yml');
-assert.match(configureBuilds, /confirm_production_trigger_changes:[\s\S]*?default: false/, 'Workers Builds Production changes must default to disabled');
-assert.ok(configureBuilds.includes('CONFIRM_PRODUCTION_TRIGGER_CHANGES: ${{ inputs.confirm_production_trigger_changes }}'), 'Workers Builds updater must receive the explicit Production confirmation');
+const configureUpdater = readFileSync(new URL('../scripts/configure_cloudflare_worker_builds.py', import.meta.url), 'utf8');
+assert.match(configureBuilds, /preview_trigger_uuid:[\s\S]*?required: true/, 'Workers Builds updater must require an exact Preview trigger UUID');
+assert.match(configureBuilds, /preview_worker_tag:[\s\S]*?required: true/, 'Workers Builds updater must require an exact Preview Worker tag');
+assert.match(configureBuilds, /preview_branch:[\s\S]*?required: true/, 'Workers Builds updater must require an exact non-production branch');
+assert.ok(!configureBuilds.includes('confirm_production_trigger_changes'), 'Workers Builds workflow must not expose a Production-write switch');
+assert.ok(!configureBuilds.includes('CONFIRM_PRODUCTION_TRIGGER_CHANGES'), 'Workers Builds workflow must not pass a Production-write switch');
+assert.ok(!configureBuilds.includes('preview_reuse_primary_build_token'), 'Preview updater must not reuse a Production build token');
+assert.ok(!configureUpdater.includes('PRODUCTION_TRIGGERS'), 'Preview updater must not define Production trigger targets');
+assert.ok(configureUpdater.includes('Production Workers Builds triggers are never queried or modified'), 'Preview updater must keep Production outside its API path');
+assert.ok(configureUpdater.includes('ALLOWED_PREVIEW_DEPLOY_COMMANDS'), 'Preview updater must enforce an explicit safe deploy-command allowlist');
 
 const health = workflow('health-check.yml');
 const healthGuard = "if: (github.event_name == 'workflow_run' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'";
