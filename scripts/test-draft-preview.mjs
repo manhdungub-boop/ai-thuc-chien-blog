@@ -48,7 +48,10 @@ for (const slug of slugs) {
   assert.ok(html.includes('name="robots" content="noindex,nofollow,noarchive"'));
   assert.ok(html.includes("DUNG - AI"));
   assert.ok(html.includes("BẢN NHÁP – CHƯA XUẤT BẢN"));
-  assert.ok(html.includes("schema.org"));
+  const schemaBlocks = [...html.matchAll(/<script\b[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi)]
+    .map((match) => JSON.parse(match[1]));
+  assert.ok(schemaBlocks.some((value) => value["@context"] === "https://schema.org"),
+    "draft page must include the exact schema.org JSON-LD context");
   assert.ok(html.includes("Nguồn"));
   assert.match(html,/ghi rõ tác giả|vui lòng ghi rõ tác giả/i);
   const scriptTags = [...html.matchAll(/<script\b[^>]*>/gi)].map(function (m) { return m[0]; });
