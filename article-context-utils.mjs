@@ -18,6 +18,6 @@ export function decodeBasicEntities(value) {
 export function stripNonContentTags(html) {
   // HTML permits whitespace before '>' in an end tag (for example, </script >).
   return String(html ?? "")
-    .replace(/<script\b[\s\S]*?<\/script\s*>/gi, " ")
-    .replace(/<style\b[\s\S]*?<\/style\s*>/gi, " ");
+    .replace(/<script\b[\s\S]*?<\/script\s*[^>]*>/gi, " ")
+    .replace(/<style\b[\s\S]*?<\/style\s*[^>]*>/gi, " ");
 }
