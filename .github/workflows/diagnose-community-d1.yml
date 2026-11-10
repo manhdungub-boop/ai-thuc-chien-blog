@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   inspect:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && inputs.confirm_read_only_diagnosis == true
     runs-on: ubuntu-latest
     steps:
       - name: Check out reviewed main source only
