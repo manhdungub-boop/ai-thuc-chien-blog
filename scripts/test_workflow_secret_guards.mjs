@@ -29,7 +29,7 @@ for (const file of ['deploy-cloudflare-pages.yml', 'deploy-cloudflare-workers.ym
 const oauth = workflow('staging-google-oauth-integration.yml');
 assert.match(oauth, /uses: actions\/checkout@v4\n        with:\n          persist-credentials: false/, 'OAuth PR workflow must not persist its read-only GitHub token into the checkout');
 
-const secretReference = new RegExp(String.fromCharCode(36) + '\\{\\{\\s*secrets\\.');
+const secretReference = /\$\{\{\s*secrets\./;
 for (const file of ['deploy-auth-app-preview.yml', 'test-email-verification-preview-http.yml', 'staging-google-oauth-integration.yml']) {
   assert.doesNotMatch(workflow(file), secretReference, file + ': Preview workflow must remain credential-free');
 }
