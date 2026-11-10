@@ -54,13 +54,13 @@ const checkoutWorkflows = [
   ["configure-cloudflare-worker-builds.yml", configureBuilds]
 ];
 for (const [name, workflow] of checkoutWorkflows) {
-  const lines = workflow.split("\\n");
+  const lines = workflow.split("\n");
   const checkoutIndexes = lines.map((line, index) => line.includes("uses: actions/checkout@") ? index : -1).filter(index => index >= 0);
   assert.ok(checkoutIndexes.length > 0, name + " must retain an explicit checkout step.");
   for (const index of checkoutIndexes) {
-    const nextStep = lines.findIndex((line, offset) => offset > index && /^\\s*- name:/.test(line));
-    const block = lines.slice(index, nextStep >= 0 ? nextStep : lines.length).join("\\n");
-    assert.match(block, /persist-credentials:\\s*false/, name + " must not persist the GitHub checkout token.");
+    const nextStep = lines.findIndex((line, offset) => offset > index && /^\s*- name:/.test(line));
+    const block = lines.slice(index, nextStep >= 0 ? nextStep : lines.length).join("\n");
+    assert.match(block, /persist-credentials:\s*false/, name + " must not persist the GitHub checkout token.");
   }
 }
 assert.doesNotMatch(configureBuilds, /secrets\.|api\.cloudflare\.com|wrangler (?:deploy|preview)/);
