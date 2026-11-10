@@ -7,6 +7,7 @@ on:
   pull_request:
     branches:
       - main
+      - security/pin-verified-actions-20261110
   workflow_dispatch:
 
 permissions:
