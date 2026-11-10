@@ -60,4 +60,20 @@ Các bản ghi Hugging Face Hub và Adobe Firefly hiện đã qua rà soát trư
 - Chỉ cập nhật nhánh ứng viên; không sửa `main`, không merge PR #91/#92/#93, không deploy Production, không thay đổi D1, DNS hoặc secrets.
 
 - **Security follow-up:** GitHub CodeQL run `42859495707` passed for JavaScript/TypeScript, Python and GitHub Actions. Google OAuth integration run `42859496409` passed. Official link audit run in CI `42859515305`: 144 URLs checked, 136 reachable, 8 exact official source URLs manually verified after transient GitHub 503 responses, 0 broken and 0 inconclusive. The manual-verification exception is restricted to exact publisher URLs, not whole domains.
-- **IPv6 regression coverage:** explicit offline cases now run in CI via `scripts/test_ipv6_address_safety.mjs` (added after the above run; its result will be recorded after the new CI run completes).
+- **IPv6 regression coverage:** `scripts/test_ipv6_address_safety.mjs` passed all 18 offline IPv4/IPv6 address-safety cases in GitHub CI run `42861324332`.
+
+
+## Latest verified release-readiness snapshot — 2026-11-10
+
+- PR #96 exact validated source before the final test-log-only commit: `f04dc094c7bade4a32f0551c6e6d1290856bc02d`.
+- Static CI run [#42861324332](https://github.com/manhdungub-boop/ai-thuc-chien-blog/actions/runs/42861324332) completed **SUCCESS** on that exact commit.
+- Official catalog links: 144 checked; 136 reachable; 8 exact publisher URLs manually verified; 0 broken; 0 inconclusive. Manual exceptions are URL-specific, not host-wide. Five transient GitHub source URLs were independently fetched through the GitHub contents API; a further three were verified the same way. The checker now uses bounded exponential backoff for 502/503/504 responses.
+- Chromium AI Bank E2E: **PASS** — 35 total records, 34 active, pagination 24 + 10, eight new-tool search cases, canonical IDs, sorting, review filtering, Preview noindex and candidate isolation.
+- Content and site checks: **PASS** — 69 articles; 69 author/attribution checks; 69 unique SVG diagrams; static build; 69-article SEO/sitemap/RSS parity; 74-page accessibility/performance checks.
+- Security regressions: **PASS** — 18 offline IPv4/IPv6 cases; login timing; relay allowlist; DNS rebinding; credential-free Preview; Workers Builds offline-only guard; Production deploy confirmation; Preview D1 UUID pinning; Cloudflare secret-bearing workflow dispatch guards.
+- Google OAuth integration workflow run [#42861324322](https://github.com/manhdungub-boop/ai-thuc-chien-blog/actions/runs/42861324322) completed **SUCCESS** using local mocks and in-memory SQLite. This validates OAuth state/PKCE/nonce/OIDC/session/migration logic; it is not a live Google OAuth redirect using real credentials.
+- Credential-free Auth Preview static/build validation run [#42861100315](https://github.com/manhdungub-boop/ai-thuc-chien-blog/actions/runs/42861100315) completed **SUCCESS** on the same source commit; no Worker deploy, Cloudflare secret, D1 operation, DNS change or Production operation.
+- CodeQL run [#42861324288](https://github.com/manhdungub-boop/ai-thuc-chien-blog/actions/runs/42861324288) was still completing its JavaScript/TypeScript matrix at the time of this note; record its final result only after all matrix jobs complete.
+- A final reporting-only assertion was added to print the successful checkout-token isolation check. The exact new HEAD must complete CI again before the PR can be treated as fully validated.
+- Remaining release blockers are not waived by these passing checks: PR #96 is Draft and stacked on PR #95 → PR #91; independent security review is outstanding; live Google OAuth E2E with the separately authorized Preview test path is outstanding; legacy Preview Worker inventory/binding ownership remains unresolved and must not be altered without verified identity and authorization.
+- No merge, deployment, Production Worker, D1, DNS, secrets or real user data were changed.
