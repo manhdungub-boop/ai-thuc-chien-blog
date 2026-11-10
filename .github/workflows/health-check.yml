@@ -128,7 +128,6 @@ jobs:
             "/articles/do-luong-hieu-qua-blog"
             "/sitemap.xml"
             "/feed.xml"
-            "/google4e45ddcf8facb122.html"
           )
           for host in "${hosts[@]}"; do
             echo "Checking live host: $host"
@@ -167,6 +166,14 @@ jobs:
             trap - EXIT
           done
           echo "LIVE SMOKE TEST PASS: both production hosts and key routes responded successfully."
+          verification_url="https://ai-thuc-chien-blog.pages.dev/google4e45ddcf8facb122.html"
+          verification_status="$(curl --silent --show-error --location --max-redirs 5 --max-time 25 -o /tmp/google-verification.html -w "%{http_code}" "$verification_url")"
+          if [ "$verification_status" != "200" ] || ! grep -Fq 'google-site-verification: google4e45ddcf8facb122.html' /tmp/google-verification.html; then
+            echo "FAIL: canonical Pages Google Search Console verification file returned HTTP $verification_status or unexpected content"
+            exit 1
+          fi
+          echo "PASS: canonical Pages Google Search Console verification file returned HTTP 200 with the expected token."
+          echo "NOTE: this ownership-verification file is checked on canonical Pages, not the Worker route."
 
       - name: Verify deployed article-library and sitemap coverage
         if: github.event_name != 'pull_request'
