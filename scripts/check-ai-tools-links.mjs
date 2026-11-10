@@ -77,14 +77,14 @@ async function request(url,method){
     if(!safe)return {status:0,url:current.href,unsafe_redirect:true,body:null};
     let response;
     try {
-      for (let attempt = 0; attempt < 2; attempt++) {
+      for (let attempt = 0; attempt < 4; attempt++) {
         // Re-resolve and re-pin on each bounded retry; never reuse an unchecked DNS result.
         const retrySafe = attempt === 0 ? safe : await safePublicUrl(current.href);
         if (!retrySafe) return {status:0,url:current.href,unsafe_redirect:true,body:null};
         response = await pinnedRequest(retrySafe.url, method, retrySafe.address);
-        if (![502,503,504].includes(response.status) || attempt === 1) break;
+        if (![502,503,504].includes(response.status) || attempt === 3) break;
         await response.body?.cancel().catch(()=>{});
-        await wait(500);
+        await wait(500 * (2 ** attempt));
       }
     } catch(error) { throw error; }
     if([301,302,303,307,308].includes(response.status)){
@@ -130,7 +130,10 @@ const manuallyVerifiedOfficialUrls = new Set([
   "https://github.com/JaidedAI/EasyOCR/blob/master/README.md", // d7e7853811a65d0373c5dc77d2c91402c963d0fa
   "https://github.com/Unstructured-IO/unstructured/blob/main/LICENSE.md", // b807bcb4281598fdb402807621127fad312b3f74
   "https://github.com/m-bain/whisperX/blob/main/README.md", // d66fd7e7d429de3125d1a8a45d89ef21bc3640bb
-  "https://github.com/OpenHands/OpenHands/blob/main/LICENSE" // f6f60f52368bcc96f82fbe59ec65049c2c3af9db
+  "https://github.com/OpenHands/OpenHands/blob/main/LICENSE", // f6f60f52368bcc96f82fbe59ec65049c2c3af9db
+  "https://github.com/OpenHands/software-agent-sdk/blob/main/LICENSE", // b0bd86a6335a564bd3766666bebbf014fd6a8013
+  "https://github.com/Comfy-Org/ComfyUI/blob/master/LICENSE", // f288702d2fa16d3cdf0035b15a9fcbc552cd88e7
+  "https://github.com/deepset-ai/haystack/blob/main/LICENSE" // 6fb66d8d5fa55912ee80f4fdab94cab99140c448
 ]);
 
 const results=new Array(urls.length);
