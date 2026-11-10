@@ -76,6 +76,20 @@ jobs:
           node scripts/audit-ai-tools-catalog.mjs data/ai-tools.json docs/reviews/ai-tools-candidates-2026-11-02.json --strict
           node scripts/test-ai-tools-catalog-audit.mjs
 
+      - name: Install pinned Playwright and Chromium for offline browser regression
+        run: |
+          npm install --ignore-scripts --no-save --package-lock=false --no-audit --no-fund playwright@1.65.0
+          ./node_modules/.bin/playwright install --with-deps chromium
+
+      - name: Build isolated noindex AI Bank preview fixture
+        env:
+          PREVIEW_SOURCE_DIR: dist
+          PREVIEW_DEPLOYMENT_URL: https://ai-thuc-chien-blog-ci-preview.pages.dev
+        run: node scripts/build-preview.mjs
+
+      - name: Run AI Bank Chromium browser regression
+        run: node scripts/test-ai-tools-catalog-browser.mjs
+
       - name: Check official AI tool links
         run: node scripts/check-ai-tools-links.mjs data/ai-tools.json
 
