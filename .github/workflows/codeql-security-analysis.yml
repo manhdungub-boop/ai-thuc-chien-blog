@@ -52,6 +52,7 @@ jobs:
           set -euo pipefail
           node scripts/test_article_quality.cjs
           node scripts/test_seo_consistency.cjs
+          node scripts/test_url_assertions.mjs
           python3 - <<'PY'
           import importlib.util
           import tempfile
