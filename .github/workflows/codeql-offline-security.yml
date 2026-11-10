@@ -54,6 +54,7 @@ jobs:
           node scripts/test_article_quality.cjs
           node scripts/test_seo_consistency.cjs
           node scripts/test_release_security_regressions.mjs
+          node scripts/test_secret_workflow_dispatch_guards.mjs
           node scripts/test_workers_builds_workflow_guard.mjs
           node scripts/test-ai-tools-links-security.mjs
           node scripts/test_ipv6_address_safety.mjs
