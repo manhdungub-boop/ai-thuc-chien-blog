@@ -48,7 +48,7 @@ try {
 
   await page.goto("http://127.0.0.1/ngan-hang-ai");
   await page.waitForFunction(count => document.querySelector("#bank-count")?.textContent.includes(` / ${count} công cụ`), activeTools.length);
-  await page.waitForFunction(total => document.querySelector("#bank-count")?.textContent.includes(`Tổng danh mục: ${total}.`), catalog.tools.length);
+  await page.waitForFunction(total => document.querySelector("#bank-count")?.textContent.includes(`Tổng danh mục: ${total}.`), activeTools.length);
   const cards = page.locator("#bank-grid .tool-card");
   assert.equal(await cards.count(), 24, "first page must show 24 active cards");
   assert.match(await page.locator("#bank-pagination").innerText(), /Trang 1 \/ 2/);
