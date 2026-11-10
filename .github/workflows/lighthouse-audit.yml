@@ -59,7 +59,7 @@ jobs:
           check_url "Worker article" "https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/do-luong-hieu-qua-blog" false
 
       - name: Run Lighthouse on canonical Pages deployment
-        uses: treosh/lighthouse-ci-action@v12
+        uses: treosh/lighthouse-ci-action@3e7e23fb74242897f95c0ba9cabad3d0227b9b18 # v12
         with:
           configPath: .github/lighthouse/lighthouserc.json
           urls: |
