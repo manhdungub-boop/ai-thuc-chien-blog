@@ -66,8 +66,9 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: lighthouse-reports
-          path: .lighthouseci/
-          if-no-files-found: ignore
+          path: .lighthouseci/*.json
+          if-no-files-found: error
+          include-hidden-files: true
           retention-days: 14
 
       - name: Publish Lighthouse metric summary
