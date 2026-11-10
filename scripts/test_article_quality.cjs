@@ -12,8 +12,8 @@ assert.ok(files.length > 0, 'expected at least one article');
 
 function visibleText(html) {
   return html
-    .replace(/<script\b[\s\S]*?<\\/script\\s*>/gi, ' ')
-    .replace(/<style\b[\s\S]*?<\\/style\\s*>/gi, ' ')
+    .replace(/<script\b[\s\S]*?<\/script\s*>/gi, ' ')
+    .replace(/<style\b[\s\S]*?<\/style\s*>/gi, ' ')
     .replace(/<head\b[\s\S]*?<\/head>/gi, ' ')
     .replace(/<!--[\s\S]*?-->/g, ' ')
     .replace(/<[^>]+>/g, ' ')
@@ -40,7 +40,7 @@ for (const file of files) {
   const canonical = source.match(/<link\s+rel=["']canonical["']\s+href=["']([^"']+)["']/i);
   if (!canonical || !/^https:\/\//i.test(canonical[1])) fail('missing absolute HTTPS canonical URL');
 
-  const blocks = [...source.matchAll(/<script\s+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\\/script\\s*>/gi)];
+  const blocks = [...source.matchAll(/<script\s+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script\s*>/gi)];
   if (blocks.length === 0) fail('missing JSON-LD structured data');
   for (const block of blocks) {
     try { JSON.parse(block[1]); } catch (error) { fail('invalid JSON-LD: ' + error.message); }
