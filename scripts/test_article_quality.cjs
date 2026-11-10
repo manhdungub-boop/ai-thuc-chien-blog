@@ -12,15 +12,14 @@ assert.ok(files.length > 0, 'expected at least one article');
 
 function visibleText(html) {
   return html
-    .replace(/<script\b[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style\b[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script\b[\s\S]*?<\\/script\\s*>/gi, ' ')
+    .replace(/<style\b[\s\S]*?<\\/style\\s*>/gi, ' ')
     .replace(/<head\b[\s\S]*?<\/head>/gi, ' ')
     .replace(/<!--[\s\S]*?-->/g, ' ')
     .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;|&#160;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&(?:nbsp|#160|amp|quot|#39|apos);/gi, (entity) => ({
+      '&nbsp;': ' ', '&#160;': ' ', '&amp;': '&', '&quot;': '"', '&#39;': "'", '&apos;': "'"
+    })[entity.toLowerCase()] ?? entity)
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -41,7 +40,7 @@ for (const file of files) {
   const canonical = source.match(/<link\s+rel=["']canonical["']\s+href=["']([^"']+)["']/i);
   if (!canonical || !/^https:\/\//i.test(canonical[1])) fail('missing absolute HTTPS canonical URL');
 
-  const blocks = [...source.matchAll(/<script\s+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
+  const blocks = [...source.matchAll(/<script\s+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\\/script\\s*>/gi)];
   if (blocks.length === 0) fail('missing JSON-LD structured data');
   for (const block of blocks) {
     try { JSON.parse(block[1]); } catch (error) { fail('invalid JSON-LD: ' + error.message); }
