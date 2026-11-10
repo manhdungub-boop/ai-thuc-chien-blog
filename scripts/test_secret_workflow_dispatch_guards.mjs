@@ -22,6 +22,8 @@ assert.ok(diagnoseBuild.includes("confirm_read_only_diagnosis:"));
 assert.ok(diagnoseBuild.includes("default: false"));
 assert.ok(diagnoseBuild.includes("if: github.ref == 'refs/heads/main' && inputs.confirm_read_only_diagnosis == true"));
 assert.ok(diagnoseD1.includes("confirm_read_only_diagnosis:"));
+assert.ok(diagnoseD1.includes("new RegExp(`\\\\b${col}\\\\b`, 'i')"),
+  "D1 schema diagnostics must use real word-boundary regexes, not literal backslash-b.");
 assert.ok(diagnoseD1.includes("default: false"));
 assert.ok(diagnoseD1.includes("if: github.ref == 'refs/heads/main' && inputs.confirm_read_only_diagnosis == true"));
 assert.ok(diagnoseD1.includes("ref: main"));
