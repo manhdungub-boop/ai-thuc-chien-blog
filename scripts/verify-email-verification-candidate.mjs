@@ -20,7 +20,7 @@ assert.match(worker, /origin === new URL\(request\.url\)\.origin/,
 
 assert.match(worker, /const tokenHash = await sha256Base64Url\(token\)/,
   "Email verification bearer tokens must be hashed before storage.");
-assert.match(worker, /30 \* 60 \* 1000/,
+assert.match(worker, /const COMMUNITY_VERIFICATION_SECONDS = 30 \* 60/,
   "Email verification tokens must have a bounded lifetime.");
 assert.match(worker, /DELETE FROM community_email_verification_tokens WHERE token_hash = \? AND expires_at > \?/,
   "Verification must consume a valid token.");
