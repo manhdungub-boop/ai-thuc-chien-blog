@@ -23,5 +23,7 @@ const report = JSON.parse(result.stdout);
 assert.equal(report.as_of, asOf, "--as-of must use the current Vietnam-local YYYY-MM-DD value");
 assert.ok(report.main_catalog.count > 0, "main catalog must contain records");
 assert.ok(Array.isArray(report.strict_blockers), "strict blockers must be reported as an array");
-assert.equal(report.strict_blockers.length, 0, "catalog must have no strict blockers");\nassert.deepEqual(report.main_catalog.records_needing_editorial_review, ["easyocr"], "only active EasyOCR remains under editorial review; deprecated Flowise has a verified sunset record");\nassert.deepEqual(report.main_catalog.verified_with_unknown_pricing, [], "unknown pricing is allowed only for verified deprecated records excluded from active listings");
+assert.equal(report.strict_blockers.length, 0, "catalog must have no strict blockers");
+assert.deepEqual(report.main_catalog.records_needing_editorial_review, ["easyocr"], "only active EasyOCR remains under editorial review; deprecated Flowise has a verified sunset record");
+assert.deepEqual(report.main_catalog.verified_with_unknown_pricing, [], "unknown pricing is allowed only for verified deprecated records excluded from active listings");
 console.log(`PASS: strict catalog audit uses current Asia/Ho_Chi_Minh date (${asOf})`);
