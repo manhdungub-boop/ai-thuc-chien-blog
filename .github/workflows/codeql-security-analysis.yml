@@ -81,6 +81,14 @@ jobs:
               fixture.unlink(missing_ok=True)
           print("PASS: Python similarity filters exclude adversarial script/style end tags")
           PY
+      - name: Run focused workflow and release-safety regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s scripts -p 'test_configure_cloudflare_worker_builds.py' -v
+          node scripts/test_workflow_secret_guards.mjs
+          node scripts/verify-release-safety.mjs
+          node scripts/test_ipv6_address_safety.mjs
       - name: Summarize local SARIF findings
         if: always()
         shell: bash
