@@ -6,7 +6,7 @@ on:
       source_ref:
         description: "Branch or commit to validate (runs without credentials)"
         required: false
-        default: "fix/codex-security-findings-20261109"
+        default: ""
         type: string
 
 permissions:
