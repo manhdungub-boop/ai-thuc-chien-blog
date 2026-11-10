@@ -32,6 +32,10 @@ try {
     "Transient upstream server failures must receive one bounded retry.");
   assert.match(checkerSource, /attempt === 0 \? safe : await safePublicUrl\(current\.href\)/,
     "Every retry must re-resolve and re-pin the public destination.");
+  assert.match(checkerSource, /manuallyVerifiedOfficialUrls\.has\(original\)/,
+    "Only exact, manually reviewed publisher URLs may bypass automated 403/404 probe ambiguity.");
+  assert.match(checkerSource, /https:\\/\\/www\\.perplexity\\.ai\\/enterprise\\/pricing/,
+    "The exact official Perplexity pricing URL must be recorded for manual verification.");
   assert.ok(summary.results.every(result => result.status === "invalid_or_non_public_url"),
     "IPv6 loopback, IPv6 ULA, IPv4 loopback, DNS-resolved loopback, and deprecated 6to4 relay targets must be rejected before fetch");
   console.log("PASS: catalog link checker blocks private IPv4/IPv6 literals, private DNS targets, and deprecated 6to4 relay addresses.");
