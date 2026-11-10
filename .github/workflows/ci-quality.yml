@@ -53,6 +53,7 @@ jobs:
           node scripts/test-ai-tools-links-security.mjs
           node scripts/test_workers_builds_workflow_guard.mjs
           node scripts/test_release_security_regressions.mjs
+          node scripts/verify-email-verification-candidate.mjs
           node scripts/test_secret_workflow_dispatch_guards.mjs
 
       - name: Test community D1 schema
