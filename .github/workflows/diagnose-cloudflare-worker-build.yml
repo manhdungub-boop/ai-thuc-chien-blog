@@ -26,7 +26,7 @@ concurrency:
 
 jobs:
   diagnose:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && inputs.confirm_read_only_diagnosis == true
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
