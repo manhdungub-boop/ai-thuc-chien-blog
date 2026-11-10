@@ -657,7 +657,7 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
       let cursor = 0;
       let match;
       while ((match = linkPattern.exec(text)) !== null) {
-        let safeHref = '';
+        let safeSlug = '';
         try {
           const candidate = new URL(match[2]);
           if (
@@ -668,15 +668,15 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
             !candidate.hash &&
             !candidate.username &&
             !candidate.password
-          ) safeHref = candidate.href;
+          ) safeSlug = candidate.pathname.slice('/articles/'.length);
         } catch (_error) {
-          safeHref = '';
+          safeSlug = '';
         }
-        if (!safeHref) continue;
+        if (!safeSlug) continue;
         paragraph.appendChild(document.createTextNode(text.slice(cursor, match.index)));
         const link = document.createElement('a');
         link.textContent = match[1];
-        link.href = safeHref;
+        link.href = trustedArticleOrigin + '/articles/' + safeSlug;
         link.rel = 'noopener noreferrer';
         paragraph.appendChild(link);
         cursor = linkPattern.lastIndex;
