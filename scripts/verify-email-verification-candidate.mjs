@@ -26,7 +26,7 @@ assert.match(worker, /WHERE t\.token_hash = \? AND t\.expires_at > \? LIMIT 1/,
   "Verification must consume a valid token.");
 assert.match(worker, /DELETE FROM community_email_verification_tokens\s+WHERE member_id = \?/,
   "Verification tokens must be removed after account verification.");
-assert.match(worker, /EMAIL_VERIFICATION_REQUIRED/,
+assert.match(worker, /EMAIL_NOT_VERIFIED/,
   "Unverified accounts must not establish a session.");
 assert.match(worker, /hashCommunityPassword\(password, new Uint8Array\(16\)\)/,
   "Unknown-account login must perform dummy PBKDF2 work.");
