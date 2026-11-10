@@ -62,7 +62,7 @@ jobs:
               ("article_similarity", root / "scripts/audit-article-similarity.py", "article_words"),
               ("draft_similarity", root / "scripts/audit-draft-similarity.py", "published_words"),
           ]
-          html = "<p>visible phrase</p><script>secret_script_marker</script\\t  bar><style>secret_style_marker</style\\t  bar><p>retained phrase</p>"
+          html = "<p>visible phrase</p><script>secret_script_marker</script\t  bar><style>secret_style_marker</style\t  bar><p>retained phrase</p>"
           with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".html", delete=False) as stream:
               stream.write(html)
               fixture = Path(stream.name)
