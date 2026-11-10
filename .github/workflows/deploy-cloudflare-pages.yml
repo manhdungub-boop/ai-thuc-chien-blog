@@ -1,18 +1,32 @@
 name: Deploy Cloudflare Pages
 
-# Production Pages deployment requires an explicit manual dispatch.
+# Production Pages deployment requires an explicit manual dispatch from main.
 on:
   workflow_dispatch:
+    inputs:
+      confirm_production_pages_deploy:
+        description: "Required: explicitly approve deploying the reviewed main branch to Production Pages."
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
+concurrency:
+  group: deploy-cloudflare-pages
+  cancel-in-progress: false
+
 jobs:
   deploy:
+    # A dispatch from any feature/PR branch must never publish to the production Pages branch.
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.confirm_production_pages_deploy == true
     runs-on: ubuntu-latest
     steps:
-      - name: Check out source
+      - name: Check out reviewed main source
         uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
