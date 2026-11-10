@@ -695,8 +695,8 @@
         "self_hosted",
         "api"
       ],
-      "description": "Thư viện Python OCR sẵn dùng, nhận dạng hơn 80 ngôn ngữ và nhiều hệ chữ viết; hỗ trợ CPU/GPU và xuất vùng bounding box cùng text/confidence.",
-      "free_tier_summary": "EasyOCR package/repository dùng Apache-2.0 và có thể chạy local không mất phí API. Trang Model Hub chính thức liệt kê checkpoint có thể tải nhưng không nêu license rõ ràng cho từng checkpoint. Giữ needs_review: cần kiểm tra license/điều kiện của từng weight artifact và dữ liệu huấn luyện trước khi khuyến nghị tái phân phối hoặc đóng gói thương mại.",
+      "description": "Thư viện Python OCR đa ngôn ngữ, hỗ trợ hơn 80 ngôn ngữ và có thể chạy local trên CPU/GPU; mã nguồn chính thức hiện công bố phiên bản 1.7.2 (24/09/2024).",
+      "free_tier_summary": "Gói mã nguồn EasyOCR có thể cài và chạy local miễn phí; repository/package dùng Apache-2.0. README chính thức cho biết các pretrained weights được tải từ Model Hub, nhưng trang Model Hub không nêu rõ license riêng cho từng checkpoint và các thành phần/model nguồn được sử dụng. Chỉ xác nhận license của code; không khuyến nghị tái phân phối weights hoặc đóng gói thương mại cho đến khi xác minh license từng artifact và dependency.",
       "official_sources": [
         "https://github.com/JaidedAI/EasyOCR",
         "https://github.com/JaidedAI/EasyOCR/blob/master/LICENSE",
@@ -704,7 +704,7 @@
         "https://www.jaided.ai/easyocr",
         "https://www.jaided.ai/easyocr/modelhub/"
       ],
-      "last_verified": "2026-11-05",
+      "last_verified": "2026-11-11",
       "verification_status": "needs_review",
       "status": "active",
       "tags": [
