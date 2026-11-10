@@ -1,4 +1,4 @@
-name: Cloudflare Branch Preview Trigger Safety Validation
+name: Legacy Cloudflare Branch Preview Trigger Repair (disabled)
 
 on:
   workflow_dispatch:
@@ -6,21 +6,13 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: cloudflare-branch-preview-safety-validation
-  cancel-in-progress: false
-
 jobs:
-  validate-only:
-    # All API mutations are intentionally disabled until exact Preview trigger identities are re-verified.
+  disabled:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
     steps:
-      - name: Check out reviewed source without credentials
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-      - name: Run offline Workers Builds trigger fixtures
-        run: python -m unittest discover -s scripts -p 'test_configure_cloudflare_worker_builds.py' -v
-      - name: Assert no Cloudflare API mutation path is available
-        run: node scripts/test_workers_builds_workflow_guard.mjs
+      - name: Refuse legacy trigger mutation
+        run: |
+          echo "::error::Disabled: legacy trigger repair has unverified Worker identity and must not receive Cloudflare credentials."
+          echo "Use the offline-only Workers Builds validation workflow. Do not recreate or mutate build tokens/triggers here."
+          exit 1
