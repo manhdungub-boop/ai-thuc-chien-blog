@@ -33,7 +33,7 @@ assert.match(worker, /hashCommunityPassword\(password, new Uint8Array\(16\)\)/,
 
 assert.match(worker, /password-reset\/request/);
 assert.match(worker, /password-reset\/complete/);
-assert.match(worker, /DELETE FROM community_sessions WHERE member_id = \?/,
+assert.match(worker, /DELETE FROM community_sessions\s+WHERE member_id = \(/,
   "Password reset must revoke existing sessions.");
 assert.match(frontend, /socialGoogleButton\.href = '\/api\/community\/oauth\/google\/start'/);
 assert.match(frontend, /community-password-reset-form/);
