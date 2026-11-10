@@ -4,8 +4,6 @@ import json
 import os
 import re
 import sys
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
 
 ACCOUNT_ID = "92cf091bbac8b4879ec65feb30b4715b"
 REPO_NAME = "ai-thuc-chien-blog"
