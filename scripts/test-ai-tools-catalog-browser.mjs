@@ -13,8 +13,8 @@ const newIds = ["anythingllm", "opencode", "comfyui", "qdrant", "whisper-cpp", "
 
 assert.equal(catalog.tools.length, 36, "catalog must contain 36 total records after the verified ElevenLabs addition");
 assert.equal(activeTools.length, 35, "public AI Bank must show 35 active records; deprecated Flowise stays hidden");
-assert.deepEqual(needsReview.map(t => t.id).sort(), ["easyocr"], "only EasyOCR remains under editorial review");
-assert.equal(activeNeedsReview.length, 1, "only active EasyOCR should appear in the needs-review filter");
+assert.deepEqual(needsReview.map(t => t.id).sort(), [], "all active catalog records have verified editorial status");
+assert.equal(activeNeedsReview.length, 0, "no active record should remain in the needs-review filter");
 for (const id of newIds) {
   const tool = catalog.tools.find(t => t.id === id);
   assert.equal(tool?.status, "active", `${id} must be active`);
@@ -76,7 +76,7 @@ try {
   assert.ok(reviewText.includes("EasyOCR"), "active needs_review filter must include EasyOCR");
   assert.ok(!reviewText.includes("Flowise"), "deprecated Flowise must stay hidden from public active results");
 
-  console.log("PASS Chromium catalog E2E: 36 total records / 35 active; 24+11 pagination; search across 9 additions; canonical IDs; A-Z sort; accurate review filter; Preview noindex and candidate isolation.");
+  console.log("PASS Chromium catalog E2E: 36 total records / 35 active; 24+11 pagination; search across 9 additions; canonical IDs; A-Z sort; empty review filter; Preview noindex and candidate isolation.");
 } finally {
   await browser.close();
 }
