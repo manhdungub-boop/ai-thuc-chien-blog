@@ -83,3 +83,39 @@ No secret values were requested or read. Do not copy, compare, rotate, delete, r
 ## Decision
 
 **NOT READY FOR RELEASE.** Keep PR #96 Draft/open and do not merge or deploy Production. Continue only with read-only inspection, credential-free CI, isolated Preview work and separately authorized Preview-only credential provisioning. Re-run only checks affected by subsequent changes, and record every PASS against the exact commit SHA.
+
+## Addendum — xử lý quy tắc lỗi/PR và rà soát PR cũ (11/11/2026)
+
+### Quy tắc làm việc mới
+
+Đã ghi thành tài liệu bắt buộc: [docs/WORKING_RULES_ERROR_AND_PR_CONTROL.md](../WORKING_RULES_ERROR_AND_PR_CONTROL.md), commit `82544142943ff3618062e1b60766f2cd7702b181`.
+
+Các nguyên tắc trọng yếu:
+- Sửa nguyên nhân gốc và lỗi phát sinh trước khi mở rộng phạm vi.
+- Ưu tiên tiếp tục trên PR/branch hiện hữu; không tạo PR mới để tách nhỏ không cần thiết, né CI đỏ hoặc che lỗi.
+- Không bỏ qua, skip, nới assertion hay đổi điều kiện để làm xanh kiểm thử.
+- Mọi PASS phải gắn SHA; không có workflow run không đồng nghĩa PASS.
+- Khi CI lỗi do quota/dịch vụ ngoài, ghi BLOCKED và tìm phương án miễn phí; không tuyên bố PASS.
+- Mỗi lỗi phải có regression test phù hợp và cập nhật hồ sơ kiểm toán.
+
+### Rà soát PR cũ
+
+Đã truy vấn PR đang mở và commit-associated workflow runs trên HEAD của các PR #94, #93, #92, #90, #89, #88, #87, #85, #84, #83, #82, #77, #76, #75, #74, #73, #72, #71, #70, #67, #62, #30, #21 và #20.
+
+- Với các HEAD được truy vấn của #93, #92, #89, #88, #85, #83, #82, #77, #76, #75, #74, #73, #72, #71, #70, #67, #62, #30, #21 và #20, những workflow run được API trả về đều có conclusion success.
+- Với #94, #90, #87 và #84, không có commit-associated workflow run được trả về. Đây là NOT VERIFIED, không phải PASS.
+- Không có failed conclusion nào xuất hiện trong tập commit-associated runs được truy vấn ở đợt này. Tuy nhiên, điều đó không chứng minh mọi job lịch sử, mọi lần rerun hoặc toàn bộ PR cũ đều sạch lỗi.
+- PR #88, #21 và #20 hiện được metadata báo mergeable=false; cần điều tra conflict/base cũ trước khi xem xét. PR #67 cũng mergeable=false. Không tự ý đóng hoặc merge.
+- Nhiều PR cũ dùng base branch/commit khác nhau; không dùng CI PASS lịch sử của chúng làm bằng chứng cho PR #96 hoặc release hiện tại.
+
+### PR #96 sau cập nhật quy tắc
+
+- HEAD mới nhất: `82544142943ff3618062e1b60766f2cd7702b181`.
+- PR #96 vẫn Open / Draft, chưa merge.
+- Sau commit tài liệu, GitHub trả về OAuth integration run `42878357136` đang chạy và CodeQL run `42878357351` đang queued tại thời điểm kiểm tra.
+- Không có Static CI run được trả về cho commit tài liệu này; do đó không ghi Static CI PASS trên SHA mới. Kết quả Static CI/CodeQL/OAuth của SHA cũ không được kế thừa sang SHA mới.
+- Việc thêm tài liệu không thay đổi mã ứng dụng; không chạy lại toàn bộ test suite. Chờ các workflow có liên quan hoàn tất và tiếp tục kiểm tra CI chính xác theo SHA mới.
+
+### Quyết định
+
+Giữ PR #96 ở Draft. Tiếp tục xử lý blocker Preview credentials, live Google OAuth, live email, D1 read-only metadata và independent security review. Chỉ mở PR khác khi có lý do kỹ thuật bắt buộc và đã ghi rõ; trước tiên phải rà soát/khắc phục PR cũ và kết quả kiểm thử lỗi.
