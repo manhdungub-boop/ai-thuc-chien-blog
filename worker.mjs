@@ -79,7 +79,7 @@ function decodeBasicEntities(text) {
       const response = await env.ASSETS.fetch(new Request(new URL(item.path + ".html", base)));
       if (!response.ok) continue;
       const html = await response.text();
-      const body = html.replace(/<script\b[\s\S]*?<\/script>/gi," ").replace(/<style\b[\s\S]*?<\/style>/gi," ");
+      const body = html.replace(/<script\b[\s\S]*?<\/script\s*>/gi," ").replace(/<style\b[\s\S]*?<\/style\s*>/gi," ");
       const blocks = [...body.matchAll(/<(h[1-3]|p|li|blockquote)\b[^>]*>([\s\S]*?)<\/\1>/gi)]
         .map((match) => decodeBasicEntities(match[2].replace(/<[^>]*>/g," ").replace(/\s+/g," ").trim()))
         .filter((text) => text.length >= 45 && text.length <= 900);
