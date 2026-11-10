@@ -51,31 +51,49 @@ jobs:
         shell: bash
         run: |
           python - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
-          import glob, json, os
+          import glob, json
+
           files = sorted(glob.glob("codeql-results/*.sarif"))
           if not files:
               print("## CodeQL results")
               print("No SARIF output was produced; inspect the analysis step logs.")
               raise SystemExit(1)
+
           findings = []
           for path in files:
               with open(path, encoding="utf-8") as stream:
                   data = json.load(stream)
               for run in data.get("runs", []):
+                  driver = run.get("tool", {}).get("driver", {})
+                  rules = driver.get("rules", [])
+                  rules_by_id = {rule.get("id"): rule for rule in rules if rule.get("id")}
                   for item in run.get("results", []):
+                      rule_id = item.get("ruleId", "unknown")
+                      rule = rules_by_id.get(rule_id, {})
+                      properties = item.get("properties", {})
+                      rule_properties = rule.get("properties", {})
+                      configuration = rule.get("defaultConfiguration", {})
+                      severity = (
+                          properties.get("security-severity")
+                          or rule_properties.get("security-severity")
+                          or item.get("level")
+                          or configuration.get("level")
+                          or "unknown"
+                      )
+                      message = (item.get("message") or {}).get("text", "").replace("\\n", " ").strip()
                       locations = item.get("locations") or [{}]
-                      loc = locations[0].get("physicalLocation", {})
-                      artifact = loc.get("artifactLocation", {}).get("uri", "unknown")
-                      line = loc.get("region", {}).get("startLine", "?")
-                      props = item.get("properties", {})
-                      severity = props.get("security-severity") or item.get("level", "unspecified")
-                      findings.append((severity, item.get("ruleId", "unknown"), artifact, line))
+                      physical = locations[0].get("physicalLocation", {})
+                      artifact = physical.get("artifactLocation", {}).get("uri", "unknown")
+                      line = physical.get("region", {}).get("startLine", "?")
+                      findings.append((str(severity), rule_id, artifact, line, message))
+
           print(f"## CodeQL findings: {len(findings)}")
           print("SARIF remains local to the runner; no upload to Code Scanning was attempted.")
           if not findings:
               print("No findings were reported by this language analysis.")
-          for severity, rule, path, line in findings[:100]:
-              print(f"- **{severity}** `{rule}` — `{path}:{line}`")
+          for severity, rule_id, path, line, message in findings[:100]:
+              suffix = f" — {message}" if message else ""
+              print(f"- **{severity}** `{rule_id}` — `{path}:{line}`{suffix}")
           if len(findings) > 100:
-              print(f"- ... and {len(findings) - 100} additional findings; inspect the job artifact/logs.")
+              print(f"- ... and {len(findings) - 100} additional findings; inspect the local SARIF output.")
           PY
