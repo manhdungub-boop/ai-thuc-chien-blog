@@ -652,14 +652,31 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
     const paragraph = document.createElement('p');
     if (role === 'assistant') {
       // Render only verified internal article links; all other text remains plain text.
-      const linkPattern = /\[([^\]\n]{1,180})\]\((https:\/\/ai-thuc-chien-blog\.manhdungub\.workers\.dev\/articles\/[a-z0-9-]+)\)/g;
+      const linkPattern = /\[([^\]\n]{1,180})\]\((https:\/\/[^)\s]{1,2048})\)/g;
+      const trustedArticleOrigin = 'https://ai-thuc-chien-blog.manhdungub.workers.dev';
       let cursor = 0;
       let match;
       while ((match = linkPattern.exec(text)) !== null) {
+        let safeHref = '';
+        try {
+          const candidate = new URL(match[2]);
+          if (
+            candidate.protocol === 'https:' &&
+            candidate.origin === trustedArticleOrigin &&
+            /^\/articles\/[a-z0-9-]+$/.test(candidate.pathname) &&
+            !candidate.search &&
+            !candidate.hash &&
+            !candidate.username &&
+            !candidate.password
+          ) safeHref = candidate.href;
+        } catch (_error) {
+          safeHref = '';
+        }
+        if (!safeHref) continue;
         paragraph.appendChild(document.createTextNode(text.slice(cursor, match.index)));
         const link = document.createElement('a');
         link.textContent = match[1];
-        link.href = match[2];
+        link.href = safeHref;
         link.rel = 'noopener noreferrer';
         paragraph.appendChild(link);
         cursor = linkPattern.lastIndex;
