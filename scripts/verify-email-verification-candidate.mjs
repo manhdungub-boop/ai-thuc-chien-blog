@@ -12,8 +12,16 @@ const originBlock = worker.match(/const COMMUNITY_ALLOWED_ORIGINS = new Set\(\[(
 assert.ok(originBlock, "Worker must declare an explicit CORS origin allowlist.");
 const allowedOrigins = [...originBlock[1].matchAll(/["'](https:\/\/[^"']+)["']/g)]
   .map((match) => new URL(match[1]).origin);
-assert.ok(allowedOrigins.includes("https://ai-thuc-chien-blog.manhdungub.workers.dev"));
-assert.ok(allowedOrigins.includes("https://ai-thuc-chien-blog.pages.dev"));
+const expectedOriginHosts = new Set([
+  "ai-thuc-chien-blog.manhdungub.workers.dev",
+  "ai-thuc-chien-blog.pages.dev"
+]);
+for (const expectedHost of expectedOriginHosts) {
+  assert.ok(allowedOrigins.some((origin) => {
+    const parsed = new URL(origin);
+    return parsed.protocol === "https:" && parsed.hostname === expectedHost && !parsed.port && !parsed.username && !parsed.password;
+  }), "CORS allowlist must contain the exact HTTPS origin for " + expectedHost);
+}
 assert.equal(new Set(allowedOrigins).size, allowedOrigins.length, "CORS origins must be unique.");
 assert.match(worker, /origin === new URL\(request\.url\)\.origin/,
   "Same-origin Preview requests must be allowed without wildcard CORS.");
