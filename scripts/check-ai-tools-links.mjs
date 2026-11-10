@@ -113,7 +113,17 @@ const manuallyVerifiedOfficialUrls = new Set([
   "https://helpx.adobe.com/creative-cloud/apps/generative-ai/generative-credits-faq.html",
   "https://github.com/BerriAI/litellm/blob/main/LICENSE",
   "https://github.com/ollama/ollama/blob/main/LICENSE",
-  "https://github.com/JaidedAI/EasyOCR/blob/master/LICENSE"
+  "https://github.com/JaidedAI/EasyOCR/blob/master/LICENSE",
+  // These exact GitHub source pages were manually fetched and checked on 2026-11-10.
+  // GitHub returned transient 503 responses to the automated probe; do not treat them
+  // as broken, and do not widen this exception to the entire github.com host.
+  "https://github.com/BerriAI/litellm/blob/main/pyproject.toml",
+  "https://github.com/datalab-to/surya/blob/master/pyproject.toml",
+  "https://github.com/OpenHands/enterprise/blob/main/LICENSE",
+  "https://github.com/anomalyco/opencode/blob/dev/LICENSE",
+  "https://github.com/qdrant/qdrant/blob/master/LICENSE",
+  "https://github.com/mlflow/mlflow/blob/master/LICENSE.txt",
+  "https://github.com/pydantic/pydantic-ai/blob/main/LICENSE"
 ]);
 
 const results=new Array(urls.length);
