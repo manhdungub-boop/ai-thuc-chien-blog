@@ -59,15 +59,16 @@ jobs:
           check_url "Worker article" "https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/do-luong-hieu-qua-blog" false
 
       - name: Run Lighthouse on canonical Pages deployment
-        uses: treosh/lighthouse-ci-action@v12
+        run: npx --yes @lhci/cli@0.15.1 autorun --config=.github/lighthouse/lighthouserc.json
+
+      - name: Upload private Lighthouse reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          configPath: .github/lighthouse/lighthouserc.json
-          urls: |
-            https://ai-thuc-chien-blog.pages.dev/
-            https://ai-thuc-chien-blog.pages.dev/articles/do-luong-hieu-qua-blog
-          uploadArtifacts: true
-          temporaryPublicStorage: false
-          runs: 3
+          name: lighthouse-reports
+          path: .lighthouseci/
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Publish Lighthouse metric summary
         if: success()
