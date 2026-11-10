@@ -1,6 +1,12 @@
 name: Diagnose Community D1 Schema
 on:
   workflow_dispatch:
+    inputs:
+      confirm_read_only_diagnosis:
+        description: "Required: confirm read-only Production/Preview schema inspection from trusted main"
+        required: true
+        default: false
+        type: boolean
 permissions:
   contents: read
 concurrency:
@@ -11,8 +17,11 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      - name: Check out source
+      - name: Check out reviewed main source only
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: main
+          persist-credentials: false
       - name: Verify production and preview community table schema (read-only)
         env:
           CLOUDFLARE_WORKERS_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
