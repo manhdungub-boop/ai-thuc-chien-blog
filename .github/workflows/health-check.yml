@@ -115,7 +115,7 @@ jobs:
         run: node scripts/test_homepage_article_coverage.cjs
 
       - name: Smoke-test live Workers and Pages deployments
-        if: github.event_name != 'pull_request'
+        if: github.event_name == 'schedule' || (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
         shell: bash
         run: |
           set -euo pipefail
