@@ -26,6 +26,7 @@ assert.ok(!legacyPreviewRepair.includes("api_mutate"));
 assert.ok(!legacyPreviewRepair.includes("builds/triggers"));
 assert.ok(codeqlWorkflow.includes("upload: never"));
 assert.ok(codeqlWorkflow.includes("codeql-results"));
+assert.ok(codeqlWorkflow.includes("tee -a \"$GITHUB_STEP_SUMMARY\""));
 assert.ok(!codeqlWorkflow.includes("security-events: write"));
 assert.ok(codeqlWorkflow.includes("github/codeql-action/init@v4"));
 assert.ok(codeqlWorkflow.includes("github/codeql-action/analyze@v4"));

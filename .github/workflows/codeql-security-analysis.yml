@@ -50,7 +50,7 @@ jobs:
         if: always()
         shell: bash
         run: |
-          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          python - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
           import glob, json, os
           files = sorted(glob.glob("codeql-results/*.sarif"))
           if not files:
