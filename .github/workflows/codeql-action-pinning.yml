@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: codeql-action-pinning-\${{ github.ref }}
+  group: codeql-action-pinning-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -35,6 +35,6 @@ jobs:
         uses: github/codeql-action/analyze@0911ee96d2d6c8def97122c36c5cadd93829a4b4 # v4.39.3
         with:
           category: /language:actions
-          output: \${{ github.workspace }}/codeql-results
+          output: ${{ github.workspace }}/codeql-results
           upload: never
           wait-for-processing: false
