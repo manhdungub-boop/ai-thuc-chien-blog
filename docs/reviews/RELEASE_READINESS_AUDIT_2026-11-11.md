@@ -119,3 +119,49 @@ Các nguyên tắc trọng yếu:
 ### Quyết định
 
 Giữ PR #96 ở Draft. Tiếp tục xử lý blocker Preview credentials, live Google OAuth, live email, D1 read-only metadata và independent security review. Chỉ mở PR khác khi có lý do kỹ thuật bắt buộc và đã ghi rõ; trước tiên phải rà soát/khắc phục PR cũ và kết quả kiểm thử lỗi.
+
+## Addendum — tiếp tục kiểm tra PR #96 và D1 access (11/11/2026)
+
+### Trạng thái mới nhất trên HEAD `6bdcefe59ac7ac78fe98ccae6d7eb074d741bf98`
+
+PR #96 vẫn Open / Draft, chưa merge; base PR #95. PR #95 vẫn base trên PR #91. Cả ba PR cha/con vẫn Open / Draft.
+
+Các workflow gắn trực tiếp với HEAD này đã hoàn tất:
+- Static CI Quality Gate — run `42878507409`, job `validate`: success.
+- CodeQL Offline Security Analysis — run `42878507355`, jobs Analyze actions, javascript-typescript và python: success.
+- Staging Google OAuth integration — run `42878507229`, job `staging-google-oauth`: success.
+
+Ba kết quả trên là PASS trên đúng SHA `6bdcefe`; OAuth là mock/integration, không phải đăng nhập Google thật. Không có kết quả CI nào bị kế thừa từ SHA trước.
+
+### Rà soát lại các findings còn mở trên PR #91
+
+Năm review threads Codex cũ vẫn unresolved trên PR #91:
+1. Branch-controlled build hook có thể chạy dưới token triển khai Preview.
+2. DNS rebinding giữa bước resolve và fetch.
+3. Relay allowlist fallback sang hostname Production.
+4. Timing khác biệt khi email không tồn tại.
+5. Worker Preview branch code có thể đọc secret binding cũ.
+
+Đối chiếu source trên PR #96 HEAD:
+- `.github/workflows/deploy-auth-app-preview.yml` hiện chỉ là manual, credential-free static/build/regression validation; checkout `persist-credentials: false`; không chứa Cloudflare token, relay secret, Google OAuth secret, lệnh deploy, D1 hay DNS. Finding 1 về workflow này được giảm thiểu bằng cách bỏ deploy/credential khỏi workflow; không còn đúng với chức năng hiện tại của file này.
+- `scripts/check-ai-tools-links.mjs` đã pin địa chỉ IP được xác thực vào socket lookup; mỗi redirect hop và retry đều resolve/revalidate lại. Finding 2 có mitigation trong source hiện tại.
+- `email-relay/Code.gs` fail closed khi allowlist thiếu; không fallback sang hostname Production. Finding 3 có mitigation trong source hiện tại.
+- `worker.mjs` thực hiện dummy PBKDF2 cho user không tồn tại. Finding 4 có mitigation trong source hiện tại.
+- Finding 5 chưa thể coi là đóng: workflow credential-free không triển khai branch code lên Worker có secret, nhưng hai Worker Preview legacy còn metadata secret binding chưa xác minh nguồn gốc/traffic. Không đọc hoặc thay đổi secret; cần xác minh ownership, source/version, traffic và credential boundary trước khi kết luận.
+
+Các review threads cũ được giữ nguyên để bảo toàn lịch sử. Chưa resolve thủ công vì PR #91 vẫn là PR riêng trong stack và cần reviewer xác nhận mitigation trên đúng diff.
+
+### Kiểm tra D1 permission
+
+Đã thực hiện duy nhất một yêu cầu Cloudflare API GET metadata cho Preview database UUID đã biết `51d814c8-a3fc-4481-a5f1-60bc67617f3c`. Kết quả HTTP 401, yêu cầu scope `d1.read` (D1 Read). Không có SQL query, D1 write, migration hay thay đổi database.
+
+Đã khởi tạo kết nối Cloudflare qua Composio để thay thế quyền truy cập hiện tại; trạng thái kết nối là pending, cần chủ tài khoản hoàn tất xác thực và cấp quyền tối thiểu D1 Read. Chưa thực thi bất kỳ Composio Cloudflare action nào khi chưa có kết nối Active.
+
+### Kết luận cập nhật
+
+- Static CI / CodeQL / OAuth mock: PASS trên `6bdcefe`.
+- Findings 1–4 của PR #91: source mitigation đã được xác minh trong PR #96; vẫn giữ nguyên thread lịch sử.
+- Finding 5 / legacy Preview secret provenance: BLOCKED.
+- D1 metadata: BLOCKED bởi thiếu `d1.read`.
+- Live Google OAuth, live email và independent security review: BLOCKED.
+- Release: **NOT READY**. Không merge, không deploy Production, không thay đổi Production Worker/DNS/D1/secrets.
