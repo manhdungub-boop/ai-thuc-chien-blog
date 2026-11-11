@@ -9,8 +9,8 @@ if (previewUrl.protocol !== "https:" ||
     previewUrl.pathname !== "/" || previewUrl.search || previewUrl.hash) {
   throw new Error("Refusing to send: PREVIEW_BASE_URL is not the approved isolated Preview origin.");
 }
-if (!/^\\d{1,20}$/.test(runId)) throw new Error("Missing or invalid GitHub run ID.");
-if (!/^daingo11\\+ai-thuc-chien-\\d+@gmail\\.com$/i.test(recipient)) {
+if (!/^\d{1,20}$/.test(runId)) throw new Error("Missing or invalid GitHub run ID.");
+if (!/^daingo11\+ai-thuc-chien-\d+@gmail\.com$/i.test(recipient)) {
   throw new Error("Refusing to send: recipient is not the dedicated test inbox alias.");
 }
 
