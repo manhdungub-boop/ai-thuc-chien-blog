@@ -47,6 +47,11 @@ jobs:
           output: ${{ github.workspace }}/codeql-results
           upload: never
           wait-for-processing: false
+      - name: Enforce offline CodeQL high-severity security gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/check_codeql_sarif_findings.py codeql-results
       - name: Run focused content, SEO and security regressions
         shell: bash
         run: |
@@ -60,13 +65,14 @@ jobs:
           node scripts/test-ai-tools-links-security.mjs
           node scripts/test_ipv6_address_safety.mjs
           python3 -m unittest discover -s scripts -p 'test_configure_cloudflare_worker_builds.py' -v
+          python3 -m unittest discover -s scripts -p 'test_codeql_sarif_findings.py' -v
       - name: Summarize local SARIF findings
         if: always()
         shell: bash
         run: |
           python - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
           import glob, json
-          files = sorted(glob.glob("codeql-results/*.sarif"))
+          files = sorted(glob.glob("codeql-results/**/*.sarif", recursive=True))
           if not files:
               print("## CodeQL results")
               print("No SARIF output was produced; inspect the analysis step logs.")
@@ -83,7 +89,8 @@ jobs:
                       rule_id = item.get("ruleId", "unknown")
                       rule = rules_by_id.get(rule_id, {})
                       props = item.get("properties", {})
-                      severity = props.get("security-severity") or item.get("level") or rule.get("defaultConfiguration", {}).get("level") or "unknown"
+                      rule_props = rule.get("properties", {})
+                      severity = props.get("security-severity") or rule_props.get("security-severity") or item.get("level") or rule.get("defaultConfiguration", {}).get("level") or "unknown"
                       message = (item.get("message") or {}).get("text", "").replace("\n", " ").strip()
                       locations = item.get("locations") or [{}]
                       physical = locations[0].get("physicalLocation", {})
