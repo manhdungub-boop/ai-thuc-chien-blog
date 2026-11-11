@@ -7,6 +7,8 @@ on:
   pull_request:
     branches:
       - main
+      - security/pin-verified-actions-20261110
+      - security/release-readiness-hardening-20261110
   workflow_dispatch:
 
 permissions:
@@ -51,6 +53,11 @@ jobs:
           node scripts/verify-release-safety.mjs
           node --check scripts/check-ai-tools-links.mjs
           node scripts/test-ai-tools-links-security.mjs
+          node scripts/test_ipv6_address_safety.mjs
+          node scripts/test_workers_builds_workflow_guard.mjs
+          node scripts/test_release_security_regressions.mjs
+          node scripts/verify-email-verification-candidate.mjs
+          node scripts/test_secret_workflow_dispatch_guards.mjs
 
       - name: Test community D1 schema
         run: python3 scripts/test_community_schema.py
@@ -70,6 +77,22 @@ jobs:
           node scripts/test-ai-tools-catalog-ui.mjs
           node scripts/audit-ai-tools-catalog.mjs data/ai-tools.json docs/reviews/ai-tools-candidates-2026-11-02.json --strict
           node scripts/test-ai-tools-catalog-audit.mjs
+
+      - name: Install pinned Playwright and Chromium for browser regression
+        run: |
+          npm install --ignore-scripts --no-save --package-lock=false --no-audit --no-fund playwright@1.65.0
+          # Avoid apt dependency installation; it fails when Ubuntu mirrors/DNS are unavailable.
+          # The GitHub-hosted runner supplies Chromium runtime libraries; install only the pinned browser binary.
+          ./node_modules/.bin/playwright install chromium
+
+      - name: Build isolated noindex AI Bank preview fixture
+        env:
+          PREVIEW_SOURCE_DIR: dist
+          PREVIEW_DEPLOYMENT_URL: https://ai-thuc-chien-blog-ci-preview.pages.dev
+        run: node scripts/build-preview.mjs
+
+      - name: Run AI Bank Chromium browser regression
+        run: node scripts/test-ai-tools-catalog-browser.mjs
 
       - name: Check official AI tool links
         run: node scripts/check-ai-tools-links.mjs data/ai-tools.json

@@ -103,8 +103,10 @@ const invalidClaims = [
   ["wrong audience", { aud: "another-client" }],
   ["wrong authorized party", { aud: [CLIENT_ID, "other-client"], azp: "other-client" }],
   ["expired token", () => ({ exp: now - 1 })],
-  ["future issued-at", () => ({ iat: now + 61 })],
-  ["future not-before", () => ({ nbf: now + 61 })],
+  // Exceed the validator's 60-second clock-skew allowance by a wide margin.
+  // A 61-second offset can race across a second boundary and become exactly 60.
+  ["future issued-at", () => ({ iat: now + 120 })],
+  ["future not-before", () => ({ nbf: now + 120 })],
   ["malformed not-before", { nbf: "soon" }],
   ["issued-at older than one hour", () => ({ iat: now - 3601, exp: now + 300 })],
   ["expiry before issue", () => ({ exp: now + 10, iat: now + 20 })],

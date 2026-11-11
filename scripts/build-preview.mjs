@@ -3,7 +3,7 @@ import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promi
 import path from "node:path";
 
 const root = process.cwd();
-const sourceRoot = path.join(root, "site-snapshot");
+const sourceRoot = path.resolve(root, process.env.PREVIEW_SOURCE_DIR || "site-snapshot");
 const outputRoot = path.join(root, "preview-output");
 const robotsMeta = '<meta name="robots" content="noindex,nofollow,noarchive">';
 const productionSiteOrigin = "https://ai-thuc-chien-blog.manhdungub.workers.dev";
@@ -15,6 +15,29 @@ const isCloudflarePagesPreview = previewUrl.hostname.endsWith(".pages.dev");
 const isVercelPreview = previewUrl.hostname.endsWith(".vercel.app");
 assert.ok(isCloudflarePagesPreview || isVercelPreview, "preview URL must use a Cloudflare Pages or Vercel preview hostname");
 const previewOrigin = previewUrl.origin;
+
+function attributeValue(tag, name) {
+  const pattern = name === "href"
+    ? /\bhref\s*=\s*(["'])(.*?)\1/i
+    : /\bcontent\s*=\s*(["'])(.*?)\1/i;
+  const match = tag.match(pattern);
+  return match ? match[2] : "";
+}
+
+function exactOrigin(value, base) {
+  try { return new URL(value, base).origin; } catch { return ""; }
+}
+
+function collectAbsoluteUrls(value, output = []) {
+  if (typeof value === "string") {
+    for (const match of value.matchAll(/https?:\/\/[^\s"'<>]+/gi)) output.push(match[0]);
+  } else if (Array.isArray(value)) {
+    for (const item of value) collectAbsoluteUrls(item, output);
+  } else if (value && typeof value === "object") {
+    for (const item of Object.values(value)) collectAbsoluteUrls(item, output);
+  }
+  return output;
+}
 const headersFile = "/*\n  X-Robots-Tag: noindex, nofollow, noarchive\n";
 const robotsFile = "User-agent: *\nAllow: /\n";
 
@@ -25,9 +48,12 @@ await cp(sourceRoot, outputRoot, { recursive: true });
 // The recovery README is repository-only incident context and must never be public.
 await rm(path.join(outputRoot, "RECOVERY-README.txt"), { force: true });
 await rm(path.join(outputRoot, "_headers"), { force: true });
+// Production Search Console ownership proof is not needed and must not be copied to Preview.
+await rm(path.join(outputRoot, "google4e45ddcf8facb122.html"), { force: true });
 // Candidate review records and internal notes must not be exposed by a public preview.
 await rm(path.join(outputRoot, "data", "review"), { recursive: true, force: true });
 await assert.rejects(stat(path.join(outputRoot, "RECOVERY-README.txt")), "preview output must exclude internal recovery notes");
+await assert.rejects(stat(path.join(outputRoot, "google4e45ddcf8facb122.html")), "preview output must exclude the Production Search Console verification file");
 await assert.rejects(stat(path.join(outputRoot, "data", "review")), "preview output must exclude internal catalog review candidates");
 
 async function walk(directory) {
@@ -115,17 +141,25 @@ for (const file of htmlFiles) {
   guardedHtml = guardedHtml.replace(/<script\b(?=[^>]*\btype=["']application\/ld\+json["'])[^>]*>[\s\S]*?<\/script>/gi, rewriteMetadataTag);
   const canonicalTags = guardedHtml.match(/<link\b(?=[^>]*\brel=["']canonical["'])[^>]*>/gi) || [];
   for (const tag of canonicalTags) {
-    assert.ok(tag.includes(previewOrigin), "canonical must point to this preview deployment: " + path.relative(outputRoot, file));
-    assert.ok(!tag.includes(productionSiteOrigin), "canonical must not point to production: " + path.relative(outputRoot, file));
+    const href = attributeValue(tag, "href");
+    assert.ok(href, "canonical tag must contain href: " + path.relative(outputRoot, file));
+    assert.equal(exactOrigin(href, previewOrigin), previewOrigin,
+      "canonical must point to the exact preview origin: " + path.relative(outputRoot, file));
   }
   const ogUrlTags = guardedHtml.match(/<meta\b(?=[^>]*\bproperty=["']og:url["'])[^>]*>/gi) || [];
   for (const tag of ogUrlTags) {
-    assert.ok(tag.includes(previewOrigin), "og:url must point to this preview deployment: " + path.relative(outputRoot, file));
-    assert.ok(!tag.includes(productionSiteOrigin), "og:url must not point to production: " + path.relative(outputRoot, file));
+    const content = attributeValue(tag, "content");
+    assert.ok(content, "og:url must contain content: " + path.relative(outputRoot, file));
+    assert.equal(exactOrigin(content, previewOrigin), previewOrigin,
+      "og:url must point to the exact preview origin: " + path.relative(outputRoot, file));
   }
   const jsonLdBlocks = guardedHtml.match(/<script\b(?=[^>]*\btype=["']application\/ld\+json["'])[^>]*>[\s\S]*?<\/script>/gi) || [];
   for (const block of jsonLdBlocks) {
-    assert.ok(!block.includes(productionSiteOrigin), "JSON-LD must not reference production canonical URLs: " + path.relative(outputRoot, file));
+    const jsonText = block.replace(/^<script\b[^>]*>/i, "").replace(/<\/script\s*>$/i, "");
+    const structuredData = JSON.parse(jsonText);
+    const urls = collectAbsoluteUrls(structuredData);
+    assert.ok(urls.every((value) => exactOrigin(value, previewOrigin) !== productionSiteOrigin),
+      "JSON-LD must not reference the Production origin: " + path.relative(outputRoot, file));
   }
   guardedHtml = guardedHtml.replace("</head>", previewInteractionStyle + "\n" + previewApiGuard + "\n</head>");
   assert.ok(guardedHtml.includes('id="preview-api-guard"'), "preview API guard must be present: " + path.relative(outputRoot, file));

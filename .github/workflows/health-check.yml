@@ -23,6 +23,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          persist-credentials: false
 
       - name: Set up Node.js for browser-script regression tests
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -43,7 +44,7 @@ jobs:
         run: node scripts/test_d1_preview_config.cjs
 
       - name: Verify configured production and preview D1 databases (read-only API)
-        if: github.event_name == 'workflow_run' || github.event_name == 'workflow_dispatch'
+        if: (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
         env:
           CLOUDFLARE_WORKERS_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 92cf091bbac8b4879ec65feb30b4715b
@@ -96,7 +97,7 @@ jobs:
           echo "PASS: preview D1 is a separate existing database; no schema or user data was changed."
 
       - name: Diagnose community D1 schema (read-only)
-        if: github.event_name == 'workflow_run' || github.event_name == 'workflow_dispatch'
+        if: (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
         env:
           CLOUDFLARE_WORKERS_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 92cf091bbac8b4879ec65feb30b4715b
@@ -115,7 +116,7 @@ jobs:
         run: node scripts/test_homepage_article_coverage.cjs
 
       - name: Smoke-test live Workers and Pages deployments
-        if: github.event_name != 'pull_request'
+        if: github.event_name == 'schedule' || (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
         shell: bash
         run: |
           set -euo pipefail
@@ -128,7 +129,6 @@ jobs:
             "/articles/do-luong-hieu-qua-blog"
             "/sitemap.xml"
             "/feed.xml"
-            "/google4e45ddcf8facb122.html"
           )
           for host in "${hosts[@]}"; do
             echo "Checking live host: $host"
@@ -167,6 +167,14 @@ jobs:
             trap - EXIT
           done
           echo "LIVE SMOKE TEST PASS: both production hosts and key routes responded successfully."
+          verification_url="https://ai-thuc-chien-blog.pages.dev/google4e45ddcf8facb122.html"
+          verification_status="$(curl --silent --show-error --location --max-redirs 5 --max-time 25 -o /tmp/google-verification.html -w "%{http_code}" "$verification_url")"
+          if [ "$verification_status" != "200" ] || ! grep -Fq 'google-site-verification: google4e45ddcf8facb122.html' /tmp/google-verification.html; then
+            echo "FAIL: canonical Pages Google Search Console verification file returned HTTP $verification_status or unexpected content"
+            exit 1
+          fi
+          echo "PASS: canonical Pages Google Search Console verification file returned HTTP 200 with the expected token."
+          echo "NOTE: this ownership-verification file is checked on canonical Pages, not the Worker route."
 
       - name: Verify deployed article-library and sitemap coverage
         if: github.event_name != 'pull_request'

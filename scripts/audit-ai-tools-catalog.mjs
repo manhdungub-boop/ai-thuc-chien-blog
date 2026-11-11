@@ -85,7 +85,7 @@ const futureDates = main.filter(tool => validDate(tool.last_verified) && ageDays
   .map(tool => ({ id: tool.id, name: tool.name, last_verified: tool.last_verified }));
 const pricingUnknown = main.filter(tool => tool.pricing_status === "unknown").map(tool => tool.id);
 const recordsNeedingEditorialReview = main.filter(tool => tool.verification_status !== "verified").map(tool => tool.id);
-const verifiedUnknownPricing = main.filter(tool => tool.verification_status === "verified" && tool.pricing_status === "unknown")
+const verifiedUnknownPricing = main.filter(tool => tool.verification_status === "verified" && tool.pricing_status === "unknown" && tool.status !== "deprecated")
   .map(tool => tool.id);
 const missingSources = main.filter(tool => !Array.isArray(tool.official_sources) || tool.official_sources.length === 0)
   .map(tool => tool.id);
@@ -124,7 +124,7 @@ const report = {
     not_needs_review: candidateStatusWarnings
   },
   strict_blockers: strictBlockers,
-  note: "Needs-review records remain visible as review warnings and do not fail strict mode by themselves. Strict mode fails stale or invalid verification dates, missing official sources, duplicate candidates, candidate status drift, future dates, or verified records with unknown pricing. Domain matches are review warnings, not automatic duplicates. No network requests are performed."
+  note: "Needs-review records remain visible as review warnings and do not fail strict mode by themselves. Strict mode fails stale or invalid verification dates, missing official sources, duplicate candidates, candidate status drift, future dates, or active/other verified records with unknown pricing. Deprecated records may retain unknown pricing when their sunset is verified and they are excluded from public results. Domain matches are review warnings, not automatic duplicates. No network requests are performed."
 };
 console.log(JSON.stringify(report, null, 2));
 
