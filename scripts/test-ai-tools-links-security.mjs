@@ -43,8 +43,8 @@ try {
   assert.ok(summary.results.every(result => result.status === "invalid_or_non_public_url"),
     "IPv6 loopback, IPv6 ULA, IPv4 loopback, DNS-resolved loopback, and deprecated 6to4 relay targets must be rejected before fetch");
 
-  // Simulate DNS rebinding between validation and socket creation. The first DNS
-  // answer is public; every later answer is loopback. The HTTP transport is stubbed,
+  // Simulate DNS rebinding between validation and socket creation. The first two DNS
+  // answers are public (catalog validation and request validation); later answers are loopback. The HTTP transport is stubbed,
   // but it invokes the exact lookup callback Node's socket layer receives.
   const rebindFixture = join(directory, "rebind-catalog.json");
   const preload = join(directory, "rebind-preload.mjs");
@@ -60,7 +60,7 @@ try {
     const socketAddresses = [];
     dns.lookup = async () => {
       dnsCalls += 1;
-      return [{ address: dnsCalls === 1 ? "93.184.216.34" : "127.0.0.1", family: 4 }];
+      return [{ address: dnsCalls <= 2 ? "93.184.216.34" : "127.0.0.1", family: 4 }];
     };
     const fakeRequest = (options, callback) => {
       const req = new EventEmitter();
@@ -98,7 +98,7 @@ try {
   const rebindSummary = JSON.parse(rebindRun.stdout.slice(rebindRun.stdout.indexOf("{")));
   const rebindEvidence = JSON.parse(readFileSync(rebindResult, "utf8"));
   assert.equal(rebindSummary.results[0].status, "reachable");
-  assert.equal(rebindEvidence.dnsCalls, 1, "the socket must not perform a second hostname resolution");
+  assert.equal(rebindEvidence.dnsCalls, 2, "the socket must not perform a third hostname resolution after the request-level safety check");
   assert.deepEqual(rebindEvidence.socketAddresses, ["93.184.216.34"],
     "the socket must connect only to the previously validated public IP, never the rebound loopback IP");
   console.log("PASS: catalog link checker blocks private targets and pins the validated public DNS answer at socket creation.");
