@@ -85,3 +85,31 @@ This section supersedes earlier statements in this file that the stable Preview 
 - Relay no-send probe did not send email. Real verification/reset email delivery remains NOT VERIFIED pending isolated test account/inbox execution.
 - Exact PR #96 pre-documentation HEAD `1267a4f0f68dd6ab0befdf812d21fccf558443f1` had 10/10 completed successful check-runs. Documentation commit(s) must receive their own exact-head CI evidence; prior SHA results are not inherited.
 - Independent security review remains BLOCKED. No Production action, secret-value read, D1 write, migration, or external email occurred.
+
+
+## Secret-bearing Preview workflow retirement — verified on 11/11/2026
+
+### Root cause and remediation
+- Source inspection found two inherited workflows that could run from the candidate branch while exposing application/Cloudflare credentials to branch-controlled scripts:
+  - `.github/workflows/deploy-auth-preview-candidate.yml`
+  - `.github/workflows/verify-auth-preview-candidate.yml`
+- Both files were deleted from `security/release-readiness-hardening-20261110` and from the obsolete candidate branch `fix/restore-preview-migration-chain-20261111`.
+- GitHub Contents API returned 404 for both paths on the PR #96 branch after deletion.
+- Added an `ENOENT` regression assertion in `scripts/test_secret_workflow_dispatch_guards.mjs`; Static CI logs explicitly report PASS for the secret-workflow and release-safety guards.
+- The remaining `deploy-auth-app-preview.yml` is manual, credential-free, static/build-only, and does not deploy or expose secrets. The stable Preview Worker remains unchanged.
+
+### Exact-head CI evidence
+- Final code head before this documentation-only update: `f5e0667816b82bc2c86516c8f2c3f4c0d3ec0fd9`.
+- GitHub check-runs: 10/10 completed success:
+  - Static CI `validate`: success.
+  - CodeQL Actions, JavaScript/TypeScript, Python: success (three analyses; a second set of duplicate CodeQL check-runs also completed successfully).
+  - Staging Google OAuth integration: success.
+  - Cloudflare Workers Builds for `ai-thuc-chien-blog-auth-app-preview`: success.
+- Static CI logs confirm: 69 articles passed content quality; 69 author/attribution/JSON-LD checks passed; 69 unique SVG roadmaps passed; 69 article SEO metadata/sitemap/RSS checks passed; accessibility/performance, catalog checks, 18 IPv4/IPv6 regression cases, and release-security guards passed.
+- Exact-head result does not remove the independent-review blocker.
+
+### Remaining gates
+- **BLOCKED:** fresh independent security review on the exact final head; Codex quota exhausted and CodeMouse account inactive.
+- **NOT VERIFIED:** real email verification/reset delivery; no email was sent by the no-send probe. Requires an isolated test account and test inbox.
+- **PASS:** Preview D1 identity/schema read-only evidence; stable Preview binding metadata; operator-confirmed Google sign-in/session/logout; legacy Worker public endpoints disabled and read-back verified.
+- PR #96 remains Draft and stacked on #95 → #91 → main. No PR merge, Production deployment, Production D1/DNS/secret change, or external email occurred.
