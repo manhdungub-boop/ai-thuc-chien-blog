@@ -72,3 +72,16 @@ This section supersedes the earlier D1 permission limitation recorded above.
 - Live email remains blocked by the missing Preview relay secret. Google OAuth is not yet proven end-to-end merely because a secret binding name exists; client ID, redirect configuration, consent/callback/token exchange and persisted session still require isolated live verification.
 
 Safety: these were metadata and schema-only reads against the dedicated Preview D1. No Production D1, Worker, DNS, secrets, or user records were changed or read.
+
+
+## Reconciliation after Cloudflare metadata re-check — 11/11/2026 (ICT)
+
+This section supersedes earlier statements in this file that the stable Preview Worker lacked the relay binding or that legacy Workers remained publicly reachable.
+
+- Stable Worker `ai-thuc-chien-blog-auth-app-preview` metadata currently lists `COMMUNITY_EMAIL_RELAY_SECRET` (secret_text), `COMMUNITY_EMAIL_RELAY_URL` (plain_text), `GOOGLE_OAUTH_CLIENT_ID` (plain_text), `GOOGLE_OAUTH_CLIENT_SECRET` (secret_text), and `DB` (D1). Secret values were not read.
+- Cloudflare read-only metadata confirms Preview D1 UUID `51d814c8-a3fc-4481-a5f1-60bc67617f3c` is named `ai-thuc-chien-community-preview`. Prior read-only schema inventory remains the evidence for table names; no D1 write or migration was performed.
+- Legacy Workers `ai-thuc-chien-blog-auth-preview` and `ai-thuc-chien-blog-auth-isolated-20261104` now both return `enabled=false` and `previews_enabled=false` from Cloudflare GET subdomain metadata. Their Worker scripts, D1 databases and secret bindings remain preserved.
+- Operator confirmed real browser Google sign-in succeeded on the current stable Preview, session persisted after reload, logout succeeded, and logged-out state persisted after reload. This is operator-observed browser E2E; OAuth CI remains separately labelled mock/integration.
+- Relay no-send probe did not send email. Real verification/reset email delivery remains NOT VERIFIED pending isolated test account/inbox execution.
+- Exact PR #96 pre-documentation HEAD `1267a4f0f68dd6ab0befdf812d21fccf558443f1` had 10/10 completed successful check-runs. Documentation commit(s) must receive their own exact-head CI evidence; prior SHA results are not inherited.
+- Independent security review remains BLOCKED. No Production action, secret-value read, D1 write, migration, or external email occurred.
