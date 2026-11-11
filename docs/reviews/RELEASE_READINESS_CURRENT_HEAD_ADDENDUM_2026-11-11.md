@@ -58,3 +58,17 @@ This addendum was prepared from GitHub PR metadata, exact-head workflow-run meta
 **BLOCKED — NOT APPROVED FOR MERGE OR PRODUCTION RELEASE.**
 
 Re-open this gate only after the remaining Preview credential, live OAuth/email, D1 read-only evidence, legacy Worker provenance, PR #91 review triage, and independent security review blockers are closed with verifiable evidence on the final exact commit.
+
+
+## Follow-up read-only Preview verification — later on 11/11/2026
+
+This section supersedes the earlier D1 permission limitation recorded above.
+
+- Cloudflare D1 metadata read now succeeded for Preview database UUID `51d814c8-a3fc-4481-a5f1-60bc67617f3c`: name `ai-thuc-chien-community-preview`, 9 tables reported by metadata.
+- Read-only `SELECT name, type FROM sqlite_master WHERE type IN ('table','view') ORDER BY type, name` succeeded. It returned the expected community tables, `d1_migrations`, and SQLite internal tables. Cloudflare reported `rows_written=0` and `changed_db=false`.
+- No member, message, token, or session records were selected. No schema mutation or migration was run.
+- Read-only Worker secret metadata inventory for stable Preview returned exactly one secret binding: `GOOGLE_OAUTH_CLIENT_SECRET`. The relay secret binding `COMMUNITY_EMAIL_RELAY_SECRET` remains absent. No secret values were read.
+- The D1 metadata/schema read gate is now **PASS for the inspected Preview scope**. This does not prove migration correctness, backup/restore, or full application E2E.
+- Live email remains blocked by the missing Preview relay secret. Google OAuth is not yet proven end-to-end merely because a secret binding name exists; client ID, redirect configuration, consent/callback/token exchange and persisted session still require isolated live verification.
+
+Safety: these were metadata and schema-only reads against the dedicated Preview D1. No Production D1, Worker, DNS, secrets, or user records were changed or read.
