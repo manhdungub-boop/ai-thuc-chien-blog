@@ -239,3 +239,53 @@ This is an authentication/configuration failure despite Composio reporting the c
 
 ### Decision
 **NOT READY FOR RELEASE.** Keep PR #96 Open / Draft. The latest exact-head automated CI and CodeQL are green, but live integration, Preview D1 metadata, legacy Worker provenance and independent review remain unresolved. Production remains untouched.
+
+
+## Addendum — xác minh chính xác PR #96 và vòng đời session (11/11/2026)
+
+### Commit và quan hệ PR
+- Trước addendum này, PR #96 HEAD là `e2129f04fe8012c1ef348f1369537bb19a74287d`.
+- Quan hệ nhánh đã xác minh qua GitHub REST:
+  - PR #91: `fix/release-blockers-20261109` → `main`, base SHA `61c53cb8b2c74c69dbbe5afc114c83592bf43c67`.
+  - PR #95: `security/pin-verified-actions-20261110` → `fix/release-blockers-20261109`, base SHA đúng bằng PR #91 HEAD `c5d17ab60f033ed9e7026522d28a7e2d100db12e`.
+  - PR #96: `security/release-readiness-hardening-20261110` → `security/pin-verified-actions-20261110`, base SHA đúng bằng PR #95 HEAD `d86938debc516490cdd3ac2e8fc0ae9ddbd1fc74`.
+- Cả ba PR vẫn Open / Draft; chưa PR nào được merge.
+
+### Bổ sung regression test session
+- Commit `e2129f04fe8012c1ef348f1369537bb19a74287d` chỉ sửa `scripts/test_community_api.mjs`, không sửa Worker runtime.
+- Bổ sung assertion rằng logout:
+  1. Xóa đúng server-side session row theo token hash.
+  2. Cookie cũ không còn xác thực được qua `/me`.
+- Bổ sung assertion rằng session có `expires_at` trong quá khứ bị `/me` từ chối.
+- Static CI job `validate` trên SHA này hoàn tất SUCCESS; log xác nhận `node scripts/test_community_api.mjs` chạy qua và kết thúc với PASS.
+- Đây là kiểm thử MockD1/offline, không phải thao tác hay kiểm thử ghi vào Preview/Production D1.
+
+### CI exact-head trên SHA e2129f0
+- GitHub trả về 10/10 check-runs completed / success trên commit này, bao gồm:
+  - Static CI Quality Gate.
+  - CodeQL Offline Security Analysis cho JavaScript/TypeScript, Python và GitHub Actions.
+  - Staging Google OAuth integration.
+  - Cloudflare Workers Builds Preview check.
+- Có cả workflow push và pull_request cho một số workflow; không coi số lần chạy trùng là các bộ kiểm thử độc lập.
+- Ba job CodeQL đều báo 0 findings trong SARIF cục bộ; không upload SARIF lên GitHub Code Scanning.
+- Static CI ghi nhận: 69 bài viết đạt content quality gate; 74 trang HTML qua accessibility/performance; AI Bank 36 bản ghi (35 active) qua Chromium browser E2E; SEO consistency PASS; các regression guard cho login timing, relay allowlist, DNS rebinding và credential-free Preview PASS.
+- OAuth integration CI ghi nhận 23/23 OIDC tests, 5/5 route runtime tests và 2/2 host allowlist tests PASS; migration rehearsal chỉ dùng in-memory SQLite.
+- Những kết quả này chỉ áp dụng cho SHA `e2129f04fe8012c1ef348f1369537bb19a74287d`, không tự động chứng minh cho commit sau đó.
+
+### Kiểm tra read-only stable Preview
+- `/api/community/oauth/providers` hiện trả `{"google":true,"facebook":false}`.
+- `/api/community/me` từ phiên truy cập không có cookie trả `{"member":null}`.
+- `/api/community/messages?topic=tools` không có cookie bị từ chối HTTP 401.
+- Provider flag chỉ xác nhận cấu hình được khai báo là hiện diện, không chứng minh token exchange thành công. Riêng người dùng đã báo cáo trước đó rằng đăng nhập Google thực tế trên trình duyệt Preview thành công, giữ session sau refresh và logout vẫn duy trì trạng thái đăng xuất sau refresh.
+- Các request read-only hiện tại không mang cookie từ trình duyệt người dùng; không suy diễn trạng thái đăng nhập của người dùng từ `/me` anonymous.
+
+### Blocker chưa đóng
+- PR #91 còn 5 review threads chưa resolve. PR #96 chứa các mitigation cho bốn nhóm lỗi (PBKDF2 dummy work, fail-closed relay allowlist, DNS-pinned requests, credential-free Preview workflow), nhưng chưa có independent security review xác nhận trên final stack.
+- Secret provenance và hoạt động của hai legacy Preview Workers vẫn chưa được xác minh; không đọc/rotate/delete secret hoặc thay binding.
+- Cloudflare D1 read-only metadata/schema vẫn BLOCKED do thiếu `d1.read`; không truy cập Production D1.
+- Branch protection chưa xác minh được vì GitHub integration trả 403. Rulesets API trả danh sách rỗng, nhưng điều này không thay thế việc xác minh branch protection.
+- Independent security review vẫn BLOCKED; CodeQL offline không thay thế review độc lập.
+- Hồ sơ audit này được cập nhật ở commit riêng sau SHA nêu trên; khi đánh giá gate phải lấy SHA mới nhất của PR #96 và chạy trạng thái checks tương ứng, không kế thừa PASS của SHA cũ.
+
+### Quyết định
+**NOT READY FOR RELEASE.** Giữ PR #91/#95/#96 ở Draft; không merge, deploy Production, apply D1 migration, đổi DNS hoặc chỉnh secret/binding. Chỉ tiếp tục kiểm tra read-only, offline CI và Preview tách biệt.
