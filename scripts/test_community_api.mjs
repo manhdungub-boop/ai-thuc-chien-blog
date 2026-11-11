@@ -275,6 +275,25 @@ storedExpiredToken.expires_at = new Date(Date.now() - 1000).toISOString();
 const expiredVerify = await call('/verify-email', { method: 'POST', body: { token: expiredTokenMatch[1] } });
 assert.equal(expiredVerify.status, 400, 'expired token must be rejected');
 assert.equal(expiredMember.email_verified_at, null, 'expired token must not activate the member');
+// Unknown-account login must execute one real PBKDF2 derivation, not merely contain a source-code marker.
+const originalDeriveBits = crypto.subtle.deriveBits;
+let unknownAccountDeriveBitsCalls = 0;
+crypto.subtle.deriveBits = async function (...args) {
+  unknownAccountDeriveBitsCalls += 1;
+  return originalDeriveBits.apply(this, args);
+};
+try {
+  const unknownAccountLogin = await call('/login', {
+    method: 'POST',
+    ip: '203.0.113.222',
+    body: { email: 'does-not-exist@example.invalid', password: 'Unknown-Account-Password-123!' }
+  });
+  assert.equal(unknownAccountLogin.status, 401);
+  assert.equal(unknownAccountDeriveBitsCalls, 1,
+    'unknown-account login must execute exactly one dummy PBKDF2 deriveBits operation');
+} finally {
+  crypto.subtle.deriveBits = originalDeriveBits;
+}
 const login = await call('/login', { method: 'POST', body: { email: 'member@example.com', password: 'MotMatKhauRieng123!' } }); assert.equal(login.status, 200); assert.equal((await login.json()).member.username, 'thanhvien_1');
 const setCookie = login.headers.get('set-cookie'); assert.match(setCookie, /HttpOnly/); assert.match(setCookie, /Secure/); assert.match(setCookie, /SameSite=Lax/); assert.match(setCookie, /Path=\//); let cookie = setCookie.split(';')[0];
 const me = await call('/me', { cookie }); assert.equal(me.status, 200); assert.equal((await me.json()).member.username, 'thanhvien_1');
