@@ -7,8 +7,8 @@ if (previewUrl.protocol !== "https:" ||
     previewUrl.pathname !== "/" || previewUrl.search || previewUrl.hash) {
   throw new Error("Refusing to send: PREVIEW_BASE_URL is not the approved isolated Preview origin.");
 }
-if (!/^\\d{1,20}$/.test(runId)) throw new Error("Missing or invalid GitHub run ID.");
-if (!/^daingo11\\+ai-thuc-chien-\\d+@gmail\\.com$/i.test(recipient)) {
+if (!/^\d{1,20}$/.test(runId)) throw new Error("Missing or invalid GitHub run ID.");
+if (!/^daingo11\+ai-thuc-chien-\d+@gmail\.com$/i.test(recipient)) {
   throw new Error("Refusing to send: recipient is not the dedicated test inbox alias.");
 }
 
@@ -23,7 +23,7 @@ let payload = {};
 try { payload = await response.json(); } catch { /* validated below */ }
 if (response.status !== 200 || payload.ok !== true) {
   const safeError = typeof payload.error === "string" ? payload.error.slice(0, 180) : "Unexpected response";
-  throw new Error(`Preview password-reset request failed: HTTP ${response.status}; ${safeError}`);
+  throw new Error(\`Preview password-reset request failed: HTTP \${response.status}; \${safeError}\`);
 }
 console.log("PASS: Preview accepted the password-reset request with the expected privacy-preserving response.");
 console.log("ACTION: Check the dedicated test inbox for the reset message; this workflow does not access the inbox.");
