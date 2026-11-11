@@ -9,6 +9,7 @@ on:
       - main
       - security/pin-verified-actions-20261110
       - security/release-readiness-hardening-20261110
+      - fix/release-blockers-20261109
   workflow_dispatch:
 
 permissions:
