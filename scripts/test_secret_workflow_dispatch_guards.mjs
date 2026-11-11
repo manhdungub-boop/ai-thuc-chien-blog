@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 
 const read = async path => readFile(new URL("../.github/workflows/" + path, import.meta.url), "utf8");
+
+for (const forbidden of ["deploy-auth-preview-candidate.yml", "verify-auth-preview-candidate.yml"]) {
+  await assert.rejects(
+    access(new URL("../.github/workflows/" + forbidden, import.meta.url)),
+    { code: "ENOENT" },
+    forbidden + " must remain absent: branch-controlled workflows must not receive Cloudflare or application secrets."
+  );
+}
+
 const health = await read("health-check.yml");
 const diagnoseBuild = await read("diagnose-cloudflare-worker-build.yml");
 const diagnoseD1 = await read("diagnose-community-d1.yml");
