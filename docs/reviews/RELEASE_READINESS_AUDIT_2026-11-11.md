@@ -362,3 +362,39 @@ Commit `49b4ecd8820e1a5154035da7d41216064ff28cd7`:
 ### Release decision (unchanged)
 
 **NOT READY FOR RELEASE.** Giữ PR #91/#95/#96 ở trạng thái Draft/open. D1 Preview read-only schema inspection đã được nâng từ BLOCKED/NOT VERIFIED thành PASS đúng phạm vi; các blocker email secret, live Google OAuth E2E, independent security review và browser UI E2E vẫn chưa được giải quyết. Không thực hiện thay đổi Production.
+
+
+## Addendum — cập nhật trạng thái Preview sau xác nhận Worker cũ không còn sử dụng (11/11/2026, ICT)
+
+### Cloudflare Worker metadata — kiểm tra mới nhất
+- Stable Preview Worker `ai-thuc-chien-blog-auth-app-preview`: `workers.dev` đang bật và Preview URLs đang bật (đây là Worker Preview hiện hành, không phải Worker cũ).
+- Binding metadata hiện tại của stable Preview: `DB` (D1), `COMMUNITY_EMAIL_RELAY_SECRET` (secret_text), `COMMUNITY_EMAIL_RELAY_URL` (plain_text), `GOOGLE_OAUTH_CLIENT_ID` (plain_text), `GOOGLE_OAUTH_CLIENT_SECRET` (secret_text), cùng AI/ASSETS. Chỉ đọc tên và loại binding; không đọc secret values.
+- Preview D1 UUID `51d814c8-a3fc-4481-a5f1-60bc67617f3c` được Cloudflare API xác nhận tên `ai-thuc-chien-community-preview`. Trước đó đã có read-only schema inventory thành công; không có SQL write hoặc migration.
+- Hai Worker legacy `ai-thuc-chien-blog-auth-preview` và `ai-thuc-chien-blog-auth-isolated-20261104`: cả `workers.dev` và Preview URLs đều đã tắt, sau đó GET metadata xác minh lại thành `enabled=false`, `previews_enabled=false`. Worker scripts, D1 databases/bindings và secret bindings được giữ nguyên; không đọc secret values, không xóa resource.
+- Điều này thay thế các kết luận cũ cho rằng stable Preview thiếu relay binding và legacy Worker vẫn còn public. Các kết luận lịch sử được giữ lại để truy vết; trạng thái hiện tại phải lấy theo addendum này.
+
+### Live authentication evidence
+- Người vận hành xác nhận trực tiếp: Google sign-in trên stable Preview thành công; session còn hiệu lực sau reload; logout thành công và trạng thái logged-out vẫn giữ sau reload. Đây là browser E2E do chủ dự án thực hiện, không phải chỉ là mock OAuth CI.
+- Binding metadata hiện tại xác nhận đủ tên biến Google OAuth và relay trên stable Preview; không có secret value nào được đọc.
+- Relay no-send probe trước đó xác nhận relay chấp nhận cấu trúc/secret nhưng từ chối payload không hợp lệ trước khi gửi email. Không có email thật nào được gửi trong probe này. Vì vậy email verification/password-reset delivery E2E vẫn **NOT VERIFIED** cho đến khi chạy thử với test account và inbox cô lập.
+
+### Exact-head / PR disposition tại thời điểm lập addendum
+- PR #96 HEAD trước commit hồ sơ này: `1267a4f0f68dd6ab0befdf812d21fccf558443f1`; 10/10 check-runs hoàn tất success, gồm Static CI, CodeQL ba nhóm phân tích, Google OAuth integration và Cloudflare Workers Builds. Kết quả OAuth integration là CI; không thay thế browser E2E do người vận hành xác nhận ở trên.
+- PR stack: #96 → #95 → #91 → `main`; cả ba PR vẫn Draft/open. Không merge hoặc đổi base.
+- PR #91 vẫn giữ các review threads P2 lịch sử. Mitigation DNS pinning, relay fail-closed và dummy PBKDF2 hiện có trong PR #96 source; không đánh dấu resolved trên PR #91 trước khi các commit phụ thuộc được tích hợp vào nhánh đó và reviewer xác nhận.
+- Independent security review exact-head vẫn **BLOCKED**: chưa có review độc lập mới; Codex review quota đã hết và CodeMouse account inactive. Không coi CodeQL hoặc tự rà soát là review độc lập.
+
+### Release gate được hiệu chỉnh
+| Gate | Trạng thái mới nhất |
+|---|---|
+| Stable Preview Worker bindings / Preview D1 identity | PASS — metadata read-only |
+| Preview D1 schema inventory | PASS — read-only, theo kết quả audit trước đó |
+| Legacy Worker public endpoints | PASS — cả hai legacy workers.dev và Preview URLs đã tắt, read-back verified |
+| Google OAuth browser sign-in/session/logout | PASS — người vận hành xác nhận trên stable Preview |
+| Email verification/reset delivery E2E | NOT VERIFIED — cần test account/inbox cô lập; không gửi email trong probe trước |
+| Static CI / CodeQL / Workers Builds trên SHA `1267a4f` | PASS — 10/10 check-runs |
+| Independent security review | BLOCKED — cần reviewer độc lập trên exact final head |
+| Merge / Production deployment authorization | NOT GRANTED — cần phê duyệt riêng của chủ dự án |
+
+### Safety
+Không thay đổi Production Worker, Production D1, DNS, routing, secrets hoặc dữ liệu người dùng. Không đọc secret values, không gửi email, không chạy migration, không merge hoặc deploy Production.
