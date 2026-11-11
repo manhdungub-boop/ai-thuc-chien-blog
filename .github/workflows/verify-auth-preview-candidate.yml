@@ -1,0 +1,63 @@
+name: Verify deployed OAuth Preview candidate
+
+on:
+  push:
+    branches:
+      - fix/restore-preview-migration-chain-20261111
+    paths:
+      - "scripts/test_auth_preview_oauth_http.mjs"
+      - "scripts/test_email_relay_no_send.mjs"
+      - ".github/workflows/verify-auth-preview-candidate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-deployed-auth-preview
+  cancel-in-progress: true
+
+jobs:
+  verify-preview:
+    if: github.ref == 'refs/heads/fix/restore-preview-migration-chain-20261111'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+
+      - name: Verify deployed Preview HTTP and OAuth transaction behavior
+        env:
+          PREVIEW_URL: "https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev"
+        run: node scripts/test_auth_preview_oauth_http.mjs
+
+      - name: Probe relay secret without sending email (diagnostic gate)
+        id: relay_probe
+        continue-on-error: true
+        env:
+          COMMUNITY_EMAIL_RELAY_URL: ${{ secrets.COMMUNITY_EMAIL_RELAY_URL }}
+          COMMUNITY_EMAIL_RELAY_SECRET: ${{ secrets.COMMUNITY_EMAIL_RELAY_SECRET }}
+        run: node scripts/test_email_relay_no_send.mjs
+
+      - name: Record independent Preview and relay results
+        if: always()
+        env:
+          RELAY_OUTCOME: ${{ steps.relay_probe.outcome }}
+        run: |
+          {
+            echo "## Deployed Preview verification"
+            echo "- Candidate commit: ${GITHUB_SHA}"
+            echo "- Target: ai-thuc-chien-blog-auth-app-preview only."
+            echo "- OAuth HTTP test performs read-only provider/session requests and creates no account."
+            echo "- Relay no-send probe outcome: ${RELAY_OUTCOME}."
+            echo "- A relay probe failure is tracked separately and does not hide the OAuth HTTP result."
+            echo "- No Production Worker, Production D1, DNS, or production secrets were targeted."
+            echo "- No email was sent and no D1 migration was applied."
+          } >> "$GITHUB_STEP_SUMMARY"
