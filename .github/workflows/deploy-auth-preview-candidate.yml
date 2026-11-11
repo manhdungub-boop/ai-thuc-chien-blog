@@ -141,7 +141,8 @@ jobs:
       - name: Deploy candidate to the dedicated Preview Worker only
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
-        run: npx --yes wrangler@4 deploy --config wrangler.auth-preview.jsonc --message "GitHub PR #102 isolated Preview candidate ${GITHUB_SHA}"
+        run: |
+          npx --yes wrangler@4 deploy --config wrangler.auth-preview.jsonc --message "GitHub PR 102 isolated Preview candidate ${GITHUB_SHA}"
 
       - name: Verify relay connectivity without sending email
         env:
