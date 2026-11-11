@@ -4,10 +4,12 @@ on:
   push:
     branches:
       - main
+      - test/release-security-runtime-regressions-20261111
   pull_request:
     branches:
       - main
       - security/pin-verified-actions-20261110
+      - security/release-readiness-hardening-20261110
   workflow_dispatch:
 
 permissions:
