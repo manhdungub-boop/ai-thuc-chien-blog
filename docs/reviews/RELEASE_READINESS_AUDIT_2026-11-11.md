@@ -322,3 +322,43 @@ This is an authentication/configuration failure despite Composio reporting the c
 
 ### Quyết định cập nhật
 **NOT READY FOR RELEASE.** Live Google OAuth Preview được nâng lên PASS theo xác nhận người dùng. Giữ PR #91/#95/#96 Open / Draft. Blocker quyết định còn lại là email relay delivery E2E, Preview D1 read-only metadata, provenance/traffic của legacy Preview Workers, independent security review và branch-protection verification. Không merge, không deploy Production, không migration, không đổi DNS/secret/binding.
+
+
+## Addendum — xác minh D1 Preview bằng connector Cloudflare (11/11/2026, bổ sung sau kiểm tra trực tiếp)
+
+Phần D1 ở mục “D1 metadata” phía trên phản ánh lần kiểm tra trước bằng API credential bị HTTP 401. Kết quả đó không còn là mô tả đầy đủ trạng thái hiện tại. Trong phiên làm việc tiếp theo, đã có một lần kiểm tra độc lập thành công bằng Cloudflare connector với quyền hiện có:
+
+- Worker: `ai-thuc-chien-blog-auth-app-preview`.
+- Binding `DB` trỏ tới Preview D1 UUID `51d814c8-a3fc-4481-a5f1-60bc67617f3c`.
+- D1 metadata/database lookup thành công; database Preview tồn tại ở APAC.
+- SQL chỉ đọc `sqlite_master` trả về các bảng community: `community_email_verification_status`, `community_email_verification_tokens`, `community_members`, `community_messages`, `community_oauth_accounts`, `community_password_reset_tokens`, `community_rate_limits`, `community_sessions`; cùng bảng migration và SQLite nội bộ.
+- Truy vấn schema chỉ đọc tiếp theo đối chiếu cột bắt buộc cho `community_members`, `community_sessions`, `community_messages`, `community_rate_limits`; tất cả cột đã kiểm tra đều hiện diện.
+- Phản hồi truy vấn ghi `success=true`, `changed_db=false`, `rows_written=0`; không đọc hàng thành viên/tin nhắn, không ghi, không chạy migration.
+
+**Phân loại đúng:** Preview D1 metadata + schema inspection = PASS cho phạm vi đọc đã thực hiện. Điều này không chứng minh CRUD, ràng buộc dữ liệu, migration, backup/restore hay E2E của ứng dụng. Production D1 vẫn hoàn toàn ngoài phạm vi.
+
+### Live Preview read-only probes
+
+- `GET /api/community/oauth/providers` trên Auth App Preview trả `{"google":true,"facebook":false}`. Chỉ xác nhận provider readiness ở runtime; không chứng minh Google consent/callback/token exchange/session.
+- `GET /api/community/me` không có cookie/credential trả `{"member":null}`, phù hợp trạng thái anonymous.
+- Trang chủ Preview trả nội dung. Đường dẫn `/health` chuyển hướng về trang chủ; không đánh dấu health endpoint PASS.
+- Metadata secret binding trên Auth App Preview vẫn thiếu `COMMUNITY_EMAIL_RELAY_SECRET`; không đọc bất kỳ secret value nào. Email verification/password-reset E2E vẫn BLOCKED.
+- Browser UI automation không chạy được do công cụ browser bên ngoài báo wallet âm và yêu cầu nạp tiền; không nạp tiền, không retry và không dùng công cụ trả phí.
+
+### CI trên addendum SHA
+
+Commit `49b4ecd8820e1a5154035da7d41216064ff28cd7`:
+- Static CI Quality Gate run `43006726098`: PASS.
+- CodeQL Offline Security Analysis run `43006725899`: PASS (Actions, JavaScript/TypeScript, Python).
+- Staging Google OAuth integration run `43006725944`: PASS (mock/integration, không phải live OAuth E2E).
+
+### PR stack snapshot hiện tại
+
+- PR #91: Open/Draft, branch `fix/release-blockers-20261109`, base `main`, head `979b038829db0637098972b0f1dd44c26452dad8`, trạng thái mergeable `blocked`.
+- PR #95: Open/Draft, branch `security/pin-verified-actions-20261110`, base PR #91 branch, head `e7d5b3f34d6b1e4b1aedb7ed91123111691509eb`, trạng thái mergeable `clean`.
+- PR #96: Open/Draft, branch `security/release-readiness-hardening-20261110`, base PR #95 branch, head `49b4ecd8820e1a5154035da7d41216064ff28cd7`, trạng thái mergeable `clean`.
+- Đây là chuỗi PR xếp chồng; không đổi base, không merge và không chuyển PR sang Ready khi release gates còn BLOCKED.
+
+### Release decision (unchanged)
+
+**NOT READY FOR RELEASE.** Giữ PR #91/#95/#96 ở trạng thái Draft/open. D1 Preview read-only schema inspection đã được nâng từ BLOCKED/NOT VERIFIED thành PASS đúng phạm vi; các blocker email secret, live Google OAuth E2E, independent security review và browser UI E2E vẫn chưa được giải quyết. Không thực hiện thay đổi Production.
