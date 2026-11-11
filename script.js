@@ -395,6 +395,15 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
   }
 
   switchModeButton.addEventListener('click', () => setAuthMode(authMode === 'register' ? 'login' : 'register'));
+  // Make login discoverable from the global header on desktop and the mobile menu.
+  const headerLoginLinks = document.querySelectorAll('#header-login-link, #header-login-cta');
+  headerLoginLinks.forEach((link) => link.addEventListener('click', () => {
+    if (!currentMember && !verificationToken && !passwordResetToken) setAuthMode('login');
+    const primaryNav = document.getElementById('primary-nav');
+    if (primaryNav) primaryNav.classList.remove('open');
+    const menuToggle = document.querySelector('.menu-toggle');
+    if (menuToggle) menuToggle.setAttribute('aria-expanded', 'false');
+  }));
   authForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     authSubmit.disabled = true;
