@@ -42,7 +42,69 @@ try {
     "Only exact manually verified URLs may be classified as manual after blocked or transient HTTP responses.");
   assert.ok(summary.results.every(result => result.status === "invalid_or_non_public_url"),
     "IPv6 loopback, IPv6 ULA, IPv4 loopback, DNS-resolved loopback, and deprecated 6to4 relay targets must be rejected before fetch");
-  console.log("PASS: catalog link checker blocks private IPv4/IPv6 literals, private DNS targets, and deprecated 6to4 relay addresses.");
+
+  // Simulate DNS rebinding between validation and socket creation. The first DNS
+  // answer is public; every later answer is loopback. The HTTP transport is stubbed,
+  // but it invokes the exact lookup callback Node's socket layer receives.
+  const rebindFixture = join(directory, "rebind-catalog.json");
+  const preload = join(directory, "rebind-preload.mjs");
+  const rebindResult = join(directory, "rebind-result.json");
+  writeFileSync(rebindFixture, JSON.stringify({ tools: [{ website: "https://rebind.example.test/" }] }));
+  writeFileSync(preload, `
+    import dns from "node:dns/promises";
+    import http from "node:http";
+    import https from "node:https";
+    import { EventEmitter } from "node:events";
+    import { writeFileSync } from "node:fs";
+    let dnsCalls = 0;
+    const socketAddresses = [];
+    dns.lookup = async () => {
+      dnsCalls += 1;
+      return [{ address: dnsCalls === 1 ? "93.184.216.34" : "127.0.0.1", family: 4 }];
+    };
+    const fakeRequest = (options, callback) => {
+      const req = new EventEmitter();
+      req.setTimeout = () => req;
+      req.end = () => {
+        const finish = (address) => {
+          socketAddresses.push(address);
+          const response = new EventEmitter();
+          response.statusCode = 200;
+          response.headers = {};
+          response.destroy = () => {};
+          callback(response);
+        };
+        if (typeof options.lookup === "function") {
+          options.lookup(options.hostname, { all: true }, (error, addresses) => {
+            if (error) { req.emit("error", error); return; }
+            finish(Array.isArray(addresses) ? addresses[0].address : addresses);
+          });
+        } else {
+          dns.lookup(options.hostname).then(rows => finish(rows[0].address), error => req.emit("error", error));
+        }
+      };
+      return req;
+    };
+    http.request = fakeRequest;
+    https.request = fakeRequest;
+    process.on("exit", () => writeFileSync(process.env.REBIND_RESULT, JSON.stringify({ dnsCalls, socketAddresses })));
+  `);
+  const rebindRun = spawnSync(process.execPath, ["--import", preload, "scripts/check-ai-tools-links.mjs", rebindFixture], {
+    encoding: "utf8",
+    timeout: 30000,
+    env: { ...process.env, REBIND_RESULT: rebindResult }
+  });
+  assert.equal(rebindRun.status, 0, rebindRun.stderr || rebindRun.stdout);
+  const rebindSummary = JSON.parse(rebindRun.stdout.slice(rebindRun.stdout.indexOf("{")));
+  const rebindEvidence = JSON.parse((await import("node:fs/promises")).readFile
+    ? await (await import("node:fs/promises")).readFile(rebindResult, "utf8")
+    : "{}");
+  assert.equal(rebindSummary.results[0].status, "reachable");
+  assert.equal(rebindEvidence.dnsCalls, 1, "the socket must not perform a second hostname resolution");
+  assert.deepEqual(rebindEvidence.socketAddresses, ["93.184.216.34"],
+    "the socket must connect only to the previously validated public IP, never the rebound loopback IP");
+  console.log("PASS: catalog link checker blocks private targets and pins the validated public DNS answer at socket creation.");
+
 } finally {
   rmSync(directory, { recursive: true, force: true });
 }
