@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -96,9 +96,7 @@ try {
   });
   assert.equal(rebindRun.status, 0, rebindRun.stderr || rebindRun.stdout);
   const rebindSummary = JSON.parse(rebindRun.stdout.slice(rebindRun.stdout.indexOf("{")));
-  const rebindEvidence = JSON.parse((await import("node:fs/promises")).readFile
-    ? await (await import("node:fs/promises")).readFile(rebindResult, "utf8")
-    : "{}");
+  const rebindEvidence = JSON.parse(readFileSync(rebindResult, "utf8"));
   assert.equal(rebindSummary.results[0].status, "reachable");
   assert.equal(rebindEvidence.dnsCalls, 1, "the socket must not perform a second hostname resolution");
   assert.deepEqual(rebindEvidence.socketAddresses, ["93.184.216.34"],
