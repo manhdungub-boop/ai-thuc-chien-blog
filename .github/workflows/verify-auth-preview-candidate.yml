@@ -8,6 +8,7 @@ on:
       - "scripts/test_auth_preview_oauth_http.mjs"
       - "scripts/test_email_relay_no_send.mjs"
       - ".github/workflows/verify-auth-preview-candidate.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
