@@ -78,10 +78,12 @@ jobs:
           node scripts/audit-ai-tools-catalog.mjs data/ai-tools.json docs/reviews/ai-tools-candidates-2026-11-02.json --strict
           node scripts/test-ai-tools-catalog-audit.mjs
 
-      - name: Install pinned Playwright and Chromium for offline browser regression
+      - name: Install pinned Playwright and Chromium for browser regression
         run: |
           npm install --ignore-scripts --no-save --package-lock=false --no-audit --no-fund playwright@1.65.0
-          ./node_modules/.bin/playwright install --with-deps chromium
+          # Avoid apt dependency installation; it fails when Ubuntu mirrors/DNS are unavailable.
+          # The GitHub-hosted runner supplies Chromium runtime libraries; install only the pinned browser binary.
+          ./node_modules/.bin/playwright install chromium
 
       - name: Build isolated noindex AI Bank preview fixture
         env:
