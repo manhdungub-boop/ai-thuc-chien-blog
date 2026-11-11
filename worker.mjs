@@ -11,6 +11,11 @@ function withSecurityHeaders(response, request) {
   // Keep the homepage from being stored by browsers or intermediary caches. This
   // prevents a previously cached fallback/404 document from masking the live home page.
   const requestUrl = new URL(request.url);
+  // Only the canonical production Worker host may be indexed. Branch Previews,
+  // the Pages fallback, and other workers.dev aliases must not compete with it.
+  if (requestUrl.hostname !== "ai-thuc-chien-blog.manhdungub.workers.dev") {
+    headers.set("X-Robots-Tag", "noindex, nofollow");
+  }
   if (requestUrl.pathname === "/" && response.status === 200 && (headers.get("Content-Type") || "").toLowerCase().includes("text/html")) {
     headers.set("Cache-Control", "no-store, max-age=0");
     headers.set("Pragma", "no-cache");
@@ -63,9 +68,9 @@ function scoreSearchText(text, terms) {
   return score;
 }
 function decodeBasicEntities(text) {
-  return text.replace(/&nbsp;/gi," ").replace(/&amp;/gi,"&").replace(/&lt;/gi,"<").replace(/&gt;/gi,">").replace(/&quot;/gi,'"').replace(/&#39;|&apos;/gi,"'");
-}
-async function retrieveArticleContext(env, requestUrl, question, catalog) {
+  const entities = { "&nbsp;": " ", "&#160;": " ", "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#39;": "'", "&apos;": "'" };
+  return text.replace(/&(?:nbsp|#160|amp|lt|gt|quot|#39|apos);/gi, (entity) => entities[entity.toLowerCase()] ?? entity);
+}async function retrieveArticleContext(env, requestUrl, question, catalog) {
   if (!env.ASSETS || typeof env.ASSETS.fetch !== "function") return "";
   const terms = searchTerms(question);
   if (!terms.length) return "";
@@ -79,7 +84,7 @@ async function retrieveArticleContext(env, requestUrl, question, catalog) {
       const response = await env.ASSETS.fetch(new Request(new URL(item.path + ".html", base)));
       if (!response.ok) continue;
       const html = await response.text();
-      const body = html.replace(/<script\b[\s\S]*?<\/script>/gi," ").replace(/<style\b[\s\S]*?<\/style>/gi," ");
+      const body = html.replace(/<script\b[\s\S]*?<\/script\b[^>]*>/gi," ").replace(/<style\b[\s\S]*?<\/style\b[^>]*>/gi," ");
       const blocks = [...body.matchAll(/<(h[1-3]|p|li|blockquote)\b[^>]*>([\s\S]*?)<\/\1>/gi)]
         .map((match) => decodeBasicEntities(match[2].replace(/<[^>]*>/g," ").replace(/\s+/g," ").trim()))
         .filter((text) => text.length >= 45 && text.length <= 900);
@@ -1112,6 +1117,10 @@ async function handleCommunityApi(request, env) {
       let valid = false;
       if (row) {
         try { valid = (await hashCommunityPassword(password, base64UrlToBytes(row.password_salt))) === row.password_hash; } catch (_error) { valid = false; }
+      } else {
+        // Match the expensive PBKDF2 work for unknown accounts to reduce timing-based
+        // account enumeration. This fixed salt is public and is never used to store a password.
+        try { await hashCommunityPassword(password, new Uint8Array(16)); } catch (_error) { /* keep the generic response */ }
       }
       if (!valid) return communityJson({ error: "Email hoặc mật khẩu chưa chính xác." }, 401, request);
       if (!row.email_verified_at) return communityJson({ code: "EMAIL_NOT_VERIFIED", error: "Bạn cần xác nhận email trước khi đăng nhập. Hãy mở email hoặc gửi lại liên kết xác nhận." }, 403, request);

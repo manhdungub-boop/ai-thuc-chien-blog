@@ -410,3 +410,77 @@ test("rejects a nonce mismatch without persisting an identity or issuing a sessi
   assert.equal(db.sessions.size, 0);
   assert.equal(cookiesFrom(response).filter((cookie) => /Max-Age=0/.test(cookie)).length, 3);
 });
+
+test("logout revokes the server-side session and rejects the old cookie", async () => {
+  const env = await makeFixture();
+  const started = await startOAuth(env);
+  const callback = new URL(STAGING + "/api/community/oauth/google/callback");
+  callback.searchParams.set("code", "mock-logout-authorization-code");
+  callback.searchParams.set("state", started.state);
+  const callbackResponse = await worker.fetch(new Request(callback, {
+    headers: {
+      Cookie: cookieHeader(started.cookies),
+      "CF-Connecting-IP": "192.0.2.21",
+    },
+  }), env);
+  assert.equal(callbackResponse.status, 302);
+
+  const sessionCookie = cookiesFrom(callbackResponse).find((cookie) => cookie.startsWith("__Host-ai_community="));
+  assert.ok(sessionCookie, "OAuth callback should issue the authenticated session cookie");
+  const oldCookieHeader = sessionCookie.split(";")[0];
+  assert.equal(db.sessions.size, 1);
+
+  const logout = await worker.fetch(new Request(STAGING + "/api/community/logout", {
+    method: "POST",
+    headers: {
+      Cookie: oldCookieHeader,
+      Origin: STAGING,
+      "CF-Connecting-IP": "192.0.2.21",
+    },
+  }), env);
+  assert.equal(logout.status, 200);
+  assert.deepEqual(await logout.json(), { ok: true });
+  const clearedSessionCookie = cookiesFrom(logout).find((cookie) => cookie.startsWith("__Host-ai_community="));
+  assert.ok(clearedSessionCookie, "Logout should clear the browser session cookie");
+  assert.match(clearedSessionCookie, /Max-Age=0/);
+  assert.equal(db.sessions.size, 0, "Logout must revoke the session in D1, not only clear the browser cookie");
+
+  const me = await worker.fetch(new Request(STAGING + "/api/community/me", {
+    headers: { Cookie: oldCookieHeader },
+  }), env);
+  assert.equal(me.status, 200);
+  assert.deepEqual(await me.json(), { member: null }, "The revoked cookie must not authenticate another request");
+});
+
+test("enforces the 30-day session expiry and rejects an expired session", async () => {
+  const env = await makeFixture();
+  const started = await startOAuth(env);
+  const callback = new URL(STAGING + "/api/community/oauth/google/callback");
+  callback.searchParams.set("code", "mock-expiry-authorization-code");
+  callback.searchParams.set("state", started.state);
+  const callbackResponse = await worker.fetch(new Request(callback, {
+    headers: {
+      Cookie: cookieHeader(started.cookies),
+      "CF-Connecting-IP": "192.0.2.22",
+    },
+  }), env);
+  assert.equal(callbackResponse.status, 302);
+
+  const sessionCookie = cookiesFrom(callbackResponse).find((cookie) => cookie.startsWith("__Host-ai_community="));
+  assert.ok(sessionCookie, "OAuth callback should issue the authenticated session cookie");
+  const [session] = [...db.sessions.values()];
+  assert.ok(session, "Expected a persisted session");
+  assert.equal(
+    Date.parse(session.expires_at) - Date.parse(session.created_at),
+    30 * 24 * 60 * 60 * 1000,
+    "Session lifetime must remain exactly 30 days",
+  );
+
+  session.expires_at = new Date(Date.now() - 1000).toISOString();
+  const me = await worker.fetch(new Request(STAGING + "/api/community/me", {
+    headers: { Cookie: sessionCookie.split(";")[0] },
+  }), env);
+  assert.equal(me.status, 200);
+  assert.deepEqual(await me.json(), { member: null }, "An expired session must not authenticate");
+});
+

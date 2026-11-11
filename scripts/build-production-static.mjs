@@ -108,7 +108,16 @@ assert.doesNotMatch(robots, /Disallow:\s*\//i);
 
 const sitemap = await readFile(path.join(output, "sitemap.xml"), "utf8");
 assert.equal((sitemap.match(/<url>/g) || []).length, 73, "sitemap must contain the 69 articles and four public pages");
-assert.ok(sitemap.includes(productionOrigin), "sitemap must use production canonical URLs");
+const sitemapLocations = [...sitemap.matchAll(/<loc>([\s\S]*?)<\/loc>/gi)]
+  .map((match) => match[1].replace(/&amp;/gi, "&"));
+assert.equal(sitemapLocations.length, 73, "sitemap must expose exactly 73 canonical locations");
+for (const location of sitemapLocations) {
+  const parsed = new URL(location);
+  assert.equal(parsed.protocol, "https:", "sitemap URLs must use HTTPS");
+  assert.equal(parsed.origin, productionOrigin, "sitemap URLs must use the exact Production origin");
+  assert.equal(parsed.username, "", "sitemap URLs must not contain userinfo");
+  assert.equal(parsed.password, "", "sitemap URLs must not contain userinfo");
+}
 assert.doesNotMatch(sitemap, /pages\.dev|auth-app-preview/i);
 
 await assert.rejects(stat(path.join(output, "data", "review")), "review candidate data must be excluded");

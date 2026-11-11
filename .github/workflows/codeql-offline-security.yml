@@ -1,0 +1,110 @@
+name: CodeQL Offline Security Analysis
+
+on:
+  push:
+    branches:
+      - security/release-readiness-hardening-20261110
+  pull_request:
+    branches:
+      - security/pin-verified-actions-20261110
+      - fix/release-blockers-20261109
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  security-events: read
+
+concurrency:
+  group: codeql-offline-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze ${{ matrix.language }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        language:
+          - javascript-typescript
+          - python
+          - actions
+    steps:
+      - name: Check out source without persisting credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@0911ee96d2d6c8def97122c36c5cadd93829a4b4 # v4
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-extended
+      - name: Run CodeQL analysis without uploading SARIF
+        uses: github/codeql-action/analyze@0911ee96d2d6c8def97122c36c5cadd93829a4b4 # v4
+        with:
+          category: "/language:${{ matrix.language }}"
+          output: ${{ github.workspace }}/codeql-results
+          upload: never
+          wait-for-processing: false
+      - name: Enforce offline CodeQL high-severity security gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/check_codeql_sarif_findings.py codeql-results
+      - name: Run focused content, SEO and security regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/test_article_quality.cjs
+          node scripts/test_seo_consistency.cjs
+          node scripts/test_release_security_regressions.mjs
+          node scripts/verify-email-verification-candidate.mjs
+          node scripts/test_secret_workflow_dispatch_guards.mjs
+          node scripts/test_workers_builds_workflow_guard.mjs
+          node scripts/test-ai-tools-links-security.mjs
+          node scripts/test_ipv6_address_safety.mjs
+          python3 -m unittest discover -s scripts -p 'test_configure_cloudflare_worker_builds.py' -v
+          python3 -m unittest discover -s scripts -p 'test_codeql_sarif_findings.py' -v
+      - name: Summarize local SARIF findings
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import glob, json
+          files = sorted(glob.glob("codeql-results/**/*.sarif", recursive=True))
+          if not files:
+              print("## CodeQL results")
+              print("No SARIF output was produced; inspect the analysis step logs.")
+              raise SystemExit(1)
+          findings = []
+          for path in files:
+              with open(path, encoding="utf-8") as stream:
+                  data = json.load(stream)
+              for run in data.get("runs", []):
+                  driver = run.get("tool", {}).get("driver", {})
+                  rules = driver.get("rules", [])
+                  rules_by_id = {rule.get("id"): rule for rule in rules if rule.get("id")}
+                  for item in run.get("results", []):
+                      rule_id = item.get("ruleId", "unknown")
+                      rule = rules_by_id.get(rule_id, {})
+                      props = item.get("properties", {})
+                      rule_props = rule.get("properties", {})
+                      severity = props.get("security-severity") or rule_props.get("security-severity") or item.get("level") or rule.get("defaultConfiguration", {}).get("level") or "unknown"
+                      message = (item.get("message") or {}).get("text", "").replace("\n", " ").strip()
+                      locations = item.get("locations") or [{}]
+                      physical = locations[0].get("physicalLocation", {})
+                      artifact = physical.get("artifactLocation", {}).get("uri", "unknown")
+                      line = physical.get("region", {}).get("startLine", "?")
+                      findings.append((str(severity), rule_id, artifact, line, message))
+          print(f"## CodeQL findings: {len(findings)}")
+          print("SARIF remains local to this runner; no upload to GitHub Code Scanning was attempted.")
+          if not findings:
+              print("No findings were reported by this language analysis.")
+          for severity, rule_id, path, line, message in findings[:100]:
+              suffix = f" — {message}" if message else ""
+              print(f"- **{severity}** `{rule_id}` — `{path}:{line}`{suffix}")
+          if len(findings) > 100:
+              print(f"- ... and {len(findings) - 100} additional findings; inspect local SARIF.")
+          PY

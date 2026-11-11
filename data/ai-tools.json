@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-11-10T00:00:00+07:00",
+  "generated_at": "2026-11-11T01:00:00+07:00",
   "catalog_policy": {
     "default_locale": "vi",
     "currency": "USD",
@@ -525,15 +525,15 @@
       ],
       "pricing_model": "unknown",
       "pricing_status": "unknown",
-      "license": "Apache-2.0 for the Flowise source repository; hosted Flowise Cloud pricing and service terms are separate",
+      "license": "Apache-2.0 cho mã nguồn repository Flowise; điều khoản và giá của Flowise Cloud là riêng biệt và hiện không được xác minh.",
       "platforms": [
         "nodejs",
         "docker",
         "self_hosted",
         "api"
       ],
-      "description": "Nền tảng low-code mã nguồn mở để xây dựng LLM chain, RAG pipeline và AI agent bằng giao diện kéo-thả; dự án đã sunset và repository chính thức được lưu trữ.",
-      "free_tier_summary": "Flowise đã thông báo wind-down: code freeze 29/07/2026, repository chuyển Public Archive 10/08/2026 (GitHub ghi archived 13/08/2026), npm packages/Docker images bị đánh dấu deprecated và hỗ trợ chính thức kết thúc 31/08/2026. Mã nguồn Apache-2.0 còn có thể fork/self-host nhưng không khuyến nghị dự án mới; Flowise Cloud pricing/availability không được xác nhận trong lần rà soát này.",
+      "description": "Nền tảng low-code mã nguồn mở để xây dựng LLM chain, RAG pipeline và AI agent bằng giao diện kéo-thả. Dự án đã chính thức wind-down; repository ở trạng thái Public Archive và không còn được đội ngũ cốt lõi duy trì.",
+      "free_tier_summary": "Flowise công bố code freeze ngày 29/07/2026 và lịch chuyển repository sang Public Archive ngày 10/08/2026; GitHub xác nhận repository thực tế được archive ngày 13/08/2026. EOL của đội ngũ cốt lõi là 31/08/2026. npm packages và Docker images được đánh dấu deprecated theo thông báo. Mã nguồn Apache-2.0 vẫn có thể fork và tự vận hành, nhưng không khuyến nghị triển khai mới nếu không có đội ngũ tự bảo trì. Giá và khả năng cung cấp Flowise Cloud không được thông báo rõ trong sunset notice; không suy diễn có gói hosted miễn phí.",
       "official_sources": [
         "https://flowiseai.com/sunset",
         "https://github.com/FlowiseAI/Flowise/discussions/6727",
@@ -541,8 +541,8 @@
         "https://github.com/FlowiseAI/Flowise/security",
         "https://github.com/FlowiseAI/Flowise/blob/main/LICENSE.md"
       ],
-      "last_verified": "2026-11-05",
-      "verification_status": "needs_review",
+      "last_verified": "2026-11-11",
+      "verification_status": "verified",
       "status": "deprecated",
       "tags": [
         "visual-builder",
@@ -686,7 +686,7 @@
       ],
       "pricing_model": "free",
       "pricing_status": "self_hosted_free",
-      "license": "Apache-2.0 for the EasyOCR repository/package code. The official model hub lists downloadable pretrained checkpoints but does not state a clear license for each checkpoint on that page; verify each model artifact/training-data notice and PyTorch/CUDA dependency before redistribution or commercial bundling.",
+      "license": "Apache-2.0 for the EasyOCR repository code/package. The official Model Hub links pretrained checkpoints to release assets hosted by the official JaidedAI/EasyOCR GitHub repository, whose LICENSE file is Apache-2.0. This does not independently establish rights to underlying third-party training datasets or external dependencies; review those separately before redistribution beyond the licensed repository artifacts.",
       "platforms": [
         "python",
         "windows",
@@ -695,8 +695,8 @@
         "self_hosted",
         "api"
       ],
-      "description": "Thư viện Python OCR sẵn dùng, nhận dạng hơn 80 ngôn ngữ và nhiều hệ chữ viết; hỗ trợ CPU/GPU và xuất vùng bounding box cùng text/confidence.",
-      "free_tier_summary": "EasyOCR package/repository dùng Apache-2.0 và có thể chạy local không mất phí API. Trang Model Hub chính thức liệt kê checkpoint có thể tải nhưng không nêu license rõ ràng cho từng checkpoint. Giữ needs_review: cần kiểm tra license/điều kiện của từng weight artifact và dữ liệu huấn luyện trước khi khuyến nghị tái phân phối hoặc đóng gói thương mại.",
+      "description": "Thư viện Python OCR đa ngôn ngữ, hỗ trợ hơn 80 ngôn ngữ và có thể chạy local trên CPU/GPU; mã nguồn chính thức hiện công bố phiên bản 1.7.2 (24/09/2024).",
+      "free_tier_summary": "EasyOCR là mã nguồn mở, có thể cài đặt và chạy local miễn phí. Repository LICENSE chính thức là Apache-2.0. Model Hub chính thức liên kết các pretrained checkpoints tới release assets của repository JaidedAI/EasyOCR; repository có LICENSE Apache-2.0. Giấy phép repository không tự động cấp quyền đối với dataset bên thứ ba hoặc các dependency bên ngoài; cần rà soát riêng các thành phần đó trước khi phân phối một gói tích hợp. Không có dịch vụ hosted hay mức phí cloud nào được khẳng định ở đây.",
       "official_sources": [
         "https://github.com/JaidedAI/EasyOCR",
         "https://github.com/JaidedAI/EasyOCR/blob/master/LICENSE",
@@ -704,8 +704,8 @@
         "https://www.jaided.ai/easyocr",
         "https://www.jaided.ai/easyocr/modelhub/"
       ],
-      "last_verified": "2026-11-05",
-      "verification_status": "needs_review",
+      "last_verified": "2026-11-11",
+      "verification_status": "verified",
       "status": "active",
       "tags": [
         "ocr",
@@ -1334,6 +1334,45 @@
         "agent-framework",
         "pipelines",
         "python"
+      ]
+    },
+    {
+      "id": "elevenlabs",
+      "name": "ElevenLabs",
+      "vendor": "ElevenLabs",
+      "website": "https://elevenlabs.io/",
+      "categories": [
+        "audio",
+        "voice",
+        "translation",
+        "video"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "limited_credits",
+      "license": "Proprietary hosted service. Under the non-EEA Terms of Service last updated 2026-10-09, free users may use the services and outputs only for non-commercial purposes; paid subscribers may use them commercially subject to the Terms and applicable service-specific policies. Generated output rights and user-content license are governed by the Terms.",
+      "platforms": [
+        "web",
+        "api",
+        "ios",
+        "android"
+      ],
+      "description": "Nền tảng AI tạo giọng nói, chuyển văn bản thành giọng nói, chuyển giọng nói thành văn bản, lồng tiếng, âm thanh và nội dung đa phương tiện.",
+      "free_tier_summary": "Gói Free 0 USD gồm 10.000 credits/tháng; credits dùng chung giữa các sản phẩm và mức tiêu hao tùy tính năng/model. Theo Terms of Service áp dụng ngoài EEA, người dùng miễn phí chỉ được sử dụng dịch vụ và output cho mục đích phi thương mại. Gói Starter có giá niêm yết 6 USD/tháng, gồm 30.000 credits/tháng và Commercial License; giá chưa gồm thuế và có thể thay đổi.",
+      "official_sources": [
+        "https://elevenlabs.io/pricing",
+        "https://elevenlabs.io/terms-of-use",
+        "https://elevenlabs.io/use-policy",
+        "https://elevenlabs.io/docs/help-center/account/general/what-happens-to-my-content-after-my-subscription-ends"
+      ],
+      "last_verified": "2026-11-11",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "text-to-speech",
+        "voice-cloning",
+        "dubbing",
+        "speech-to-text",
+        "audio-generation"
       ]
     }
   ]

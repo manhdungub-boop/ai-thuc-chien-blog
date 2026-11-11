@@ -11,6 +11,11 @@ on:
         description: "Worker tag (32 hexadecimal characters) for a Worker to inspect"
         required: true
         type: string
+      confirm_read_only_diagnosis:
+        description: "Required: confirm read-only Cloudflare diagnostics from trusted main"
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -21,6 +26,7 @@ concurrency:
 
 jobs:
   diagnose:
+    if: github.ref == 'refs/heads/main' && inputs.confirm_read_only_diagnosis == true
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

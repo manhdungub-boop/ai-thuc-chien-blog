@@ -436,6 +436,33 @@ const badTopic = await call('/messages?topic=unknown', { cookie }); assert.equal
 const badMessage = await call('/messages', { method: 'POST', cookie, body: { topic: 'tools', body: '   ' } }); assert.equal(badMessage.status, 400);
 
 const wrongPassword = await call('/login', { method: 'POST', body: { email: 'member@example.com', password: 'sai-mat-khau' } }); assert.equal(wrongPassword.status, 401);
-const logout = await call('/logout', { method: 'POST', cookie }); assert.equal(logout.status, 200); assert.match(logout.headers.get('set-cookie'), /Max-Age=0/);
+const memberForSessionLifecycle = db.members.find((member) => member.email === 'member@example.com');
+const sessionBeforeLogout = db.sessions.find((session) => session.member_id === memberForSessionLifecycle.id);
+assert.ok(sessionBeforeLogout, 'authenticated member must have a persisted session before logout');
+const logout = await call('/logout', { method: 'POST', cookie });
+assert.equal(logout.status, 200);
+assert.match(logout.headers.get('set-cookie'), /Max-Age=0/);
+assert.equal(db.sessions.some((session) => session.token_hash === sessionBeforeLogout.token_hash), false,
+  'logout must delete the matching server-side session record');
+const afterLogout = await call('/me', { cookie });
+assert.equal((await afterLogout.json()).member, null,
+  'the pre-logout cookie must no longer authenticate after server-side revocation');
+
+// Re-authenticate, then prove the server rejects a session whose expiry is in the past.
+const winningPassword = concurrentLoginAttempts[0].status === 200
+  ? 'New-Concurrent-Password-123!'
+  : 'New-Concurrent-Password-456!';
+const expiryLogin = await call('/login', {
+  method: 'POST',
+  body: { email: 'member@example.com', password: winningPassword }
+});
+assert.equal(expiryLogin.status, 200, 'a valid password must create a fresh session for expiry testing');
+const expiryCookie = expiryLogin.headers.get('set-cookie').split(';')[0];
+const expirySession = db.sessions.find((session) => session.member_id === memberForSessionLifecycle.id);
+assert.ok(expirySession, 'fresh login must persist a session record');
+expirySession.expires_at = new Date(Date.now() - 1000).toISOString();
+const expiredSessionMe = await call('/me', { cookie: expiryCookie });
+assert.equal((await expiredSessionMe.json()).member, null,
+  'an expired server-side session must not authenticate');
 globalThis.fetch = originalFetch;
 console.log('PASS: email verification required before login; one-time token, Apps Script relay mock, PBKDF2 login, secure session, messages, validation, origin protection and missing-DB behavior');

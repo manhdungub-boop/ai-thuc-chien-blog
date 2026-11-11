@@ -1,6 +1,12 @@
 name: Diagnose Community D1 Schema
 on:
   workflow_dispatch:
+    inputs:
+      confirm_read_only_diagnosis:
+        description: "Required: confirm read-only Production/Preview schema inspection from trusted main"
+        required: true
+        default: false
+        type: boolean
 permissions:
   contents: read
 concurrency:
@@ -8,10 +14,14 @@ concurrency:
   cancel-in-progress: false
 jobs:
   inspect:
+    if: github.ref == 'refs/heads/main' && inputs.confirm_read_only_diagnosis == true
     runs-on: ubuntu-latest
     steps:
-      - name: Check out source
-        uses: actions/checkout@v7
+      - name: Check out reviewed main source only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: main
+          persist-credentials: false
       - name: Verify production and preview community table schema (read-only)
         env:
           CLOUDFLARE_WORKERS_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
@@ -63,7 +73,7 @@ jobs:
             for (const [table, columns] of Object.entries(required)) {
               const definition = schema.get(table);
               if (!definition) { missing.push(table); continue; }
-              const absent = columns.filter(col => !new RegExp(`\\b${col}\\b`, 'i').test(definition));
+              const absent = columns.filter(col => !new RegExp(String.raw`\b${col}\b`, 'i').test(definition));
               if (absent.length) missingColumns.push(`${table}: ${absent.join(', ')}`);
             }
             console.log('MISSING_TABLES:', missing.join(', ') || '(none)');

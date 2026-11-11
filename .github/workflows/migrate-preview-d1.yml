@@ -25,12 +25,13 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: 92cf091bbac8b4879ec65feb30b4715b
     steps:
       - name: Check out reviewed main source only
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: main
+          persist-credentials: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
 
