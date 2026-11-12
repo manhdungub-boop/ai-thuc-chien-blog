@@ -53,6 +53,7 @@ class MockD1 {
         if (q.startsWith('INSERT INTO site_page_views')) { const [day, path, topic] = args; const row = db.pageViews.find((item) => item.day === day && item.path === path && item.topic === topic); if (row) row.views += 1; else db.pageViews.push({ day, path, topic, views: 1 }); return { meta: { changes: 1 } }; }
         if (q.startsWith('INSERT INTO community_topic_presence')) { const [member_id, topic, last_seen_at] = args; const row = db.presence.find((item) => item.member_id === member_id && item.topic === topic); if (row) row.last_seen_at = last_seen_at; else db.presence.push({ member_id, topic, last_seen_at }); return { meta: { changes: 1 } }; }
         if (q.startsWith('DELETE FROM community_topic_presence WHERE last_seen_at <')) { const before = db.presence.length; db.presence = db.presence.filter((item) => item.last_seen_at >= args[0]); return { meta: { changes: before - db.presence.length } }; }
+        if (q.startsWith('DELETE FROM community_topic_presence WHERE member_id = ?')) { const before = db.presence.length; db.presence = db.presence.filter((item) => item.member_id !== args[0]); return { meta: { changes: before - db.presence.length } }; }
         if (q.startsWith('INSERT INTO community_members')) { const [id, username, email, display_name, password_salt, password_hash, created_at] = args; if (db.members.some((m) => m.email === email || m.username === username)) throw new Error('unique constraint'); db.members.push({ id, username, email, display_name, password_salt, password_hash, created_at, email_verified_at: null }); return { meta: { changes: 1 } }; }
         if (q.startsWith('INSERT INTO community_email_verification_tokens')) { const [token_hash, member_id, created_at, expires_at] = args; db.tokens.push({ token_hash, member_id, created_at, expires_at }); return { meta: { changes: 1 } }; }
         if (q.startsWith('DELETE FROM community_password_reset_tokens WHERE member_id =')) { const before = db.resetTokens.length; db.resetTokens = db.resetTokens.filter((t) => t.member_id !== args[0]); return { meta: { changes: before - db.resetTokens.length } }; }
@@ -457,6 +458,8 @@ assert.equal(logout.status, 200);
 assert.match(logout.headers.get('set-cookie'), /Max-Age=0/);
 assert.equal(db.sessions.some((session) => session.token_hash === sessionBeforeLogout.token_hash), false,
   'logout must delete the matching server-side session record');
+assert.equal(db.presence.some((presence) => presence.member_id === memberForSessionLifecycle.id), false,
+  'logout must immediately remove the member from online topic counts');
 const afterLogout = await call('/me', { cookie });
 assert.equal((await afterLogout.json()).member, null,
   'the pre-logout cookie must no longer authenticate after server-side revocation');
