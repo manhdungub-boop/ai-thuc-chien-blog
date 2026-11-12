@@ -30,14 +30,14 @@ jobs:
       - name: Checkout exact main commit
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: 7e72dc7a6e50243f320f749f603d4d067ff6e6e4
+          ref: 5e210e0832b148f711ae555913e38da38f701634
           persist-credentials: false
 
       - name: Verify requested release commit
         shell: bash
         run: |
           set -euo pipefail
-          expected="7e72dc7a6e50243f320f749f603d4d067ff6e6e4"
+          expected="5e210e0832b148f711ae555913e38da38f701634"
           actual="$(git rev-parse HEAD)"
           if [[ "$actual" != "$expected" ]]; then
             echo "::error::main is at $actual, expected approved release $expected. Refusing deployment."
@@ -119,7 +119,7 @@ jobs:
           {
             echo "## Production Worker-only deployment"
             echo "- Worker: ai-thuc-chien-blog"
-            echo "- Release commit: 7e72dc7a6e50243f320f749f603d4d067ff6e6e4"
+            echo "- Release commit: 5e210e0832b148f711ae555913e38da38f701634"
             echo "- D1 migrations: NOT RUN"
             echo "- DNS changes: NOT RUN"
             echo "- Existing Worker variables/secrets: preserved via keep_vars"
