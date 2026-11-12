@@ -1,0 +1,85 @@
+name: Deploy Google Login fix to isolated Auth Preview
+
+on:
+  push:
+    branches:
+      - fix/google-button-visibility-20261112
+    paths:
+      - "script.js"
+      - ".github/workflows/deploy-google-login-preview.yml"
+      - "wrangler.jsonc"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: google-login-auth-preview
+  cancel-in-progress: false
+
+jobs:
+  deploy-preview-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout isolated PR branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: fix/google-button-visibility-20261112
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+
+      - name: Build static assets
+        run: npm run build
+
+      - name: Create and verify Preview-only Wrangler config
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          config = json.loads(Path("wrangler.jsonc").read_text(encoding="utf-8"))
+          assert config["name"] == "ai-thuc-chien-blog", "Unexpected source Worker"
+          previews = config.get("previews", {}).get("d1_databases", [])
+          assert len(previews) == 1, "Expected exactly one isolated Preview D1"
+          assert previews[0]["database_id"] == "51d814c8-a3fc-4481-a5f1-60bc67617f3c", "Refusing unexpected Preview D1"
+          assert previews[0]["database_name"] == "ai-thuc-chien-community-preview", "Refusing unexpected Preview database"
+          config["name"] = "ai-thuc-chien-blog-auth-app-preview"
+          config["d1_databases"] = previews
+          config.pop("previews", None)
+          assert config["d1_databases"][0]["database_id"] != "fc2517cb-9543-4d7b-98f4-bcd5f3c013e7", "Production D1 is forbidden"
+          assert config["name"] != "ai-thuc-chien-blog", "Production Worker is forbidden"
+          Path("wrangler.preview.deploy.jsonc").write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          print("PASS: target Worker and D1 are the isolated Preview resources; no migrations will run.")
+          PY
+
+      - name: Deploy to isolated Auth Preview Worker only
+        uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+          accountId: 92cf091bbac8b4879ec65feb30b4715b
+          command: deploy --config wrangler.preview.deploy.jsonc
+
+      - name: Verify Preview OAuth provider endpoint
+        run: |
+          node --input-type=module <<'JS'
+          const base = "https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev";
+          const response = await fetch(base + "/api/community/oauth/providers");
+          if (!response.ok) throw new Error(`Preview provider endpoint returned HTTP ${response.status}`);
+          const providers = await response.json();
+          if (providers.google !== true) throw new Error("Google OAuth is not enabled on Preview");
+          console.log("PASS: Preview reports Google OAuth enabled.");
+          JS
+
+      - name: Record deployment boundary
+        if: always()
+        run: |
+          {
+            echo "## Isolated Preview deployment"
+            echo "- Worker: ai-thuc-chien-blog-auth-app-preview"
+            echo "- D1: ai-thuc-chien-community-preview (51d814c8-a3fc-4481-a5f1-60bc67617f3c)"
+            echo "- No Production Worker, Production D1, DNS or migration operation is performed."
+          } >> "$GITHUB_STEP_SUMMARY"
