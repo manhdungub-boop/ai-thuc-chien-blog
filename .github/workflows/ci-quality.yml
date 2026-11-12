@@ -46,6 +46,7 @@ jobs:
           node scripts/test_worker_headers.mjs
           node scripts/test_worker_retrieval.mjs
           node scripts/test_community_api.mjs
+          node scripts/test_community_preview_host_allowlist.mjs
           node scripts/test_email_verification.mjs
           node scripts/test-password-reset.mjs
           node --test tests/staging-google-oidc-runtime.test.mjs
