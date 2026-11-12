@@ -375,8 +375,7 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
   const communityAuthHosts = new Set([
     primaryHost,
     'feature-required-email-verification-ai-thuc-chien-blog.manhdungub.workers.dev',
-    'ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev',
-    'fix-header-login-mainline-2026-ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev'
+    'ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev'
   ]);
   if (!communityAuthHosts.has(window.location.hostname)) {
     authPanel.hidden = true;
