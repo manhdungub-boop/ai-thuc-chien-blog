@@ -253,6 +253,7 @@ const COMMUNITY_ENCODER = new TextEncoder();
 const COMMUNITY_OAUTH_STAGING_ORIGINS = new Set([
   "https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev",
   "https://security-release-readiness-ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev",
+  "https://preview-google-oauth-secret-ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev",
 ]);
 const COMMUNITY_OAUTH_STATE_TTL_SECONDS = 600;
 
