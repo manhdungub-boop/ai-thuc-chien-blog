@@ -559,7 +559,7 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
   api('/oauth/providers', { method: 'GET', headers: {} }).then((providers) => {
     googleOAuthReady = providers.google === true;
     socialGoogleButton.hidden = !googleOAuthReady;
-    socialAuthContainer.hidden = !googleOAuthReady || Boolean(verificationToken) || Boolean(authPanel.hidden);
+    socialAuthContainer.hidden = !googleOAuthReady || Boolean(verificationToken) || Boolean(passwordResetToken) || Boolean(authPanel.hidden);
   }).catch(() => {
     googleOAuthReady = false;
     socialGoogleButton.hidden = true;
