@@ -171,21 +171,9 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
   const authSubmit = root.querySelector('#community-auth-submit');
   const authStatus = root.querySelector('#community-auth-status');
 
-  // Google sign-in is enabled only when the staging Worker confirms credentials are configured.
-  const socialAuthContainer = document.createElement('div');
-  socialAuthContainer.className = 'community-social-auth';
-  socialAuthContainer.hidden = true;
-  const socialAuthHeading = document.createElement('p');
-  socialAuthHeading.className = 'community-social-heading';
-  socialAuthHeading.textContent = 'Hoặc tiếp tục bằng';
-  const socialGoogleButton = document.createElement('a');
-  socialGoogleButton.className = 'community-social-button';
-  socialGoogleButton.href = '/api/community/oauth/google/start';
-  socialGoogleButton.textContent = 'G  Tiếp tục với Google';
-  socialGoogleButton.setAttribute('aria-label', 'Đăng nhập hoặc đăng ký bằng Google');
-  socialGoogleButton.hidden = true;
-  socialAuthContainer.append(socialAuthHeading, socialGoogleButton);
-  if (authForm) authForm.insertAdjacentElement('afterend', socialAuthContainer);
+  // Keep the Google sign-in controls in server-rendered HTML so they do not depend on dynamic DOM insertion.
+  const socialAuthContainer = root.querySelector('#community-social-auth');
+  const socialGoogleButton = root.querySelector('#community-google-signin');
   let googleOAuthReady = false;
   let oauthNotice = null;
   const verifyButton = root.querySelector('#community-verify-confirm');
