@@ -375,7 +375,8 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
   const communityAuthHosts = new Set([
     primaryHost,
     'feature-required-email-verification-ai-thuc-chien-blog.manhdungub.workers.dev',
-    'ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev'
+    'ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev',
+    'fix-header-login-mainline-2026-ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev'
   ]);
   if (!communityAuthHosts.has(window.location.hostname)) {
     authPanel.hidden = true;
@@ -395,6 +396,15 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
   }
 
   switchModeButton.addEventListener('click', () => setAuthMode(authMode === 'register' ? 'login' : 'register'));
+  // Make login discoverable from the global header on desktop and the mobile menu.
+  const headerLoginLinks = document.querySelectorAll('#header-login-link, #header-login-cta');
+  headerLoginLinks.forEach((link) => link.addEventListener('click', () => {
+    if (!currentMember && !verificationToken && !passwordResetToken) setAuthMode('login');
+    const primaryNav = document.getElementById('primary-nav');
+    if (primaryNav) primaryNav.classList.remove('open');
+    const menuToggle = document.querySelector('.menu-toggle');
+    if (menuToggle) menuToggle.setAttribute('aria-expanded', 'false');
+  }));
   authForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     authSubmit.disabled = true;
