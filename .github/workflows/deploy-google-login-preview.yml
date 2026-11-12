@@ -102,5 +102,6 @@ jobs:
             echo "## Isolated Preview deployment"
             echo "- Worker: ai-thuc-chien-blog-auth-app-preview"
             echo "- D1: ai-thuc-chien-community-preview (51d814c8-a3fc-4481-a5f1-60bc67617f3c)"
-            echo "- No Production Worker, Production D1, DNS or migration operation is performed."
+            echo "- Migration 0007 was applied only to the isolated Preview D1 listed above."
+            echo "- No Production Worker, Production D1, DNS or Production secrets were changed."
           } >> "$GITHUB_STEP_SUMMARY"
