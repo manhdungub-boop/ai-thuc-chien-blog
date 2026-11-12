@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "generated_on": "2026-10-31",
+  "author": "DUNG - AI",
+  "note": "Các SVG dưới đây được tự thiết kế cho bản thảo; không nhúng ảnh, biểu tượng hoặc nội dung đồ họa lấy từ website bên ngoài. Cần kiểm tra khả năng hiển thị trên template website trước khi phát hành.",
+  "assets": [
+    {
+      "file": "bo-kiem-thu-ai.svg",
+      "article": "kien-thuc-ai/bo-kiem-thu-20-cau-hoi-danh-gia-chat-luong-ai.md",
+      "purpose": "Minh họa chu trình kiểm thử AI từ bộ câu hỏi đến quyết định triển khai",
+      "origin": "original project SVG"
+    },
+    {
+      "file": "rag-kho-tri-thuc.svg",
+      "article": "kien-thuc-ai/rag-kho-tri-thuc-co-trich-dan.md",
+      "purpose": "Minh họa luồng RAG từ tài liệu nguồn đến câu trả lời có trích dẫn",
+      "origin": "original project SVG"
+    },
+    {
+      "file": "agent-human-approval.svg",
+      "article": "ai-tu-dong-hoa/agent-quyen-han-toi-thieu-human-approval.md",
+      "purpose": "Minh họa điểm kiểm soát chính sách và phê duyệt của con người",
+      "origin": "original project SVG"
+    },
+    {
+      "file": "workflow-idempotency.svg",
+      "article": "ai-tu-dong-hoa/workflow-chong-loi-idempotency-dead-letter.md",
+      "purpose": "Minh họa xử lý sự kiện, idempotency, retry và dead-letter queue",
+      "origin": "original project SVG"
+    },
+    {
+      "file": "dong-goi-dich-vu-ai.svg",
+      "article": "ai-kiem-tien/dong-goi-dich-vu-ai-cho-doanh-nghiep-nho.md",
+      "purpose": "Minh họa các giai đoạn đóng gói và nghiệm thu dịch vụ AI",
+      "origin": "original project SVG"
+    },
+    {
+      "file": "hoa-von-tco-ai.svg",
+      "article": "ai-kiem-tien/phan-tich-hoa-von-va-tco-du-an-ai.md",
+      "purpose": "Minh họa quy trình đo baseline, TCO, chi phí đầu ra và hòa vốn",
+      "origin": "original project SVG"
+    },
+    {
+      "file": "ollama-openwebui-local.svg",
+      "article": "cong-cu-ai-mien-phi/chay-ai-local-ollama-open-webui.md",
+      "purpose": "Minh họa kiến trúc người dùng, Open WebUI, Ollama API và model local",
+      "origin": "original project SVG"
+    },
+    {
+      "file": "whisper-cpp-flow.svg",
+      "article": "cong-cu-ai-mien-phi/chuyen-giong-noi-local-whisper-cpp.md",
+      "purpose": "Minh họa quy trình chép lời offline và hiệu đính thủ công",
+      "origin": "original project SVG"
+    }
+  ]
+}

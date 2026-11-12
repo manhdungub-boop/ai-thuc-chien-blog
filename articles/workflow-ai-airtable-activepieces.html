@@ -3,20 +3,20 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="description" content="Hướng dẫn thiết kế workflow nội dung AI với Airtable và Activepieces, có trạng thái chờ duyệt, chống chạy lặp và kiểm soát trước khi đăng.">
-<meta name="theme-color" content="#0b1020"><meta name="robots" content="index,follow,max-image-preview:large"><meta name="author" content="AI Thực Chiến">
+<meta name="theme-color" content="#0b1020"><meta name="robots" content="index,follow,max-image-preview:large"><meta name="author" content="DUNG - AI">
 <link rel="canonical" href="https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/workflow-ai-airtable-activepieces">
 <link rel="icon" type="image/svg+xml" href="../favicon.svg">
 <meta property="og:type" content="article"><meta property="og:locale" content="vi_VN"><meta property="og:site_name" content="AI Thực Chiến">
-<meta property="og:title" content="Xây dựng workflow AI có kiểm duyệt với Airtable và Activepieces | AI Thực Chiến">
-<meta property="og:description" content="Từ bản ghi mới đến bản nháp AI chờ con người duyệt: thiết kế các trạng thái, bộ lọc, kiểm thử và hàng rào an toàn.">
+<meta property="og:title" content="Workflow AI có kiểm duyệt với Airtable và Activepieces">
+<meta property="og:description" content="Hướng dẫn thiết kế workflow nội dung AI với Airtable và Activepieces, có trạng thái chờ duyệt, chống chạy lặp và kiểm soát trước khi đăng.">
 <meta property="og:url" content="https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/workflow-ai-airtable-activepieces">
-<meta name="twitter:card" content="summary"><meta name="twitter:title" content="Workflow AI có kiểm duyệt với Airtable và Activepieces"><meta name="twitter:description" content="Thiết kế quy trình tạo bản nháp AI có người duyệt, không tự đăng khi chưa được phê duyệt.">
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Xây dựng workflow AI có kiểm duyệt với Airtable và Activepieces","description":"Hướng dẫn thiết kế workflow nội dung AI có trạng thái chờ duyệt, chống chạy lặp và kiểm soát trước khi đăng.","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/workflow-ai-airtable-activepieces","mainEntityOfPage":{"@type":"WebPage","@id":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/workflow-ai-airtable-activepieces"},"datePublished":"2026-10-18","dateModified":"2026-10-21","inLanguage":"vi-VN","articleSection":"Tự động hóa","author":{"@type":"Organization","name":"AI Thực Chiến","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/"},"publisher":{"@type":"Organization","name":"AI Thực Chiến","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/"}}</script>
-<title>Xây dựng workflow AI có kiểm duyệt với Airtable và Activepieces | AI Thực Chiến</title>
+<meta name="twitter:card" content="summary"><meta name="twitter:title" content="Workflow AI có kiểm duyệt với Airtable và Activepieces"><meta name="twitter:description" content="Hướng dẫn thiết kế workflow nội dung AI với Airtable và Activepieces, có trạng thái chờ duyệt, chống chạy lặp và kiểm soát trước khi đăng.">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Xây dựng workflow AI có kiểm duyệt với Airtable và Activepieces","description":"Hướng dẫn thiết kế workflow nội dung AI với Airtable và Activepieces, có trạng thái chờ duyệt, chống chạy lặp và kiểm soát trước khi đăng.","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/workflow-ai-airtable-activepieces","mainEntityOfPage":{"@type":"WebPage","@id":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/workflow-ai-airtable-activepieces"},"datePublished":"2026-10-18","dateModified":"2026-10-28","inLanguage":"vi-VN","articleSection":"Tự động hóa","author":{"@type":"Person","name":"DUNG - AI"},"publisher":{"@type":"Organization","name":"AI Thực Chiến","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/","logo":"https://ai-thuc-chien-blog.manhdungub.workers.dev/logo.svg"}}</script>
+<title>Workflow AI có kiểm duyệt với Airtable và Activepieces</title>
 <link rel="alternate" type="application/rss+xml" title="AI Thực Chiến RSS" href="../feed.xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap" onload="this.onload=null;this.rel='stylesheet'"><noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap"></noscript>
 <link rel="stylesheet" href="../styles.css">
 
 <!-- Cloudflare Web Analytics: primary host only --><script>(function(){if(window.location.hostname==="ai-thuc-chien-blog.manhdungub.workers.dev"){var s=document.createElement("script");s.type="module";s.src="https://static.cloudflareinsights.com/beacon.min.js";s.setAttribute("data-cf-beacon",'{"token":"f6ac034ab044496e8246fb13481a409e"}');document.head.appendChild(s);}})();</script><!-- End Cloudflare Web Analytics -->
@@ -24,9 +24,35 @@
 <body>
 <a class="skip-link" href="#main-content">Bỏ qua đến nội dung chính</a>
 <header class="site-header"><a class="brand" href="../"><span class="brand-mark">AI</span><span>AI <b>Thực Chiến</b></span></a><a class="header-cta" href="../#bai-viet">← Tất cả bài viết</a></header>
-<main class="section" style="max-width:900px;margin:auto" id="main-content">
+<main class="section" style="max-width:900px;margin:auto" id="main-content"><p class="article-byline" style="font-size:14px;color:var(--muted);margin:0 0 16px"><strong>Tác giả:</strong> DUNG - AI</p>
 <div class="section-kicker">TỰ ĐỘNG HÓA · QUY TRÌNH CÓ KIỂM DUYỆT</div>
 <h1 style="font-size:clamp(32px,5vw,54px);line-height:1.2;letter-spacing:-1.6px;margin:18px 0">Xây dựng workflow AI có kiểm duyệt với Airtable và Activepieces</h1>
+<figure class="article-diagram" data-article-diagram="workflow-ai-airtable-activepieces" role="group" aria-labelledby="article-diagram-title-workflow-ai-airtable-activepieces" style="max-width:620px;margin:30px auto;padding:18px;border:1px solid var(--line);border-radius:18px;background:#0b1424">
+<svg viewBox="0 0 600 500" width="100%" height="auto" role="img" aria-labelledby="article-diagram-title-workflow-ai-airtable-activepieces article-diagram-desc-workflow-ai-airtable-activepieces" style="display:block;max-width:100%;height:auto">
+<title id="article-diagram-title-workflow-ai-airtable-activepieces">Sơ đồ thực hành: Xây dựng workflow AI có kiểm duyệt với Airtable và Activepieces</title>
+<desc id="article-diagram-desc-workflow-ai-airtable-activepieces">Ba bước chính trong bài viết: 1. Kiến trúc đơn giản, dễ kiểm tra; 2. Chuẩn bị bảng Airtable; 3. Tạo flow tạo bản nháp</desc>
+<defs><linearGradient id="diagram-accent-workflow-ai-airtable-activepieces" x1="0" x2="1"><stop offset="0" stop-color="#55d6b5"/><stop offset="1" stop-color="#8ab4ff"/></linearGradient></defs>
+<text x="300" y="38" text-anchor="middle" fill="#73dfc2" font-size="16" font-weight="700" letter-spacing="2">LỘ TRÌNH THỰC HÀNH</text>
+<rect x="58" y="76" width="484" height="94" rx="18" fill="#14243b" stroke="#36506f" stroke-width="2"/>
+<circle cx="105" cy="123" r="22" fill="url(#diagram-accent-workflow-ai-airtable-activepieces)"/>
+<text x="105" y="130" text-anchor="middle" fill="#081421" font-size="19" font-weight="800">1</text>
+<text x="148" y="127" fill="#eef4ff" font-size="19" font-weight="600"><tspan x="148" dy="0">Kiến trúc đơn giản, dễ kiểm tra</tspan></text>
+<path d="M300 172 V214" fill="none" stroke="#68d8bd" stroke-width="3" stroke-linecap="round"/>
+<path d="M291 204 L300 215 L309 204" fill="none" stroke="#68d8bd" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="58" y="222" width="484" height="94" rx="18" fill="#14243b" stroke="#36506f" stroke-width="2"/>
+<circle cx="105" cy="269" r="22" fill="url(#diagram-accent-workflow-ai-airtable-activepieces)"/>
+<text x="105" y="276" text-anchor="middle" fill="#081421" font-size="19" font-weight="800">2</text>
+<text x="148" y="273" fill="#eef4ff" font-size="19" font-weight="600"><tspan x="148" dy="0">Chuẩn bị bảng Airtable</tspan></text>
+<path d="M300 318 V360" fill="none" stroke="#68d8bd" stroke-width="3" stroke-linecap="round"/>
+<path d="M291 350 L300 361 L309 350" fill="none" stroke="#68d8bd" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="58" y="368" width="484" height="94" rx="18" fill="#14243b" stroke="#36506f" stroke-width="2"/>
+<circle cx="105" cy="415" r="22" fill="url(#diagram-accent-workflow-ai-airtable-activepieces)"/>
+<text x="105" y="422" text-anchor="middle" fill="#081421" font-size="19" font-weight="800">3</text>
+<text x="148" y="419" fill="#eef4ff" font-size="19" font-weight="600"><tspan x="148" dy="0">Tạo flow tạo bản nháp</tspan></text>
+</svg>
+<figcaption style="margin-top:10px;color:var(--muted);font-size:13px;line-height:1.6">Sơ đồ tóm tắt ba phần chính của bài viết. Đọc hướng dẫn chi tiết và kiểm chứng kết quả trước khi áp dụng vào dữ liệu thật.</figcaption>
+</figure>
+
 <p style="color:var(--muted);font-size:15px;line-height:1.9">Cách thực tế để biến ý tưởng thành bản nháp có cấu trúc mà vẫn giữ quyền quyết định ở con người. Quy trình khởi đầu chỉ tạo bản nháp và cập nhật trạng thái; không tự đăng hoặc gửi tin nhắn.</p>
 <p style="font-size:12px;color:#8993ab">Cập nhật ngày <time datetime="2026-10-21">21/10/2026</time> · Thời gian đọc khoảng 8 phút</p>
 
@@ -111,6 +137,16 @@
 <p><strong>Bài liên quan:</strong> <a href="/articles/quy-trinh-ai-co-kiem-duyet" style="color:var(--mint);text-decoration:underline">Thiết kế quy trình AI có kiểm duyệt</a> · <a href="/articles/kiem-chung-noi-dung-ai" style="color:var(--mint);text-decoration:underline">Checklist kiểm chứng nội dung AI</a>.</p>
 <a class="article-link" href="../#bai-viet" style="max-width:260px">← Quay lại thư viện bài viết <span>→</span></a>
 
+<section class="article-faq" aria-labelledby="faq-airtable-activepieces">
+<h2 id="faq-airtable-activepieces">Câu hỏi thường gặp</h2>
+<h3>Nên đặt bước duyệt của con người ở đâu trong workflow?</h3>
+<p>Đặt sau khi dữ liệu và bản nháp AI đã vượt kiểm tra tự động, nhưng trước hành động có thể tác động ra ngoài như xuất bản, gửi thông báo hoặc cập nhật dữ liệu quan trọng. Màn hình duyệt nên cho thấy nguồn đầu vào, phần AI tạo, những kiểm tra đã đạt và hành động sẽ xảy ra khi bấm chấp thuận.</p>
+<h3>Làm sao tránh workflow xử lý cùng một sự kiện nhiều lần?</h3>
+<p>Dùng mã sự kiện hoặc khóa idempotency ổn định, lưu trạng thái xử lý và kiểm tra trạng thái trước khi tạo tác động mới. Với bước cập nhật dữ liệu, xác minh hành vi của connector và ưu tiên thao tác có thể lặp lại an toàn. Retry cần giới hạn và không được biến lỗi không rõ nguyên nhân thành nhiều lần gửi hoặc ghi trùng.</p>
+<h3>Nếu workflow dừng ở giữa thì tiếp tục từ đâu?</h3>
+<p>Lưu trạng thái của từng bước và phân loại lỗi tạm thời với lỗi dữ liệu hoặc quyền truy cập. Chỉ chạy lại bước đã xác định an toàn; không phát lại toàn bộ quy trình nếu các bước trước đã gửi thư hoặc cập nhật hệ thống. Ngoại lệ vượt giới hạn nên được đưa vào hàng chờ để người phụ trách kiểm tra và xử lý.</p>
+</section>
+
 <section class="related-articles" aria-labelledby="related-articles-title">
   <div class="related-articles-heading"><p class="section-kicker">ĐỌC TIẾP</p><h2 id="related-articles-title">Bài viết liên quan</h2><p>Tiếp tục theo lộ trình thực hành với các hướng dẫn có liên quan.</p></div>
   <nav class="related-articles-grid" aria-label="Bài viết liên quan">
@@ -119,7 +155,8 @@
     <a class="related-article" href="/articles/kiem-chung-noi-dung-ai"><strong>Checklist kiểm chứng nội dung AI</strong><span>Bổ sung tiêu chí kiểm tra cho đầu ra trước khi duyệt.</span></a>
   </nav>
 </section>
-</main>
+<p class="article-library-cta" style="margin:28px 0 12px"><a class="button primary" href="../thu-vien.html">Khám phá thư viện bài viết →</a></p>
+<section class="article-author-note" aria-label="Ghi công tác giả và sử dụng nội dung"><p><strong>Tác giả:</strong> DUNG - AI</p><p>Khi trích dẫn, chia sẻ hoặc sử dụng lại nội dung bài viết này, vui lòng ghi rõ tác giả <strong>DUNG - AI</strong> và dẫn liên kết về bài viết gốc. Các tài sản của bên thứ ba (nếu có) vẫn tuân theo giấy phép và điều kiện sử dụng riêng.</p></section></main>
 <footer><a class="brand" href="../"><span class="brand-mark">AI</span><span>AI <b>Thực Chiến</b></span></a><span>Học thật · Thử thật · Tối ưu từng bước · <a href="../feed.xml" aria-label="Đăng ký RSS">RSS</a></span><span>© 2026 AI Thực Chiến</span></footer>
-<script src="../script.js"></script>
+<script src="../script.js" defer></script>
 </body></html>

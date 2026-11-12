@@ -26,7 +26,33 @@ python3 scripts/test_community_schema.py
 
 ## Giới hạn của bản đầu
 
-- Chưa có xác minh email, đặt lại mật khẩu, công cụ kiểm duyệt quản trị viên, báo cáo tin nhắn hoặc khôi phục tài khoản.
+- Đặt lại mật khẩu, công cụ kiểm duyệt quản trị viên, báo cáo tin nhắn và khôi phục tài khoản vẫn chưa được triển khai.
 - Danh sách phòng cập nhật định kỳ khoảng 15 giây khi người dùng đang xem; đây chưa phải WebSocket/push thời gian thực.
 - Email không hiển thị cho thành viên khác; tên hiển thị và nội dung tin nhắn được chia sẻ trong phòng tương ứng.
 - Trước khi mở rộng công khai, cần bổ sung quy trình kiểm duyệt/báo cáo, điều khoản cộng đồng và chính sách quyền riêng tư đầy đủ.
+
+
+## Required email verification
+
+New registrations remain pending until the member confirms the one-time link sent through the Google Apps Script mail relay. Links expire after 30 minutes; only a SHA-256 hash of each random token is stored in D1. Existing accounts are grandfathered as verified by migration `0002_email_verification.sql` so this feature does not lock out current members.
+
+### Free-first setup without a custom domain (Google Apps Script + Gmail)
+
+This relay sends mail from the Google account that owns the script, so no custom sender domain is required. Google Apps Script currently lists a 100-recipient/day quota for consumer Gmail accounts; quotas can change and are enforced by Google.
+
+1. Open https://script.google.com/home and create a new project using the Google account that should send the verification emails.
+2. Copy `email-relay/Code.gs` from this repository into the editor. Open **Project Settings**, enable **Show `appsscript.json` manifest file in editor**, then replace that manifest with `email-relay/appsscript.json`. It requests only the `script.send_mail` scope and configures the web app to execute as the deploying owner with anonymous public access; the relay itself still requires the shared secret.
+3. In **Project Settings → Script properties**, set `COMMUNITY_EMAIL_RELAY_SECRET` to a long random secret (at least 32 random characters), and `COMMUNITY_EMAIL_ALLOWED_HOSTS` to `ai-thuc-chien-blog.manhdungub.workers.dev,feature-required-email-verification-ai-thuc-chien-blog.manhdungub.workers.dev` for staging tests. Use the exact same secret in Cloudflare Worker Secrets; do not place it in Git or in a URL. The relay sends only to hosts on this allowlist.
+4. Deploy → **New deployment** → type **Web app**. Choose **Execute as: Me** and access **Anyone** (if offered as two similarly named choices, use the one that allows unauthenticated visitors) so Cloudflare can call it server-to-server. The public URL is protected by the shared secret; never publish the secret. Authorize sending as your own Google account.
+4. Copy the Web app `/exec` URL into the Cloudflare Worker variable `COMMUNITY_EMAIL_RELAY_URL`; add the matching secret as Worker secret `COMMUNITY_EMAIL_RELAY_SECRET`. Configure preview separately from production. Keep both values absent in production until the real-inbox test passes.
+5. Apply `migrations/0002_email_verification.sql` to the preview D1 first. Test a new registration, email arrival (including Spam), token expiry/replay, and login gating on Preview. After Preview tests pass, change `COMMUNITY_EMAIL_ALLOWED_HOSTS` to only `ai-thuc-chien-blog.manhdungub.workers.dev`, removing the Preview hostname. Only then apply the migration and configure the relay for production as a separate rollout.
+
+The Apps Script endpoint checks the shared secret before sending and returns only a generic error code; the secret is never returned to the browser or logged. A missing relay configuration fails closed with HTTP 503 and removes the newly created pending account. The resend endpoint uses the same generic public response for known and unknown email addresses.
+
+
+### Preview verification milestone — 2026-10-22
+
+- The guarded workflow `Manage Preview D1 Migrations` was run in `apply` mode on `feature/required-email-verification`. It verified the exact Preview database UUID `51d814c8-a3fc-4481-a5f1-60bc67617f3c` and applied `0002_email_verification.sql`. The workflow's post-apply migration list reported `No migrations to apply!`.
+- Read-only live smoke test at `https://feature-required-email-verification-ai-thuc-chien-blog.manhdungub.workers.dev`: `/api/community/me` = HTTP 200 with same-origin CORS; a cryptographically random nonexistent verify token = HTTP 400 (verification schema is queryable); untrusted Origin = HTTP 403 with no CORS permission. No test member was created and no email was sent in these probes.
+- Production D1 UUID `fc2517cb-9543-4d7b-98f4-bcd5f3c013e7`, `main`, and production Worker were not changed.
+- Remaining release gate: deploy and authorize the Google Apps Script `/exec` relay, configure only Preview Worker URL/secret, test delivery to a real mailbox and full confirm/login/expiry/replay/resend flow; then remove Preview hostname from relay allowlist before any production rollout.

@@ -1,0 +1,56 @@
+name: Staging Google OAuth integration
+
+on:
+  push:
+    branches:
+      - main
+      - security/release-readiness-hardening-20261110
+  pull_request:
+    branches:
+      - main
+      - security/pin-verified-actions-20261110
+      - fix/release-blockers-20261109
+    paths:
+      - "worker.mjs"
+      - "script.js"
+      - "tests/community-auth-host-allowlist.test.mjs"
+      - "migrations/0003_community_oauth_accounts.sql"
+      - "tests/staging-google-oidc-runtime.test.mjs"
+      - "tests/staging-google-oauth-route-runtime.test.mjs"
+      - "scripts/test_google_oauth_worker_integration.mjs"
+      - "scripts/test_google_oauth_migration.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  staging-google-oauth:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+      - name: Syntax-check integrated Worker and tests
+        run: |
+          node --check worker.mjs
+          node --check script.js
+          node --check tests/staging-google-oidc-runtime.test.mjs
+          node --check tests/staging-google-oauth-route-runtime.test.mjs
+          node --check tests/community-auth-host-allowlist.test.mjs
+          node --check scripts/test_google_oauth_worker_integration.mjs
+      - name: Run Google OIDC security regression tests against integrated Worker
+        run: node --test tests/staging-google-oidc-runtime.test.mjs
+      - name: Verify exact staging OAuth frontend host allowlist
+        run: node --test tests/community-auth-host-allowlist.test.mjs
+      - name: Exercise complete OAuth route flow with isolated D1 mock
+        run: node --test tests/staging-google-oauth-route-runtime.test.mjs
+      - name: Check staging-only OAuth routes and migration contract
+        run: node scripts/test_google_oauth_worker_integration.mjs
+      - name: Rehearse additive OAuth migration in local SQLite
+        run: python scripts/test_google_oauth_migration.py

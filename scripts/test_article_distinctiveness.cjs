@@ -80,9 +80,9 @@ function coreTokens(slug) {
   assert.ok(sourceStart > h1End, `${slug}: article sources section not found after H1`);
   let core = source.slice(h1End + 5, sourceStart)
     .replace(/<[^>]*>/g, ' ')
-    .replace(/&nbsp;|&#160;/gi, ' ')
-    .replace(/&amp;/gi, '&').replace(/&quot;/gi, '"')
-    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&(?:nbsp|#160|amp|quot|#39|apos);/gi, (entity) => ({
+      '&nbsp;': ' ', '&#160;': ' ', '&amp;': '&', '&quot;': '"', '&#39;': "'", '&apos;': "'"
+    })[entity.toLowerCase()] ?? entity)
     .toLocaleLowerCase('vi-VN');
   return core.match(/[\p{L}\p{N}]+/gu) || [];
 }

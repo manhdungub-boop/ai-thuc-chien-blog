@@ -26,4 +26,10 @@ assert.equal(migrationDb.database_id, preview.database_id, 'preview migration ID
 assert.equal(migrationDb.database_name, preview.database_name, 'preview migration name must match Worker preview name');
 assert.equal(migrationDb.migrations_dir, 'migrations', 'preview migration directory must be explicit');
 assert.notEqual(migrationDb.database_id, prod.database_id, 'preview migration must never target production D1');
+const productionDeployWorkflow = fs.readFileSync('.github/workflows/deploy-cloudflare-workers.yml', 'utf8');
+assert.match(productionDeployWorkflow, /github\.event_name == 'workflow_dispatch' && github\.ref == 'refs\/heads\/main' && inputs\.confirm_production_worker_and_d1_changes == true/, 'Production deployment must require explicit manual confirmation from main');
+assert.doesNotMatch(productionDeployWorkflow, /--request POST/, 'Production deployment must never create a D1 database automatically');
+assert.match(productionDeployWorkflow, /fc2517cb-9543-4d7b-98f4-bcd5f3c013e7/, 'Production deploy must verify the exact reviewed D1 ID');
+assert.match(productionDeployWorkflow, /d1 migrations apply/, 'D1 migrations remain available only behind the manual deploy job gate');
+console.log('PASS: Production deploy is main-only, manually confirmed, and cannot auto-create a D1 database.');
 console.log('PASS: production and preview D1 bindings are isolated; migration config matches the verified preview DB.');

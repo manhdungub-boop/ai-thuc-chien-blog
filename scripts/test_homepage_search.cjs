@@ -21,10 +21,7 @@ const cardMarkup = [...home.matchAll(/<article class="article-card(?: featured)?
 assert.ok(cardMarkup.length > 0, 'homepage should include at least one article card');
 const toTextContent = (markup) => markup
   .replace(/<[^>]*>/g, ' ')
-  .replace(/&amp;/g, '&')
-  .replace(/&nbsp;/g, ' ')
-  .replace(/&#39;/g, "'")
-  .replace(/&quot;/g, '"')
+  .replace(/&(?:amp|nbsp|#39|quot);/gi, (entity) => ({ '&amp;': '&', '&nbsp;': ' ', '&#39;': "'", '&quot;': '"' })[entity.toLowerCase()] ?? entity)
   .replace(/\s+/g, ' ')
   .trim();
 const cards = cardMarkup.map((markup) => ({ textContent: toTextContent(markup), hidden: false }));

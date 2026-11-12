@@ -36,17 +36,25 @@ function getLastModified(html) {
 
 function getTitle(html) {
   const match = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-  return match ? match[1].replace(/<[^>]+>/g, '').trim() : '';
+  if (!match) return '';
+  return match[1]
+    .replace(/<script\b[\s\S]*?(?:<\/script\s*>|$)/gi, ' ')
+    .replace(/<style\b[\s\S]*?(?:<\/style\s*>|$)/gi, ' ')
+    .replace(/<[^<>]*>/g, ' ')
+    .replace(/[<>]/g, ' ')
+    .trim();
 }
 
 function getCanonical(html, file) {
   const tag = (html.match(/<link\b[^>]*rel=["']canonical["'][^>]*>/i) || [])[0] || '';
   const match = tag.match(/\bhref\s*=\s*["']([^"']+)["']/i);
   const canonical = match ? match[1].trim() : '';
-  if (!canonical || !canonical.startsWith(SITE + '/')) {
+  let parsed;
+  try { parsed = new URL(canonical); } catch { parsed = null; }
+  if (!parsed || parsed.protocol !== 'https:' || parsed.origin !== SITE || parsed.username || parsed.password) {
     throw new Error('Missing or invalid canonical URL in ' + file);
   }
-  return canonical;
+  return parsed.href;
 }
 
 function validatePageMetadata(html, file) {
@@ -91,7 +99,7 @@ function generate(outputDir) {
   const articles = files.map((file) => {
     const html = fs.readFileSync(path.join(articlesDir, file), 'utf8');
     const metadata = validatePageMetadata(html, 'articles/' + file);
-    if (!metadata.canonical.startsWith(SITE + '/articles/')) {
+    if (new URL(metadata.canonical).pathname.split('/')[1] !== 'articles') {
       throw new Error('Article canonical must use /articles/ path in ' + file);
     }
     if (metadata.canonical.endsWith('.html')) {
@@ -107,6 +115,13 @@ function generate(outputDir) {
     throw new Error('About page canonical URL must match the deployed /ve-chung-toi.html route');
   }
 
+  const aiBankPath = path.join(outputDir, 'ngan-hang-ai.html');
+  const aiBankHtml = fs.readFileSync(aiBankPath, 'utf8');
+  const aiBank = validatePageMetadata(aiBankHtml, 'ngan-hang-ai.html');
+  if (aiBank.canonical !== SITE + '/ngan-hang-ai.html') {
+    throw new Error('AI bank canonical URL must match /ngan-hang-ai.html');
+  }
+
   const libraryPath = path.join(outputDir, 'thu-vien.html');
   const libraryHtml = fs.readFileSync(libraryPath, 'utf8');
   const library = validatePageMetadata(libraryHtml, 'thu-vien.html');
@@ -118,6 +133,7 @@ function generate(outputDir) {
     { canonical: SITE + '/' },
     about,
     library,
+    aiBank,
     ...articles
   ].map((page) => {
     const lines = [
@@ -161,7 +177,7 @@ function generate(outputDir) {
 
   fs.writeFileSync(path.join(outputDir, 'sitemap.xml'), sitemap, 'utf8');
   fs.writeFileSync(path.join(outputDir, 'feed.xml'), feed, 'utf8');
-  console.log('SEO FEEDS GENERATED: ' + articles.length + ' homepage-linked articles + homepage + about page.');
+  console.log('SEO FEEDS GENERATED: ' + articles.length + ' homepage-linked articles + homepage + about + library + AI bank pages.');
 }
 
 module.exports = generate;

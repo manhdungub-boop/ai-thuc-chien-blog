@@ -15,7 +15,11 @@ for (const file of htmlFiles) {
   assert.match(html, /<main\b[^>]*\bid="main-content"/i, file + ': main landmark needs main-content id');
   assert.ok(html.includes('<link rel="preconnect" href="https://fonts.googleapis.com">'), file + ': missing Google Fonts preconnect');
   assert.ok(html.includes('<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'), file + ': missing font asset preconnect');
-  assert.ok(html.includes('<link href="' + fontUrl + '" rel="stylesheet">'), file + ': font stylesheet must be discoverable from HTML');
+  const directFontStylesheet = html.includes('<link href="' + fontUrl + '" rel="stylesheet">') ||
+    html.includes('<link rel="stylesheet" href="' + fontUrl + '">');
+  const preloadedFontStylesheet = html.includes('<link rel="preload" as="style" href="' + fontUrl + '" onload="this.onload=null;this.rel=\'stylesheet\'">') &&
+    html.includes('<noscript><link rel="stylesheet" href="' + fontUrl + '"></noscript>');
+  assert.ok(directFontStylesheet || preloadedFontStylesheet, file + ': font stylesheet must be discoverable through a direct link or a non-blocking preload with noscript fallback');
 }
 const css = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
 assert.doesNotMatch(css, /^\s*@import\b/m, 'Avoid CSS @import because it delays font discovery');

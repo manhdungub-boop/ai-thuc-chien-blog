@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-11-11T00:00:00+07:00",
+  "catalog_policy": {
+    "default_locale": "vi",
+    "currency": "USD",
+    "new_entry_status": "needs_review",
+    "note": "Candidate intake only. All new records remain needs_review; pricing, license scope, regional availability and public-listing eligibility require editorial approval."
+  },
+  "tools": []
+}

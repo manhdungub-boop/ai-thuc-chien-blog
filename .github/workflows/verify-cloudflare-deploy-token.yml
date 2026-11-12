@@ -2,12 +2,19 @@ name: Verify Cloudflare Deploy Token
 
 on:
   workflow_dispatch:
+    inputs:
+      confirm_read_only_token_check:
+        description: "Required: confirm token status check from trusted main"
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
 
 jobs:
   verify:
+    if: github.ref == 'refs/heads/main' && inputs.confirm_read_only_token_check == true
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
