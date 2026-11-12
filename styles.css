@@ -141,3 +141,8 @@
 
 /* Respect the HTML hidden attribute even when component styles set display:grid/block. */
 [hidden] { display: none !important; }
+
+
+/* Header login entry: keep desktop CTA singular; expose nav link inside mobile menu. */
+.site-header nav .nav-login-link{display:none}
+@media(max-width:640px){.site-header nav.open .nav-login-link{display:block}}
