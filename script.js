@@ -25,7 +25,7 @@ if (year) year.textContent = String(new Date().getFullYear());
 // Count aggregate page views on every public HTML page; no visitor IP is sent or stored.
 (() => {
   const endpoint = '/api/community';
-  const viewNode = document.getElementById('site-view-count');
+  const viewNode = typeof document.getElementById === 'function' ? document.getElementById('site-view-count') : null;
   const updateCount = async () => {
     try {
       const response = await fetch(endpoint + '/analytics/stats', { credentials: 'same-origin', cache: 'no-store' });
