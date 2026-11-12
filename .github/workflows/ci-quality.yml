@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - test/release-security-runtime-regressions-20261111
   pull_request:
     branches:
       - main
@@ -81,8 +82,8 @@ jobs:
       - name: Install pinned Playwright and Chromium for browser regression
         run: |
           npm install --ignore-scripts --no-save --package-lock=false --no-audit --no-fund playwright@1.65.0
-          # Avoid apt dependency installation; it fails when Ubuntu mirrors/DNS are unavailable.
-          # The GitHub-hosted runner supplies Chromium runtime libraries; install only the pinned browser binary.
+          # Avoid playwright install --with-deps: it invokes apt and can fail when Ubuntu mirrors/DNS are unavailable.
+          # The hosted runner image supplies Chromium's runtime libraries; install only the pinned browser binary.
           ./node_modules/.bin/playwright install chromium
 
       - name: Build isolated noindex AI Bank preview fixture

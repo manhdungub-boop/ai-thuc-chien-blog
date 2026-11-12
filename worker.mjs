@@ -37,6 +37,7 @@ const CHAT_ALLOWED_ORIGINS = new Set([
   "https://ai-thuc-chien-blog.manhdungub.workers.dev",
   "https://ai-thuc-chien-blog.pages.dev",
   "https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev",
+  "https://integration-release-candida-ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev",
 ]);
 function chatJson(data, status, request) {
   const headers = new Headers({
