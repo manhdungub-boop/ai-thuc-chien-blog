@@ -1,11 +1,14 @@
-name: Deploy Google Login fix to isolated Auth Preview
+name: Deploy Visitor Analytics candidate to isolated Auth Preview
 
 on:
   push:
     branches:
-      - fix/google-button-visibility-20261112
+      - feature/visitor-analytics-topic-presence
     paths:
       - "script.js"
+      - "worker.mjs"
+      - "index.html"
+      - "migrations/**"
       - ".github/workflows/deploy-google-login-preview.yml"
       - "wrangler.jsonc"
   workflow_dispatch:
@@ -14,7 +17,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: google-login-auth-preview
+  group: visitor-analytics-auth-preview
   cancel-in-progress: false
 
 jobs:
@@ -22,10 +25,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Checkout isolated PR branch
+      - name: Checkout isolated visitor analytics branch
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: fix/google-button-visibility-20261112
+          ref: feature/visitor-analytics-topic-presence
           persist-credentials: false
 
       - name: Set up Node.js
@@ -64,7 +67,7 @@ jobs:
           accountId: 92cf091bbac8b4879ec65feb30b4715b
           command: deploy --config wrangler.preview.deploy.jsonc
 
-      - name: Verify Preview OAuth provider endpoint
+      - name: Verify Preview analytics endpoints and OAuth provider configuration
         run: |
           node --input-type=module <<'JS'
           const base = "https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev";
@@ -72,7 +75,9 @@ jobs:
           if (!response.ok) throw new Error(`Preview provider endpoint returned HTTP ${response.status}`);
           const providers = await response.json();
           if (providers.google !== true) throw new Error("Google OAuth is not enabled on Preview");
-          console.log("PASS: Preview reports Google OAuth enabled.");
+          const stats = await fetch(base + "/api/community/analytics");
+          console.log("Preview analytics endpoint HTTP", stats.status);
+          console.log("PASS: Preview reports Google OAuth enabled; analytics endpoint reachable.");
           JS
 
       - name: Record deployment boundary
