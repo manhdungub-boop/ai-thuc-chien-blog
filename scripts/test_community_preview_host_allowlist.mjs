@@ -11,6 +11,8 @@ assert.notEqual(allowlistEnd, -1, 'Community auth host allowlist must close');
 const allowlist = source.slice(allowlistStart, allowlistEnd);
 assert.ok(allowlist.includes("'security-release-readiness-ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev'"),
   'Current release-readiness Preview hostname must be allowed to display the login form');
+assert.ok(allowlist.includes("'preview-google-oauth-secret-ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev'"),
+  'Dedicated Google OAuth refresh Preview hostname must be allowed to display the login form');
 assert.ok(source.includes('if (!communityAuthHosts.has(window.location.hostname))'),
   'Unknown hostnames must continue to fail closed');
 assert.ok(source.includes('authPanel.hidden = true;'),
