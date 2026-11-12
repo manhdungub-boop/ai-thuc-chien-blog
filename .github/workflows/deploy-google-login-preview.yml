@@ -67,6 +67,11 @@ jobs:
           accountId: 92cf091bbac8b4879ec65feb30b4715b
           command: deploy --config wrangler.preview.deploy.jsonc
 
+      - name: Apply pending migrations to the isolated Preview D1 only
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+        run: npx --yes wrangler@4.161.0 d1 migrations apply "ai-thuc-chien-community-preview" --remote --config wrangler.preview-migrations.jsonc
+
       - name: Verify Preview analytics endpoints and OAuth provider configuration
         run: |
           node --input-type=module <<'JS'
@@ -75,9 +80,19 @@ jobs:
           if (!response.ok) throw new Error(`Preview provider endpoint returned HTTP ${response.status}`);
           const providers = await response.json();
           if (providers.google !== true) throw new Error("Google OAuth is not enabled on Preview");
-          const stats = await fetch(base + "/api/community/analytics");
-          console.log("Preview analytics endpoint HTTP", stats.status);
-          console.log("PASS: Preview reports Google OAuth enabled; analytics endpoint reachable.");
+          const stats = await fetch(base + "/api/community/analytics/stats");
+          if (!stats.ok) throw new Error(`Analytics stats returned HTTP ${stats.status}`);
+          const totals = await stats.json();
+          if (!Number.isFinite(totals.totalViews)) throw new Error("Analytics totalViews is missing or invalid");
+          const presence = await fetch(base + "/api/community/presence?topic=tools");
+          if (!presence.ok) throw new Error(`Public presence count returned HTTP ${presence.status}`);
+          const online = await presence.json();
+          if (online.topic !== "tools" || !Number.isFinite(online.onlineMembers)) throw new Error("Presence response is invalid");
+          const me = await fetch(base + "/api/community/me");
+          if (!me.ok) throw new Error(`Unauthenticated /me returned HTTP ${me.status}`);
+          const own = await me.json();
+          if (own.member !== null || Object.hasOwn(own, "currentIp")) throw new Error("Unauthenticated visitor must not receive an IP address");
+          console.log("PASS: Google OAuth configured; aggregate stats, public online count and unauthenticated IP privacy verified.");
           JS
 
       - name: Record deployment boundary
