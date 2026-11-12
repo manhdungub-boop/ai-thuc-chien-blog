@@ -1277,9 +1277,16 @@ export default {
   // and purge expired buckets hourly without touching active rate-limit windows.
   async scheduled(controller, env) {
     const scheduledAt = Number.isFinite(controller?.scheduledTime) ? controller.scheduledTime : Date.now();
-    const retentionCutoff = scheduledAt - (2 * 60 * 60 * 1000);
+    // Retain rate-limit buckets for two hours (maximum window plus grace).
+    const rateLimitCutoff = scheduledAt - (2 * 60 * 60 * 1000);
     await env.DB.prepare("DELETE FROM community_rate_limits WHERE window_start < ?")
-      .bind(retentionCutoff)
+      .bind(rateLimitCutoff)
+      .run();
+
+    // Presence expires after 120 seconds; remove stale member/topic rows hourly.
+    const presenceCutoff = new Date(scheduledAt - (120 * 1000)).toISOString();
+    await env.DB.prepare("DELETE FROM community_topic_presence WHERE last_seen_at < ?")
+      .bind(presenceCutoff)
       .run();
   },
   async fetch(request, env) {
