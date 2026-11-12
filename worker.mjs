@@ -1218,6 +1218,8 @@ export default {
     try {
       const requestUrl = new URL(request.url);
       const pathname = requestUrl.pathname;
+      const isHomepageRead = (request.method === "GET" || request.method === "HEAD") && pathname === "/";
+      const isPrimaryWorkerHost = requestUrl.hostname === "ai-thuc-chien-blog.manhdungub.workers.dev";
       // resolveAssetRequest maps / to /index.html internally, keeping the public URL canonical.
       if (pathname === "/api/chat") return withSecurityHeaders(await handleChat(request, env), request);
       if (pathname === "/api/community" || pathname.startsWith("/api/community/")) {
