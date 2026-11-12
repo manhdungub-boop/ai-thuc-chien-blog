@@ -22,6 +22,23 @@ if (menuButton && nav) {
 const year = document.querySelector('#year');
 if (year) year.textContent = String(new Date().getFullYear());
 
+// Count aggregate page views on every public HTML page; no visitor IP is sent or stored.
+(() => {
+  const endpoint = '/api/community';
+  const viewNode = document.getElementById('site-view-count');
+  const updateCount = async () => {
+    try {
+      const response = await fetch(endpoint + '/analytics/stats', { credentials: 'same-origin', cache: 'no-store' });
+      if (!response.ok) return;
+      const data = await response.json();
+      if (viewNode) viewNode.textContent = `Lượt truy cập: ${Number(data.totalViews || 0).toLocaleString('vi-VN')}`;
+    } catch (_error) { /* Analytics must never block page rendering. */ }
+  };
+  fetch(endpoint + '/analytics/pageview', { method: 'POST', credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: location.pathname }) })
+    .then(updateCount).catch(updateCount);
+})();
+
 // Accessible copy buttons for reusable prompt templates and other text blocks.
 const copyButtons = document.querySelectorAll('[data-copy-target]');
 copyButtons.forEach((button) => {
@@ -210,7 +227,10 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
   const emailInput = root.querySelector('#community-email');
   const passwordInput = root.querySelector('#community-password');
   const memberName = root.querySelector('#community-member-name');
+  const memberIp = root.querySelector('#community-member-ip');
   const memberStatus = root.querySelector('#community-member-status');
+  const topicViewCount = root.querySelector('#community-topic-views');
+  const topicOnlineCount = root.querySelector('#community-topic-online');
   const logoutButton = root.querySelector('#community-logout');
   const roomTitle = root.querySelector('#community-room-title');
   const roomDescription = root.querySelector('#community-room-description');
@@ -275,7 +295,7 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
     if (passwordResetForm) passwordResetForm.hidden = !passwordResetToken;
     if (socialAuthContainer) socialAuthContainer.hidden = !googleOAuthReady || Boolean(verificationToken) || Boolean(passwordResetToken);
   };
-  const showMember = (member) => {
+  const showMember = (member, currentIp = null) => {
     currentMember = member || null;
     authPanel.hidden = Boolean(currentMember);
     memberPanel.hidden = !currentMember;
@@ -283,13 +303,42 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
     chatForm.hidden = !currentMember;
     if (currentMember) {
       memberName.textContent = `${currentMember.displayName || currentMember.username} (@${currentMember.username})`;
+      if (memberIp) memberIp.textContent = currentIp ? `Địa chỉ IP hiện tại của bạn: ${currentIp}` : 'Chưa xác định được địa chỉ IP của kết nối này.';
       setStatus(authStatus, '');
       setStatus(memberStatus, '');
-    }
+    } else if (memberIp) memberIp.textContent = '';
   };
   const formatDate = (value) => {
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? '' : date.toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  };
+  const refreshTopicStats = async (topic = currentTopic) => {
+    try {
+      const [sr, pr] = await Promise.all([
+        fetch(`/api/community/analytics/stats?topic=${encodeURIComponent(topic)}`, { credentials: 'same-origin', cache: 'no-store' }),
+        fetch(`/api/community/presence?topic=${encodeURIComponent(topic)}`, { credentials: 'same-origin', cache: 'no-store' })
+      ]);
+      if (!sr.ok || !pr.ok) return;
+      const [stats, presence] = await Promise.all([sr.json(), pr.json()]);
+      if (topic === currentTopic) {
+        if (topicViewCount) topicViewCount.textContent = `Lượt xem chủ đề: ${Number(stats.topicViews || 0).toLocaleString('vi-VN')}`;
+        if (topicOnlineCount) topicOnlineCount.textContent = `Thành viên đang online: ${Number(presence.onlineMembers || 0).toLocaleString('vi-VN')}`;
+      }
+      const node = document.getElementById('site-view-count');
+      if (node) node.textContent = `Lượt truy cập: ${Number(stats.totalViews || 0).toLocaleString('vi-VN')}`;
+    } catch (_error) { /* Counters must not interrupt community use. */ }
+  };
+  const recordTopicView = async (topic) => {
+    try { await api('/analytics/pageview', { method: 'POST', body: JSON.stringify({ path: location.pathname, topic }) }); }
+    catch (_error) { /* Topic navigation remains available if analytics is unavailable. */ }
+    refreshTopicStats(topic);
+  };
+  const sendPresence = async () => {
+    if (!currentMember || document.visibilityState !== 'visible') return;
+    try {
+      await api('/presence', { method: 'POST', body: JSON.stringify({ topic: currentTopic }) });
+      refreshTopicStats(currentTopic);
+    } catch (error) { if (error.status === 401) showMember(null); }
   };
   const renderMessages = (messages) => {
     messageList.replaceChildren();
@@ -361,7 +410,8 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
     roomTitle.textContent = roomInfo[topic].title;
     roomDescription.textContent = roomInfo[topic].description;
     setStatus(roomStatus, '');
-    if (currentMember) loadMessages();
+    recordTopicView(topic);
+    if (currentMember) { loadMessages(); sendPresence(); }
     else {
       messageList.replaceChildren();
       const prompt = document.createElement('p');
@@ -422,9 +472,10 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
         setStatus(authStatus, result.message || 'Đã gửi email xác nhận. Hãy kiểm tra hộp thư.', 'success');
         return;
       }
-      showMember(result.member);
+      showMember(result.member, result.currentIp);
       setStatus(roomStatus, 'Đăng nhập thành công. Đang tải phòng thảo luận…', 'success');
       await loadMessages();
+      sendPresence();
     } catch (error) {
       if (error.code === 'EMAIL_NOT_VERIFIED') { pendingVerificationEmail = emailInput.value.trim(); resendButton.hidden = false; }
       setStatus(authStatus, error.message, 'error');
@@ -595,8 +646,8 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
     // A reset link takes precedence over an existing session; keep the reset form visible.
     if (passwordResetToken) showMember(null);
     else {
-      showMember(result.member);
-      if (result.member) loadMessages();
+      showMember(result.member, result.currentIp);
+      if (result.member) { loadMessages(); sendPresence(); }
     }
     if (oauthNotice) {
       if (result.member && oauthNotice.kind === 'success') setStatus(memberStatus, oauthNotice.text, 'success');
@@ -610,8 +661,10 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
     roomTabs.forEach((button) => { button.disabled = error.status === 503; });
   });
   window.setInterval(() => {
-    if (currentMember && document.visibilityState === 'visible') loadMessages();
-  }, 15000);
+    if (document.visibilityState !== 'visible') return;
+    if (currentMember) { loadMessages(); sendPresence(); }
+    else refreshTopicStats(currentTopic);
+  }, 30000);
 })();
 
 // Site-wide AI reader assistant. Conversation stays in this tab and is not persisted.
