@@ -125,6 +125,18 @@ const previewSameOriginResponse = await worker.fetch(new Request(`${previewOrigi
 assert.equal(previewSameOriginResponse.status, 200, 'same-origin Preview API calls should be accepted');
 assert.equal(previewSameOriginResponse.headers.get('Access-Control-Allow-Origin'), previewOrigin);
 
+// Privacy regression: anonymous requests must never receive a current-IP field.
+const anonymousMe = await call('/me', { ip: '203.0.113.10' });
+assert.equal(anonymousMe.status, 200);
+const anonymousMePayload = await anonymousMe.json();
+assert.equal(anonymousMePayload.member, null);
+assert.equal(Object.hasOwn(anonymousMePayload, 'currentIp'), false,
+  'anonymous visitors must never receive a currentIp field');
+const anonymousPresence = await call('/presence?topic=tools');
+assert.equal(anonymousPresence.status, 200);
+assert.equal((await anonymousPresence.json()).onlineMembers, 0,
+  'anonymous visitors must not be counted as online members');
+
 // Port the email-verification boundary checks from GitLab to the current Worker.
 const communityPreflight = await call('/register', { method: 'OPTIONS' });
 assert.equal(communityPreflight.status, 200, 'allowed community CORS preflight must succeed');
@@ -460,9 +472,14 @@ assert.equal(db.sessions.some((session) => session.token_hash === sessionBeforeL
   'logout must delete the matching server-side session record');
 assert.equal(db.presence.some((presence) => presence.member_id === memberForSessionLifecycle.id), false,
   'logout must immediately remove the member from online topic counts');
-const afterLogout = await call('/me', { cookie });
-assert.equal((await afterLogout.json()).member, null,
+const afterLogout = await call('/me', { cookie, ip: '203.0.113.77' });
+const afterLogoutPayload = await afterLogout.json();
+assert.equal(afterLogoutPayload.member, null,
   'the pre-logout cookie must no longer authenticate after server-side revocation');
+assert.equal(Object.hasOwn(afterLogoutPayload, 'currentIp'), false,
+  'a logged-out visitor must not receive a currentIp field');
+assert.equal(db.presence.some((presence) => presence.member_id === memberForSessionLifecycle.id), false,
+  'logged-out members must remain absent from online topic counts');
 
 // Re-authenticate, then prove the server rejects a session whose expiry is in the past.
 const winningPassword = concurrentLoginAttempts[0].status === 200
