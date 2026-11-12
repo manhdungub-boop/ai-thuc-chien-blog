@@ -9,6 +9,9 @@ assert.equal(production.length, 1, 'exactly one production DB binding named DB i
 assert.equal(previews.length, 1, 'exactly one preview DB override named DB is required');
 const prod = production[0];
 const preview = previews[0];
+const previewVars = (config.previews || {}).vars || {};
+assert.equal(previewVars.GOOGLE_OAUTH_CLIENT_ID, '582053443839-h9q5rg4ne0telneas45noba8s694qmgn.apps.googleusercontent.com', 'Google OAuth Client ID must be configured for branch Previews');
+assert.equal(Object.hasOwn(previewVars, 'GOOGLE_OAUTH_CLIENT_SECRET'), false, 'Google OAuth Client Secret must never be stored as plaintext in Wrangler config');
 assert.equal(prod.database_name, 'ai-thuc-chien-community', 'production database name changed unexpectedly');
 assert.equal(preview.database_name, 'ai-thuc-chien-community-preview', 'preview database must be explicitly named as non-production');
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
