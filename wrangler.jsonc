@@ -27,6 +27,9 @@
     }
   ],
   "previews": {
+    "vars": {
+      "GOOGLE_OAUTH_CLIENT_ID": "582053443839-h9q5rg4ne0telneas45noba8s694qmgn.apps.googleusercontent.com"
+    },
     "ai": { "binding": "AI" },
     "d1_databases": [
       {
