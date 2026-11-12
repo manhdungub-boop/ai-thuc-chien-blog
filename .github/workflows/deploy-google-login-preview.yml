@@ -59,6 +59,9 @@ jobs:
           print("PASS: target Worker and D1 are the isolated Preview resources; no migrations will run.")
           PY
 
+      - name: Test rate-limit retention cleanup logic
+        run: node scripts/test_rate_limit_retention.mjs
+
       - name: Deploy to isolated Auth Preview Worker only
         uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3
         with:
