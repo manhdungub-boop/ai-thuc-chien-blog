@@ -174,6 +174,7 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
   // Keep the Google sign-in controls in server-rendered HTML so they do not depend on dynamic DOM insertion.
   const socialAuthContainer = root.querySelector('#community-social-auth');
   const socialGoogleButton = root.querySelector('#community-google-signin');
+  if (socialGoogleButton) socialGoogleButton.href = '/api/community/oauth/google/start';
   let googleOAuthReady = false;
   let oauthNotice = null;
   const verifyButton = root.querySelector('#community-verify-confirm');
