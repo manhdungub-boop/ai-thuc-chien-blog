@@ -1,0 +1,121 @@
+name: Deploy Production Worker only (no D1 migrations)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_worker_only_deploy:
+        description: "Confirm deployment of the reviewed main Worker bundle only; no D1 migrations or DNS changes."
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-worker-only-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy-worker-only:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.confirm_worker_only_deploy == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact main commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Verify requested release commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="7e72dc7a6e50243f320f749f603d4d067ff6e6e4"
+          actual="$(git rev-parse HEAD)"
+          if [[ "$actual" != "$expected" ]]; then
+            echo "::error::main is at $actual, expected approved release $expected. Refusing deployment."
+            exit 1
+          fi
+          echo "PASS: exact approved commit $actual"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+
+      - name: Build and validate Worker package
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build
+          node --check worker.mjs
+          node --check script.js
+          node scripts/test_worker_headers.mjs
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          config = json.loads(Path("wrangler.jsonc").read_text(encoding="utf-8"))
+          assert config.get("name") == "ai-thuc-chien-blog", "Unexpected Production Worker name"
+          assert config.get("account_id") == "92cf091bbac8b4879ec65feb30b4715b", "Unexpected Cloudflare account"
+          assert config.get("keep_vars") is True, "Must preserve existing Worker vars and secrets"
+          assert config.get("main") == "./worker.mjs", "Unexpected Worker entrypoint"
+          assets = config.get("assets", {})
+          assert assets.get("directory") == "./dist" and assets.get("binding") == "ASSETS"
+          assert assets.get("run_worker_first") is True
+          dbs = config.get("d1_databases", [])
+          assert len(dbs) == 1 and dbs[0].get("binding") == "DB"
+          assert dbs[0].get("database_id") == "fc2517cb-9543-4d7b-98f4-bcd5f3c013e7"
+          assert dbs[0].get("database_name") == "ai-thuc-chien-community"
+          assert Path("dist/_headers").is_file()
+          assert Path("dist/google4e45ddcf8facb122.html").is_file()
+          assert list(Path("dist/articles").glob("*.html"))
+          # This workflow intentionally never invokes wrangler d1 or any SQL command.
+          print("PASS: reviewed Production Worker target and existing D1 binding validated; no D1 migration step exists.")
+          PY
+
+      - name: Deploy existing Production Worker (no migration)
+        uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+          wranglerVersion: "4.161.0"
+          accountId: 92cf091bbac8b4879ec65feb30b4715b
+          command: deploy --config wrangler.jsonc
+
+      - name: Verify Production health, OAuth provider and routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          host="https://ai-thuc-chien-blog.manhdungub.workers.dev"
+          node --input-type=module <<'JS'
+          const base = "https://ai-thuc-chien-blog.manhdungub.workers.dev";
+          const providersResponse = await fetch(base + "/api/community/oauth/providers");
+          if (!providersResponse.ok) throw new Error("OAuth provider endpoint HTTP " + providersResponse.status);
+          const providers = await providersResponse.json();
+          if (providers.google !== true) throw new Error("Production does not report Google OAuth enabled");
+          for (const path of ["/", "/api/community/me", "/articles/do-luong-hieu-qua-blog", "/sitemap.xml", "/feed.xml"]) {
+            const response = await fetch(base + path, { redirect: "follow" });
+            if (!response.ok) throw new Error(path + " returned HTTP " + response.status);
+          }
+          console.log("PASS: Production Google OAuth provider flag and core routes.");
+          JS
+          headers="$(mktemp)"
+          trap 'rm -f "$headers"' EXIT
+          curl --fail --silent --show-error --location --max-time 20 -D "$headers" -o /dev/null "$host/"
+          for expected in 'X-Content-Type-Options: nosniff' 'X-Frame-Options: DENY' 'Referrer-Policy: strict-origin-when-cross-origin' 'Strict-Transport-Security: max-age=31536000'; do
+            grep -Fqi "$expected" "$headers" || { echo "::error::Missing security header: $expected"; exit 1; }
+          done
+          echo "PASS: Production security headers."
+
+      - name: Record deployment boundary
+        if: always()
+        run: |
+          {
+            echo "## Production Worker-only deployment"
+            echo "- Worker: ai-thuc-chien-blog"
+            echo "- Release commit: 7e72dc7a6e50243f320f749f603d4d067ff6e6e4"
+            echo "- D1 migrations: NOT RUN"
+            echo "- DNS changes: NOT RUN"
+            echo "- Existing Worker variables/secrets: preserved via keep_vars"
+          } >> "$GITHUB_STEP_SUMMARY"
