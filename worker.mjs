@@ -913,7 +913,6 @@ async function handleCommunityApi(request, env) {
     const topic = String(url.searchParams.get("topic") || "");
     if (!Object.hasOwn(COMMUNITY_TOPICS, topic)) return communityJson({ error: "Chủ đề trực tuyến không hợp lệ." }, 400, request);
     const cutoff = new Date(Date.now() - 120 * 1000).toISOString();
-    await db.prepare("DELETE FROM community_topic_presence WHERE last_seen_at < ?").bind(cutoff).run();
     const row = await db.prepare("SELECT COUNT(DISTINCT member_id) AS online_members FROM community_topic_presence WHERE topic = ? AND last_seen_at >= ?").bind(topic, cutoff).first();
     return communityJson({ topic, onlineMembers: Number(row?.online_members || 0) }, 200, request);
   }
