@@ -32,7 +32,7 @@ if (year) year.textContent = String(new Date().getFullYear());
       const response = await fetch(endpoint + '/analytics/stats', { credentials: 'same-origin', cache: 'no-store' });
       if (!response.ok) return;
       const data = await response.json();
-      if (viewNode) viewNode.textContent = `Lượt truy cập: ${Number(data.totalViews || 0).toLocaleString('vi-VN')}`;
+      if (viewNode) viewNode.textContent = `Lượt xem trang: ${Number(data.totalViews || 0).toLocaleString('vi-VN')}`;
     } catch (_error) { /* Analytics must never block page rendering. */ }
   };
   fetch(endpoint + '/analytics/pageview', { method: 'POST', credentials: 'same-origin',
@@ -304,7 +304,7 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
     chatForm.hidden = !currentMember;
     if (currentMember) {
       memberName.textContent = `${currentMember.displayName || currentMember.username} (@${currentMember.username})`;
-      if (memberIp) memberIp.textContent = currentIp ? `Địa chỉ IP hiện tại của bạn: ${currentIp}` : 'Chưa xác định được địa chỉ IP của kết nối này.';
+      if (memberIp) memberIp.textContent = currentIp ? `IP công khai hiện tại của bạn: ${currentIp}` : 'Chưa xác định được địa chỉ IP của kết nối này.';
       setStatus(authStatus, '');
       setStatus(memberStatus, '');
     } else if (memberIp) memberIp.textContent = '';
@@ -326,7 +326,7 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
         if (topicOnlineCount) topicOnlineCount.textContent = `Thành viên đang online: ${Number(presence.onlineMembers || 0).toLocaleString('vi-VN')}`;
       }
       const node = document.getElementById('site-view-count');
-      if (node) node.textContent = `Lượt truy cập: ${Number(stats.totalViews || 0).toLocaleString('vi-VN')}`;
+      if (node) node.textContent = `Lượt xem trang: ${Number(stats.totalViews || 0).toLocaleString('vi-VN')}`;
     } catch (_error) { /* Counters must not interrupt community use. */ }
   };
   const recordTopicView = async (topic) => {
