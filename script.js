@@ -171,7 +171,7 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
   const authSubmit = root.querySelector('#community-auth-submit');
   const authStatus = root.querySelector('#community-auth-status');
 
-  // Google sign-in is enabled only when the staging Worker confirms credentials are configured.
+  // Google sign-in is shown when the active Worker confirms credentials are configured.
   const socialAuthContainer = document.createElement('div');
   socialAuthContainer.className = 'community-social-auth';
   socialAuthContainer.hidden = true;
@@ -273,7 +273,7 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
     setStatus(authStatus, '');
     if (forgotPasswordButton) forgotPasswordButton.hidden = registering || Boolean(verificationToken) || Boolean(passwordResetToken);
     if (passwordResetForm) passwordResetForm.hidden = !passwordResetToken;
-    if (socialAuthContainer) socialAuthContainer.hidden = !googleOAuthReady || Boolean(verificationToken) || Boolean(passwordResetToken) || Boolean(authPanel.hidden);
+    if (socialAuthContainer) socialAuthContainer.hidden = !googleOAuthReady || Boolean(verificationToken) || Boolean(passwordResetToken);
   };
   const showMember = (member) => {
     currentMember = member || null;
@@ -571,7 +571,7 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
   api('/oauth/providers', { method: 'GET', headers: {} }).then((providers) => {
     googleOAuthReady = providers.google === true;
     socialGoogleButton.hidden = !googleOAuthReady;
-    socialAuthContainer.hidden = !googleOAuthReady || Boolean(verificationToken) || Boolean(authPanel.hidden);
+    socialAuthContainer.hidden = !googleOAuthReady || Boolean(verificationToken) || Boolean(passwordResetToken);
   }).catch(() => {
     googleOAuthReady = false;
     socialGoogleButton.hidden = true;
