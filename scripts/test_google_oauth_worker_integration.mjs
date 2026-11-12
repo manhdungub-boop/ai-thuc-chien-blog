@@ -7,8 +7,7 @@ const migration = await readFile(new URL("../migrations/0003_community_oauth_acc
 
 assert.match(worker, /COMMUNITY_OAUTH_STAGING_ORIGINS = new Set\(\[/);
 assert.match(worker, /https:\/\/ai-thuc-chien-blog-auth-app-preview\.manhdungub\.workers\.dev/);
-assert.match(worker, /https:\/\/security-release-readiness-ai-thuc-chien-blog-auth-app-preview\\.manhdungub\\.workers\\.dev/);
-assert.match(worker, /CHAT_ALLOWED_ORIGINS = new Set\\(\\[[\\s\\S]*?https:\\/\\/security-release-readiness-ai-thuc-chien-blog-auth-app-preview/);
+assert.equal(worker.split('"https://security-release-readiness-ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev"').length - 1, 2, "the exact Preview origin must be present in both community and OAuth allowlists");
 assert.doesNotMatch(worker, /https:\/\/feature-required-email-verification-ai-thuc-chien-blog\.manhdungub\.workers\.dev/);
 assert.match(worker, /route === "oauth\/providers"/);
 assert.match(worker, /isStagingOAuthHost = COMMUNITY_OAUTH_STAGING_ORIGINS\.has\(new URL\(request\.url\)\.origin\)/);
