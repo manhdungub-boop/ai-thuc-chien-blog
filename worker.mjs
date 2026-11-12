@@ -881,6 +881,58 @@ async function handleCommunityApi(request, env) {
   const ip = request.headers.get("CF-Connecting-IP") || "unknown";
   const now = new Date().toISOString();
 
+  // Public aggregate analytics: store counters only, never raw IP addresses.
+  if (route === "analytics/pageview" && request.method === "POST") {
+    const parsed = await readJsonPayload(request, 1200);
+    if (!parsed.ok) return communityJson({ error: parsed.error }, parsed.status, request);
+    const path = String(parsed.value.path || "/");
+    const topic = String(parsed.value.topic || "");
+    if (path.length > 200 || !/^\/(?:[A-Za-z0-9._/-]*)$/.test(path) || path.startsWith("//") ||
+        path.split("/").some((part) => part === "." || part === "..") || path.includes("\\") ||
+        (topic && !Object.hasOwn(COMMUNITY_TOPICS, topic))) {
+      return communityJson({ error: "Đường dẫn hoặc chủ đề thống kê không hợp lệ." }, 400, request);
+    }
+    const ipHash = await sha256Base64Url(ip);
+    if (!await communityRateLimit(db, `analytics:${ipHash}`, 180, 60 * 1000)) {
+      return communityJson({ error: "Yêu cầu thống kê quá nhanh. Vui lòng thử lại sau." }, 429, request);
+    }
+    await db.prepare(`INSERT INTO site_page_views (day, path, topic, views)
+      VALUES (?, ?, ?, 1)
+      ON CONFLICT(day, path, topic) DO UPDATE SET views = site_page_views.views + 1`)
+      .bind(now.slice(0, 10), path, topic).run();
+    return communityJson({ ok: true }, 202, request);
+  }
+  if (route === "analytics/stats" && request.method === "GET") {
+    const topic = String(url.searchParams.get("topic") || "");
+    if (topic && !Object.hasOwn(COMMUNITY_TOPICS, topic)) return communityJson({ error: "Chủ đề thống kê không hợp lệ." }, 400, request);
+    const total = await db.prepare("SELECT COALESCE(SUM(views), 0) AS total_views FROM site_page_views WHERE topic = ''").first();
+    const topicRow = topic ? await db.prepare("SELECT COALESCE(SUM(views), 0) AS topic_views FROM site_page_views WHERE topic = ?").bind(topic).first() : null;
+    return communityJson({ totalViews: Number(total?.total_views || 0), topicViews: Number(topicRow?.topic_views || 0) }, 200, request);
+  }
+  if (route === "presence" && request.method === "GET") {
+    const topic = String(url.searchParams.get("topic") || "");
+    if (!Object.hasOwn(COMMUNITY_TOPICS, topic)) return communityJson({ error: "Chủ đề trực tuyến không hợp lệ." }, 400, request);
+    const cutoff = new Date(Date.now() - 120 * 1000).toISOString();
+    await db.prepare("DELETE FROM community_topic_presence WHERE last_seen_at < ?").bind(cutoff).run();
+    const row = await db.prepare("SELECT COUNT(DISTINCT member_id) AS online_members FROM community_topic_presence WHERE topic = ? AND last_seen_at >= ?").bind(topic, cutoff).first();
+    return communityJson({ topic, onlineMembers: Number(row?.online_members || 0) }, 200, request);
+  }
+  if (route === "presence" && request.method === "POST") {
+    const member = await communityMemberFromRequest(request, db);
+    if (!member) return communityJson({ error: "Hãy đăng nhập để cập nhật trạng thái trực tuyến." }, 401, request);
+    const parsed = await readJsonPayload(request, 1200);
+    if (!parsed.ok) return communityJson({ error: parsed.error }, parsed.status, request);
+    const topic = String(parsed.value.topic || "");
+    if (!Object.hasOwn(COMMUNITY_TOPICS, topic)) return communityJson({ error: "Chủ đề trực tuyến không hợp lệ." }, 400, request);
+    await db.prepare(`INSERT INTO community_topic_presence (member_id, topic, last_seen_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(member_id, topic) DO UPDATE SET last_seen_at = excluded.last_seen_at`).bind(member.id, topic, now).run();
+    const cutoff = new Date(Date.now() - 120 * 1000).toISOString();
+    await db.prepare("DELETE FROM community_topic_presence WHERE last_seen_at < ?").bind(cutoff).run();
+    const row = await db.prepare("SELECT COUNT(DISTINCT member_id) AS online_members FROM community_topic_presence WHERE topic = ? AND last_seen_at >= ?").bind(topic, cutoff).first();
+    return communityJson({ topic, onlineMembers: Number(row?.online_members || 0) }, 200, request);
+  }
+
   // Advertise Google only on the canonical Production host or dedicated Preview host,
   // and only when that Worker has its own OAuth credentials configured.
   if (route === "oauth/providers" && request.method === "GET") {
@@ -1128,18 +1180,22 @@ async function handleCommunityApi(request, env) {
       if (!valid) return communityJson({ error: "Email hoặc mật khẩu chưa chính xác." }, 401, request);
       if (!row.email_verified_at) return communityJson({ code: "EMAIL_NOT_VERIFIED", error: "Bạn cần xác nhận email trước khi đăng nhập. Hãy mở email hoặc gửi lại liên kết xác nhận." }, 403, request);
       const token = await createCommunitySession(db, row.id);
-      return communityJson({ member: safeCommunityMember(row) }, 200, request, { "Set-Cookie": communityCookie(token) });
+      return communityJson({ member: safeCommunityMember(row), currentIp: ip !== "unknown" ? ip : null }, 200, request, { "Set-Cookie": communityCookie(token) });
     }
 
     if (route === "logout" && request.method === "POST") {
       const token = readCommunityCookie(request);
-      if (token) await db.prepare("DELETE FROM community_sessions WHERE token_hash = ?").bind(await sha256Base64Url(token)).run();
+      if (token) {
+        const member = await communityMemberFromRequest(request, db);
+        if (member) await db.prepare("DELETE FROM community_topic_presence WHERE member_id = ?").bind(member.id).run();
+        await db.prepare("DELETE FROM community_sessions WHERE token_hash = ?").bind(await sha256Base64Url(token)).run();
+      }
       return communityJson({ ok: true }, 200, request, { "Set-Cookie": communityCookie("", 0) });
     }
 
     if (route === "me" && request.method === "GET") {
       const row = await communityMemberFromRequest(request, db);
-      return communityJson({ member: safeCommunityMember(row) }, 200, request);
+      return communityJson({ member: safeCommunityMember(row), currentIp: row && ip !== "unknown" ? ip : null }, 200, request);
     }
 
     if (route === "messages" && request.method === "GET") {
