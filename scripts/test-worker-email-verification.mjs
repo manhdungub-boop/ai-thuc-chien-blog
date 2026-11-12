@@ -61,6 +61,7 @@ class MockD1 {
       member.password_salt=salt; member.password_hash=hash;
       return { meta: { changes: 1 } };
     }
+    if (sql.startsWith("delete from community_topic_presence where member_id = ?")) return { meta: { changes: 0 } };
     if (sql.startsWith("delete from community_sessions where member_id = ?")) {
       const [memberId] = a; let n=0;
       for (const [hash, session] of this.sessions) if (session.member_id === memberId) { this.sessions.delete(hash); n++; }
