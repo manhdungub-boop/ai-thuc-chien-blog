@@ -377,7 +377,8 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
     'feature-required-email-verification-ai-thuc-chien-blog.manhdungub.workers.dev',
     'ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev',
     'fix-header-login-entry-2026-ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev',
-    'integration-release-candida-ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev'
+    'integration-release-candida-ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev',
+    'security-release-readiness-ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev'
   ]);
   if (!communityAuthHosts.has(window.location.hostname)) {
     authPanel.hidden = true;
