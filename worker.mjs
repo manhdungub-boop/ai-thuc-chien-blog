@@ -1272,6 +1272,16 @@ function resolveAssetRequest(request) {
 }
 
 export default {
+  // Rate-limit buckets contain one-way IP/email hashes, not raw addresses.
+  // The longest configured window is one hour; retain an extra hour of grace
+  // and purge expired buckets hourly without touching active rate-limit windows.
+  async scheduled(controller, env) {
+    const scheduledAt = Number.isFinite(controller?.scheduledTime) ? controller.scheduledTime : Date.now();
+    const retentionCutoff = scheduledAt - (2 * 60 * 60 * 1000);
+    await env.DB.prepare("DELETE FROM community_rate_limits WHERE window_start < ?")
+      .bind(retentionCutoff)
+      .run();
+  },
   async fetch(request, env) {
     try {
       const requestUrl = new URL(request.url);
