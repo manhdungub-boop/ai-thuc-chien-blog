@@ -1184,17 +1184,16 @@ async function handleCommunityApi(request, env) {
 
     if (route === "logout" && request.method === "POST") {
       const token = readCommunityCookie(request);
-      if (token) {
-        const member = await communityMemberFromRequest(request, db);
-        if (member) await db.prepare("DELETE FROM community_topic_presence WHERE member_id = ?").bind(member.id).run();
-        await db.prepare("DELETE FROM community_sessions WHERE token_hash = ?").bind(await sha256Base64Url(token)).run();
-      }
+      if (token) await db.prepare("DELETE FROM community_sessions WHERE token_hash = ?").bind(await sha256Base64Url(token)).run();
       return communityJson({ ok: true }, 200, request, { "Set-Cookie": communityCookie("", 0) });
     }
 
     if (route === "me" && request.method === "GET") {
       const row = await communityMemberFromRequest(request, db);
-      return communityJson({ member: safeCommunityMember(row), currentIp: row && ip !== "unknown" ? ip : null }, 200, request);
+      const response = { member: safeCommunityMember(row) };
+      // Only an authenticated member receives their own current connection IP.
+      if (row && ip !== "unknown") response.currentIp = ip;
+      return communityJson(response, 200, request);
     }
 
     if (route === "messages" && request.method === "GET") {
