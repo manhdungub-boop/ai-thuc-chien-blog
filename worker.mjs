@@ -247,7 +247,9 @@ const COMMUNITY_SESSION_SECONDS = 60 * 60 * 24 * 30;
 const COMMUNITY_PASSWORD_ITERATIONS = 100000;
 const COMMUNITY_ENCODER = new TextEncoder();
 
-const COMMUNITY_OAUTH_STAGING_ORIGINS = new Set([
+// Google OAuth is available only on the canonical Production host and the dedicated Preview host.
+const COMMUNITY_OAUTH_ALLOWED_ORIGINS = new Set([
+  "https://ai-thuc-chien-blog.manhdungub.workers.dev",
   "https://ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev",
 ]);
 const COMMUNITY_OAUTH_STATE_TTL_SECONDS = 600;
@@ -597,7 +599,7 @@ async function validateGoogleOidcIdToken(idToken, clientId, expectedNonce) {
 
 async function beginCommunityOAuth(request, env, provider, db) {
   const requestUrl = new URL(request.url);
-  if (!COMMUNITY_OAUTH_STAGING_ORIGINS.has(requestUrl.origin)) {
+  if (!COMMUNITY_OAUTH_ALLOWED_ORIGINS.has(requestUrl.origin)) {
     return communityJson({ error: "Đăng nhập mạng xã hội hiện chưa được bật." }, 404, request);
   }
   const credentials = communityOAuthCredentials(env, provider);
@@ -724,7 +726,7 @@ async function communityOAuthMember(db, provider, providerUserId, email, display
 
 async function completeCommunityOAuth(request, env, provider, db) {
   const requestUrl = new URL(request.url);
-  if (!COMMUNITY_OAUTH_STAGING_ORIGINS.has(requestUrl.origin)) {
+  if (!COMMUNITY_OAUTH_ALLOWED_ORIGINS.has(requestUrl.origin)) {
     return communityJson({ error: "Callback đăng nhập không hợp lệ." }, 404, request);
   }
   const state = String(requestUrl.searchParams.get("state") || "");
@@ -879,15 +881,16 @@ async function handleCommunityApi(request, env) {
   const ip = request.headers.get("CF-Connecting-IP") || "unknown";
   const now = new Date().toISOString();
 
-  // Google OAuth is deliberately restricted to the dedicated staging hostname.
+  // Advertise Google only on the canonical Production host or dedicated Preview host,
+  // and only when that Worker has its own OAuth credentials configured.
   if (route === "oauth/providers" && request.method === "GET") {
-    const isStagingOAuthHost = COMMUNITY_OAUTH_STAGING_ORIGINS.has(new URL(request.url).origin);
-    return communityJson({ google: isStagingOAuthHost && communityOAuthReady(env, "google"), facebook: false }, 200, request);
+    const isAllowedOAuthHost = COMMUNITY_OAUTH_ALLOWED_ORIGINS.has(new URL(request.url).origin);
+    return communityJson({ google: isAllowedOAuthHost && communityOAuthReady(env, "google"), facebook: false }, 200, request);
   }
   const googleOAuthRoute = route.match(/^oauth\/google\/(start|callback)$/);
   if (googleOAuthRoute && request.method === "GET") {
-    if (!COMMUNITY_OAUTH_STAGING_ORIGINS.has(new URL(request.url).origin)) {
-      return communityJson({ error: "Google OAuth chỉ được bật trên môi trường staging." }, 404, request);
+    if (!COMMUNITY_OAUTH_ALLOWED_ORIGINS.has(new URL(request.url).origin)) {
+      return communityJson({ error: "Google OAuth chưa được bật trên tên miền này." }, 404, request);
     }
     return googleOAuthRoute[1] === "start"
       ? beginCommunityOAuth(request, env, "google", db)
