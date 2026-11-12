@@ -1,6 +1,11 @@
 name: Deploy Production Worker only (no D1 migrations)
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/deploy-production-worker-only.yml"
   workflow_dispatch:
     inputs:
       confirm_worker_only_deploy:
@@ -18,7 +23,7 @@ concurrency:
 
 jobs:
   deploy-worker-only:
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.confirm_worker_only_deploy == true
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.confirm_worker_only_deploy == true))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
