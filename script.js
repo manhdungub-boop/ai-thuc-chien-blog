@@ -661,9 +661,12 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
     roomTabs.forEach((button) => { button.disabled = error.status === 503; });
   });
   window.setInterval(() => {
+    if (currentMember && document.visibilityState === 'visible') loadMessages();
+  }, 15000);
+  window.setInterval(() => {
     if (document.visibilityState !== 'visible') return;
-    if (currentMember) { loadMessages(); sendPresence(); }
-    else refreshTopicStats(currentTopic);
+    if (currentMember) sendPresence();
+    refreshTopicStats(currentTopic);
   }, 30000);
 })();
 
