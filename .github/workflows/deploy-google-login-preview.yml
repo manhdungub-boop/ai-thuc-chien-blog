@@ -8,7 +8,11 @@ on:
       - "script.js"
       - "worker.mjs"
       - "index.html"
+      - "styles.css"
       - "migrations/**"
+      - "package.json"
+      - "package-lock.json"
+      - "wrangler.preview-migrations.jsonc"
       - ".github/workflows/deploy-google-login-preview.yml"
       - "wrangler.jsonc"
   workflow_dispatch:
