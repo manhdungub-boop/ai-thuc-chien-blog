@@ -288,6 +288,7 @@ if ('IntersectionObserver' in window && !reduceMotion && revealItems.length) {
   const showMember = (member, currentIp = null) => {
     currentMember = member || null;
     authPanel.hidden = Boolean(currentMember);
+    if (socialAuthContainer) socialAuthContainer.hidden = !googleOAuthReady || Boolean(verificationToken) || Boolean(passwordResetToken) || Boolean(currentMember);
     memberPanel.hidden = !currentMember;
     loginPrompt.hidden = Boolean(currentMember);
     chatForm.hidden = !currentMember;
