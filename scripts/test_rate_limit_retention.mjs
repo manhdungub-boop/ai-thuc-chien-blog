@@ -56,6 +56,7 @@ assert.deepEqual(logEvents[0][1], {
   presenceRowsDeleted: 4,
 });
 assert.equal(logEvents[1][0], 'scheduled_cleanup_completed');
-assert.ok(!JSON.stringify(logEvents).match(/(?:\\b\\d{1,3}\\.){3}\\d{1,3}|member_id|email|secret|token/i),
-  'Scheduled logs must not contain IP addresses or personal/secret fields');
+assert.deepEqual(Object.keys(logEvents[0][1]).sort(),
+  ['presenceRowsDeleted', 'rateLimitRowsDeleted', 'scheduledAt'],
+  'Scheduled logs must contain only the approved aggregate fields');
 console.log('PASS: hourly cleanup bounds retention and emits sanitized Cron execution evidence.');
