@@ -79,6 +79,10 @@
           <input id="community-password" name="password" type="password" minlength="10" maxlength="128" autocomplete="current-password" placeholder="Ít nhất 10 ký tự" required>
           <button class="button primary community-submit" id="community-auth-submit" type="submit">Đăng ký thành viên <span>→</span></button>
         </form>
+        <div id="community-social-auth" class="community-social-auth" hidden>
+          <p class="community-social-heading">Hoặc tiếp tục bằng</p>
+          <a id="community-google-signin" class="community-social-button" href="/api/community/oauth/google/start" aria-label="Đăng nhập hoặc đăng ký bằng Google" hidden>G&nbsp; Tiếp tục với Google</a>
+        </div>
         <button class="button primary community-submit" id="community-verify-confirm" type="button" hidden>Xác nhận email</button>
         <button type="button" id="community-resend-verification" class="community-resend-verification" hidden>Gửi lại email xác nhận</button>
         <button type="button" id="community-forgot-password" class="community-resend-verification" hidden>Quên mật khẩu?</button>
