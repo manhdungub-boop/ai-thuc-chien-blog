@@ -1279,15 +1279,22 @@ export default {
     const scheduledAt = Number.isFinite(controller?.scheduledTime) ? controller.scheduledTime : Date.now();
     // Retain rate-limit buckets for two hours (maximum window plus grace).
     const rateLimitCutoff = scheduledAt - (2 * 60 * 60 * 1000);
-    await env.DB.prepare("DELETE FROM community_rate_limits WHERE window_start < ?")
+    const rateLimitCleanup = await env.DB.prepare("DELETE FROM community_rate_limits WHERE window_start < ?")
       .bind(rateLimitCutoff)
       .run();
 
     // Presence expires after 120 seconds; remove stale member/topic rows hourly.
     const presenceCutoff = new Date(scheduledAt - (120 * 1000)).toISOString();
-    await env.DB.prepare("DELETE FROM community_topic_presence WHERE last_seen_at < ?")
+    const presenceCleanup = await env.DB.prepare("DELETE FROM community_topic_presence WHERE last_seen_at < ?")
       .bind(presenceCutoff)
       .run();
+
+    // Sanitized execution evidence only: no IPs, member IDs, request data, or secrets.
+    console.info("scheduled_cleanup_completed", {
+      scheduledAt: new Date(scheduledAt).toISOString(),
+      rateLimitRowsDeleted: Number(rateLimitCleanup?.meta?.changes || 0),
+      presenceRowsDeleted: Number(presenceCleanup?.meta?.changes || 0),
+    });
   },
   async fetch(request, env) {
     try {
