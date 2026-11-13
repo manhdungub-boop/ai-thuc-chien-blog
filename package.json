@@ -7,6 +7,6 @@
     "test:worker": "node scripts/test_worker_headers.mjs",
     "test:content": "node scripts/test_article_quality.cjs",
     "test:seo": "node scripts/test_seo_consistency.cjs",
-    "test:community": "node scripts/test_community_api.mjs && python3 scripts/test_community_schema.py"
+    "test:community": "node scripts/test_community_api.mjs && python3 scripts/test_community_schema.py && python3 scripts/test_analytics_schema.py"
   }
 }

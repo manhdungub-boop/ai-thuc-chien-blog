@@ -66,6 +66,7 @@ class ResetD1 {
     }
     if(sql.startsWith("delete from community_password_reset_tokens where token_hash")){const existed=this.resetTokens.delete(a[0]);return {meta:{changes:existed?1:0}};}
     if(sql.startsWith("update community_members set password_salt = ?, password_hash = ? where id = ?")){const [salt,hash,id]=a,m=this.members.get(id);if(!m)return {meta:{changes:0}};m.password_salt=salt;m.password_hash=hash;return {meta:{changes:1}};}
+    if(sql.startsWith("delete from community_topic_presence where member_id = ?"))return {meta:{changes:0}};
     if(sql.startsWith("delete from community_sessions where member_id = ?")){const [id]=a;let n=0;for(const [h,session] of this.sessions)if(session.member_id===id){this.sessions.delete(h);n++;}return {meta:{changes:n}};}
     throw new Error("Unsupported mocked run SQL: "+sql);
   }

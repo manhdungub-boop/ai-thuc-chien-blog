@@ -11,6 +11,7 @@ EXPECTED_MIGRATIONS = [
     "0004_community_password_reset.sql",
     "0005_email_verified_at.sql",
     "0006_email_verification_status.sql",
+    "0007_visitor_analytics_presence.sql",
 ]
 actual_migrations = sorted(path.name for path in MIGRATIONS.glob("*.sql"))
 assert actual_migrations == EXPECTED_MIGRATIONS, (
@@ -46,6 +47,8 @@ required_tables = {
     "community_oauth_accounts",
     "community_password_reset_tokens",
     "community_email_verification_status",
+    "site_page_views",
+    "community_topic_presence",
 }
 assert required_tables.issubset(tables), f"Missing tables: {required_tables - tables}"
 

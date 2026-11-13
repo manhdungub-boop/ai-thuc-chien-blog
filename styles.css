@@ -146,3 +146,10 @@
 /* Header login entry: keep desktop CTA singular; expose nav link inside mobile menu. */
 .site-header nav .nav-login-link{display:none}
 @media(max-width:640px){.site-header nav.open .nav-login-link{display:block}}
+
+/* Aggregate analytics and privacy-preserving member presence */
+.community-topic-stats{display:flex;flex-wrap:wrap;gap:9px 18px;margin:-5px 0 16px;padding:11px 13px;border:1px solid var(--line);border-radius:9px;background:#0a1020;color:#aeb8cf;font-size:10px;line-height:1.6}
+.community-topic-stats span:last-child{color:var(--mint)}
+.community-member-ip{margin:12px 0 0;padding:10px 12px;border:1px solid #8bf0ce35;border-radius:9px;background:#102420;color:var(--mint);font-size:11px;line-height:1.7;overflow-wrap:anywhere}
+#site-view-count{color:var(--mint);white-space:nowrap}
+@media(max-width:640px){.community-topic-stats{flex-direction:column;gap:4px}}

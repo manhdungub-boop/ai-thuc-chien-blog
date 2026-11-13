@@ -84,6 +84,9 @@ class FakeD1 {
               database.sessions.set(id, { id, member_id, token_hash, created_at, expires_at });
               return { success: true, meta: { changes: 1 } };
             }
+            if (sql.includes("DELETE FROM community_topic_presence WHERE member_id")) {
+              return { success: true, meta: { changes: 1 } };
+            }
             if (sql.includes("DELETE FROM community_sessions WHERE token_hash")) {
               for (const [id, session] of database.sessions) if (session.token_hash === values[0]) database.sessions.delete(id);
               return { success: true, meta: { changes: 1 } };

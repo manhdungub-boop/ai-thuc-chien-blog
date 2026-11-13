@@ -28,6 +28,7 @@ on:
       - "migrations/**"
       - "scripts/test_community_api.mjs"
       - "scripts/test_community_schema.py"
+      - "scripts/test_analytics_schema.py"
       - "package.json"
       - "scripts/build_static_site.cjs"
       - "scripts/generate_seo_feeds.cjs"
@@ -99,6 +100,7 @@ jobs:
           node scripts/test_worker_headers.mjs
           node scripts/test_community_api.mjs
           python3 scripts/test_community_schema.py
+          python3 scripts/test_analytics_schema.py
 
       - name: Check for dedicated Worker deployment token
         id: token

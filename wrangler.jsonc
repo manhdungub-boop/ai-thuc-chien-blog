@@ -3,12 +3,16 @@
   "name": "ai-thuc-chien-blog",
   "account_id": "92cf091bbac8b4879ec65feb30b4715b",
   "compatibility_date": "2026-10-12",
-  "compatibility_flags": ["assets_navigation_has_no_effect"],
+  "compatibility_flags": [
+    "assets_navigation_has_no_effect"
+  ],
   "workers_dev": true,
   "preview_urls": true,
   "keep_vars": true,
   "secrets": {
-    "required": ["COMMUNITY_EMAIL_RELAY_SECRET"]
+    "required": [
+      "COMMUNITY_EMAIL_RELAY_SECRET"
+    ]
   },
   "assets": {
     "directory": "./dist",
@@ -18,7 +22,9 @@
     "run_worker_first": true
   },
   "main": "./worker.mjs",
-  "ai": { "binding": "AI" },
+  "ai": {
+    "binding": "AI"
+  },
   "d1_databases": [
     {
       "binding": "DB",
@@ -33,6 +39,11 @@
         "database_name": "ai-thuc-chien-community-preview",
         "database_id": "51d814c8-a3fc-4481-a5f1-60bc67617f3c"
       }
+    ]
+  },
+  "triggers": {
+    "crons": [
+      "17 * * * *"
     ]
   }
 }

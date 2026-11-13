@@ -53,6 +53,7 @@ class MockD1 {
           if (!db.identities.has(key)) db.identities.set(key, { provider, provider_user_id, member_id, email, created_at });
           return { meta: { changes: 1 } };
         }
+        if (q.startsWith("delete from community_topic_presence where member_id = ?")) return { meta: { changes: 0 } };
         if (q.startsWith("delete from community_sessions where expires_at")) return { meta: { changes: 0 } };
         if (q.startsWith("insert into community_sessions")) {
           const [id, member_id, token_hash, created_at, expires_at] = a;
