@@ -5,6 +5,10 @@ import worker from '../worker.mjs';
 
 const scheduledTime = Date.UTC(2026, 10, 13, 12, 17, 0);
 const calls = [];
+const logEvents = [];
+const originalInfo = console.info;
+console.info = (...args) => logEvents.push(args);
+try {
 const db = {
   prepare(sql) {
     return {
@@ -41,4 +45,17 @@ assert.equal(fallbackCalls[0].sql, 'DELETE FROM community_rate_limits WHERE wind
 assert.equal(fallbackCalls[1].sql, 'DELETE FROM community_topic_presence WHERE last_seen_at < ?');
 assert.ok(fallbackCalls[0].value < Date.now());
 assert.ok(Date.parse(fallbackCalls[1].value) < Date.now());
-console.log('PASS: hourly cleanup bounds rate-limit retention and removes expired topic-presence rows after 120 seconds.');
+} finally {
+  console.info = originalInfo;
+}
+assert.equal(logEvents.length, 2, 'Each scheduled invocation must emit one sanitized completion event');
+assert.equal(logEvents[0][0], 'scheduled_cleanup_completed');
+assert.deepEqual(logEvents[0][1], {
+  scheduledAt: new Date(scheduledTime).toISOString(),
+  rateLimitRowsDeleted: 4,
+  presenceRowsDeleted: 4,
+});
+assert.equal(logEvents[1][0], 'scheduled_cleanup_completed');
+assert.ok(!JSON.stringify(logEvents).match(/(?:\\b\\d{1,3}\\.){3}\\d{1,3}|member_id|email|secret|token/i),
+  'Scheduled logs must not contain IP addresses or personal/secret fields');
+console.log('PASS: hourly cleanup bounds retention and emits sanitized Cron execution evidence.');
