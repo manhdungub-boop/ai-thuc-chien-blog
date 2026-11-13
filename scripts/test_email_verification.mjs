@@ -51,6 +51,18 @@ assert.ok(frontend.includes("fragmentParams.get('reset')"), 'frontend must read 
 assert.ok(frontend.includes("fragmentParams.get('verify')"), 'frontend must read verification tokens from the email URL fragment');
 assert.ok(frontend.includes("password-reset/complete"));
 assert.match(frontend, /verificationRequired/);
+assert.match(html, /<div id="community-social-auth" class="community-social-auth" hidden>/,
+  'Google sign-in controls must be present in server-rendered community HTML');
+assert.match(html, /<a id="community-google-signin" class="community-social-button" href="\/api\/community\/oauth\/google\/start" aria-label="Đăng nhập hoặc đăng ký bằng Google" hidden>/,
+  'Google sign-in must use the same-origin OAuth start route and remain hidden until enabled');
+assert.ok(frontend.includes("const socialAuthContainer = root.querySelector('#community-social-auth');"),
+  'frontend must bind to the server-rendered social-auth container');
+assert.ok(frontend.includes("const socialGoogleButton = root.querySelector('#community-google-signin');"),
+  'frontend must bind to the server-rendered Google button');
+assert.ok(frontend.includes("socialAuthContainer.hidden = !googleOAuthReady || Boolean(verificationToken) || Boolean(passwordResetToken) || Boolean(authPanel.hidden);"),
+  'Google sign-in must remain hidden when OAuth is unavailable, during verification/reset, or after login');
+assert.ok(!frontend.includes("socialAuthContainer = document.createElement('div')"),
+  'Google sign-in markup must not depend on dynamic element creation');
 assert.ok(frontend.includes("const communityAuthHosts = new Set([\n    primaryHost,\n    'feature-required-email-verification-ai-thuc-chien-blog.manhdungub.workers.dev',\n    'ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev'\n  ]);"), 'documented feature and OAuth Preview hosts must expose auth controls for end-to-end testing');
 assert.match(frontend, /if \(!communityAuthHosts\.has\(window\.location\.hostname\)\)/, 'unrecognized hosts must keep community auth controls hidden');
 assert.match(html, /id="community-verify-confirm"/);
