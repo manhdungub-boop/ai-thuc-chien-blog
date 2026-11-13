@@ -1,21 +1,13 @@
-name: Deploy Visitor Analytics candidate to isolated Auth Preview
+name: Deploy main to isolated Auth Preview (manual only)
 
 on:
-  push:
-    branches:
-      - feature/visitor-analytics-topic-presence
-    paths:
-      - "script.js"
-      - "worker.mjs"
-      - "index.html"
-      - "styles.css"
-      - "migrations/**"
-      - "package.json"
-      - "package-lock.json"
-      - "wrangler.preview-migrations.jsonc"
-      - ".github/workflows/deploy-google-login-preview.yml"
-      - "wrangler.jsonc"
   workflow_dispatch:
+    inputs:
+      confirm_preview_worker_deploy:
+        description: "Required: explicitly approve deploying reviewed main to the isolated Auth Preview Worker and applying migrations to Preview D1 only."
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -26,13 +18,14 @@ concurrency:
 
 jobs:
   deploy-preview-only:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.confirm_preview_worker_deploy == true
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Checkout isolated visitor analytics branch
+      - name: Check out trusted main source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: feature/visitor-analytics-topic-presence
+          ref: main
           persist-credentials: false
 
       - name: Set up Node.js
