@@ -61,6 +61,8 @@ assert.ok(frontend.includes("const socialGoogleButton = root.querySelector('#com
   'frontend must bind to the server-rendered Google button');
 assert.ok(frontend.includes("socialAuthContainer.hidden = !googleOAuthReady || Boolean(verificationToken) || Boolean(passwordResetToken) || Boolean(authPanel.hidden);"),
   'Google sign-in must remain hidden when OAuth is unavailable, during verification/reset, or after login');
+assert.ok(frontend.includes("if (socialAuthContainer) socialAuthContainer.hidden = !googleOAuthReady || Boolean(verificationToken) || Boolean(passwordResetToken) || Boolean(currentMember);"),
+  'Google sign-in must reappear after logout when OAuth is still enabled');
 assert.ok(!frontend.includes("socialAuthContainer = document.createElement('div')"),
   'Google sign-in markup must not depend on dynamic element creation');
 assert.ok(frontend.includes("const communityAuthHosts = new Set([\n    primaryHost,\n    'feature-required-email-verification-ai-thuc-chien-blog.manhdungub.workers.dev',\n    'ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev'\n  ]);"), 'documented feature and OAuth Preview hosts must expose auth controls for end-to-end testing');
