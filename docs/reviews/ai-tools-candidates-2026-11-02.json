@@ -1,11 +1,81 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-11-11T00:00:00+07:00",
+  "generated_at": "2026-11-15T00:00:00+07:00",
   "catalog_policy": {
     "default_locale": "vi",
     "currency": "USD",
     "new_entry_status": "needs_review",
-    "note": "Candidate intake only. All new records remain needs_review; pricing, license scope, regional availability and public-listing eligibility require editorial approval."
+    "note": "Candidate intake only. These records remain needs_review and are not publicly listed. Pricing, licensing, data retention, regional availability, terms and product scope must be independently verified before promotion."
   },
-  "tools": []
+  "tools": [
+    {
+      "id": "groqcloud",
+      "name": "GroqCloud",
+      "vendor": "Groq",
+      "website": "https://console.groq.com/home",
+      "categories": [
+        "developer",
+        "assistant",
+        "automation",
+        "audio"
+      ],
+      "pricing_model": "unknown",
+      "pricing_status": "unknown",
+      "license": "proprietary",
+      "platforms": [
+        "web",
+        "api"
+      ],
+      "description": "Nền tảng inference cho mô hình ngôn ngữ lớn, cung cấp API tương thích OpenAI và tài liệu về mô hình, giới hạn tốc độ, tích hợp và công cụ.",
+      "free_tier_summary": "Chưa xác minh hạn mức miễn phí, điều kiện sử dụng và giá hiện hành; không được giới thiệu là miễn phí trước khi kiểm tra nguồn chính thức.",
+      "official_sources": [
+        "https://console.groq.com/home",
+        "https://console.groq.com/docs/overview"
+      ],
+      "last_verified": "2026-11-15",
+      "verification_status": "needs_review",
+      "status": "active",
+      "tags": [
+        "llm-inference",
+        "api",
+        "openai-compatible",
+        "developer-platform"
+      ]
+    },
+    {
+      "id": "mistral-studio",
+      "name": "Mistral Studio",
+      "vendor": "Mistral AI",
+      "website": "https://console.mistral.ai/",
+      "categories": [
+        "developer",
+        "agents",
+        "automation",
+        "data"
+      ],
+      "pricing_model": "unknown",
+      "pricing_status": "unknown",
+      "license": "proprietary",
+      "platforms": [
+        "web",
+        "api"
+      ],
+      "description": "Bảng điều khiển dành cho nhà phát triển của Mistral AI, hỗ trợ API, API keys, Playground, đánh giá mô hình, agents và SDK.",
+      "free_tier_summary": "Chưa xác minh gói miễn phí, giá, hạn mức và điều kiện theo khu vực; không đưa ra khẳng định miễn phí khi chưa đối chiếu trang giá chính thức.",
+      "official_sources": [
+        "https://docs.mistral.ai/",
+        "https://console.mistral.ai/"
+      ],
+      "last_verified": "2026-11-15",
+      "verification_status": "needs_review",
+      "status": "active",
+      "tags": [
+        "developer-console",
+        "llm-api",
+        "playground",
+        "agents",
+        "evaluation"
+      ]
+    }
+  ]
 }
