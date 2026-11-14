@@ -420,5 +420,23 @@
     <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/bao-cao-tuan-google-sheets-voi-ai</guid>
     <description>Quy trình tạo báo cáo tuần từ bảng tính: chuẩn hóa dữ liệu, tính chỉ số có thể kiểm tra, dùng AI viết bản nháp và đối chiếu trước khi chia sẻ.</description>
   </item>
+  <item>
+    <title>Tự động đọc hóa đơn bằng AI: kiểm tra và phê duyệt an toàn</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/tu-dong-doc-hoa-don-bang-ai-an-toan</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/tu-dong-doc-hoa-don-bang-ai-an-toan</guid>
+    <description>Hướng dẫn xây quy trình đọc hóa đơn bằng AI: OCR, kiểm tra số liệu, phát hiện trùng và yêu cầu con người duyệt trước khi ghi sổ hoặc thanh toán.</description>
+  </item>
+  <item>
+    <title>Tính điểm hòa vốn và TCO dự án AI: công thức và ví dụ | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/tinh-diem-hoa-von-va-tco-du-an-ai</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/tinh-diem-hoa-von-va-tco-du-an-ai</guid>
+    <description>Tính TCO, chi phí mỗi đầu ra đạt chuẩn, điểm hòa vốn sản lượng và thời gian hoàn vốn cho dự án AI bằng công thức và ví dụ minh họa.</description>
+  </item>
+  <item>
+    <title>Đóng gói dịch vụ AI cho doanh nghiệp nhỏ: SOW, KPI và nghiệm thu | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/dong-goi-dich-vu-ai-cho-doanh-nghiep-nho</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/dong-goi-dich-vu-ai-cho-doanh-nghiep-nho</guid>
+    <description>Cách đóng gói dịch vụ AI cho doanh nghiệp nhỏ bằng phạm vi rõ, SOW một trang, KPI đo được, tiêu chí nghiệm thu và quy trình bảo vệ dữ liệu.</description>
+  </item>
   </channel>
 </rss>
