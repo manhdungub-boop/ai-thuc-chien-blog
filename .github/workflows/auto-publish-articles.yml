@@ -1,0 +1,139 @@
+name: Auto-publish approved articles to Production Worker
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "articles/*.html"
+      - "sitemap.xml"
+      - "feed.xml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: article-auto-publish-production
+  cancel-in-progress: false
+
+jobs:
+  validate-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out exact pushed revision and comparison base
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Enforce content-only deployment boundary
+        shell: bash
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$BEFORE_SHA" || "$BEFORE_SHA" =~ ^0+$ ]]; then
+            echo "::error::Cannot verify the push comparison base; refusing Production deployment."
+            exit 1
+          fi
+          changed_files="$(git diff --name-only "$BEFORE_SHA" "$AFTER_SHA")"
+          if [[ -z "$changed_files" ]]; then
+            echo "::error::No changed files found; refusing deployment."
+            exit 1
+          fi
+          printf '%s\n' "$changed_files"
+          while IFS= read -r path; do
+            [[ -z "$path" ]] && continue
+            case "$path" in
+              articles/*.html|sitemap.xml|feed.xml) ;;
+              *)
+                echo "::error::Blocked non-content file in article auto-publish push: $path"
+                exit 1
+                ;;
+            esac
+          done <<< "$changed_files"
+          echo "PASS: only article HTML, sitemap, and/or RSS feed files changed."
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+
+      - name: Run article quality and SEO checks
+        run: |
+          npm run test:content
+          npm run test:seo
+
+      - name: Build static site and validate Worker package
+        run: |
+          npm run build
+          npx --yes wrangler@4 deploy --dry-run --config wrangler.jsonc
+
+      - name: Require least-privilege Worker deployment token
+        shell: bash
+        env:
+          CF_WORKERS_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_CONTENT_DEPLOY_TOKEN }}
+        run: |
+          if [[ -z "$CF_WORKERS_TOKEN" ]]; then
+            echo "::error::Missing CLOUDFLARE_WORKERS_CONTENT_DEPLOY_TOKEN. Add a dedicated Cloudflare API token with only the permissions required to edit this Worker script/assets. Do not reuse a token with D1 permissions."
+            exit 1
+          fi
+          echo "Dedicated content deployment token is present."
+
+      - name: Deploy approved content to the existing Worker (no D1 migrations)
+        uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_WORKERS_CONTENT_DEPLOY_TOKEN }}
+          accountId: 92cf091bbac8b4879ec65feb30b4715b
+          command: deploy --config wrangler.jsonc
+
+      - name: Verify live article, sitemap, and security headers
+        shell: bash
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          host="https://ai-thuc-chien-blog.manhdungub.workers.dev"
+          changed_files="$(git diff --name-only "$BEFORE_SHA" "$AFTER_SHA")"
+          checked=0
+          while IFS= read -r path; do
+            [[ -z "$path" ]] && continue
+            if [[ "$path" == articles/*.html ]]; then
+              slug="${path#articles/}"
+              slug="${slug%.html}"
+              code="$(curl --silent --show-error --location --max-time 25 -o /dev/null -w '%{http_code}' "$host/articles/$slug")"
+              if [[ "$code" != "200" ]]; then
+                echo "::error::Published article /articles/$slug returned HTTP $code"
+                exit 1
+              fi
+              echo "PASS: /articles/$slug returned HTTP 200"
+              checked=$((checked + 1))
+            fi
+          done <<< "$changed_files"
+
+          for path in /sitemap.xml /feed.xml; do
+            code="$(curl --silent --show-error --location --max-time 25 -o /dev/null -w '%{http_code}' "$host$path")"
+            if [[ "$code" != "200" ]]; then
+              echo "::error::$path returned HTTP $code"
+              exit 1
+            fi
+            echo "PASS: $path returned HTTP 200"
+          done
+
+          headers="$(mktemp)"
+          trap 'rm -f "$headers"' EXIT
+          curl --fail --silent --show-error --location --max-time 25 -D "$headers" -o /dev/null "$host/"
+          for expected in \
+            'X-Content-Type-Options: nosniff' \
+            'X-Frame-Options: DENY' \
+            'Referrer-Policy: strict-origin-when-cross-origin' \
+            'Strict-Transport-Security: max-age=31536000'; do
+            grep -Fqi "$expected" "$headers" || {
+              echo "::error::Missing expected security header: $expected"
+              exit 1
+            }
+          done
+          echo "PASS: key routes and Worker security headers verified."
