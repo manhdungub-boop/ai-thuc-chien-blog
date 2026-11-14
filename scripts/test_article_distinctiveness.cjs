@@ -70,6 +70,10 @@ const slugs = [
   'thiet-ke-workflow-ai-dau-cuoi',
   'workflow-ai-chong-loi-va-chay-lai-an-toan',
   'xay-bang-theo-doi-loi-nhuan-affiliate',
+  'ai-agent-thuc-hanh-tu-thiet-ke-den-kiem-soat',
+  'bao-cao-tuan-google-sheets-voi-ai',
+  'gioi-han-quota-ai-agent',
+  'mcp-filesystem-server-an-toan',
 ];
 function coreTokens(slug) {
   const source = fs.readFileSync(path.join(root, 'articles', `${slug}.html`), 'utf8');
