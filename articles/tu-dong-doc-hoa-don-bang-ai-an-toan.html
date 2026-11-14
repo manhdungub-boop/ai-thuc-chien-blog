@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Hướng dẫn xây quy trình đọc hóa đơn bằng AI: OCR, kiểm tra số liệu, phát hiện trùng và yêu cầu con người duyệt trước khi ghi sổ hoặc thanh toán.">
+<title>Tự động đọc hóa đơn bằng AI: kiểm tra và phê duyệt an toàn</title>
+<meta name="theme-color" content="#0b1020"><meta name="robots" content="index,follow,max-image-preview:large"><meta name="author" content="DUNG - AI">
+<link rel="canonical" href="https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/tu-dong-doc-hoa-don-bang-ai-an-toan">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<meta property="og:type" content="article"><meta property="og:locale" content="vi_VN"><meta property="og:site_name" content="AI Thực Chiến"><meta property="og:title" content="Tự động đọc hóa đơn bằng AI: kiểm tra và phê duyệt an toàn"><meta property="og:description" content="Hướng dẫn xây quy trình đọc hóa đơn bằng AI: OCR, kiểm tra số liệu, phát hiện trùng và yêu cầu con người duyệt trước khi ghi sổ hoặc thanh toán."><meta property="og:url" content="https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/tu-dong-doc-hoa-don-bang-ai-an-toan">
+<meta name="twitter:card" content="summary"><meta name="twitter:title" content="Tự động đọc hóa đơn bằng AI: kiểm tra và phê duyệt an toàn"><meta name="twitter:description" content="Hướng dẫn xây quy trình đọc hóa đơn bằng AI: OCR, kiểm tra số liệu, phát hiện trùng và yêu cầu con người duyệt trước khi ghi sổ hoặc thanh toán.">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Tự động đọc hóa đơn bằng AI: kiểm tra và phê duyệt an toàn","description":"Hướng dẫn xây quy trình đọc hóa đơn bằng AI: OCR, kiểm tra số liệu, phát hiện trùng và yêu cầu con người duyệt trước khi ghi sổ hoặc thanh toán.","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/tu-dong-doc-hoa-don-bang-ai-an-toan","mainEntityOfPage":{"@type":"WebPage","@id":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/tu-dong-doc-hoa-don-bang-ai-an-toan"},"datePublished":"2026-11-15","dateModified":"2026-11-15","inLanguage":"vi-VN","author":{"@type":"Person","name":"DUNG - AI"},"publisher":{"@type":"Organization","name":"AI Thực Chiến","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/","logo":"https://ai-thuc-chien-blog.manhdungub.workers.dev/logo.svg"}}</script>
+<link rel="alternate" type="application/rss+xml" title="AI Thực Chiến RSS" href="../feed.xml"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap" onload="this.onload=null;this.rel='stylesheet'"><noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap"></noscript>
+<link rel="stylesheet" href="../styles.css">
+</head>
+<body><a class="skip-link" href="#main-content">Bỏ qua đến nội dung chính</a>
+<header class="site-header"><a class="brand" href="../"><span class="brand-mark">AI</span><span>AI <b>Thực Chiến</b></span></a><a class="header-cta" href="../thu-vien.html">Thư viện bài viết ↗</a></header>
+<main class="section" style="max-width:900px;margin:auto" id="main-content">
+<p class="article-byline" style="font-size:14px;color:var(--muted);margin:0 0 16px"><strong>Tác giả:</strong> DUNG - AI</p>
+<div class="section-kicker">AI ỨNG DỤNG · CHỨNG TỪ CÓ KIỂM SOÁT</div>
+<h1>Tự động đọc hóa đơn bằng AI: kiểm tra và phê duyệt an toàn</h1>
+<figure class="article-diagram" data-article-diagram="tu-dong-doc-hoa-don-bang-ai-an-toan" role="group" aria-labelledby="invoice-flow-title" style="max-width:680px;margin:30px auto;padding:18px;border:1px solid var(--line);border-radius:18px;background:#0b1424">
+<svg viewBox="0 0 640 570" width="100%" height="auto" role="img" aria-labelledby="invoice-flow-title invoice-flow-desc" style="display:block;max-width:100%;height:auto">
+<title id="invoice-flow-title">Quy trình đọc hóa đơn bằng AI có kiểm soát</title>
+<desc id="invoice-flow-desc">Sáu bước: tiếp nhận tệp, OCR và trích xuất, kiểm tra quy tắc, đối chiếu trùng và bất thường, con người phê duyệt, ghi sổ có nhật ký.</desc>
+<defs><linearGradient id="invoice-accent" x1="0" x2="1"><stop offset="0" stop-color="#55d6b5"/><stop offset="1" stop-color="#8ab4ff"/></linearGradient></defs>
+<text x="320" y="34" text-anchor="middle" fill="#73dfc2" font-size="16" font-weight="700" letter-spacing="2">LUỒNG XỬ LÝ 6 BƯỚC</text>
+<g font-family="Arial,sans-serif">
+<rect x="52" y="58" width="536" height="62" rx="14" fill="#14243b" stroke="#36506f"/><circle cx="88" cy="89" r="19" fill="url(#invoice-accent)"/><text x="88" y="95" text-anchor="middle" fill="#081421" font-size="17" font-weight="800">1</text><text x="124" y="95" fill="#eef4ff" font-size="18" font-weight="600">Tiếp nhận tệp và tạo mã hồ sơ</text>
+<path d="M320 121v22m-7-8 7 8 7-8" fill="none" stroke="#68d8bd" stroke-width="3" stroke-linecap="round"/>
+<rect x="52" y="151" width="536" height="62" rx="14" fill="#14243b" stroke="#36506f"/><circle cx="88" cy="182" r="19" fill="url(#invoice-accent)"/><text x="88" y="188" text-anchor="middle" fill="#081421" font-size="17" font-weight="800">2</text><text x="124" y="188" fill="#eef4ff" font-size="18" font-weight="600">OCR và trích xuất trường dữ liệu</text>
+<path d="M320 214v22m-7-8 7 8 7-8" fill="none" stroke="#68d8bd" stroke-width="3" stroke-linecap="round"/>
+<rect x="52" y="244" width="536" height="62" rx="14" fill="#14243b" stroke="#36506f"/><circle cx="88" cy="275" r="19" fill="url(#invoice-accent)"/><text x="88" y="281" text-anchor="middle" fill="#081421" font-size="17" font-weight="800">3</text><text x="124" y="281" fill="#eef4ff" font-size="18" font-weight="600">Kiểm tra số học và định dạng</text>
+<path d="M320 307v22m-7-8 7 8 7-8" fill="none" stroke="#68d8bd" stroke-width="3" stroke-linecap="round"/>
+<rect x="52" y="337" width="536" height="62" rx="14" fill="#14243b" stroke="#36506f"/><circle cx="88" cy="368" r="19" fill="url(#invoice-accent)"/><text x="88" y="374" text-anchor="middle" fill="#081421" font-size="17" font-weight="800">4</text><text x="124" y="374" fill="#eef4ff" font-size="18" font-weight="600">Phát hiện trùng và điểm bất thường</text>
+<path d="M320 400v22m-7-8 7 8 7-8" fill="none" stroke="#68d8bd" stroke-width="3" stroke-linecap="round"/>
+<rect x="52" y="430" width="536" height="62" rx="14" fill="#18352f" stroke="#55a995" stroke-width="2"/><circle cx="88" cy="461" r="19" fill="url(#invoice-accent)"/><text x="88" y="467" text-anchor="middle" fill="#081421" font-size="17" font-weight="800">5</text><text x="124" y="467" fill="#eef4ff" font-size="18" font-weight="700">Người có thẩm quyền phê duyệt</text>
+<path d="M320 493v22m-7-8 7 8 7-8" fill="none" stroke="#68d8bd" stroke-width="3" stroke-linecap="round"/>
+<rect x="52" y="523" width="536" height="40" rx="12" fill="#14243b" stroke="#36506f"/><text x="320" y="549" text-anchor="middle" fill="#eef4ff" font-size="17" font-weight="600">6 · Ghi sổ, lưu bằng chứng và nhật ký</text>
+</g></svg>
+<figcaption style="margin-top:10px;color:var(--muted);font-size:13px;line-height:1.6">Sơ đồ do AI Thực Chiến biên soạn. AI chỉ hỗ trợ đọc và gợi ý; bước phê duyệt tài chính vẫn thuộc về người có thẩm quyền.</figcaption>
+</figure>
+<p style="color:var(--muted)">Mục tiêu không phải để AI tự quyết định hóa đơn nào được thanh toán. Mục tiêu là giảm thao tác nhập liệu lặp lại, phát hiện lỗi sớm và tạo hồ sơ có thể kiểm tra trước khi một người chịu trách nhiệm xác nhận.</p>
+<p><strong>Phù hợp với:</strong> hộ kinh doanh, doanh nghiệp nhỏ, nhóm kế toán hoặc bộ phận vận hành đang nhận hóa đơn qua email, biểu mẫu hay thư mục dùng chung. Hướng dẫn này là thiết kế quy trình kỹ thuật, không thay thế tư vấn kế toán, thuế hoặc pháp lý.</p>
+<h2>1. Tách việc đọc hóa đơn khỏi quyền ghi sổ và thanh toán</h2>
+<p>Hóa đơn là tài liệu đầu vào, không phải một mệnh lệnh để hệ thống tự hành động. Một tệp có thể chứa chữ mờ, bảng nhiều dòng, nhiều mức thuế, thông tin tài khoản ngân hàng hoặc nội dung bất thường. OCR có thể đọc nhầm ký tự; mô hình AI có thể suy diễn phần bị thiếu. Vì vậy, hãy chia quy trình thành ba lớp độc lập:</p>
+<ul><li><strong>Đọc:</strong> nhận dạng ký tự và đề xuất các trường dữ liệu.</li><li><strong>Kiểm tra:</strong> dùng quy tắc xác định để đối chiếu phép tính, định dạng, nhà cung cấp và hồ sơ trùng.</li><li><strong>Phê duyệt:</strong> người có thẩm quyền xem ảnh gốc cùng dữ liệu đã trích xuất trước khi ghi sổ hoặc tạo lệnh thanh toán.</li></ul>
+<p>Không cấp cho mô hình quyền truy cập ngân hàng, quyền sửa thông tin nhà cung cấp hoặc quyền phát lệnh thanh toán. Nếu cần tích hợp phần mềm kế toán, hãy dùng tài khoản dịch vụ có quyền tối thiểu, giới hạn ở thao tác cần thiết và tách quyền ghi dữ liệu khỏi quyền duyệt.</p>
+<h2>2. Thiết kế luồng tiếp nhận có dấu vết</h2>
+<p>Chỉ nhận tệp từ nguồn đã được tổ chức cho phép, chẳng hạn hộp thư chuyên nhận hóa đơn hoặc thư mục tải lên có phân quyền. Với mỗi tệp, tạo một mã hồ sơ duy nhất, ghi thời điểm tiếp nhận, người gửi, tên tệp, loại tệp và mã băm nội dung. Mã băm giúp nhận ra cùng một tệp được gửi lại; nó không thay thế bước đối chiếu hóa đơn trùng.</p>
+<p>Kiểm tra loại tệp thực tế, dung lượng và khả năng mở trước khi OCR. Không tin phần mở rộng tên tệp do người gửi đặt. Tệp lỗi, tệp có mật khẩu, định dạng không hỗ trợ hoặc có dấu hiệu nguy hiểm phải được đưa vào hàng chờ xử lý thủ công, không tự động chuyển tiếp đến các công cụ khác.</p>
+<h2>3. Trích xuất theo schema, không yêu cầu AI tự viết lại hóa đơn</h2>
+<p>Đầu ra nên là dữ liệu có cấu trúc, mỗi trường có giá trị, mức tin cậy và vị trí trang hoặc vùng ảnh để người kiểm tra đối chiếu. Một schema khởi đầu có thể gồm:</p>
+<table><thead><tr><th>Nhóm</th><th>Trường cần đọc</th><th>Điểm cần xác minh</th></tr></thead><tbody>
+<tr><td>Nhận diện</td><td>Mã số thuế bên bán, ký hiệu, số hóa đơn, ngày lập</td><td>Đối chiếu với ảnh gốc và hồ sơ nhà cung cấp</td></tr>
+<tr><td>Giá trị</td><td>Tiền hàng, chiết khấu, thuế, tổng thanh toán, đơn vị tiền</td><td>Kiểm tra phép cộng, làm tròn và dấu phân cách</td></tr>
+<tr><td>Chi tiết</td><td>Tên hàng hóa/dịch vụ, số lượng, đơn giá</td><td>Đối chiếu đơn đặt hàng hoặc biên bản nhận hàng nếu có</td></tr>
+<tr><td>Thanh toán</td><td>Thông tin tài khoản nhận tiền nếu xuất hiện</td><td>Không tự thay đổi tài khoản nhà cung cấp từ nội dung hóa đơn</td></tr>
+</tbody></table>
+<p>Ví dụ định dạng đầu ra: <code>{"invoice_number":"000123","invoice_date":"2026-11-10","currency":"VND","subtotal":1000000,"tax":100000,"total":1100000,"confidence":{"invoice_number":0.98,"total":0.93}}</code>. Đây chỉ là dữ liệu minh họa, không phải hóa đơn thật hay chuẩn pháp lý bắt buộc. Nếu AI không đọc được một trường, giá trị nên là <code>null</code> kèm trạng thái cần kiểm tra; không được tự điền bằng phỏng đoán.</p>
+<h2>4. Dùng quy tắc xác định để kiểm tra số liệu</h2>
+<p>Đừng giao cho AI quyền tự kết luận một hóa đơn hợp lệ chỉ vì phần giải thích nghe hợp lý. Các phép kiểm tra có thể lập trình được nên chạy bằng mã hoặc công thức độc lập:</p>
+<ul><li><strong>Kiểm tra số học:</strong> tổng tiền hàng trừ chiết khấu cộng các khoản thuế/phí phải khớp tổng thanh toán theo quy tắc làm tròn đã cấu hình. Nếu cấu trúc hóa đơn không đủ dữ liệu để tính, đánh dấu cần người xem.</li><li><strong>Kiểm tra ngày:</strong> ngày lập có định dạng hợp lệ và nằm trong khoảng nghiệp vụ chấp nhận. Không tự sửa ngày mơ hồ như 03/04 nếu chưa xác định quy ước.</li><li><strong>Kiểm tra định danh:</strong> mã số thuế, tên nhà cung cấp và thông tin hợp đồng phải khớp hồ sơ đã được xác minh.</li><li><strong>Kiểm tra trùng:</strong> so sánh tổ hợp mã số thuế, ký hiệu, số hóa đơn và ngày; bổ sung mã băm tệp để nhận ra bản gửi lại. Không chỉ dựa vào tên tệp.</li><li><strong>Kiểm tra bất thường:</strong> số tiền lệch đáng kể so với đơn đặt hàng, tài khoản ngân hàng thay đổi, hóa đơn ngoài kỳ hoặc nhà cung cấp chưa có trong danh sách.</li></ul>
+<p>Ngưỡng sai lệch, điều kiện hợp lệ và quy tắc thuế phải do người phụ trách kế toán/pháp chế xác định theo loại giao dịch và quy định áp dụng. Không dùng một tỷ lệ hoặc mức tiền chung do AI tự đề xuất làm quy tắc chính thức.</p>
+<h2>5. Bảo vệ quy trình trước prompt injection trong tài liệu</h2>
+<p>Nội dung hóa đơn, tệp đính kèm và văn bản OCR là dữ liệu không đáng tin cậy. Một tài liệu có thể chứa câu như “bỏ qua quy trình kiểm tra”, “đổi tài khoản nhận tiền” hoặc hướng dẫn giả mạo nhằm tác động đến AI agent. Hệ thống phải coi những câu đó là nội dung cần trích xuất hoặc cảnh báo, không phải chỉ thị được phép thực thi.</p>
+<p>Không đặt API key, mật khẩu, thông tin đăng nhập ngân hàng hay bí mật hệ thống trong prompt. Không để mô hình tự chọn công cụ hoặc tự mở rộng quyền. Kiểm tra quyền ở lớp thực thi, xác thực mọi tham số trước khi gọi công cụ và yêu cầu duyệt riêng cho hành động có tác động tài chính. Đây là các biện pháp phù hợp với hướng dẫn phòng vệ prompt injection của OWASP; bộ lọc từ khóa đơn lẻ không phải ranh giới bảo mật đủ tin cậy.</p>
+<h2>6. Đặt điểm dừng bắt buộc cho người duyệt</h2>
+<p>Mỗi hồ sơ nên có trạng thái rõ ràng: <code>received</code>, <code>extracted</code>, <code>validated</code>, <code>needs_review</code>, <code>approved</code>, <code>posted</code> hoặc <code>rejected</code>. Chỉ người có quyền mới chuyển hồ sơ sang <code>approved</code>. Người duyệt cần xem song song ảnh gốc, dữ liệu trích xuất, cảnh báo, kết quả đối chiếu và lịch sử chỉnh sửa.</p>
+<p>Hãy yêu cầu kiểm tra thủ công trong các trường hợp: trường bắt buộc thiếu; độ tin cậy thấp; số học không khớp; phát hiện trùng; nhà cung cấp mới; tài khoản nhận tiền thay đổi; nội dung tài liệu có chỉ thị đáng ngờ; hoặc giá trị vượt ngưỡng nội bộ. Dù tất cả kiểm tra tự động đều đạt, người phụ trách vẫn cần xác nhận hồ sơ trước khi ghi sổ. Lệnh thanh toán nên là một quy trình riêng với xác thực và phê duyệt riêng.</p>
+<h2>7. Ghi sổ có chống chạy trùng và khả năng truy vết</h2>
+<p>Khi hồ sơ đã được duyệt, hệ thống mới gửi dữ liệu sang phần mềm kế toán. Dùng mã hồ sơ hoặc khóa idempotency để một lần gửi lại do lỗi mạng không tạo hai bút toán. Trước khi ghi, kiểm tra trạng thái hiện tại; sau khi ghi, lưu mã giao dịch trả về và thời điểm hoàn tất. Nếu kết quả không rõ ràng, truy vấn trạng thái trước khi thử lại, không gửi lặp một cách mù quáng.</p>
+<p>Nhật ký nên ghi ai đã duyệt, trường nào được sửa, giá trị trước/sau, quy tắc nào đã chạy và kết quả tích hợp. Không ghi toàn bộ nội dung nhạy cảm hoặc thông tin tài khoản vào log nếu không cần thiết. Thiết lập thời hạn lưu trữ, quyền truy cập và quy trình xóa theo chính sách dữ liệu của tổ chức.</p>
+<h2>8. Thử nghiệm nhỏ trước khi áp dụng dữ liệu thật</h2>
+<p>Bắt đầu bằng bộ hóa đơn giả lập hoặc đã che thông tin nhận diện. Tạo ca kiểm thử bình thường và ca lỗi: ảnh nghiêng/mờ, thiếu trang, số tiền bị đọc nhầm, hóa đơn gửi hai lần, ngày không rõ, tài khoản ngân hàng khác hồ sơ, tổng tiền không khớp và văn bản có chỉ thị giả mạo. Đo ít nhất các chỉ số sau:</p>
+<ul><li>Tỷ lệ trường dữ liệu đọc đúng trên tập mẫu đã được người kiểm tra gán nhãn.</li><li>Tỷ lệ hồ sơ phải sửa thủ công và nhóm trường hay sai nhất.</li><li>Tỷ lệ phát hiện đúng hồ sơ trùng và tỷ lệ cảnh báo nhầm.</li><li>Thời gian xử lý trung bình từ lúc nhận đến lúc người duyệt quyết định.</li><li>Số lần ghi trùng, gửi nhầm hoặc vượt quyền — mục tiêu kiểm soát là không để xảy ra.</li></ul>
+<p>Chỉ mở rộng khi có kết quả kiểm thử lặp lại được, người chịu trách nhiệm rõ ràng, quyền truy cập tối thiểu, nhật ký đủ dùng và phương án dừng/khôi phục. Không dùng một vài hóa đơn đọc đúng để kết luận toàn bộ hệ thống đã an toàn.</p>
+<h2>Checklist trước khi đưa vào vận hành</h2>
+<ul><li>Đã xác định nguồn tiếp nhận và quyền truy cập tệp.</li><li>Đầu ra OCR có schema, trạng thái thiếu dữ liệu và vị trí đối chiếu.</li><li>Phép tính và quy tắc nghiệp vụ được kiểm tra độc lập với AI.</li><li>Có kiểm tra trùng, nhà cung cấp và thay đổi thông tin thanh toán.</li><li>Tài liệu được xem là dữ liệu không đáng tin cậy; prompt injection không thể cấp quyền công cụ.</li><li>AI không có quyền thanh toán hoặc tự duyệt hóa đơn.</li><li>Người có thẩm quyền duyệt trước khi ghi sổ; thanh toán có bước xác thực riêng.</li><li>Có idempotency, nhật ký tối thiểu, giám sát và cách dừng quy trình.</li><li>Đã thử nghiệm bằng dữ liệu giả lập và có tiêu chí chấp nhận rõ ràng.</li></ul>
+<h2>Kết luận</h2>
+<p>AI có thể giúp đọc hóa đơn nhanh hơn, nhưng độ tin cậy đến từ cả hệ thống: dữ liệu đầu vào được kiểm soát, schema rõ ràng, quy tắc xác định, kiểm tra trùng, quyền tối thiểu và phê duyệt của con người. Hãy bắt đầu bằng một luồng chỉ đọc, đo tỷ lệ sai trên dữ liệu thử nghiệm, rồi mới cân nhắc tích hợp ghi sổ. Đừng trao quyền thanh toán cho một mô hình ngôn ngữ.</p>
+<h2 id="tai-lieu-tham-khao">Tài liệu tham khảo</h2>
+<ul>
+<li><a href="https://nvlpubs.nist.gov/nistpubs/AI/NIST.AI.600-1.pdf" target="_blank" rel="noopener noreferrer">NIST AI 600-1: Artificial Intelligence Risk Management Framework — Generative Artificial Intelligence Profile</a> — tài liệu về quản trị rủi ro, giám sát và vai trò của con người khi triển khai GenAI.</li>
+<li><a href="https://genai.owasp.org/llm-top-10/" target="_blank" rel="noopener noreferrer">OWASP GenAI Security Project: GenAI LLM Top 10 (2026)</a> — nguồn tham khảo về prompt injection, rò rỉ thông tin và quyền hành động quá mức của hệ thống AI.</li>
+<li><a href="https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html" target="_blank" rel="noopener noreferrer">OWASP: LLM Prompt Injection Prevention Cheat Sheet</a> — hướng dẫn phân tách dữ liệu không tin cậy, kiểm soát quyền công cụ, xác thực tham số và phê duyệt hành động nhạy cảm.</li>
+</ul>
+<p>Các nguồn trên hỗ trợ nguyên tắc quản trị và an toàn AI; chúng không thay thế quy định kế toán, hóa đơn hoặc thuế tại Việt Nam. Hãy xác minh quy định và điều khoản nhà cung cấp đang áp dụng trước khi vận hành.</p>
+<section aria-labelledby="faq-title" class="article-faq">
+<h2 id="faq-title">Câu hỏi thường gặp</h2>
+<h3>Có thể để AI tự động duyệt hóa đơn có giá trị nhỏ không?</h3>
+<p>Không nên mặc định như vậy. Nếu tổ chức muốn áp dụng phân luồng tự động, cần chính sách được người có thẩm quyền phê duyệt, ngưỡng rủi ro rõ, kiểm thử độc lập và cơ chế hậu kiểm. Với quy trình mới, hãy giữ phê duyệt của con người cho mọi hồ sơ trước khi ghi sổ hoặc thanh toán.</p>
+<h3>OCR và AI có giống nhau không?</h3>
+<p>OCR chuyển hình ảnh chữ thành văn bản; mô hình AI có thể hỗ trợ phân loại, hiểu ngữ cảnh và đề xuất cấu trúc. Cả hai đều có thể sai. Vì vậy cần lưu vị trí nguồn, kiểm tra phép tính và hiển thị ảnh gốc cho người duyệt.</p>
+<h3>Nếu hóa đơn có tài khoản ngân hàng khác hồ sơ nhà cung cấp thì sao?</h3>
+<p>Dừng tự động hóa và xác minh qua kênh liên hệ đã biết trước đó, không dùng riêng số điện thoại hoặc đường dẫn nằm trong hóa đơn mới. Chỉ cập nhật thông tin nhà cung cấp sau quy trình xác minh độc lập và được người có thẩm quyền chấp thuận.</p>
+<h3>Có nên đưa hóa đơn thật lên công cụ AI miễn phí không?</h3>
+<p>Không nên tải lên trước khi kiểm tra điều khoản xử lý dữ liệu, nơi lưu trữ, thời hạn lưu, quyền truy cập và việc dữ liệu có được dùng để cải thiện dịch vụ hay không. Hãy bắt đầu bằng dữ liệu giả lập hoặc đã che thông tin; chỉ dùng dữ liệu thật khi tổ chức có căn cứ và biện pháp bảo vệ phù hợp.</p>
+</section>
+<section class="related-articles" aria-labelledby="related-articles-title">
+<div class="related-articles-heading"><p class="section-kicker">ĐỌC TIẾP</p><h2 id="related-articles-title">Xây quy trình AI có kiểm soát</h2><p>Đọc thêm về kiểm tra dữ liệu, quyền truy cập và phòng vệ prompt injection.</p></div>
+<nav class="related-articles-grid" aria-label="Bài viết liên quan">
+<a class="related-article" href="/articles/kiem-tra-json-dau-ra-ai-truoc-khi-tu-dong-hoa"><strong>Kiểm tra đầu ra AI trước khi tự động hóa</strong><span>Schema, kiểm tra mã và bước phê duyệt để chặn dữ liệu sai.</span></a>
+<a class="related-article" href="/articles/kiem-soat-quyen-va-du-lieu-workflow"><strong>Kiểm soát quyền và dữ liệu trong workflow</strong><span>Giới hạn quyền, dữ liệu và điểm dừng của quy trình tự động.</span></a>
+<a class="related-article" href="/articles/nhan-biet-prompt-injection-ai"><strong>Nhận biết prompt injection trong AI</strong><span>Phòng vệ trước chỉ thị độc hại nằm trong tài liệu và nội dung bên ngoài.</span></a>
+</nav>
+</section>
+<p><a class="button primary" href="../thu-vien.html">Khám phá thư viện bài viết →</a></p>
+<p><a href="../thu-vien.html">← Quay lại thư viện bài viết</a></p>
+<section class="article-author-note" aria-label="Ghi công tác giả và sử dụng nội dung"><p><strong>Tác giả:</strong> DUNG - AI</p><p>Khi trích dẫn, chia sẻ hoặc sử dụng lại nội dung bài viết này, vui lòng ghi rõ tác giả <strong>DUNG - AI</strong> và dẫn liên kết về bài viết gốc. Các tài sản của bên thứ ba (nếu có) vẫn tuân theo giấy phép và điều kiện sử dụng riêng.</p></section>
+</main>
+<footer><a class="brand" href="../"><span class="brand-mark">AI</span><span>AI <b>Thực Chiến</b></span></a><span>Học thật · Thử thật · Tối ưu từng bước</span><span>© 2026 AI Thực Chiến</span></footer>
+</body></html>
