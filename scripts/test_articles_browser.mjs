@@ -9,7 +9,7 @@ const dist = path.join(root, "dist");
 const articleDir = path.join(dist, "articles");
 assert.ok(fs.existsSync(articleDir), "dist/articles must exist; run npm run build first");
 const articleFiles = fs.readdirSync(articleDir).filter(file => file.endsWith(".html")).sort();
-assert.equal(articleFiles.length, 69, "release candidate must contain exactly 69 article pages");
+assert.equal(articleFiles.length, 71, "release candidate must contain exactly 71 article pages");
 
 const mime = {
   ".html": "text/html; charset=utf-8",
