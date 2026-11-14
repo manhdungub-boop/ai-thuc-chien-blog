@@ -68,8 +68,9 @@ async function walk(directory) {
 
 const htmlFiles = (await walk(outputRoot)).filter((file) => file.endsWith(".html"));
 const articleFiles = htmlFiles.filter((file) => file.includes(path.sep + "articles" + path.sep));
-assert.equal(articleFiles.length, 71, "preview output must include all 71 reviewed article pages");
-assert.ok(htmlFiles.length >= 71, "preview output must include the 71 articles plus non-article HTML pages");
+const sourceArticleFiles = (await readdir(path.join(sourceRoot, "articles"))).filter((file) => file.endsWith(".html"));
+assert.equal(articleFiles.length, sourceArticleFiles.length, "preview output must include every source article exactly once");
+assert.ok(htmlFiles.length > articleFiles.length, "preview output must include non-article HTML pages in addition to articles");
 let robotsMetaCount = 0;
 
 for (const file of htmlFiles) {
