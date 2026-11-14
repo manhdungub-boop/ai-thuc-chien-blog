@@ -207,6 +207,7 @@ jobs:
         if: steps.token.outputs.deploy_ready == 'true'
         uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3
         with:
+          wranglerVersion: "4.151.2"
           apiToken: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
           accountId: 92cf091bbac8b4879ec65feb30b4715b
           command: deploy --config wrangler.deploy.jsonc
