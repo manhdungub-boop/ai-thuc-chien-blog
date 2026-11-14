@@ -18,6 +18,8 @@ const verifyToken = await read("verify-cloudflare-deploy-token.yml");
 const repairLegacy = await read("repair-cloudflare-branch-preview-triggers.yml");
 const pages = await read("deploy-cloudflare-pages.yml");
 const workers = await read("deploy-cloudflare-workers.yml");
+const workerOnly = await read("deploy-production-worker-only.yml");
+const googlePreview = await read("deploy-google-login-preview.yml");
 const previewD1 = await read("migrate-preview-d1.yml");
 const configureBuilds = await read("configure-cloudflare-worker-builds.yml");
 
@@ -49,6 +51,29 @@ assert.ok(pages.includes("github.ref == 'refs/heads/main'"));
 assert.ok(pages.includes("confirm_production_pages_deploy == true"));
 assert.ok(workers.includes("github.ref == 'refs/heads/main'"));
 assert.ok(workers.includes("confirm_production_worker_and_d1_changes == true"));
+assert.ok(workers.includes("github.event_name == 'workflow_dispatch'"),
+  "Production Worker deployment must never run from a push event.");
+assert.ok(workerOnly.includes("if: ${{ false }}"),
+  "The duplicate Worker-only Production deployment workflow must remain disabled for this release.");
+assert.doesNotMatch(workerOnly, /^\s{2}push:/m,
+  "The duplicate Worker-only Production workflow must not run automatically on main pushes.");
+assert.ok(!workerOnly.includes("CLOUDFLARE_WORKERS_API_TOKEN") &&
+  !workerOnly.includes("cloudflare/wrangler-action") &&
+  !workerOnly.includes("wrangler deploy") &&
+  !workerOnly.includes("d1 migrations apply"),
+  "The disabled Worker-only workflow must not retain a secret-bearing Production deploy path.");
+assert.doesNotMatch(googlePreview, /^\s{2}push:/m,
+  "The Preview deployment workflow must not run from branch pushes.");
+assert.ok(googlePreview.includes("confirm_preview_worker_deploy:") &&
+  googlePreview.includes("default: false") &&
+  googlePreview.includes("github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.confirm_preview_worker_deploy == true"),
+  "Preview deployment must require explicit confirmation from trusted main.");
+assert.ok(googlePreview.includes("ref: main") && googlePreview.includes("persist-credentials: false"),
+  "Preview deployment must check out trusted main without persisting the GitHub token.");
+assert.ok(googlePreview.includes("51d814c8-a3fc-4481-a5f1-60bc67617f3c"),
+  "Preview deployment must remain pinned to the isolated Preview D1 UUID.");
+assert.ok(googlePreview.includes("wrangler.preview-migrations.jsonc"),
+  "Only the dedicated Preview D1 migration config may be used.");
 assert.ok(previewD1.includes("github.ref == 'refs/heads/main'"));
 assert.ok(previewD1.includes("ref: main"));
 assert.ok(previewD1.includes("51d814c8-a3fc-4481-a5f1-60bc67617f3c"));
@@ -59,6 +84,7 @@ const checkoutWorkflows = [
   ["diagnose-community-d1.yml", diagnoseD1],
   ["deploy-cloudflare-pages.yml", pages],
   ["deploy-cloudflare-workers.yml", workers],
+  ["deploy-google-login-preview.yml", googlePreview],
   ["migrate-preview-d1.yml", previewD1],
   ["configure-cloudflare-worker-builds.yml", configureBuilds]
 ];
@@ -77,3 +103,4 @@ assert.doesNotMatch(configureBuilds, /secrets\.|api\.cloudflare\.com|wrangler (?
 console.log("PASS: all Cloudflare secret-bearing diagnostics require trusted-main dispatch and explicit confirmation.");
 console.log("PASS: legacy trigger repair is disabled; Workers Builds updater is offline-only.");
 console.log("PASS: Production deploys require explicit confirmation from main; D1 migration is locked to the Preview UUID.");
+console.log("PASS: Worker-only Production deployment is disabled; Preview deploys require trusted-main manual confirmation.");
