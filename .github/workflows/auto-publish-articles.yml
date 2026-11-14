@@ -69,7 +69,7 @@ jobs:
       - name: Build static site and validate Worker package
         run: |
           npm run build
-          npx --yes wrangler@4 deploy --dry-run --config wrangler.jsonc
+          npx --yes wrangler@4.151.3 deploy --dry-run --config wrangler.jsonc
 
       - name: Require least-privilege Worker deployment token
         shell: bash
