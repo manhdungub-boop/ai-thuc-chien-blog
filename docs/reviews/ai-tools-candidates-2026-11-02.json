@@ -66,7 +66,7 @@
         "api"
       ],
       "description": "Bảng điều khiển dành cho nhà phát triển của Mistral AI, hỗ trợ API, API keys, Playground, đánh giá mô hình, agents và SDK.",
-      "free_tier_summary": "Trang giá chính thức mô tả Free plan có quyền truy cập giới hạn vào Mistral Studio và $10 API credits/tháng; API sử dụng vượt mức tín dụng có thể phát sinh phí. Cần kiểm tra điều kiện, vùng áp dụng và giới hạn trước khi xếp hạng hoặc khuyến nghị.",
+      "free_tier_summary": "Trang giá chính thức hiện mô tả gói Free cho Vibe (trợ lý AI cá nhân) với giới hạn sử dụng; chưa có bằng chứng xác nhận Mistral Studio hoặc API đi kèm $10 tín dụng miễn phí mỗi tháng. API được tính phí theo lượng token; cần xác minh riêng điều kiện tài khoản, khu vực và giới hạn trước khi khuyến nghị. Không bật API trả phí hoặc phương thức thanh toán chỉ để thử nghiệm.",
       "official_sources": [
         "https://docs.mistral.ai/",
         "https://console.mistral.ai/",
