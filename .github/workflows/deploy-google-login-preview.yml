@@ -53,7 +53,7 @@ jobs:
           assert config["d1_databases"][0]["database_id"] != "fc2517cb-9543-4d7b-98f4-bcd5f3c013e7", "Production D1 is forbidden"
           assert config["name"] != "ai-thuc-chien-blog", "Production Worker is forbidden"
           Path("wrangler.preview.deploy.jsonc").write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-          print("PASS: target Worker and D1 are the isolated Preview resources; no migrations will run.")
+          print("PASS: target Worker and D1 are isolated Preview resources; any migrations are constrained to Preview D1.")
           PY
 
       - name: Test rate-limit retention cleanup logic
@@ -102,6 +102,6 @@ jobs:
             echo "## Isolated Preview deployment"
             echo "- Worker: ai-thuc-chien-blog-auth-app-preview"
             echo "- D1: ai-thuc-chien-community-preview (51d814c8-a3fc-4481-a5f1-60bc67617f3c)"
-            echo "- Migration 0007 was applied only to the isolated Preview D1 listed above."
+            echo "- Any pending migrations were applied only to the isolated Preview D1 listed above."
             echo "- No Production Worker, Production D1, DNS or Production secrets were changed."
           } >> "$GITHUB_STEP_SUMMARY"
