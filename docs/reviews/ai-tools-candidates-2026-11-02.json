@@ -27,10 +27,15 @@
         "api"
       ],
       "description": "Nền tảng inference cho mô hình ngôn ngữ lớn, cung cấp API tương thích OpenAI và tài liệu về mô hình, giới hạn tốc độ, tích hợp và công cụ.",
-      "free_tier_summary": "Chưa xác minh hạn mức miễn phí, điều kiện sử dụng và giá hiện hành; không được giới thiệu là miễn phí trước khi kiểm tra nguồn chính thức.",
+      "free_tier_summary": "Tài liệu chính thức có mục Free tier và giới hạn theo model/tổ chức; giới hạn cụ thể cần kiểm tra trong tài khoản. Developer tier yêu cầu phương thức thanh toán và tính phí theo mức sử dụng. Không bật Developer tier hoặc cấu hình thanh toán chỉ để thử nghiệm.",
       "official_sources": [
         "https://console.groq.com/home",
-        "https://console.groq.com/docs/overview"
+        "https://console.groq.com/docs/overview",
+        "https://console.groq.com/docs/rate-limits",
+        "https://console.groq.com/docs/billing-faqs",
+        "https://console.groq.com/docs/legal/services-agreement",
+        "https://trust.groq.com/faq",
+        "https://groq.com/privacy-policy"
       ],
       "last_verified": "2026-11-15",
       "verification_status": "needs_review",
@@ -61,10 +66,14 @@
         "api"
       ],
       "description": "Bảng điều khiển dành cho nhà phát triển của Mistral AI, hỗ trợ API, API keys, Playground, đánh giá mô hình, agents và SDK.",
-      "free_tier_summary": "Chưa xác minh gói miễn phí, giá, hạn mức và điều kiện theo khu vực; không đưa ra khẳng định miễn phí khi chưa đối chiếu trang giá chính thức.",
+      "free_tier_summary": "Trang giá chính thức mô tả Free plan có quyền truy cập giới hạn vào Mistral Studio và $10 API credits/tháng; API sử dụng vượt mức tín dụng có thể phát sinh phí. Cần kiểm tra điều kiện, vùng áp dụng và giới hạn trước khi xếp hạng hoặc khuyến nghị.",
       "official_sources": [
         "https://docs.mistral.ai/",
-        "https://console.mistral.ai/"
+        "https://console.mistral.ai/",
+        "https://mistral.ai/pricing/",
+        "https://mistral.ai/pricing/api/",
+        "https://docs.mistral.ai/studio/governance",
+        "https://docs.mistral.ai/admin/monitor-comply/zero-data-retention"
       ],
       "last_verified": "2026-11-15",
       "verification_status": "needs_review",
