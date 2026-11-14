@@ -47,7 +47,7 @@ jobs:
           while IFS= read -r path; do
             [[ -z "$path" ]] && continue
             case "$path" in
-              articles/*.html|sitemap.xml|feed.xml) ;;
+              articles/*.html|index.html|thu-vien.html|sitemap.xml|feed.xml) ;;
               *)
                 echo "::error::Blocked non-content file in article auto-publish push: $path"
                 exit 1

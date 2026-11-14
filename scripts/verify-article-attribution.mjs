@@ -25,7 +25,7 @@ for (const file of files) {
 }
 const home = fs.readFileSync("index.html", "utf8");
 if (!/<meta\b(?=[^>]*name=["']author["'])(?=[^>]*content=["']DUNG - AI["'])[^>]*>/i.test(home)) failures.push("index.html: meta author is not DUNG - AI");
-if (!/71 bài thực hành/i.test(home)) failures.push("index.html: article count is not 71");
+if (!new RegExp(`${files.length} bài thực hành`, "i").test(home)) failures.push(`index.html: expected article count ${files.length}`);
 if (failures.length) {
   console.error(failures.join("\n"));
   process.exitCode = 1;
