@@ -1,0 +1,88 @@
+name: AI Bank weekly maintenance
+
+on:
+  schedule:
+    # 09:15 Asia/Ho_Chi_Minh every Monday
+    - cron: "15 2 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-bank-weekly-maintenance
+  cancel-in-progress: false
+
+jobs:
+  catalog-maintenance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out the exact repository revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+
+      - name: Prepare report directory
+        run: mkdir -p reports/ai-bank
+
+      - name: Validate catalog schema and unique IDs
+        run: |
+          set -o pipefail
+          node scripts/validate-ai-tools-catalog.mjs data/ai-tools.json 2>&1 | tee reports/ai-bank/catalog-validation.log
+
+      - name: Audit stale records, evidence and duplicate candidates
+        if: always()
+        run: |
+          node scripts/audit-ai-tools-catalog.mjs \
+            data/ai-tools.json \
+            docs/reviews/ai-tools-candidates-2026-11-02.json \
+            --strict > reports/ai-bank/catalog-audit.json 2>&1
+
+      - name: Check official product and source links
+        if: always()
+        run: |
+          node scripts/check-ai-tools-links.mjs data/ai-tools.json > reports/ai-bank/official-links.log 2>&1
+
+      - name: Publish maintenance report in the workflow summary
+        if: always()
+        run: |
+          {
+            echo "## AI Bank maintenance"
+            echo
+            echo "- Revision: `${GITHUB_SHA}`"
+            echo "- Date: $(date -u +%F)"
+            echo "- This workflow is read-only: it does not edit catalog records, publish listings, deploy Workers, or access D1."
+            echo
+            echo "### Catalog structure"
+            if [[ -f reports/ai-bank/catalog-validation.log ]]; then
+              cat reports/ai-bank/catalog-validation.log
+            fi
+            echo
+            echo "### Strict audit"
+            if [[ -f reports/ai-bank/catalog-audit.json ]]; then
+              cat reports/ai-bank/catalog-audit.json
+            fi
+            echo
+            echo "### Official link check"
+            if [[ -f reports/ai-bank/official-links.log ]]; then
+              tail -n 100 reports/ai-bank/official-links.log
+            fi
+            echo
+            echo "A link being reachable does not verify current pricing, license scope, regional availability, or product claims. Any factual change must retain official evidence and pass editorial review before it can enter the public catalog."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Preserve detailed maintenance reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: ai-bank-maintenance-${{ github.run_id }}
+          path: reports/ai-bank/
+          if-no-files-found: warn
+          retention-days: 30
