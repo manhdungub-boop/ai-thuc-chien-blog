@@ -74,6 +74,7 @@ const slugs = [
   'bao-cao-tuan-google-sheets-voi-ai',
   'gioi-han-quota-ai-agent',
   'mcp-filesystem-server-an-toan',
+  'bao-mat-mcp-server-oauth-ai',
   'dong-goi-dich-vu-ai-cho-doanh-nghiep-nho',
   'tinh-diem-hoa-von-va-tco-du-an-ai',
 ];
