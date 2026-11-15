@@ -12,6 +12,7 @@ on:
       - "sitemap.xml"
       - "feed.xml"
       - ".github/workflows/auto-publish-articles.yml"
+      - ".github/workflows/deploy-content-pages-preview.yml"
   push:
     branches: [main]
     paths:
@@ -23,6 +24,7 @@ on:
       - "sitemap.xml"
       - "feed.xml"
       - ".github/workflows/auto-publish-articles.yml"
+      - ".github/workflows/deploy-content-pages-preview.yml"
 
 permissions:
   contents: read
@@ -62,14 +64,14 @@ jobs:
           while IFS= read -r path; do
             [[ -z "$path" ]] && continue
             case "$path" in
-              articles/*.html|data/ai-tools.json|index.html|thu-vien.html|ngan-hang-ai.html|sitemap.xml|feed.xml|.github/workflows/auto-publish-articles.yml) ;;
+              articles/*.html|data/ai-tools.json|index.html|thu-vien.html|ngan-hang-ai.html|sitemap.xml|feed.xml|.github/workflows/auto-publish-articles.yml|.github/workflows/deploy-content-pages-preview.yml) ;;
               *)
                 echo "::error::Blocked non-content file in content package: $path"
                 exit 1
                 ;;
             esac
           done <<< "$changed_files"
-          echo "PASS: only approved public content or this no-deploy release workflow changed."
+          echo "PASS: only approved public content or the two explicitly scoped no-Production release workflows changed."
 
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -114,6 +116,6 @@ jobs:
             echo "- Event: \`$GITHUB_EVENT_NAME\`"
             echo "- Quality, SEO, AI Bank validation, build, and Wrangler dry-run completed before artifact creation."
             echo "- The reviewed static output is retained as a GitHub Actions artifact for 14 days."
-            echo "- This workflow does not deploy Cloudflare Workers or Pages, access D1, modify DNS, or use Cloudflare deployment secrets."
+            echo "- This validation/package job does not deploy Workers or Pages and does not access D1 or modify DNS. A separate workflow may deploy only the isolated Pages Preview branch; it cannot deploy Pages Production or the Worker."
             echo "- Public release remains a separate, explicitly approved operation."
           } >> "$GITHUB_STEP_SUMMARY"
