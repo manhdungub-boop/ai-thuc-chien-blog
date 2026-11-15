@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-11-15T00:00:00+07:00",
+  "generated_at": "2026-11-15T22:00:00+07:00",
   "catalog_policy": {
     "default_locale": "vi",
     "currency": "USD",
@@ -19,15 +19,15 @@
         "automation",
         "audio"
       ],
-      "pricing_model": "unknown",
-      "pricing_status": "unknown",
-      "license": "Chưa xác minh – cần đối chiếu điều khoản chính thức",
+      "pricing_model": "freemium",
+      "pricing_status": "Free tier có giới hạn theo tổ chức/model; giới hạn cụ thể xem trong tài khoản. Developer tier là pay-as-you-go, cần phương thức thanh toán hợp lệ; có thể phát sinh hóa đơn theo ngưỡng hoặc cuối tháng. Không bật Developer tier khi chưa có phê duyệt ngân sách.",
+      "license": "Dịch vụ nền tảng/API thương mại; điều khoản dịch vụ áp dụng. Giấy phép mô hình phụ thuộc từng model, chưa xác minh đồng nhất.",
       "platforms": [
         "web",
         "api"
       ],
       "description": "Nền tảng inference cho mô hình ngôn ngữ lớn, cung cấp API tương thích OpenAI và tài liệu về mô hình, giới hạn tốc độ, tích hợp và công cụ.",
-      "free_tier_summary": "Tài liệu chính thức có mục Free tier và giới hạn theo model/tổ chức; giới hạn cụ thể cần kiểm tra trong tài khoản. Developer tier yêu cầu phương thức thanh toán và tính phí theo mức sử dụng. Không bật Developer tier hoặc cấu hình thanh toán chỉ để thử nghiệm.",
+      "free_tier_summary": "Groq có Free tier với giới hạn RPM/RPD/TPM/TPD tùy model và tổ chức. Nâng lên Developer tier yêu cầu phương thức thanh toán hợp lệ và tính phí theo mức sử dụng; không cần nâng cấp để thử Free tier. Kiểm tra hạn mức thực tế trong tài khoản trước khi dùng.",
       "official_sources": [
         "https://console.groq.com/home",
         "https://console.groq.com/docs/overview",
@@ -58,22 +58,25 @@
         "automation",
         "data"
       ],
-      "pricing_model": "unknown",
-      "pricing_status": "unknown",
-      "license": "Chưa xác minh – cần đối chiếu điều khoản chính thức",
+      "pricing_model": "freemium",
+      "pricing_status": "Free mode có ngân sách sử dụng hàng tháng theo gói và giới hạn trong Admin; pay-as-you-go dùng tín dụng trả trước khi bật. Kiểm tra ngân sách, cài đặt thanh toán và giá model trước khi sử dụng.",
+      "license": "Dịch vụ nền tảng/API thương mại; điều khoản dịch vụ áp dụng. Giấy phép từng model có thể khác nhau, cần kiểm tra riêng model được chọn.",
       "platforms": [
         "web",
         "api"
       ],
       "description": "Bảng điều khiển dành cho nhà phát triển của Mistral AI, hỗ trợ API, API keys, Playground, đánh giá mô hình, agents và SDK.",
-      "free_tier_summary": "Trang giá chính thức hiện mô tả gói Free cho Vibe (trợ lý AI cá nhân) với giới hạn sử dụng; chưa có bằng chứng xác nhận Mistral Studio hoặc API đi kèm $10 tín dụng miễn phí mỗi tháng. API được tính phí theo lượng token; cần xác minh riêng điều kiện tài khoản, khu vực và giới hạn trước khi khuyến nghị. Không bật API trả phí hoặc phương thức thanh toán chỉ để thử nghiệm.",
+      "free_tier_summary": "Tài liệu Mistral hiện ghi Free mode cho phép tạo API key và dùng phần ngân sách hàng tháng trong giới hạn của tổ chức. Khi hết phần bao gồm, có thể dừng truy cập nếu chưa bật pay-as-you-go; pay-as-you-go dùng tín dụng trả trước. Không bật thanh toán hoặc mua tín dụng khi chưa được duyệt.",
       "official_sources": [
         "https://docs.mistral.ai/",
         "https://console.mistral.ai/",
         "https://mistral.ai/pricing/",
         "https://mistral.ai/pricing/api/",
         "https://docs.mistral.ai/studio/governance",
-        "https://docs.mistral.ai/admin/monitor-comply/zero-data-retention"
+        "https://docs.mistral.ai/admin/monitor-comply/zero-data-retention",
+        "https://docs.mistral.ai/admin/billing-usage/subscriptions",
+        "https://docs.mistral.ai/admin/billing-usage/usage-limits",
+        "https://docs.mistral.ai/getting-started/quickstarts/studio/activate-and-generate-api-key"
       ],
       "last_verified": "2026-11-15",
       "verification_status": "needs_review",
