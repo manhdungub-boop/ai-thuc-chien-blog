@@ -21,6 +21,9 @@ function tag(block, name) {
   const re = new RegExp("<(?:[\\w.-]+:)?" + name + "(?:\\s[^>]*)?>([\\s\\S]*?)<\\/(?:[\\w.-]+:)?" + name + "\\s*>", "i");
   return decodeXml(block.match(re)?.[1]?.trim() || "");
 }
+function markdownText(value = "") {
+  return String(value).replace(/[\\r\\n\\t]+/g, " ").replace(/([\\\\*_{}\\[\\]()#+.!|<>])/g, "\\\\$1").replace(/`/g, "\\\\`").trim();
+}
 function safeItemLink(raw, expectedHost) {
   try {
     const u = new URL(raw);
@@ -88,7 +91,7 @@ const lines = [
   ...results.map(x => "- " + x.source + ": " + x.status + (x.reason ? " (" + x.reason + ")" : "") + " — " + x.items.length + " items retained"),
   "",
   "## Recent leads",
-  ...unique.map(x => "- [" + x.title.replace(/[\[\]]/g, "") + "](" + x.url + ") — " + x.source + (x.published ? " — " + x.published : "")),
+  ...unique.map(x => "- [" + markdownText(x.title) + "](" + x.url.replace(/\(/g, "%28").replace(/\)/g, "%29") + ") — " + markdownText(x.source) + (x.published ? " — " + markdownText(x.published) : "")),
   ""
 ];
 await fs.writeFile("reports/ai-bank/discovery.md", lines.join("\n"));
