@@ -1,6 +1,10 @@
 name: AI Bank official-feed discovery
 
 on:
+  pull_request:
+    paths:
+      - "scripts/ai-bank-feed-discovery.mjs"
+      - ".github/workflows/ai-bank-official-feed-discovery.yml"
   schedule:
     # Wednesday 09:30 Asia/Ho_Chi_Minh
     - cron: "30 2 * * 3"
@@ -29,11 +33,16 @@ jobs:
         with:
           node-version: 22
 
+      - name: Check JavaScript syntax on pull requests
+        if: github.event_name == 'pull_request'
+        run: node --check scripts/ai-bank-feed-discovery.mjs
+
       - name: Collect discovery leads from official feeds
+        if: github.event_name != 'pull_request'
         run: node scripts/ai-bank-feed-discovery.mjs
 
       - name: Add report to workflow summary
-        if: always()
+        if: always() && github.event_name != 'pull_request'
         run: |
           if [ -f reports/ai-bank/discovery.md ]; then
             cat reports/ai-bank/discovery.md >> "$GITHUB_STEP_SUMMARY"
@@ -42,7 +51,7 @@ jobs:
           fi
 
       - name: Preserve discovery report
-        if: always()
+        if: always() && github.event_name != 'pull_request'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: ai-bank-discovery-${{ github.run_id }}
