@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: read
+  statuses: write
 
 concurrency:
   group: ai-bank-visual-smoke
@@ -74,8 +75,9 @@ jobs:
             '/articles/kiem-chung-cau-tra-loi-ai'
           ];
 
+          let browser;
           (async () => {
-            const browser = await chromium.launch({ headless: true });
+            browser = await chromium.launch({ headless: true });
             const report = { candidate: process.env.GITHUB_SHA, checks: [] };
             const pageErrors = [];
             const fontRequests = [];
@@ -143,7 +145,8 @@ jobs:
             fs.writeFileSync('artifacts/visual-smoke.json', JSON.stringify(report, null, 2));
             await browser.close();
             console.log(JSON.stringify(report, null, 2));
-          })().catch(error => {
+          })().catch(async error => {
+            if (browser) await browser.close().catch(() => {});
             console.error(error);
             process.exitCode = 1;
           });
@@ -164,3 +167,22 @@ jobs:
           path: artifacts/
           if-no-files-found: warn
           retention-days: 7
+
+      - name: Publish visual smoke commit status
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          state="success"
+          description="AI Bank desktop/mobile visual smoke passed."
+          if [[ "$JOB_STATUS" != "success" ]]; then
+            state="failure"
+            description="AI Bank visual smoke failed; inspect the workflow logs and screenshots."
+          fi
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state="$state" \
+            -f context="ai-bank-visual-smoke" \
+            -f description="$description"
