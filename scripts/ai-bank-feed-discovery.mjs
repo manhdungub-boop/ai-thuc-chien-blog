@@ -22,7 +22,7 @@ function tag(block, name) {
   return decodeXml(block.match(re)?.[1]?.trim() || "");
 }
 function markdownText(value = "") {
-  return String(value).replace(/[\\r\\n\\t]+/g, " ").replace(/([\\\\*_{}\\[\\]()#+.!|<>])/g, "\\\\$1").replace(/`/g, "\\\\`").trim();
+  return String(value).replace(/\s+/g, " ").replace(/[\u0060\\*_{}\[\]()#+.!|<>]/g, character => "\\" + character).trim();
 }
 function safeItemLink(raw, expectedHost) {
   try {
