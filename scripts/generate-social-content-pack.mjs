@@ -4,7 +4,7 @@ import path from "node:path";
 
 function decodeXml(value) {
   return value
-    .replace(/<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>/g, "$1")
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
     .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
     .replace(/&#([0-9]+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)))
     .replace(/&lt;/g, "<").replace(/&gt;/g, ">")
@@ -12,14 +12,14 @@ function decodeXml(value) {
     .replace(/&amp;/g, "&");
 }
 function field(xml, name) {
-  const match = xml.match(new RegExp("<" + name + "(?:\\\\s[^>]*)?>([\\\\s\\\\S]*?)</" + name + ">", "i"));
-  return match ? decodeXml(match[1]).replace(/<[^>]*>/g, " ").replace(/\\s+/g, " ").trim() : "";
+  const match = xml.match(new RegExp("<" + name + "(?:\\s[^>]*)?>([\\s\\S]*?)</" + name + ">", "i"));
+  return match ? decodeXml(match[1]).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim() : "";
 }
 function parseFeed(xml) {
-  const channel = (xml.match(/<channel\\b[^>]*>([\\s\\S]*?)<\\/channel>/i) || [])[1] || "";
+  const channel = (xml.match(/<channel\b[^>]*>([\s\S]*?)<\/channel>/i) || [])[1] || "";
   const base = new URL(field(channel, "link"));
   if (base.protocol !== "https:") throw new Error("RSS channel link must use HTTPS.");
-  return [...xml.matchAll(/<item\\b[^>]*>([\\s\\S]*?)<\\/item>/gi)].map((match) => {
+  return [...xml.matchAll(/<item\b[^>]*>([\s\S]*?)<\/item>/gi)].map((match) => {
     const item = match[1];
     const title = field(item, "title");
     const link = field(item, "link");
@@ -30,7 +30,7 @@ function parseFeed(xml) {
     return { title, link: url.href, description };
   });
 }
-function clean(value) { return value.replace(/[\\r\\n]+/g, " ").replace(/\\s+/g, " ").trim(); }
+function clean(value) { return value.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim(); }
 function isVietnamese(value) { return /[ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ]/i.test(value); }
 function makePack(items, generatedAt) {
   const lines = [
@@ -44,20 +44,20 @@ function makePack(items, generatedAt) {
   items.forEach((item, index) => {
     const title = clean(item.title);
     const summary = clean(item.description);
-    const shortTitle = title.replace(/\\s*\\|\\s*AI Thực Chiến\\s*$/i, "");
+    const shortTitle = title.replace(/\s*\|\s*AI Thực Chiến\s*$/i, "");
     const languageNote = isVietnamese(summary) ? "" : "> **Cần biên tập:** Tóm tắt RSS hiện không phải tiếng Việt; cần dịch và đối chiếu bài gốc trước khi đăng.\n\n";
     lines.push("## " + (index + 1) + ". " + title, "", "**Bài gốc:** " + item.link, "", "**Tóm tắt RSS (nguyên văn):** " + summary, "");
     lines.push("### TikTok — bản nháp", "", languageNote + "Tìm hiểu cách " + shortTitle.toLowerCase() + ". " + summary, "", "Đọc hướng dẫn đầy đủ tại: " + item.link, "#AIThucChien #DungAI #UngDungAI #TuDongHoa", "");
     lines.push("### YouTube Shorts — bản nháp", "", "**Tiêu đề:** " + shortTitle.slice(0, 95), "", "**Mô tả:**", "", languageNote + summary, "", "Đọc bài đầy đủ: " + item.link, "#AI #TuDongHoa #AIThucChien", "");
     lines.push("### Kiểm tra trước khi đăng", "", "- [ ] Đã đọc bài gốc và xác nhận mọi tuyên bố.", "- [ ] Đã biên tập tiếng Việt tự nhiên, không chỉ sao chép RSS.", "- [ ] Video/hình ảnh có quyền sử dụng phù hợp.", "- [ ] Không lộ dữ liệu cá nhân, khóa API hoặc thông tin riêng tư.", "- [ ] Đã kiểm tra liên kết, CTA và được người quản trị duyệt.", "", "---", "");
   });
-  return lines.join("\\n");
+  return lines.join("\n");
 }
 function selfTest() {
   const sample = '<?xml version="1.0"?><rss><channel><link>https://example.org/</link><item><title>Thử nghiệm &amp; AI</title><link>https://example.org/articles/demo</link><description><![CDATA[Hướng dẫn an toàn &amp; thực tế.]]></description></item></channel></rss>';
   const items = parseFeed(sample);
   const output = makePack(items, "2026-11-15");
-  if (items.length !== 1 || !output.includes("Thử nghiệm & AI") || output.includes("\\\\.") || !output.includes("đã biên tập")) throw new Error("Self-test failed.");
+  if (items.length !== 1 || !output.includes("Thử nghiệm & AI") || output.includes("\\.") || !output.includes("đã biên tập")) throw new Error("Self-test failed.");
   console.log("PASS: RSS parsing, readable draft text, language-review gate and no-publish policy.");
 }
 if (process.argv.includes("--self-test")) selfTest();
