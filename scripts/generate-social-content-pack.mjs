@@ -57,7 +57,7 @@ function selfTest() {
   const sample = '<?xml version="1.0"?><rss><channel><link>https://example.org/</link><item><title>Thử nghiệm &amp; AI</title><link>https://example.org/articles/demo</link><description><![CDATA[Hướng dẫn an toàn &amp; thực tế.]]></description></item></channel></rss>';
   const items = parseFeed(sample);
   const output = makePack(items, "2026-11-15");
-  if (items.length !== 1 || !output.includes("Thử nghiệm & AI") || output.includes("\\.") || !output.includes("đã biên tập")) throw new Error("Self-test failed.");
+  if (items.length !== 1 || !output.includes("Thử nghiệm & AI") || output.includes("\\.") || !output.includes("Đã biên tập")) throw new Error("Self-test failed.");
   console.log("PASS: RSS parsing, readable draft text, language-review gate and no-publish policy.");
 }
 if (process.argv.includes("--self-test")) selfTest();
