@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-11-11T01:00:00+07:00",
+  "generated_at": "2026-11-15T22:30:00+07:00",
   "catalog_policy": {
     "default_locale": "vi",
     "currency": "USD",
@@ -28,12 +28,12 @@
         "desktop"
       ],
       "description": "Trợ lý AI đa năng cho hỏi đáp, viết, phân tích tệp và sáng tạo nội dung.",
-      "free_tier_summary": "Có gói Free; chat văn bản và các công cụ như tải tệp, phân tích dữ liệu, tạo ảnh, thoại có giới hạn riêng và có thể thay đổi.",
+      "free_tier_summary": "Gói Free $0: trò chuyện văn bản rộng rãi (chịu guardrails); tải tệp, tạo ảnh, thoại, deep research, bộ nhớ và Codex/Work đều có hạn mức riêng. Hạn mức và khả năng truy cập tính năng có thể thay đổi theo thời điểm.",
       "official_sources": [
-        "https://help.openai.com/en/articles/9275245-chatgpt-free-tier-faq",
-        "https://chatgpt.com/vi-VN/pricing/"
+        "https://chatgpt.com/pricing/",
+        "https://help.openai.com/en/articles/9275245-chatgpt-free-tier-faq"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-15",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -94,12 +94,12 @@
         "desktop"
       ],
       "description": "Trợ lý AI hỗ trợ soạn thảo, phân tích và lập trình.",
-      "free_tier_summary": "Có gói Free $0 với dung lượng sử dụng giới hạn; các gói trả phí mở rộng hạn mức.",
+      "free_tier_summary": "Gói Free $0; giới hạn sử dụng theo cửa sổ 5 giờ và hạn mức tuần. Có chat web/desktop/mobile, web search, tạo tệp và chạy code; hạn mức thực tế thay đổi theo model, độ dài hội thoại và tính năng.",
       "official_sources": [
-        "https://www.anthropic.com/pricing",
+        "https://claude.com/pricing?country=VN",
         "https://support.claude.com/en/articles/11049762-choose-a-claude-plan"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-15",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -190,11 +190,11 @@
         "desktop"
       ],
       "description": "Nền tảng thiết kế trực quan cho bài đăng, hình ảnh, slide và tài liệu.",
-      "free_tier_summary": "Gói Free $0; hạn mức AI chia sẻ tối đa 20 lượt Standard hoặc Premium AI mỗi tháng theo trang giá hiện hành.",
+      "free_tier_summary": "Canva Free $0 cho một người, gồm công cụ thiết kế cơ bản và 5GB lưu trữ. AI có hạn mức miễn phí chia sẻ; trang giá hiện công bố tối đa khoảng 20 lượt Standard hoặc Premium AI/tháng tùy tính năng và độ phức tạp. Một số tính năng AI cao cấp không có trong Free; không mua AI Pass/top-up nếu giữ ngân sách 0 đồng.",
       "official_sources": [
         "https://www.canva.com/pricing/"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-15",
       "verification_status": "verified",
       "status": "active",
       "tags": [
