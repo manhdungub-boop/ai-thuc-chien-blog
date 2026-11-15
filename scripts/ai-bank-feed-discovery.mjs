@@ -44,7 +44,7 @@ async function readFeed(feed) {
     if (declared > MAX_BYTES) throw new Error("feed_too_large");
     const body = await response.text();
     if (Buffer.byteLength(body, "utf8") > MAX_BYTES) throw new Error("feed_too_large");
-    const blocks = [...body.matchAll(/<(?:item|entry)(?:\\s[^>]*)?>([\\s\\S]*?)<\\/(?:item|entry)\\s*>/gi)].slice(0, MAX_ITEMS_PER_FEED);
+    const blocks = [...body.matchAll(/<(?:item|entry)(?:\s[^>]*)?>([\s\S]*?)<\/(?:item|entry)\s*>/gi)].slice(0, MAX_ITEMS_PER_FEED);
     const items = [];
     for (const match of blocks) {
       const b = match[1];
