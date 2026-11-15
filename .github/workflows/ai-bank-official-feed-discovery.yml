@@ -5,6 +5,12 @@ on:
     paths:
       - "scripts/ai-bank-feed-discovery.mjs"
       - ".github/workflows/ai-bank-official-feed-discovery.yml"
+  push:
+    branches:
+      - "automation/ai-bank-feed-discovery-20261115"
+    paths:
+      - "scripts/ai-bank-feed-discovery.mjs"
+      - ".github/workflows/ai-bank-official-feed-discovery.yml"
   schedule:
     # Wednesday 09:30 Asia/Ho_Chi_Minh
     - cron: "30 2 * * 3"
