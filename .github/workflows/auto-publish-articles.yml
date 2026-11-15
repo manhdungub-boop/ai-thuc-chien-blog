@@ -7,6 +7,7 @@ on:
     paths:
       - "articles/*.html"
       - "thu-vien.html"
+      - "ngan-hang-ai.html"
       - "sitemap.xml"
       - "feed.xml"
 
@@ -48,7 +49,7 @@ jobs:
           while IFS= read -r path; do
             [[ -z "$path" ]] && continue
             case "$path" in
-              articles/*.html|index.html|thu-vien.html|sitemap.xml|feed.xml) ;;
+              articles/*.html|index.html|thu-vien.html|ngan-hang-ai.html|sitemap.xml|feed.xml) ;;
               *)
                 echo "::error::Blocked non-content file in article auto-publish push: $path"
                 exit 1
