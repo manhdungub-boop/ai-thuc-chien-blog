@@ -5,7 +5,7 @@
     <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/</link>
     <description>Kiến thức AI thực hành, tự động hóa và công nghệ cho người Việt.</description>
     <item>
-    <title>Đặt giới hạn quota cho AI Agent: hard-stop, ngân sách và circuit breaker | AI Thực Chiến</title>
+    <title>Giới hạn quota AI Agent: hard-stop và circuit breaker | AI Thực Chiến</title>
     <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/gioi-han-quota-ai-agent</link>
     <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/gioi-han-quota-ai-agent</guid>
     <pubDate>Mon, 02 Nov 2026 08:00:00 +0700</pubDate>
