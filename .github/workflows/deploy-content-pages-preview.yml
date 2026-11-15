@@ -1,0 +1,92 @@
+name: Deploy reviewed content to Cloudflare Pages Preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+    paths:
+      - "articles/**"
+      - "index.html"
+      - "thu-vien.html"
+      - "ngan-hang-ai.html"
+      - "sitemap.xml"
+      - "feed.xml"
+      - "styles.css"
+      - "script.js"
+      - "data/ai-tools.json"
+      - "images/**"
+      - "illustrations/**"
+      - ".github/workflows/deploy-content-pages-preview.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-preview-content-pr154
+  cancel-in-progress: false
+
+jobs:
+  deploy-preview:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'automation/separate-content-validation-no-prod-20261115' &&
+      github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the reviewed PR revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+
+      - name: Validate content and SEO
+        run: |
+          npm run test:content
+          npm run test:seo
+
+      - name: Build static Pages output
+        run: npm run build
+
+      - name: Require the dedicated Cloudflare Pages token
+        shell: bash
+        env:
+          CF_PAGES_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$CF_PAGES_TOKEN" ]]; then
+            echo "::error::Preview deploy stopped: CLOUDFLARE_PAGES_API_TOKEN is not configured."
+            exit 1
+          fi
+          echo "Dedicated Pages token is configured."
+
+      - name: Deploy only to the isolated Pages Preview branch
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: "92cf091bbac8b4879ec65feb30b4715b"
+        run: npx --yes wrangler@4.151.3 pages deploy dist --project-name=ai-thuc-chien-blog --branch=preview-content-pr154
+
+      - name: Verify the Pages Preview routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://preview-content-pr154.ai-thuc-chien-blog.pages.dev"
+          for path in / /thu-vien.html /ngan-hang-ai.html /sitemap.xml /feed.xml; do
+            code="$(curl --silent --show-error --location --max-time 30 -o /dev/null -w '%{http_code}' "$base$path")"
+            if [[ "$code" != "200" ]]; then
+              echo "::error::Preview route $path returned HTTP $code"
+              exit 1
+            fi
+            echo "PASS: $path returned HTTP 200"
+          done
+          page="$(curl --fail --silent --show-error --location --max-time 30 "$base/thu-vien.html")"
+          printf '%s' "$page" | grep -Eq '72 bài|72\s+bài' || {
+            echo "::error::Preview library page does not show the expected 72 article count."
+            exit 1
+          }
+          echo "PASS: Preview library displays 72 articles."
