@@ -8,15 +8,15 @@ const markdownPath = "reports/ai-bank/triage.md";
 function hostOf(value) {
   try {
     const url = new URL(value);
-    return url.protocol === "https:" ? url.hostname.toLowerCase().replace(/^www\\./, "") : null;
+    return url.protocol === "https:" ? url.hostname.toLowerCase().replace(/^www\./, "") : null;
   } catch { return null; }
 }
 function normalize(value = "") {
-  return String(value).normalize("NFKD").replace(/[\\u0300-\\u036f]/g, "")
+  return String(value).normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
     .toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 function tokenSet(value) {
-  return new Set(normalize(value).split(/\\s+/).filter(token => token.length >= 3));
+  return new Set(normalize(value).split(/\s+/).filter(token => token.length >= 3));
 }
 function overlap(a, b) {
   const left = tokenSet(a), right = tokenSet(b);
@@ -75,7 +75,7 @@ const report = {
   policy: "Heuristic triage only. A source/vendor match is not proof that an announcement describes an AI product. No tool identity, pricing, license, quota or verification status is inferred. No catalog writes or public publishing.",
   leads: results
 };
-await fs.writeFile(outputPath, JSON.stringify(report, null, 2) + "\\n");
+await fs.writeFile(outputPath, JSON.stringify(report, null, 2) + "\n");
 const lines = [
   "# AI Bank — discovery triage",
   "",
@@ -87,14 +87,14 @@ const lines = [
   "",
   "## Leads requiring product identification",
   ...results.filter(x => x.triage_status === "manual_product_identification_required")
-    .map(x => "- [" + String(x.title).replace(/[\\[\\]()*_]/g, "") + "](" + x.url + ") — " + x.source),
+    .map(x => "- [" + String(x.title).replace(/[\[\]()*_]/g, "") + "](" + x.url + ") — " + x.source),
   "",
   "## Possible existing-vendor overlap",
   ...results.filter(x => x.triage_status === "existing_catalog_vendor_or_source")
-    .map(x => "- [" + String(x.title).replace(/[\\[\\]()*_]/g, "") + "](" + x.url + ") — " +
+    .map(x => "- [" + String(x.title).replace(/[\[\]()*_]/g, "") + "](" + x.url + ") — " +
       x.possible_catalog_matches.map(m => m.name).join(", ")),
   ""
 ];
-await fs.writeFile(markdownPath, lines.join("\\n"));
+await fs.writeFile(markdownPath, lines.join("\n"));
 console.log("AI Bank triage: " + results.length + " leads; " +
   (counts.manual_product_identification_required || 0) + " need product identification; no catalog changes.");
