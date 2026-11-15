@@ -13,9 +13,9 @@ const MAX_ITEMS_PER_FEED = 20;
 const timeoutMs = 12_000;
 
 function decodeXml(value = "") {
-  return value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
-    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'");
+  const entities = { "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&apos;": "'", "&#39;": "'" };
+  return value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>|&(?:amp|lt|gt|quot|apos|#39);/g,
+    (match, cdata) => cdata === undefined ? entities[match] : cdata);
 }
 function tag(block, name) {
   const re = new RegExp("<(?:[\\w.-]+:)?" + name + "(?:\\s[^>]*)?>([\\s\\S]*?)<\\/(?:[\\w.-]+:)?" + name + "\\s*>", "i");
@@ -53,7 +53,7 @@ async function readFeed(feed) {
       const b = match[1];
       const rawLink = tag(b, "link") || b.match(/<link[^>]+href=["']([^"']+)["']/i)?.[1] || "";
       const link = safeItemLink(rawLink, feed.host);
-      const title = tag(b, "title").replace(/<[^>]+>/g, "").trim();
+      const title = tag(b, "title").replace(/[<>]/g, "").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
       const published = tag(b, "pubDate") || tag(b, "published") || tag(b, "updated");
       if (title && link) items.push({ title, url: link, published: published || null, source: feed.name, source_feed: feed.url, review_status: "discovery_lead_only" });
     }
