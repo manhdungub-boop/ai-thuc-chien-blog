@@ -49,6 +49,7 @@ function makePack(items, generatedAt) {
     lines.push("## " + (index + 1) + ". " + title, "", "**Bài gốc:** " + item.link, "", "**Tóm tắt RSS (nguyên văn):** " + summary, "");
     lines.push("### TikTok — bản nháp", "", languageNote + "Tìm hiểu cách " + shortTitle.toLowerCase() + ". " + summary, "", "Đọc hướng dẫn đầy đủ tại: " + item.link, "#AIThucChien #DungAI #UngDungAI #TuDongHoa", "");
     lines.push("### YouTube Shorts — bản nháp", "", "**Tiêu đề:** " + shortTitle.slice(0, 95), "", "**Mô tả:**", "", languageNote + summary, "", "Đọc bài đầy đủ: " + item.link, "#AI #TuDongHoa #AIThucChien", "");
+    lines.push("### Facebook Page — bản nháp", "", languageNote + "**" + shortTitle + "**", "", summary, "", "Bài viết hướng dẫn đầy đủ: " + item.link, "", "Bạn đang áp dụng cách này trong công việc như thế nào? Chia sẻ kinh nghiệm hoặc câu hỏi ở phần bình luận nhé.", "", "#AIThucChien #DungAI #UngDungAI #TuDongHoa", "");
     lines.push("### Kiểm tra trước khi đăng", "", "- [ ] Đã đọc bài gốc và xác nhận mọi tuyên bố.", "- [ ] Đã biên tập tiếng Việt tự nhiên, không chỉ sao chép RSS.", "- [ ] Video/hình ảnh có quyền sử dụng phù hợp.", "- [ ] Không lộ dữ liệu cá nhân, khóa API hoặc thông tin riêng tư.", "- [ ] Đã kiểm tra liên kết, CTA và được người quản trị duyệt.", "", "---", "");
   });
   return lines.join("\n");
