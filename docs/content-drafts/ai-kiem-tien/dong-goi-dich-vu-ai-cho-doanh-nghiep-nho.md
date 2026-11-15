@@ -1,5 +1,5 @@
 ---
-title: "Đóng gói dịch vụ AI cho doanh nghiệp nhỏ: phạm vi, KPI và nghiệm thu"
+title: "Dịch vụ AI cho doanh nghiệp nhỏ: SOW và KPI"
 slug: "dong-goi-dich-vu-ai-cho-doanh-nghiep-nho"
 category: "AI kiếm tiền"
 author: "DUNG - AI"
