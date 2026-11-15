@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "articles/*.html"
+      - "data/ai-tools.json"
       - "thu-vien.html"
       - "ngan-hang-ai.html"
       - "sitemap.xml"
@@ -49,14 +50,14 @@ jobs:
           while IFS= read -r path; do
             [[ -z "$path" ]] && continue
             case "$path" in
-              articles/*.html|index.html|thu-vien.html|ngan-hang-ai.html|sitemap.xml|feed.xml) ;;
+              articles/*.html|data/ai-tools.json|index.html|thu-vien.html|ngan-hang-ai.html|sitemap.xml|feed.xml) ;;
               *)
                 echo "::error::Blocked non-content file in article auto-publish push: $path"
                 exit 1
                 ;;
             esac
           done <<< "$changed_files"
-          echo "PASS: only article HTML, sitemap, and/or RSS feed files changed."
+          echo "PASS: only approved article, AI Bank catalog, and public discovery files changed."
 
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -67,6 +68,12 @@ jobs:
         run: |
           npm run test:content
           npm run test:seo
+
+      - name: Validate AI Bank catalog and official evidence
+        run: |
+          node scripts/validate-ai-tools-catalog.mjs data/ai-tools.json
+          node scripts/audit-ai-tools-catalog.mjs data/ai-tools.json docs/reviews/ai-tools-candidates-2026-11-02.json --strict
+          node scripts/check-ai-tools-links.mjs data/ai-tools.json
 
       - name: Build static site and validate Worker package
         run: |
@@ -110,6 +117,8 @@ jobs:
               route="/articles/$slug"
             elif [[ "$path" == "thu-vien.html" || "$path" == "ngan-hang-ai.html" ]]; then
               route="/$path"
+            elif [[ "$path" == "data/ai-tools.json" ]]; then
+              route="/ngan-hang-ai.html"
             elif [[ "$path" == "index.html" ]]; then
               route="/"
             fi
@@ -129,7 +138,7 @@ jobs:
             exit 1
           fi
 
-          for path in /sitemap.xml /feed.xml; do
+          for path in /sitemap.xml /feed.xml /data/ai-tools.json; do
             code="$(curl --silent --show-error --location --max-time 25 -o /dev/null -w '%{http_code}' "$host$path")"
             if [[ "$code" != "200" ]]; then
               echo "::error::$path returned HTTP $code"
