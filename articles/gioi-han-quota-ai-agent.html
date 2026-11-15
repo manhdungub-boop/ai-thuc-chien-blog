@@ -7,13 +7,13 @@
 <meta name="theme-color" content="#0b1020">
 <meta name="robots" content="index,follow,max-image-preview:large">
 <meta name="author" content="DUNG - AI">
-<title>Đặt giới hạn quota cho AI Agent: hard-stop, ngân sách và circuit breaker</title>
+<title>Giới hạn quota AI Agent: hard-stop và circuit breaker</title>
 <link rel="canonical" href="https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/gioi-han-quota-ai-agent">
 <link rel="icon" type="image/svg+xml" href="../favicon.svg">
 <meta property="og:type" content="article">
 <meta property="og:locale" content="vi_VN">
 <meta property="og:site_name" content="AI Thực Chiến | DUNG - AI">
-<meta property="og:title" content="Đặt giới hạn quota cho AI Agent: hard-stop, ngân sách và circuit breaker">
+<meta property="og:title" content="Giới hạn quota AI Agent: hard-stop và circuit breaker">
 <meta property="og:description" content="Thiết kế giới hạn lượt gọi, token, thời gian và số bước cho AI Agent; phân biệt rate limit với quota hết, xử lý 429/503 và dừng an toàn khi chạm ngưỡng.">
 <meta property="og:url" content="https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/gioi-han-quota-ai-agent">
 <meta property="og:image" content="https://ai-thuc-chien-blog.manhdungub.workers.dev/illustrations/ai-agent-quota-guard.svg">
@@ -22,7 +22,7 @@
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Sơ đồ ba lớp giới hạn AI Agent: phân loại quota, đặt hard limit, dừng hoặc retry có kiểm soát.">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Đặt giới hạn quota cho AI Agent: hard-stop, ngân sách và circuit breaker">
+<meta name="twitter:title" content="Giới hạn quota AI Agent: hard-stop và circuit breaker">
 <meta name="twitter:description" content="Thiết kế giới hạn lượt gọi, token, thời gian và số bước cho AI Agent; phân biệt rate limit với quota hết, xử lý 429/503 và dừng an toàn khi chạm ngưỡng.">
 <meta name="twitter:image" content="https://ai-thuc-chien-blog.manhdungub.workers.dev/illustrations/ai-agent-quota-guard.svg">
 <meta name="twitter:image:alt" content="Sơ đồ ba lớp giới hạn AI Agent: phân loại quota, đặt hard limit, dừng hoặc retry có kiểm soát.">
