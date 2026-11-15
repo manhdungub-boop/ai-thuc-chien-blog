@@ -184,3 +184,154 @@ jobs:
         run: |
           SITE_URL="$WORKERS_URL" node scripts/test_deployed_routes.cjs
           SITE_URL="$PAGES_URL" node scripts/test_deployed_routes.cjs
+
+  ai-bank-visual-smoke:
+    if: github.event_name == 'pull_request' && github.head_ref == 'automation/ai-bank-visual-ci-20261115'
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out the exact AI Bank candidate from PR #139
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: content/ai-bank-guides-fonts-refresh-20261115
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+
+      - name: Build the exact AI Bank candidate
+        run: npm run build
+
+      - name: Install pinned Playwright and Chromium
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts playwright@1.56.1
+          ./node_modules/.bin/playwright install --with-deps chromium
+
+      - name: Start isolated local preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m http.server 4173 --directory dist >/tmp/ai-bank-preview.log 2>&1 &
+          echo $! >/tmp/ai-bank-preview.pid
+          for attempt in {1..20}; do
+            if curl --fail --silent http://127.0.0.1:4173/ngan-hang-ai.html -o /dev/null; then
+              echo "PASS: isolated static preview is serving the exact candidate."
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/ai-bank-preview.log
+          echo "::error::Isolated static preview did not start."
+          exit 1
+
+      - name: Verify desktop and mobile rendering
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          node <<'NODE'
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const { chromium } = require('playwright');
+
+          const expectedLinks = [
+            '/articles/chon-cong-cu-ai-theo-cong-viec',
+            '/articles/so-sanh-goi-mien-phi-ai',
+            '/articles/bao-ve-du-lieu-khi-dung-ai',
+            '/articles/kiem-chung-cau-tra-loi-ai'
+          ];
+          let browser;
+
+          (async () => {
+            browser = await chromium.launch({ headless: true });
+            const report = { candidate: 'PR #139 head c7f77dc2021cb8bad3af2a8bd569c00b87539e58', checks: [] };
+            const pageErrors = [];
+            const fontRequests = [];
+            const desktop = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+            desktop.on('pageerror', error => pageErrors.push(error.message));
+            desktop.on('request', request => {
+              if (request.url().includes('fonts.googleapis.com/css2')) fontRequests.push(request.url());
+            });
+
+            const response = await desktop.goto('http://127.0.0.1:4173/ngan-hang-ai.html', { waitUntil: 'domcontentloaded' });
+            assert.equal(response.status(), 200, 'AI Bank page must return HTTP 200');
+            assert.match(await desktop.title(), /Ngân hàng AI/i, 'Page title must identify the AI Bank');
+            assert.match(await desktop.locator('h1').innerText(), /Ngân hàng/i, 'Primary heading must be visible');
+
+            const links = await desktop.locator('.bank-guides-grid a').evaluateAll(nodes =>
+              nodes.map(node => node.getAttribute('href'))
+            );
+            assert.deepEqual(links, expectedLinks, 'All four approved learning links must appear in the expected order');
+            for (const href of expectedLinks) {
+              const articlePath = path.join('dist', href.slice(1) + '.html');
+              assert.ok(fs.existsSync(articlePath), 'Linked article source must exist: ' + articlePath);
+            }
+
+            await desktop.waitForTimeout(1200);
+            const desktopDimensions = await desktop.evaluate(() => ({
+              viewport: document.documentElement.clientWidth,
+              content: document.documentElement.scrollWidth
+            }));
+            assert.ok(desktopDimensions.content <= desktopDimensions.viewport + 1,
+              'Desktop page must not overflow horizontally: ' + JSON.stringify(desktopDimensions));
+            assert.ok(fontRequests.length <= 1,
+              'Google Fonts CSS must not be requested more than once: ' + fontRequests.length);
+            await desktop.screenshot({ path: 'artifacts/ai-bank-desktop.png', fullPage: true });
+            report.checks.push({ viewport: 'desktop 1440px', dimensions: desktopDimensions, guideLinks: links.length, googleFontCssRequests: fontRequests.length });
+
+            const mobile = await browser.newPage({
+              viewport: { width: 390, height: 844 },
+              deviceScaleFactor: 1,
+              isMobile: true,
+              hasTouch: true
+            });
+            mobile.on('pageerror', error => pageErrors.push(error.message));
+            const mobileResponse = await mobile.goto('http://127.0.0.1:4173/ngan-hang-ai.html', { waitUntil: 'domcontentloaded' });
+            assert.equal(mobileResponse.status(), 200, 'Mobile AI Bank page must return HTTP 200');
+            await mobile.waitForTimeout(500);
+            const mobileDimensions = await mobile.evaluate(() => ({
+              viewport: document.documentElement.clientWidth,
+              content: document.documentElement.scrollWidth
+            }));
+            assert.ok(mobileDimensions.content <= mobileDimensions.viewport + 1,
+              'Mobile page must not overflow horizontally: ' + JSON.stringify(mobileDimensions));
+            for (const href of expectedLinks) {
+              const guide = mobile.locator('.bank-guides-grid a[href="' + href + '"]');
+              assert.equal(await guide.count(), 1, 'Mobile guide link must appear exactly once: ' + href);
+              assert.ok(await guide.isVisible(), 'Mobile guide link must be visible: ' + href);
+            }
+            await mobile.screenshot({ path: 'artifacts/ai-bank-mobile-390px.png', fullPage: true });
+            report.checks.push({ viewport: 'mobile 390px', dimensions: mobileDimensions, allGuideLinksVisible: true });
+
+            assert.deepEqual(pageErrors, [], 'No uncaught browser page errors are allowed');
+            report.status = 'PASS';
+            report.pageErrors = pageErrors;
+            fs.writeFileSync('artifacts/visual-smoke.json', JSON.stringify(report, null, 2));
+            console.log(JSON.stringify(report, null, 2));
+          })().catch(error => {
+            console.error(error);
+            process.exitCode = 1;
+          }).finally(async () => {
+            if (browser) await browser.close();
+          });
+          NODE
+
+      - name: Stop isolated preview server
+        if: always()
+        run: |
+          if [[ -f /tmp/ai-bank-preview.pid ]]; then
+            kill "$(cat /tmp/ai-bank-preview.pid)" 2>/dev/null || true
+          fi
+
+      - name: Upload desktop/mobile screenshots and report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: ai-bank-visual-smoke-${{ github.run_id }}
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 7
