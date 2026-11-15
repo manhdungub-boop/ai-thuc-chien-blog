@@ -5,6 +5,7 @@ on:
     paths:
       - "scripts/ai-bank-feed-discovery.mjs"
       - "scripts/ai-bank-lead-triage.mjs"
+      - "scripts/ai-bank-editorial-briefs.mjs"
       - "data/ai-tools.json"
       - ".github/workflows/ai-bank-official-feed-discovery.yml"
   push:
@@ -48,6 +49,7 @@ jobs:
         run: |
           node --check scripts/ai-bank-feed-discovery.mjs
           node --check scripts/ai-bank-lead-triage.mjs
+          node --check scripts/ai-bank-editorial-briefs.mjs
 
       - name: Collect discovery leads from official feeds
         run: node scripts/ai-bank-feed-discovery.mjs
@@ -55,10 +57,13 @@ jobs:
       - name: Compare leads with the existing AI Bank
         run: node scripts/ai-bank-lead-triage.mjs
 
-      - name: Add discovery and triage reports to workflow summary
+      - name: Create weekly editorial research briefs
+        run: node scripts/ai-bank-editorial-briefs.mjs
+
+      - name: Add discovery, triage and editorial reports to workflow summary
         if: always()
         run: |
-          for report in reports/ai-bank/discovery.md reports/ai-bank/triage.md; do
+          for report in reports/ai-bank/discovery.md reports/ai-bank/triage.md reports/editorial/weekly-topic-research-briefs.md; do
             if [ -f "$report" ]; then
               cat "$report" >> "$GITHUB_STEP_SUMMARY"
             else
@@ -66,11 +71,11 @@ jobs:
             fi
           done
 
-      - name: Preserve discovery and triage reports
+      - name: Preserve discovery, triage and editorial reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: ai-bank-discovery-triage-${{ github.run_id }}
-          path: reports/ai-bank/
+          name: ai-bank-editorial-research-${{ github.run_id }}
+          path: reports/
           if-no-files-found: warn
           retention-days: 30
