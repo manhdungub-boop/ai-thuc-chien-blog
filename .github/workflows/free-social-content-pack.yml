@@ -50,7 +50,7 @@ jobs:
             echo
             echo "- Source: repository RSS only"
             echo "- Output: five newest published articles, or fewer if RSS contains fewer entries"
-            echo "- Destinations: TikTok and YouTube Shorts draft copy"
+            echo "- Destinations: Facebook Page, TikTok, and YouTube Shorts draft copy"
             echo "- No social publishing, account mutation, external API, paid service, or secret access"
             echo
             cat reports/social/social-content-pack.md
