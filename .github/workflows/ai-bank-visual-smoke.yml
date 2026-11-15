@@ -82,7 +82,7 @@ jobs:
             const desktop = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
             desktop.on('pageerror', error => pageErrors.push(error.message));
             desktop.on('request', request => {
-              if (/fonts\\.googleapis\\.com\\/css2/.test(request.url())) fontRequests.push(request.url());
+              if (request.url().includes('fonts.googleapis.com/css2')) fontRequests.push(request.url());
             });
 
             const response = await desktop.goto('http://127.0.0.1:4173/ngan-hang-ai.html', { waitUntil: 'domcontentloaded' });
@@ -96,7 +96,7 @@ jobs:
             assert.deepEqual(links, expectedLinks, 'All four approved learning links must appear in the expected order');
 
             for (const href of expectedLinks) {
-              const articlePath = path.join('dist', href.replace(/^\\//, '') + '.html');
+              const articlePath = path.join('dist', href.slice(1) + '.html');
               assert.ok(fs.existsSync(articlePath), 'Linked article source must be present: ' + articlePath);
             }
 
