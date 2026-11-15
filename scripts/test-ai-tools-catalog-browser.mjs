@@ -9,10 +9,10 @@ const catalog = JSON.parse(fs.readFileSync(catalogPath, "utf8"));
 const activeTools = catalog.tools.filter(t => t && t.status === "active");
 const needsReview = catalog.tools.filter(t => t.verification_status === "needs_review");
 const activeNeedsReview = activeTools.filter(t => t.verification_status === "needs_review");
-const newIds = ["anythingllm", "opencode", "comfyui", "qdrant", "whisper-cpp", "mlflow", "pydantic-ai", "haystack", "elevenlabs"];
+const newIds = ["anythingllm", "opencode", "comfyui", "qdrant", "whisper-cpp", "mlflow", "pydantic-ai", "haystack", "elevenlabs", "embeddinggemma-2"];
 
-assert.equal(catalog.tools.length, 36, "catalog must contain 36 total records after the verified ElevenLabs addition");
-assert.equal(activeTools.length, 35, "public AI Bank must show 35 active records; deprecated Flowise stays hidden");
+assert.equal(catalog.tools.length, 37, "catalog must contain 37 total records after the verified EmbeddingGemma 2 addition");
+assert.equal(activeTools.length, 36, "public AI Bank must show 36 active records; deprecated Flowise stays hidden");
 assert.deepEqual(needsReview.map(t => t.id).sort(), [], "all active catalog records have verified editorial status");
 assert.equal(activeNeedsReview.length, 0, "no active record should remain in the needs-review filter");
 for (const id of newIds) {
@@ -53,7 +53,7 @@ try {
   assert.equal(await cards.count(), 24, "first page must show 24 active cards");
   assert.match(await page.locator("#bank-pagination").innerText(), /Trang 1 \/ 2/);
 
-  for (const name of ["Langfuse", "NotebookLM", "AnythingLLM", "OpenCode", "ComfyUI", "Qdrant", "whisper.cpp", "MLflow", "Pydantic AI", "Haystack", "ElevenLabs"]) {
+  for (const name of ["Langfuse", "NotebookLM", "AnythingLLM", "OpenCode", "ComfyUI", "Qdrant", "whisper.cpp", "MLflow", "Pydantic AI", "Haystack", "ElevenLabs", "EmbeddingGemma 2"]) {
     await page.locator("#bank-search").fill(name);
     await page.waitForFunction(() => document.querySelectorAll("#bank-grid .tool-card").length === 1);
     assert.ok((await page.locator("#bank-grid").innerText()).toLocaleLowerCase("vi").includes(name.toLocaleLowerCase("vi")), `${name} must be searchable`);
@@ -65,7 +65,7 @@ try {
   assert.match(await page.locator("#bank-grid .tool-card h2").first().innerText(), /^Activepieces$/);
 
   await page.locator("#bank-pagination button").last().click();
-  await page.waitForFunction(() => document.querySelectorAll("#bank-grid .tool-card").length === 11);
+  await page.waitForFunction(() => document.querySelectorAll("#bank-grid .tool-card").length === 12);
   assert.match(await page.locator("#bank-pagination").innerText(), /Trang 2 \/ 2/);
   await page.locator("#bank-pagination button").first().click();
   await page.waitForFunction(() => document.querySelectorAll("#bank-grid .tool-card").length === 24);
@@ -76,7 +76,7 @@ try {
   assert.ok(!reviewText.includes("EasyOCR"), "verified EasyOCR must not appear in the needs_review filter");
   assert.ok(!reviewText.includes("Flowise"), "deprecated Flowise must stay hidden from public active results");
 
-  console.log("PASS Chromium catalog E2E: 36 total records / 35 active; 24+11 pagination; search across 9 additions; canonical IDs; A-Z sort; empty review filter; Preview noindex and candidate isolation.");
+  console.log("PASS Chromium catalog E2E: 37 total records / 36 active; 24+12 pagination; search across 10 additions; canonical IDs; A-Z sort; empty review filter; Preview noindex and candidate isolation.");
 } finally {
   await browser.close();
 }
