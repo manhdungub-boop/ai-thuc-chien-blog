@@ -15,6 +15,16 @@
 @media(max-width:850px){.bank-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:600px){.ai-bank{padding-top:28px}.bank-hero{padding:23px 18px}.bank-controls{grid-template-columns:1fr}.bank-grid{grid-template-columns:1fr}.tool-card{padding:17px}}
 </style>
 <style>
+.bank-guides{margin:22px 0 26px;padding:20px;border:1px solid var(--line);border-radius:15px;background:linear-gradient(145deg,#151e32,#101a29)}
+.bank-guides h2{margin:0 0 7px;color:#f6f7fc;font:700 19px Manrope,sans-serif}
+.bank-guides>p{margin:0 0 15px;color:#b9c4d8;font-size:11px;line-height:1.8}
+.bank-guides-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:10px}
+.bank-guide-link{display:block;padding:13px;border:1px solid #ffffff1c;border-radius:11px;background:#ffffff08;color:#eaf1fb;text-decoration:none}
+.bank-guide-link strong{display:block;margin-bottom:5px;color:#a9e9d4;font-size:12px}
+.bank-guide-link span{display:block;color:#b9c4d8;font-size:10px;line-height:1.7}
+.bank-guide-link:hover{border-color:#8bf0ce88;text-decoration:none}
+</style>
+<style>
 .bank-controls-extended{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin:22px 0 14px}
 .bank-controls-extended input,.bank-controls-extended select{width:100%;min-width:0;min-height:44px;border:1px solid var(--line);border-radius:11px;background:#141a2c;color:#f2f4fb;padding:10px 12px;font:500 12px 'Be Vietnam Pro',sans-serif}
 .bank-filters{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
@@ -50,6 +60,16 @@
 <header class="site-header"><a class="brand" href="./"><span class="brand-mark">AI</span><span>AI <b>Thực Chiến</b></span></a><a class="header-cta" href="./">← Trang chủ</a></header>
 <main id="main-content" class="section ai-bank">
 <section class="bank-hero"><div class="section-kicker">THƯ VIỆN CÔNG CỤ · DANH MỤC ĐƯỢC RÀ SOÁT ĐỊNH KỲ</div><h1>Ngân hàng <em>AI.</em></h1><p>Tra cứu công cụ theo việc bạn cần làm — từ viết, nghiên cứu, thiết kế, video đến lập trình và tự động hóa. Ưu tiên lựa chọn có thể bắt đầu miễn phí; thông tin gói và giới hạn dẫn về trang chính thức để bạn tự kiểm tra trước khi đăng ký.</p><div class="bank-meta"><span>Danh mục dữ liệu được cập nhật định kỳ</span><span>Nhiều nhóm nhu cầu</span><span>Ưu tiên miễn phí</span><span>Không xếp hạng trả phí</span></div></section>
+<section class="bank-guides" aria-labelledby="bank-guides-title">
+<h2 id="bank-guides-title">Hướng dẫn trước khi chọn công cụ</h2>
+<p>Bắt đầu từ nhu cầu, giới hạn chi phí và mức độ nhạy cảm của dữ liệu. Các hướng dẫn dưới đây giúp bạn đánh giá công cụ trước khi đăng ký hoặc đưa vào công việc.</p>
+<div class="bank-guides-grid">
+<a class="bank-guide-link" href="/articles/chon-cong-cu-ai-theo-cong-viec"><strong>Chọn công cụ theo công việc ↗</strong><span>Xác định đầu ra cần có và tiêu chí so sánh thay vì chạy theo xu hướng.</span></a>
+<a class="bank-guide-link" href="/articles/so-sanh-goi-mien-phi-ai"><strong>So sánh gói miễn phí AI ↗</strong><span>Kiểm tra hạn mức, tính năng, vùng hỗ trợ và chi phí có thể phát sinh.</span></a>
+<a class="bank-guide-link" href="/articles/bao-ve-du-lieu-khi-dung-ai"><strong>Bảo vệ dữ liệu khi dùng AI ↗</strong><span>Phân loại dữ liệu và giảm rủi ro trước khi tải nội dung lên dịch vụ.</span></a>
+<a class="bank-guide-link" href="/articles/kiem-chung-cau-tra-loi-ai"><strong>Kiểm chứng câu trả lời AI ↗</strong><span>Đối chiếu nguồn và xác minh các thông tin quan trọng trước khi sử dụng.</span></a>
+</div>
+</section>
 <div class="bank-controls bank-controls-extended">
 <label class="sr-only" for="bank-search">Tìm công cụ AI</label><input id="bank-search" type="search" placeholder="Tìm tên, nhà cung cấp, tính năng hoặc nhu cầu…">
 <label class="sr-only" for="bank-cost">Lọc mô hình giá</label><select id="bank-cost"><option value="all">Tất cả mô hình giá</option><option value="free">Miễn phí hoàn toàn</option><option value="freemium">Freemium</option><option value="trial_or_credits">Dùng thử / tín dụng giới hạn</option><option value="paid">Trả phí</option><option value="self_hosted_free_and_cloud_paid">Mã nguồn mở / tự lưu trữ</option><option value="unknown">Chưa rõ mô hình giá</option></select>
