@@ -406,3 +406,37 @@ Thông tin nhà cung cấp và dự án công bố:
 
 **Trạng thái cổng phát hành không đổi: CHƯA ĐẠT.** Không có mẫu âm thanh mới được nghe; không có ứng viên nào được xác nhận tự nhiên đạt ngưỡng; không phát hành video.
 
+
+
+## 5H. Xác minh lại quy trình Speechma trên iPhone — nguồn chính thức 17/11/2026
+
+Đã đối chiếu lại FAQ, trang hướng dẫn iPhone và Terms of Service của Speechma. Kết quả làm rõ thêm khả năng thao tác trên iPhone, nhưng không thay thế việc nghe file âm thanh thực tế.
+
+### Khả năng sử dụng và giới hạn miễn phí theo nhà cung cấp
+
+- FAQ chính thức nói Speechma hoạt động trên iPhone/iPad qua website trong Safari và các trình duyệt di động hiện đại; đây là tuyên bố tương thích của nhà cung cấp, chưa phải bài kiểm thử trực tiếp trên thiết bị của AI Thực Chiến.
+- FAQ ghi công cụ TTS miễn phí không cần đăng ký, email hoặc thẻ; mỗi lần tạo yêu cầu mã bảo mật 5 chữ số.
+- Giới hạn được công bố: tối đa 2.000 ký tự cho một lần chuyển văn bản thành giọng nói tiêu chuẩn; giọng nhân vật tối đa 1.000 ký tự. File MP3 có thể tải xuống.
+- FAQ mô tả có thể chèn thẻ nghỉ như `[break 1s]`, `[break 2s]`, `[break 3s]` và các thời lượng tùy chỉnh tối đa 10 giây mỗi thẻ, tối đa 50 thẻ mỗi văn bản; thẻ nghỉ tính vào giới hạn ký tự. Đây là tính năng hữu ích để thử nhịp câu, nhưng cần nghe để xác nhận cách đọc thực tế.
+- SpeechmaPRO và API là dịch vụ trả phí riêng; tuyệt đối không chuyển sang các sản phẩm này, không tạo API key, không nhập thông tin thanh toán.
+
+### Quyền sử dụng output và dữ liệu đầu vào
+
+- Terms of Service cấp quyền toàn cầu, không độc quyền, vĩnh viễn, miễn phí bản quyền để dùng, chỉnh sửa, xuất bản, phân phối và kiếm tiền từ output cho mục đích hợp pháp, với điều kiện tuân thủ điều khoản, chính sách sử dụng và quyền của bên thứ ba.
+- Điều khoản yêu cầu người dùng có đầy đủ quyền đối với văn bản/đầu vào; đồng thời cho phép Speechma và các đối tác hạ tầng xử lý đầu vào trong phạm vi cần thiết để tạo kết quả, bảo mật và tuân thủ pháp luật.
+- Vì vậy, không được coi “không lưu tệp sau xử lý” là “không gửi dữ liệu ra ngoài”. Chỉ sử dụng câu thử giả lập công khai; không gửi bản thảo nội bộ, nội dung chưa xuất bản, dữ liệu khách hàng, thông tin cá nhân hoặc bí mật.
+- Quyền thương mại của output không chứng minh output có tính độc quyền, không bảo đảm được bảo hộ bản quyền, và không thay thế việc kiểm tra quyền của văn bản/giọng/nhạc/hình ảnh đầu vào.
+
+### Quyết định cập nhật
+
+Speechma hiện là ứng viên thực tế nhất để **người dùng tự nghe thử trên iPhone mà không cần cài ứng dụng hoặc tạo tài khoản**, theo thông tin nhà cung cấp. Quy trình thử chỉ nên dùng một câu giả lập công khai ngắn, kiểm tra mã 5 chữ số, tạo MP3 và nghe trực tiếp. Chưa có file được tạo hoặc nghe trong phiên rà soát này; không chấm điểm tự nhiên, không công nhận là giọng đạt chuẩn và không tự động đưa vào video.
+
+Nếu người dùng tự chọn thử, cần ghi lại tên chính xác của voice, thời điểm, thiết lập tốc độ/cao độ, lỗi dấu thanh/tên riêng/số liệu và đánh giá theo phiếu 7 tiêu chí ở mục 3. Không nhập nội dung thật của dự án.
+
+### Nguồn chính thức đã đối chiếu
+
+22. Speechma FAQ — iPhone/Safari, miễn phí, giới hạn ký tự, MP3 và mã bảo mật: https://speechma.com/faq
+23. Speechma iPhone guide: https://speechma.com/text-to-speech-iphone
+24. Speechma Terms of Service — quyền input/output và xử lý bởi đối tác hạ tầng: https://speechma.com/terms
+
+**Trạng thái:** mới xác minh tài liệu tương thích và điều khoản; chưa thử trực tiếp trên iPhone, chưa có audio được nghe, chưa đạt cổng phát hành video.
