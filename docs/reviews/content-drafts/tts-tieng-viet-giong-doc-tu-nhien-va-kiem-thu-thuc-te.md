@@ -440,3 +440,14 @@ Nếu người dùng tự chọn thử, cần ghi lại tên chính xác của v
 24. Speechma Terms of Service — quyền input/output và xử lý bởi đối tác hạ tầng: https://speechma.com/terms
 
 **Trạng thái:** mới xác minh tài liệu tương thích và điều khoản; chưa thử trực tiếp trên iPhone, chưa có audio được nghe, chưa đạt cổng phát hành video.
+
+## 5I. Tiếp nhận mẫu Speechma HoaiMy do người dùng cung cấp — 17/11/2026
+
+- Người dùng đã chia sẻ một liên kết Google Drive tới tệp có tên `speechma_audio_HoaiMy_at_1_19_50 AM_on_November_17th_2026.mp3`.
+- Metadata Google Drive xác nhận: MIME type `audio/mpeg`, dung lượng 183.312 bytes; tên tệp cho biết voice được chọn là HoaiMy. Tên tệp không thay thế bằng chứng nghe hoặc xác minh cấu hình giọng.
+- Tác vụ Google Drive download đã trả về một tham chiếu tải tạm thời tới nội dung tệp. Tuy nhiên, môi trường phân tích hiện tại không truy xuất được byte âm thanh từ tham chiếu tạm thời đó; vì vậy chưa thể phát/nghe, giải mã waveform, tạo transcript hoặc đo thời lượng/độ lớn một cách đáng tin cậy.
+- Không sử dụng kết quả phân tích âm thanh chưa được xác minh ở bất kỳ bước nào; không suy luận chất lượng giọng từ tên tệp, MIME type hoặc dung lượng.
+- Tệp âm thanh không được sao chép vào GitHub, không được gửi tới dịch vụ TTS/transcription bên thứ ba và không được công khai. Chỉ lưu metadata tối thiểu trong bản thảo nội bộ để theo dõi quy trình.
+- **Kết luận nghe thử:** CHƯA THỰC HIỆN. Chưa chấm 7 tiêu chí, chưa xác nhận phát âm, ngữ điệu, tốc độ, độ tự nhiên, clipping/noise hoặc quyền thương mại của voice cụ thể.
+- **Bước tiếp theo:** khi có quyền truy cập byte âm thanh trong môi trường hỗ trợ phát/giải mã audio, thực hiện nghe toàn bộ file và chấm theo phiếu ở mục 3. Nếu không có khả năng đó, yêu cầu một phương thức chia sẻ tệp có thể đọc trực tiếp; không yêu cầu người dùng tải lại khi chưa cần.
+- **Trạng thái cổng video:** vẫn CHƯA ĐẠT. Việc nhận được liên kết và metadata không đồng nghĩa đã nghe hoặc duyệt âm thanh.
