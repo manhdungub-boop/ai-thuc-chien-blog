@@ -344,3 +344,65 @@ Giới hạn xác minh:
 19. KorvaTTS model license: https://github.com/dogenthq/KorvaTTS/blob/main/MODEL_LICENSE.md
 20. KorvaTTS model card and asset descriptions: https://huggingface.co/dogenthq/KorvaTTS
 21. HeyKorva public page and its current free-use/privacy claims: https://heykorva.com/
+
+
+## 5G. Hai ứng viên bổ sung cho quy trình iPhone — rà soát nguồn 17/11/2026
+
+### Speechma — hosted TTS, ưu tiên làm bài nghe thử bằng văn bản công khai
+
+Nguồn:
+- Trang TTS tiếng Việt: https://speechma.com/vietnamese-text-to-speech
+- Điều khoản: https://speechma.com/terms
+- Chính sách quyền riêng tư: https://speechma.com/privacy
+
+Thông tin nhà cung cấp công bố:
+- Có hai giọng tiếng Việt: HoaiMy (nữ) và NamMinh (nam); tối đa 2.000 ký tự mỗi lần, không cần tài khoản, tải MP3; trang TTS nói có điều chỉnh tốc độ và cao độ.
+- Điều khoản cấp quyền sử dụng output trên phạm vi toàn cầu, không độc quyền, vĩnh viễn, miễn phí bản quyền cho mục đích cá nhân hoặc thương mại hợp pháp, nếu tuân thủ điều khoản và quyền của bên thứ ba.
+- Chính sách quyền riêng tư nói văn bản được truyền bảo mật đến Speechma và các đối tác hạ tầng AI để tạo kết quả; tệp tải lên không được lưu trên máy chủ Speechma sau khi xử lý; bản âm thanh trả về trình duyệt. Chính sách cũng nêu Google Analytics/AdSense và một số dữ liệu kỹ thuật, nhật ký bảo mật.
+- Đây là thông tin do nhà cung cấp tự công bố; AI Thực Chiến chưa kiểm toán độc lập hạ tầng, chưa xác minh chính xác voice engine/voice asset cho từng mẫu và chưa nghe thử output.
+
+Đánh giá:
+- **Phù hợp để đưa vào vòng nghe thử ngắn trên iPhone** vì có MP3, giới hạn miễn phí rõ và không yêu cầu tài khoản theo trang TTS.
+- **Không phù hợp với nội dung nội bộ/chưa công bố:** văn bản được gửi đến nhà cung cấp và đối tác hạ tầng để xử lý, dù chính sách nói không lưu sau khi xử lý.
+- Chỉ dùng câu giả lập đã công khai, không dùng bản thảo bài viết, dữ liệu cá nhân, dữ liệu khách hàng, thông tin đăng nhập hay tài liệu chưa phát hành.
+- Quyền thương mại được điều khoản của Speechma tuyên bố cho output; vẫn phải kiểm tra đúng phiên bản điều khoản, quyền văn bản đầu vào và quyền của bên thứ ba. Không suy diễn đây là bảo đảm về chất lượng tự nhiên.
+- Không dùng Speechma API (trang công bố từ 9 USD/tháng); chỉ xem xét công cụ web miễn phí.
+
+**Quyết định:** xếp Speechma vào nhóm *ứng viên hosted để nghe thử bằng câu giả lập công khai*, không phải công cụ đã được phê duyệt sản xuất. Chưa chấm điểm tự nhiên vì chưa có audio thực tế được nghe.
+
+### PyroSoft Convert — phương án TTS chạy trong trình duyệt, cần xác minh Safari iPhone
+
+Nguồn:
+- Công cụ: https://pyrosoft.pro/convert/audio/vietnamese-text-to-speech/
+- Thông báo license: https://pyrosoft.pro/convert/NOTICES.txt
+- Supertonic 3 chính chủ: https://supertonic3.github.io/
+
+Thông tin nhà cung cấp và dự án công bố:
+- PyroSoft nói công cụ chạy hoàn toàn trong trình duyệt, không tải văn bản/tệp lên máy chủ; sau khi tải model có thể hoạt động offline.
+- Trang ghi 10 giọng Supertonic cho 30 ngôn ngữ ngoài tiếng Anh, gồm tiếng Việt; kích thước Supertonic trên công cụ được trang nêu khoảng 398 MB. Công cụ quảng bá miễn phí, không tài khoản, không watermark và không giới hạn ký tự.
+- PyroSoft ghi Supertonic theo OpenRAIL-M; trang Supertonic 3 chính chủ xác nhận model weights theo OpenRAIL-M, mã nguồn/runtime mẫu theo MIT. OpenRAIL-M cho phép dùng thương mại nhưng có điều kiện/hạn chế sử dụng và yêu cầu attribution; không được mô tả toàn bộ model là MIT.
+- Trang Supertonic 3 nói hỗ trợ tiếng Việt và có runtime/browser, iOS; tuy nhiên đây là khả năng của model/runtime upstream, không phải bằng chứng PyroSoft Convert đã được kiểm thử trên Safari/iPhone.
+
+Đánh giá:
+- Ưu điểm tiềm năng: nếu đúng là xử lý hoàn toàn trong browser như nhà cung cấp công bố thì nội dung không cần gửi lên server TTS; đây là hướng đáng ưu tiên về quyền riêng tư.
+- Rủi ro: tải model khoảng 398 MB có thể tốn dữ liệu và bộ nhớ; chưa kiểm tra Safari iOS, khả năng giữ tab nền, xuất file, hiệu năng hoặc độ ổn định trên iPhone.
+- Chưa có kiểm toán network độc lập để xác nhận tuyên bố không upload; chưa có audio nghe thử; chưa xác nhận đầy đủ attribution/điều kiện license áp dụng cho voice preset và bản triển khai cụ thể.
+
+**Quyết định:** giữ ở trạng thái *cần kiểm thử tương thích iPhone và xác minh xử lý cục bộ*. Không tải model lớn qua mạng di động, không coi là giải pháp iPhone đã sẵn sàng và không đưa nội dung nội bộ vào trước khi kiểm chứng network behavior.
+
+### So sánh quyết định ở thời điểm rà soát
+
+| Ứng viên | Miễn phí theo công bố | Cách xử lý | Quyền thương mại theo tài liệu | Trạng thái |
+|---|---|---|---|---|
+| Speechma | 2.000 ký tự/lần, không tài khoản | Hosted; text gửi tới Speechma và đối tác xử lý | Điều khoản cho phép dùng output hợp pháp, subject to terms/third-party rights | Có thể nghe thử bằng câu công khai |
+| PyroSoft / Supertonic 3 | Miễn phí, không tài khoản, không giới hạn theo trang | Nhà cung cấp nói local trong browser; cần kiểm chứng | Model OpenRAIL-M, có hạn chế và attribution; code MIT | Chờ kiểm tra Safari/iPhone và network |
+| CapCut Mobile | TTS core free; một số voice Pro | Dịch vụ CapCut; không dùng nội dung nội bộ | Trang CapCut nói TTS output có thể dùng thương mại, tuân thủ terms; kiểm tra đúng voice | Đã có mẫu, hơi máy móc/hơi nhanh theo phản hồi người dùng |
+
+**Thứ tự hành động an toàn:**
+1. Speechma: nếu có quy trình nghe thử trong môi trường phù hợp, chỉ dùng một câu giả lập công khai, không cần đăng ký và không nhập nội dung dự án.
+2. PyroSoft: trước khi tải model ~398 MB, phải xác minh Safari iOS hỗ trợ, dung lượng tải thực tế và cách xuất file; không tự động tải bằng dữ liệu di động.
+3. CapCut: giữ làm phương án dự phòng đã có mẫu; chỉ thử chỉnh tốc độ nhẹ nếu tính năng miễn phí và vẫn nghe lại toàn đoạn.
+4. Không chọn người thắng khi chưa có file âm thanh thực tế và phiếu chấm độc lập.
+
+**Trạng thái cổng phát hành không đổi: CHƯA ĐẠT.** Không có mẫu âm thanh mới được nghe; không có ứng viên nào được xác nhận tự nhiên đạt ngưỡng; không phát hành video.
+
