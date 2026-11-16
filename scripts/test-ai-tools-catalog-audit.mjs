@@ -25,5 +25,5 @@ assert.ok(report.main_catalog.count > 0, "main catalog must contain records");
 assert.ok(Array.isArray(report.strict_blockers), "strict blockers must be reported as an array");
 assert.equal(report.strict_blockers.length, 0, "catalog must have no strict blockers");
 assert.deepEqual(report.main_catalog.records_needing_editorial_review, [], "all active catalog records have verified editorial status; Flowise is verified deprecated and EasyOCR checkpoint scope is documented");
-assert.deepEqual(report.main_catalog.verified_with_unknown_pricing, ["gemini-4-hydrogen"], "verified product identity may coexist with explicitly unknown model-specific pricing");
+assert.deepEqual(report.main_catalog.verified_with_unknown_pricing, [], "all active verified records must disclose a known pricing status; Gemini 4 Hydrogen has an official Free and Paid tier");
 console.log(`PASS: strict catalog audit uses current Asia/Ho_Chi_Minh date (${asOf})`);
