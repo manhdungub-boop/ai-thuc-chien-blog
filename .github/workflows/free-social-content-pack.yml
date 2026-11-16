@@ -2,7 +2,7 @@ name: Free social content draft pack
 
 on:
   schedule:
-    # 09:00 Asia/Ho_Chi_Minh every Wednesday
+    # Internal draft generation only; not a public posting time.
     - cron: "0 2 * * 3"
   workflow_dispatch:
   pull_request:
@@ -10,6 +10,7 @@ on:
     paths:
       - "feed.xml"
       - "scripts/generate-social-content-pack.mjs"
+      - "scripts/simulate-social-publishing-schedule.mjs"
       - ".github/workflows/free-social-content-pack.yml"
 
 permissions:
@@ -34,16 +35,22 @@ jobs:
         with:
           node-version: 22
 
-      - name: Check script syntax and deterministic self-test
+      - name: Check script syntax and self-tests
         run: |
           node --check scripts/generate-social-content-pack.mjs
           node scripts/generate-social-content-pack.mjs --self-test
+          node --check scripts/simulate-social-publishing-schedule.mjs
+          node scripts/simulate-social-publishing-schedule.mjs --self-test
 
       - name: Generate social drafts from published RSS entries
         run: |
           node scripts/generate-social-content-pack.mjs --feed feed.xml --out reports/social/social-content-pack.md
 
-      - name: Add draft summary to workflow run
+      - name: Generate randomized schedule simulation only
+        run: |
+          node scripts/simulate-social-publishing-schedule.mjs --days 14 --out reports/social/social-publishing-schedule-simulation.md
+
+      - name: Add draft and simulation summary to workflow run
         run: |
           {
             echo "## Free social content draft pack"
@@ -51,15 +58,20 @@ jobs:
             echo "- Source: repository RSS only"
             echo "- Output: five newest published articles, or fewer if RSS contains fewer entries"
             echo "- Destinations: Facebook Page, TikTok, and YouTube Shorts draft copy"
-            echo "- No social publishing, account mutation, external API, paid service, or secret access"
+            echo "- Randomized schedule: simulation artifact only; no publishing, account access, external API, paid service, or secret access"
+            echo "- The Wednesday workflow schedule is for internal draft generation only, not a public posting schedule"
             echo
             cat reports/social/social-content-pack.md
+            echo
+            cat reports/social/social-publishing-schedule-simulation.md
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Preserve draft pack
+      - name: Preserve draft pack and schedule simulation
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: free-social-content-pack-${{ github.run_id }}
-          path: reports/social/social-content-pack.md
+          path: |
+            reports/social/social-content-pack.md
+            reports/social/social-publishing-schedule-simulation.md
           if-no-files-found: error
           retention-days: 14
