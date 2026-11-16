@@ -441,13 +441,19 @@ Nếu người dùng tự chọn thử, cần ghi lại tên chính xác của v
 
 **Trạng thái:** mới xác minh tài liệu tương thích và điều khoản; chưa thử trực tiếp trên iPhone, chưa có audio được nghe, chưa đạt cổng phát hành video.
 
-## 5I. Tiếp nhận mẫu Speechma HoaiMy do người dùng cung cấp — 17/11/2026
+## 5I. Tiếp nhận và phân tích kỹ thuật mẫu Speechma HoaiMy — 17/11/2026
 
-- Người dùng đã chia sẻ một liên kết Google Drive tới tệp có tên `speechma_audio_HoaiMy_at_1_19_50 AM_on_November_17th_2026.mp3`.
-- Metadata Google Drive xác nhận: MIME type `audio/mpeg`, dung lượng 183.312 bytes; tên tệp cho biết voice được chọn là HoaiMy. Tên tệp không thay thế bằng chứng nghe hoặc xác minh cấu hình giọng.
-- Tác vụ Google Drive download đã trả về một tham chiếu tải tạm thời tới nội dung tệp. Tuy nhiên, môi trường phân tích hiện tại không truy xuất được byte âm thanh từ tham chiếu tạm thời đó; vì vậy chưa thể phát/nghe, giải mã waveform, tạo transcript hoặc đo thời lượng/độ lớn một cách đáng tin cậy.
-- Không sử dụng kết quả phân tích âm thanh chưa được xác minh ở bất kỳ bước nào; không suy luận chất lượng giọng từ tên tệp, MIME type hoặc dung lượng.
-- Tệp âm thanh không được sao chép vào GitHub, không được gửi tới dịch vụ TTS/transcription bên thứ ba và không được công khai. Chỉ lưu metadata tối thiểu trong bản thảo nội bộ để theo dõi quy trình.
-- **Kết luận nghe thử:** CHƯA THỰC HIỆN. Chưa chấm 7 tiêu chí, chưa xác nhận phát âm, ngữ điệu, tốc độ, độ tự nhiên, clipping/noise hoặc quyền thương mại của voice cụ thể.
-- **Bước tiếp theo:** khi có quyền truy cập byte âm thanh trong môi trường hỗ trợ phát/giải mã audio, thực hiện nghe toàn bộ file và chấm theo phiếu ở mục 3. Nếu không có khả năng đó, yêu cầu một phương thức chia sẻ tệp có thể đọc trực tiếp; không yêu cầu người dùng tải lại khi chưa cần.
-- **Trạng thái cổng video:** vẫn CHƯA ĐẠT. Việc nhận được liên kết và metadata không đồng nghĩa đã nghe hoặc duyệt âm thanh.
+- Người dùng chia sẻ liên kết Google Drive tới tệp `speechma_audio_HoaiMy_at_1_19_50 AM_on_November_17th_2026.mp3`.
+- Metadata Google Drive xác nhận MIME type `audio/mpeg`, dung lượng 183.312 bytes. Tên tệp cho biết voice được chọn là HoaiMy; tên tệp không thay thế bằng chứng về cấu hình giọng.
+- Đã tải byte MP3 từ liên kết tạm thời do Google Drive connector cung cấp vào sandbox xử lý riêng. Tệp không được tải lên dịch vụ transcription/TTS bên thứ ba và không được commit vào GitHub.
+- Phân tích cục bộ bằng SoundFile/Librosa trên tệp thực tế:
+  - Thời lượng: 30,552 giây.
+  - Kênh: mono; sample rate: 24.000 Hz.
+  - Peak amplitude: 0,7115; RMS amplitude: 0,1143.
+  - Không có mẫu PCM đạt ngưỡng clipping `|sample| >= 0,999` trong dữ liệu giải mã.
+  - Với ngưỡng năng lượng RMS -40 dBFS, khoảng 74,7% khung 10,7 ms được phân loại là hoạt động có năng lượng; phần còn lại có thể bao gồm khoảng nghỉ và âm tiết nhỏ. Đây là phép đo năng lượng, không phải xác nhận lỗi ngắt tiếng.
+- Đã thử chạy bộ nhận dạng giọng nói mã nguồn mở Faster-Whisper tiny trong sandbox riêng để lấy transcript tiếng Việt. Tác vụ thất bại do không tương thích API PyAV (`open() got an unexpected keyword argument 'metadata_errors'`); không có transcript đáng tin cậy. Không gửi audio tới API trả phí hoặc dịch vụ ngoài.
+- **Kết luận nghe thử:** CHƯA THỰC HIỆN. Không có khả năng nghe chủ quan trực tiếp trong phiên này; chưa chấm 7 tiêu chí, chưa xác nhận phát âm/dấu thanh, ngữ điệu, nhịp điệu, độ tự nhiên, tiếng ồn hoặc quyền thương mại của voice cụ thể.
+- **Kết quả kỹ thuật:** xác nhận được tệp giải mã được và không phát hiện clipping theo ngưỡng nêu trên. Không suy rộng thành kết luận chất lượng giọng.
+- **Bước tiếp theo:** nếu có bộ giải mã/nhận dạng cục bộ tương thích, tiếp tục kiểm tra transcript và phân đoạn; phần tự nhiên/ngữ điệu vẫn cần nghe mẫu. Không yêu cầu người dùng tải lại tệp khi liên kết hiện tại đã đủ để lấy dữ liệu.
+- **Trạng thái cổng video:** CHƯA ĐẠT. Chưa phê duyệt HoaiMy cho video cho tới khi hoàn tất đánh giá nghe, phát âm và quyền sử dụng thương mại của đúng giọng.
