@@ -51,6 +51,9 @@ jobs:
           node --check scripts/ai-bank-lead-triage.mjs
           node --check scripts/ai-bank-editorial-briefs.mjs
 
+      - name: Run offline RSS parser and size-limit fixtures
+        run: node scripts/ai-bank-feed-discovery.mjs --self-test
+
       - name: Collect discovery leads from official feeds
         run: node scripts/ai-bank-feed-discovery.mjs
 
