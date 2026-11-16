@@ -48,8 +48,8 @@ jobs:
       - name: Enforce content-only change boundary
         shell: bash
         env:
-          BEFORE_SHA: ${{ github.event.before || github.event.pull_request.base.sha }}
-          AFTER_SHA: ${{ github.sha }}
+          BEFORE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          AFTER_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           if [[ -z "$BEFORE_SHA" || "$BEFORE_SHA" =~ ^0+$ ]]; then
