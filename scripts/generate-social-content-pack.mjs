@@ -85,6 +85,15 @@ function selfTest() {
   }], "2026-11-15");
   if (!asciiVietnamesePack.includes("TẠM DỪNG — CHƯA ĐƯỢC ĐĂNG")) throw new Error("Undiacritized text must be conservatively held for manual language review.");
   if (asciiVietnamesePack.includes("Khám phá: Huong dan su dung AI an toan")) throw new Error("Unverified ASCII title leaked into publish-ready copy.");
+  const expectFailure = (xml, label) => {
+    let failed = false;
+    try { parseFeed(xml); } catch { failed = true; }
+    if (!failed) throw new Error("Unsafe or malformed RSS input was accepted: " + label);
+  };
+  expectFailure('<?xml version="1.0"?><rss><channel><link>https://example.org/</link><item><title>External</title><link>https://attacker.example/post</link><description>Text</description></item></channel></rss>', "cross-origin item URL");
+  expectFailure('<?xml version="1.0"?><rss><channel><link>http://example.org/</link><item><title>HTTP</title><link>http://example.org/post</link><description>Text</description></item></channel></rss>', "non-HTTPS feed origin");
+  expectFailure('<?xml version="1.0"?><rss><channel><link>https://example.org/</link><item><title>Missing description</title><link>https://example.org/post</link></item></channel></rss>', "missing description");
+  expectFailure('<?xml version="1.0"?><rss><channel><link>https://example.org/</link><item><title>Missing title</title><link>https://example.org/post</link><description>Text</description></item></channel></rss>', "missing title");
   console.log("PASS: RSS parsing, all three destination drafts, conservative title+summary language gate, blocked unverified copy and no-publish policy.");
 }
 if (process.argv.includes("--self-test")) selfTest();
