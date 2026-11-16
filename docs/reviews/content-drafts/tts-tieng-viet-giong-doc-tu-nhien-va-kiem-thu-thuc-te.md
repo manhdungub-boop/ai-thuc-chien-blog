@@ -468,3 +468,33 @@ Nếu người dùng tự chọn thử, cần ghi lại tên chính xác của v
 - Kết luận riêng tư: mức rủi ro không phù hợp để gửi bản thảo nội bộ, dữ liệu khách hàng, thông tin đăng nhập hoặc dữ liệu cá nhân nhạy cảm. Chỉ dùng văn bản công khai/đã được duyệt; không dùng Speechma API/PRO có phí.
 - Nguồn chính thức: https://speechma.com/terms ; https://speechma.com/privacy ; https://speechma.com/faq ; https://speechma.com/vietnamese-text-to-speech .
 - Trạng thái Speechma vẫn là candidate. Mẫu HoaiMy đã được phân tích tín hiệu kỹ thuật nhưng chưa được nghe/chấm chủ quan; chưa phê duyệt cho video.
+
+
+## 5K. Ứng viên biên tập video và phụ đề miễn phí trên iPhone: KakuCut — rà soát 17/11/2026
+
+Nguồn:
+- App Store Việt Nam: https://apps.apple.com/vn/app/kakucut-video-editor/id6811591634
+- Apple — tính khả dụng tính năng và ngôn ngữ: https://www.apple.com/vn/ios/feature-availability/
+- Apple Speech framework — danh sách locale nhận dạng: https://developer.apple.com/documentation/speech/sfspeechrecognizer/supportedlocales()
+
+Thông tin công khai trên App Store:
+- KakuCut được liệt kê là ứng dụng miễn phí, chỉ dành cho iPhone, yêu cầu iOS 17 trở lên; dung lượng trang cửa hàng tại thời điểm rà soát khoảng 14,1 MB.
+- Mô tả ứng dụng nêu các chức năng cắt, tách, sắp xếp tối đa 10 clip, tạo và chỉnh sửa phụ đề, sửa timing, nhập/xuất SRT, tùy chỉnh kiểu chữ và vị trí phụ đề, thu voiceover, chỉnh âm lượng và xuất MP4.
+- Nhà phát triển tuyên bố video và dữ liệu dự án được giữ trên thiết bị, không cần tài khoản và không cần tải footage lên máy chủ.
+- Mô tả cảnh báo khả năng tạo phụ đề tự động phụ thuộc thiết bị, ngôn ngữ, phiên bản iOS và hỗ trợ speech model của Apple.
+
+Đánh giá khả năng tiếng Việt và quyền riêng tư:
+- Apple liệt kê tiếng Việt trong một số khả năng Dictation/on-device speech recognition ở trang Feature Availability. Tài liệu Speech framework cũng cảnh báo hỗ trợ locale không bảo đảm mọi yêu cầu nhận dạng đều xử lý được; một số locale cần kết nối Internet tới máy chủ Apple.
+- Việc Apple hỗ trợ tiếng Việt ở cấp hệ điều hành không chứng minh KakuCut đang chọn đúng locale tiếng Việt, hoạt động offline trên mọi iPhone hoặc tạo phụ đề chính xác. Cần thử một clip tiếng Việt có dấu, tên riêng, số liệu và câu dài.
+- Tuyên bố xử lý local và không upload hiện là thông tin do nhà phát triển công bố trên App Store; chưa kiểm toán network traffic độc lập.
+- Trang App Store tại thời điểm rà soát chưa có đủ xếp hạng/đánh giá để kết luận độ ổn định hoặc chất lượng sản phẩm.
+- KakuCut là ứng viên biên tập/phụ đề, không phải công cụ TTS; không thay thế bước tạo giọng đọc và không giải quyết vấn đề ngữ điệu tự nhiên.
+
+Quyết định:
+- Xếp KakuCut vào nhóm `needs_review`, chỉ là ứng viên miễn phí để thử nghiệm cắt ghép/phụ đề trên iPhone.
+- Không coi là công cụ đã được phê duyệt sản xuất; chưa có video thử hoặc phụ đề tiếng Việt thực tế được AI Thực Chiến kiểm tra.
+- Nếu thử, chỉ dùng video công khai hoặc clip giả lập không chứa dữ liệu cá nhân; xác nhận app có nhận tiếng Việt, chỉnh được từng dòng, đồng bộ timing và xuất MP4/SRT không watermark trước khi cân nhắc sử dụng.
+- Không cấp quyền thư viện ảnh/toàn bộ ảnh nếu không cần; chỉ chọn clip thử riêng. Không đăng nhập, mua hàng hoặc bật thanh toán.
+
+**Trạng thái:** candidate only — chưa kiểm thử trực tiếp trên thiết bị, chưa xác nhận tiếng Việt và chưa thay CapCut.
+
