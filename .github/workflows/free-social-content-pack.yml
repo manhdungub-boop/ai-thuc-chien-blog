@@ -57,7 +57,7 @@ jobs:
             echo
             echo "- Source: repository RSS only"
             echo "- Output: five newest published articles, or fewer if RSS contains fewer entries"
-            echo "- Destinations: Facebook Page, TikTok, and YouTube Shorts draft copy"
+            echo "- Destination draft: TikTok only; Facebook is not connected and YouTube is excluded until the correct project channel is verified"
             echo "- Randomized schedule: simulation artifact only; no publishing, account access, external API, paid service, or secret access"
             echo "- The Wednesday workflow schedule is for internal draft generation only, not a public posting schedule"
             echo
