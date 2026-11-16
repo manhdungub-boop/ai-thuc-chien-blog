@@ -28,6 +28,7 @@ on:
 
 permissions:
   contents: read
+  statuses: write
 
 concurrency:
   group: content-validation-${{ github.ref }}
@@ -141,3 +142,33 @@ jobs:
             echo "- This validation/package job does not deploy Workers or Pages and does not access D1 or modify DNS. The separate Preview workflow only resolves the exact Cloudflare Workers Preview URL and runs read-only route and security-header checks; it does not deploy Pages or Workers."
             echo "- Public release remains a separate, explicitly approved operation."
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish required legacy commit status for branch protection
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          JOB_STATUS: ${{ job.status }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          case "$JOB_STATUS" in
+            success) state="success"; description="Content validation and packaging passed." ;;
+            failure) state="failure"; description="Content validation or packaging failed." ;;
+            *) state="error"; description="Content validation was cancelled or did not complete." ;;
+          esac
+          curl --fail-with-body --silent --show-error \
+            -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/$TARGET_SHA" \
+            --data-binary @- <<JSON
+          {
+            "state": "$state",
+            "context": "validate",
+            "description": "$description",
+            "target_url": "$RUN_URL"
+          }
+          JSON
