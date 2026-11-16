@@ -45,11 +45,13 @@ function makePack(items, generatedAt) {
     const title = clean(item.title);
     const summary = clean(item.description);
     const shortTitle = title.replace(/\s*\|\s*AI Thực Chiến\s*$/i, "");
-    const languageNote = isVietnamese(summary) ? "" : "> **Cần biên tập:** Tóm tắt RSS hiện không phải tiếng Việt; cần dịch và đối chiếu bài gốc trước khi đăng.\n\n";
-    lines.push("## " + (index + 1) + ". " + title, "", "**Bài gốc:** " + item.link, "", "**Tóm tắt RSS (nguyên văn):** " + summary, "");
-    lines.push("### TikTok — bản nháp", "", languageNote + "Tìm hiểu cách " + shortTitle.toLowerCase() + ". " + summary, "", "Đọc hướng dẫn đầy đủ tại: " + item.link, "#AIThucChien #DungAI #UngDungAI #TuDongHoa", "");
-    lines.push("### YouTube Shorts — bản nháp", "", "**Tiêu đề:** " + shortTitle.slice(0, 95), "", "**Mô tả:**", "", languageNote + summary, "", "Đọc bài đầy đủ: " + item.link, "#AI #TuDongHoa #AIThucChien", "");
-    lines.push("### Facebook Page — bản nháp", "", languageNote + "**" + shortTitle + "**", "", summary, "", "Bài viết hướng dẫn đầy đủ: " + item.link, "", "Bạn đang áp dụng cách này trong công việc như thế nào? Chia sẻ kinh nghiệm hoặc câu hỏi ở phần bình luận nhé.", "", "#AIThucChien #DungAI #UngDungAI #TuDongHoa", "");
+    const vietnameseSummary = isVietnamese(summary);
+    const languageNote = vietnameseSummary ? "" : "> **TẠM DỪNG — CHƯA ĐƯỢC ĐĂNG:** Tóm tắt RSS không phải tiếng Việt. Cần dịch, đọc bài gốc và được biên tập duyệt trước khi tạo nội dung đăng.\n\n";
+    const channelSummary = vietnameseSummary ? summary : "Nội dung đang chờ biên dịch và xác minh từ bài gốc; không sử dụng bản tóm tắt tiếng Anh này để đăng.";
+    lines.push("## " + (index + 1) + ". " + title, "", "**Bài gốc:** " + item.link, "", "**Tóm tắt RSS (nguyên văn, chỉ để tham khảo):** " + summary, "");
+    lines.push("### TikTok — bản nháp", "", languageNote + "Khám phá: " + shortTitle + ". " + channelSummary, "", "Đọc hướng dẫn đầy đủ tại: " + item.link, "#AIThucChien #DungAI #UngDungAI #TuDongHoa", "");
+    lines.push("### YouTube Shorts — bản nháp", "", "**Tiêu đề:** " + shortTitle.slice(0, 95), "", "**Mô tả:**", "", languageNote + channelSummary, "", "Đọc bài đầy đủ: " + item.link, "#AI #TuDongHoa #AIThucChien", "");
+    lines.push("### Facebook Page — bản nháp", "", languageNote + "**" + shortTitle + "**", "", channelSummary, "", "Bài viết hướng dẫn đầy đủ: " + item.link, "", "Bạn đang áp dụng cách này trong công việc như thế nào? Chia sẻ kinh nghiệm hoặc câu hỏi ở phần bình luận nhé.", "", "#AIThucChien #DungAI #UngDungAI #TuDongHoa", "");
     lines.push("### Kiểm tra trước khi đăng", "", "- [ ] Đã đọc bài gốc và xác nhận mọi tuyên bố.", "- [ ] Đã biên tập tiếng Việt tự nhiên, không chỉ sao chép RSS.", "- [ ] Video/hình ảnh có quyền sử dụng phù hợp.", "- [ ] Không lộ dữ liệu cá nhân, khóa API hoặc thông tin riêng tư.", "- [ ] Đã kiểm tra liên kết, CTA và được người quản trị duyệt.", "", "---", "");
   });
   return lines.join("\n");
@@ -68,9 +70,11 @@ function selfTest() {
     link: "https://example.org/articles/english",
     description: "A practical guide to safe AI automation."
   }], "2026-11-15");
-  if (!englishPack.includes("Cần biên tập")) throw new Error("Non-Vietnamese RSS summary must be flagged for translation and source review.");
+  if (!englishPack.includes("TẠM DỪNG — CHƯA ĐƯỢC ĐĂNG")) throw new Error("Non-Vietnamese RSS summary must be blocked from publication pending translation and source review.");
   if (!englishPack.includes("### Facebook Page — bản nháp")) throw new Error("Facebook draft missing from non-Vietnamese pack.");
-  console.log("PASS: RSS parsing, all three destination drafts, Vietnamese/translation gate and no-publish policy.");
+  if (!englishPack.includes("Nội dung đang chờ biên dịch") || !englishPack.includes("Practical AI guide")) throw new Error("Non-Vietnamese title or safe placeholder is missing.");
+  if (englishPack.includes("Khám phá: Practical AI guide. A practical guide to safe AI automation.")) throw new Error("Raw English summary leaked into publish-ready channel copy.");
+  console.log("PASS: RSS parsing, all three destination drafts, Vietnamese/translation gate, blocked English copy and no-publish policy.");
 }
 if (process.argv.includes("--self-test")) selfTest();
 else {
