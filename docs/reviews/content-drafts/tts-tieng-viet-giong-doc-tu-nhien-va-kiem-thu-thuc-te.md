@@ -457,3 +457,14 @@ Nếu người dùng tự chọn thử, cần ghi lại tên chính xác của v
 - **Kết quả kỹ thuật:** xác nhận được tệp giải mã được và không phát hiện clipping theo ngưỡng nêu trên. Không suy rộng thành kết luận chất lượng giọng.
 - **Bước tiếp theo:** nếu có bộ giải mã/nhận dạng cục bộ tương thích, tiếp tục kiểm tra transcript và phân đoạn; phần tự nhiên/ngữ điệu vẫn cần nghe mẫu. Không yêu cầu người dùng tải lại tệp khi liên kết hiện tại đã đủ để lấy dữ liệu.
 - **Trạng thái cổng video:** CHƯA ĐẠT. Chưa phê duyệt HoaiMy cho video cho tới khi hoàn tất đánh giá nghe, phát âm và quyền sử dụng thương mại của đúng giọng.
+
+
+## 5J. Đối chiếu lại điều khoản và quyền riêng tư Speechma — 17/11/2026
+
+- Trang Terms of Service (cập nhật 05/10/2026) cho phép sử dụng Output trên toàn cầu, không độc quyền, vĩnh viễn, miễn phí bản quyền cho mục đích thương mại hợp pháp; người dùng vẫn phải sở hữu/quyền sử dụng Input và tuân thủ quyền của bên thứ ba. Điều khoản cũng nói Input được xử lý bởi Speechma và đối tác hạ tầng chỉ để tạo kết quả, và tuyên bố tệp tải lên không được lưu sau xử lý.
+- FAQ và trang Vietnamese TTS nêu miễn phí, không cần tài khoản/thẻ, tối đa 2.000 ký tự/lượt, cần mã bảo mật 5 chữ số, MP3 download và hai giọng HoaiMy/NamMinh. Đây là thông tin do nhà cung cấp công bố, có thể thay đổi.
+- Privacy Policy được truy xuất hiện vẫn ghi nhận text input, dữ liệu sử dụng (bao gồm voice/speed), IP/device/browser và cookies/analytics; mục retention nói lưu dữ liệu khi cần cho mục đích dịch vụ hoặc nghĩa vụ pháp lý, và nêu chia sẻ với nhà cung cấp hạ tầng/analytics. Các tuyên bố tổng quát này chưa giải thích đầy đủ thời hạn lưu text/log và có khác biệt về mức độ chi tiết so với Terms/FAQ nói tệp tải lên không lưu sau xử lý.
+- Kết luận quyền thương mại: điều khoản cho phép dùng Output thương mại, nhưng chỉ là quyền cấp đối với Output và không bảo đảm độc quyền, không thay thế quyền đối với Input/voice bên thứ ba.
+- Kết luận riêng tư: mức rủi ro không phù hợp để gửi bản thảo nội bộ, dữ liệu khách hàng, thông tin đăng nhập hoặc dữ liệu cá nhân nhạy cảm. Chỉ dùng văn bản công khai/đã được duyệt; không dùng Speechma API/PRO có phí.
+- Nguồn chính thức: https://speechma.com/terms ; https://speechma.com/privacy ; https://speechma.com/faq ; https://speechma.com/vietnamese-text-to-speech .
+- Trạng thái Speechma vẫn là candidate. Mẫu HoaiMy đã được phân tích tín hiệu kỹ thuật nhưng chưa được nghe/chấm chủ quan; chưa phê duyệt cho video.
