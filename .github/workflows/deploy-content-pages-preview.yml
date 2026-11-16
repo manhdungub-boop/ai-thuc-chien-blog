@@ -17,6 +17,7 @@ on:
       - "images/**"
       - "illustrations/**"
       - ".github/workflows/deploy-content-pages-preview.yml"
+      - ".github/workflows/auto-publish-articles.yml"
 
 permissions:
   contents: read
