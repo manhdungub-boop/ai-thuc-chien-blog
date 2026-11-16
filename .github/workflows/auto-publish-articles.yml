@@ -138,6 +138,6 @@ jobs:
             echo "- Event: \`$GITHUB_EVENT_NAME\`"
             echo "- Quality, SEO, AI Bank validation, build, and Wrangler dry-run completed before artifact creation."
             echo "- The reviewed static output is retained as a GitHub Actions artifact for 14 days."
-            echo "- This validation/package job does not deploy Workers or Pages and does not access D1 or modify DNS. A separate workflow may deploy only the isolated Pages Preview branch; it cannot deploy Pages Production or the Worker."
+            echo "- This validation/package job does not deploy Workers or Pages and does not access D1 or modify DNS. The separate Preview workflow only resolves the exact Cloudflare Workers Preview URL and runs read-only route and security-header checks; it does not deploy Pages or Workers."
             echo "- Public release remains a separate, explicitly approved operation."
           } >> "$GITHUB_STEP_SUMMARY"
