@@ -172,7 +172,7 @@ jobs:
                       continue
                   url = row[1][1]
                   if url and re.fullmatch(
-                      r"https://[a-f0-9]{8}-ai-thuc-chien-blog-auth-app-preview\\.manhdungub\\.workers\\.dev",
+                      r"https://[a-f0-9]{8}-ai-thuc-chien-blog-auth-app-preview\.manhdungub\.workers\.dev",
                       url
                   ):
                       print(url)
@@ -183,7 +183,7 @@ jobs:
           # reports a successful Workers Builds check on this exact commit.
           for body in reversed(bot_comments):
               match = re.search(
-                  r"### Preview URL: (https://[a-z0-9-]+-ai-thuc-chien-blog-auth-app-preview\\.manhdungub\\.workers\\.dev)",
+                  r"### Preview URL: (https://[a-z0-9-]+-ai-thuc-chien-blog-auth-app-preview\.manhdungub\.workers\.dev)",
                   body
               )
               if match:
