@@ -498,3 +498,44 @@ Quyết định:
 
 **Trạng thái:** candidate only — chưa kiểm thử trực tiếp trên thiết bị, chưa xác nhận tiếng Việt và chưa thay CapCut.
 
+
+
+## 5L. Rà soát lại ứng viên dựng video iPhone và đối chứng VN Editor — 17/11/2026
+
+### KakuCut: cập nhật phiên bản và giới hạn ngôn ngữ
+
+Nguồn chính chủ:
+- Trang sản phẩm: https://kakucut.com/
+- Changelog: https://kakucut.com/changelog/
+- Privacy: https://kakucut.com/privacy/
+- Support/FAQ: https://kakucut.com/support/
+- App Store Việt Nam: https://apps.apple.com/vn/app/kakucut-video-editor/id6811591634
+
+Đối chiếu lại nguồn chính chủ cho thấy KakuCut đã lên phiên bản 1.1.9 ngày 15/11/2026. Nhà phát triển mô tả ứng dụng miễn phí, không watermark, không mua hàng trong ứng dụng, hỗ trợ iPhone iOS 17+, tối đa 10 clip, xuất MP4/SRT, chỉnh phụ đề, voiceover, tỷ lệ 9:16/1:1/16:9 và xử lý media local trên thiết bị. FAQ nói iOS 26 bật đường SpeechAnalyzer on-device chính; việc nhận dạng còn phụ thuộc thiết bị/ngôn ngữ/model speech của Apple.
+
+**Giới hạn quan trọng đối với AI Thực Chiến:** tài liệu/changelog công khai hiện nêu rõ các cập nhật tiếng Nhật, Hàn và Tây Ban Nha; chưa có bằng chứng đủ chắc rằng app đã hỗ trợ nhận dạng phụ đề tiếng Việt trên iPhone của dự án. Không được suy diễn rằng Apple có locale tiếng Việt đồng nghĩa KakuCut đã triển khai tiếng Việt. Vì vậy KakuCut chỉ còn là ứng viên biên tập local; chưa chọn làm công cụ phụ đề chính cho video tiếng Việt.
+
+### VN Video Editor: đối chứng có TTS và auto captions
+
+Nguồn App Store:
+- https://apps.apple.com/vn/app/vn-photo-video-editor/id1343581380
+
+App Store hiện mô tả VN Video Editor là ứng dụng miễn phí có mua hàng trong ứng dụng; trang được kiểm tra ghi dung lượng khoảng 683,4 MB và khoảng 325 nghìn lượt đánh giá, 4,8/5. Mô tả liệt kê Auto Captions đa ngôn ngữ, Text-to-Speech, voiceover, timeline nhiều lớp và xuất video tối đa 4K/60fps. Đây là bằng chứng ứng dụng có các tính năng nêu trên, **không phải** bằng chứng giọng TTS tiếng Việt hoặc tính năng phụ đề tiếng Việt được mở miễn phí trên mọi thiết bị.
+
+Rủi ro/điều chưa xác minh:
+- Chưa xác nhận danh sách giọng TTS tiếng Việt trên đúng phiên bản iOS và tài khoản tại Việt Nam.
+- Chưa xác nhận TTS tiếng Việt, auto-caption tiếng Việt, xuất không watermark và các tính năng cần thiết đều nằm trong gói miễn phí; không được bấm thử mua hoặc kích hoạt trial.
+- Dung lượng tải lớn (khoảng 683,4 MB theo App Store tại thời điểm rà soát) không phù hợp để tự động tải trên kết nối di động hoặc khi chưa kiểm tra dung lượng trống.
+- Chưa có kiểm toán độc lập về luồng dữ liệu và quyền riêng tư của toàn bộ tính năng AI.
+
+**Quyết định:** đưa VN Video Editor vào danh sách needs_review, chưa cài/tải, chưa cấp quyền, chưa đăng nhập, chưa dùng TTS và chưa dùng để dựng video dự án. Chỉ cân nhắc nếu người dùng đã có sẵn ứng dụng hoặc xác nhận muốn thử; phải kiểm tra đúng tiếng Việt và toàn bộ bước xuất miễn phí trước khi chọn.
+
+### Quyết định công cụ dựng video hiện tại
+
+1. Không chuyển sang VN chỉ vì trang App Store liệt kê TTS/Auto Captions; chưa có xác nhận tiếng Việt và free-tier của từng tính năng.
+2. Không chọn KakuCut làm phụ đề tiếng Việt chính cho tới khi có bằng chứng ngôn ngữ cụ thể và thử nghiệm thực tế.
+3. Giữ CapCut làm công cụ đã có mẫu TTS để đối chứng; mẫu trước đây được nhận xét rõ tiếng nhưng hơi nhanh và khá máy móc. Chưa đủ điều kiện duyệt giọng.
+4. Không tải thêm ứng dụng/model dung lượng lớn, không đăng ký, không cấp quyền rộng hoặc bật thanh toán chỉ để tiếp tục nghiên cứu.
+5. Cổng phát hành video vẫn BLOCKED: cần audio nghe/chấm đạt, transcript/phụ đề tiếng Việt được kiểm tra, quyền sử dụng voice/music/assets rõ ràng và bản MP4 Preview được xem lại trước khi lên lịch.
+
+**Kết luận:** chưa có công cụ miễn phí nào được chứng minh đồng thời đáp ứng đủ ba điều kiện: giọng Việt tự nhiên, phụ đề Việt chính xác và dựng/xuất video không watermark trên iPhone. Giữ quy trình ở mức ứng viên và không phát hành khi chưa đủ bằng chứng.
