@@ -153,3 +153,13 @@ Chỉ đánh dấu **ĐẠT** khi tất cả mục sau được xác minh:
 - Không chấm điểm định lượng và không tuyên bố đã xác minh giấy phép của voice cụ thể. Trước khi dùng video công khai, cần kiểm tra điều khoản/nhãn quyền sử dụng của đúng voice và nghe duyệt bản xuất cuối cùng.
 - Không dùng CapCut Pro, không bật thanh toán; nếu voice cần trả phí thì loại khỏi lựa chọn.
 - Tệp âm thanh gốc không được lưu vào GitHub nhằm bảo vệ quyền riêng tư của người dùng.
+
+## Kết quả nghe thử bổ sung do người dùng xác nhận — 2026-11-17
+- Độ rõ: rõ, dễ nghe (người dùng chọn `clear`).
+- Độ tự nhiên: hơi giống giọng máy (người dùng chọn `rather_synthetic`).
+- Tốc độ: hơi nhanh (người dùng chọn `slightly_fast`).
+- Chi phí: người dùng xác nhận giọng thử được chọn là miễn phí (`yes`); chưa biết tên giọng cụ thể.
+- Chưa có tên voice, phiên bản CapCut, vùng giọng hoặc cấu hình tốc độ; không suy đoán các thông tin này.
+- Đánh giá biên tập: mẫu đạt mức dễ hiểu và có thể dùng để thử quy trình, nhưng hiện chưa đạt mục tiêu giọng đọc tự nhiên cho video chuyên nghiệp do còn cảm giác tổng hợp và tốc độ hơi nhanh.
+- Khuyến nghị thử tiếp: nếu CapCut cho phép chỉnh tốc độ miễn phí, giảm nhẹ tốc độ rồi nghe lại cùng một đoạn; không bật Pro, không đăng ký trả phí. Cần nghe thêm đoạn 30–60 giây có tên riêng, số liệu và câu dài trước khi quyết định.
+- Kết quả này là tự đánh giá của người dùng đối với giọng đã nghe; không phải kiểm thử độc lập và không xác nhận quyền thương mại của voice cụ thể.
