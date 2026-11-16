@@ -202,3 +202,101 @@ Thông tin có thể xác nhận từ README và model card tại ngày rà soá
 - Vì website là dịch vụ hosted, văn bản thử sẽ được gửi đến hạ tầng bên ngoài theo luồng sử dụng thông thường; tuyên bố không lưu/log không đồng nghĩa không truyền dữ liệu. Chỉ dùng câu giả lập công khai, tuyệt đối không gửi kịch bản nội bộ, thông tin cá nhân, dữ liệu khách hàng hoặc nội dung chưa xuất bản.
 
 **Kết luận cập nhật:** HeyKorva có thể là phương án thử ngắn miễn phí theo hạn mức công bố, nhưng chưa đủ căn cứ để xếp vào phương án ưu tiên về quyền riêng tư hoặc quyền sử dụng thương mại. KorvaTTS tự triển khai và HeyKorva hosted phải được đánh giá như hai phương án khác nhau. Không đăng ký, không nhập dữ liệu của dự án và không yêu cầu anh thao tác cho đến khi điều khoản, cách xử lý dữ liệu và điều kiện sử dụng thương mại được xác minh rõ.
+
+
+## 5C. Đối chiếu thêm các dự án TTS tiếng Việt — rà soát nguồn 17/11/2026
+
+### ViTTS-Bench: nguồn benchmark bên thứ ba
+
+Nguồn: https://github.com/yoonjae26/vietnamese-tts và https://github.com/yoonjae26/vietnamese-tts/blob/main/docs/RESULTS.md
+
+Đây là repository benchmark do nhóm khác thực hiện, không phải benchmark của tác giả các model. Họ dùng 50 câu chung đã chuẩn hóa thành lời nói, PhoWhisper-large để tính WER, cấu hình khuyến nghị của từng model và seed cố định. Kết quả công bố:
+
+| Model | WER | UTMOS | RTF | Giấy phép được bảng benchmark ghi |
+|---|---:|---:|---:|---|
+| IndexTTS-2 Vietnamese | 1,8% | 1,99 | 1,063 | Apache-2.0* |
+| F5-TTS Vietnamese | 3,0% | 2,21 | 0,219 | CC-BY-NC-SA-4.0 |
+| VieNeu-TTS v3 Turbo | 3,3% | 2,16 | 0,101 | Apache-2.0 |
+| Piper vi_VN-vais1000-medium | 5,7% | 2,37 | 0,037 CPU | CC-BY-4.0 |
+| MMS-TTS | 6,9% | 2,74 | 0,013 | CC-BY-NC-4.0 |
+| viXTTS | 9,2% | 2,20 | 0,202 | CPML (phi thương mại) |
+| VietTTS | 12,0% | 2,39 | 0,395 | CC |
+
+Lưu ý phương pháp rất quan trọng:
+- RTF của bảng này đo trên NVIDIA H200, ngoại trừ Piper chạy CPU; không thể dùng để dự đoán tốc độ trên iPhone.
+- UTMOS là mô hình dự đoán tự động, được chính benchmark ghi nhận là huấn luyện trên tiếng Anh; không phải điểm MOS do hội đồng người Việt nghe và chấm.
+- WER phản ánh độ dễ nhận dạng lời nói, không đo trực tiếp ngữ điệu hay cảm giác tự nhiên.
+- Benchmark chưa có human MOS và chính tác giả nêu cần thêm nhiều giọng tham chiếu. Kết quả có thể thay đổi khi thay giọng tham chiếu.
+- IndexTTS-2 có WER tốt nhất trong bảng, nhưng benchmark ghi chú cần xin phép tác giả cho mục đích thương mại; không chọn làm phương án phát hành 0 đồng/thương mại khi chưa làm rõ quyền.
+- VieNeu-TTS v3 Turbo là ứng viên cân bằng đáng thử theo benchmark này, nhưng không thể kết luận là giọng tự nhiên nhất chỉ từ WER/UTMOS.
+
+### ZeroTTS — cập nhật đúng trạng thái tính năng
+
+Đã đối chiếu lại README hiện tại của repository chính chủ https://github.com/zeroweight-ai/ZeroTTS:
+- Package mã nguồn mở hiện có 8 voice preset và hỗ trợ phát sinh âm thanh qua ONNX Runtime.
+- **Voice cloning vẫn không có trong package/release công khai** vì voice encoder tạo speaker latent chưa được phát hành. Tuy nhiên, README hiện chỉ rõ dịch vụ nền tảng riêng của nhà phát triển có thể tạo latent rồi tải về. Không được mô tả rằng toàn bộ khả năng voice cloning là không tồn tại; phải phân biệt package local với dịch vụ hosted.
+- Model weights tải lần đầu khoảng 900 MB, fp32, chưa quantize; browser demo lưu cache cục bộ và tài liệu nhắm tới desktop broadband, không nhắm mobile data.
+- README hiện ghi MIT cho code và weights; decoder MOSS đi kèm Apache-2.0. Bộ dữ liệu ZeroBench-TTS có CC-BY-NC-4.0, đây là license của dataset benchmark, không phải license của model.
+- Các chỉ số WER 1,03%, UTMOS 2,91, RTF CPU 0,50× là benchmark do chính nhóm ZeroTTS công bố trên ZeroBench-TTS, so sánh với ba baseline. Không phải đánh giá độc lập trên iPhone và không thể so trực tiếp với bảng ViTTS-Bench vì tập câu, model, thiết bị và cách chấm khác nhau.
+- Không gửi âm thanh tham chiếu hoặc giọng nói của người khác lên dịch vụ tạo latent nếu chưa có quyền và chưa xác minh chính sách dữ liệu.
+
+### ViFastTts — loại khỏi lựa chọn sản xuất thương mại hiện tại
+
+Nguồn chính chủ: https://github.com/vifast-oss/ViFastTts và docs/NGOC_HUYEN.md.
+
+- Repository mô tả một model mẫu Ngọc Huyền 6,1M tham số, ONNX CPU, 24 kHz; tác giả công bố RTF 0,045 trên VPS CPU và A/B 24/24 người nghe chọn bản mới so với phiên bản P2 trước đó. Đây là số liệu nội bộ do chính dự án công bố, không phải kiểm thử độc lập.
+- **Model Ngọc Huyền được ghi rõ chỉ dùng nghiên cứu/phi thương mại**, vì dataset gốc CC BY-NC 4.0. Do đó không dùng làm giọng cho video thương mại/kiếm tiền của AI Thực Chiến nếu chưa có quyền khác bằng văn bản.
+- Bản iOS được README ghi là **iOS Simulator**, không phải app cài trực tiếp lên iPhone thật; cần macOS/Xcode để chạy simulator. Không phù hợp quy trình hiện tại chỉ có iPhone.
+- Trang demo online công bố giới hạn 3.000 ký tự và nói không lưu text/audio. Đây là tuyên bố của nhà cung cấp; chưa có kiểm toán độc lập. Không gửi nội dung chưa công bố hoặc dữ liệu riêng tư.
+
+**Quyết định:** không chọn model Ngọc Huyền của ViFastTts cho nội dung thương mại; chỉ giữ thông tin làm tài liệu tham khảo kỹ thuật. Không yêu cầu người dùng cài Xcode hoặc dùng máy tính.
+
+## 5D. Xếp hạng ứng viên theo điều kiện thực tế của dự án
+
+Đây là thứ tự ưu tiên **để kiểm thử tiếp**, không phải bảng xếp hạng chất lượng âm thanh đã được nghe trực tiếp:
+
+1. **CapCut Mobile — phương án tạo mẫu ngay trên iPhone:** đã có mẫu thực tế do người dùng cung cấp; rõ và dễ nghe, nhưng hơi máy móc và hơi nhanh. Chỉ giữ làm phương án dự phòng, thử giảm nhẹ tốc độ nếu có tùy chọn miễn phí. Cần xác minh quyền của đúng voice trước khi phát hành.
+2. **VieNeu-TTS v3 Turbo — ứng viên model mã nguồn mở ưu tiên:** có 25 voice preset, CPU/ONNX và kết quả benchmark bên thứ ba tốt về WER/RTF trên thiết bị benchmark. Cần môi trường máy tính tương thích để tạo mẫu; chưa xác minh trên iPhone.
+3. **KorvaTTS — ứng viên mới cần nghe thử:** 10 preset, tiếng Việt/code-switching, Apache-2.0 cho code/weights theo tài liệu chính chủ. Chưa có benchmark so sánh độc lập hoặc mẫu do nhóm AI Thực Chiến nghe; không coi website hosted HeyKorva là tương đương mô hình tự chạy cục bộ.
+4. **ZeroTTS — đối chứng chất lượng/CPU:** kết quả tự benchmark của dự án tốt, nhưng tải model lớn khoảng 900 MB; browser demo không hướng tới điện thoại. Package local không có encoder voice cloning.
+5. **CapCut và dịch vụ hosted khác:** chỉ thử bằng văn bản giả lập công khai, không đưa dữ liệu dự án chưa công bố lên dịch vụ bên ngoài.
+
+Không đưa ViFastTts Ngọc Huyền vào lựa chọn thương mại do điều khoản phi thương mại. Không dùng F5-TTS Vietnamese hoặc MMS-TTS cho video kiếm tiền khi license được benchmark ghi là phi thương mại.
+
+## 5E. Bộ thử nghiệm nghe chuẩn hóa — phiên bản 2
+
+Để so sánh công bằng, mọi ứng viên phải đọc đúng cùng nội dung và giữ nguyên cấu hình. Mỗi voice tạo một file 45–60 giây gồm:
+- Mở đầu tự nhiên, giọng thân thiện nhưng không quảng cáo quá mức.
+- Câu hướng dẫn kỹ thuật có thuật ngữ tiếng Anh: “GitHub Actions, Cloudflare Workers và Google OAuth”.
+- Số, ngày, giờ, phần trăm và đơn vị: “Phiên bản 2.4.1, ngày 17 tháng 11 năm 2026, lúc 8 giờ 15 phút, tăng 12,5 phần trăm”.
+- Câu dài có dấu phẩy, dấu hai chấm, câu hỏi và lời kết.
+- Cụm từ dễ sai thanh điệu và phụ âm: “xử lý dữ liệu, bảo mật hệ thống, quyền truy cập, kiểm thử thực tế”.
+
+Chấm độc lập theo thang 1–5:
+1. Phát âm và dấu thanh.
+2. Ngữ điệu, nhấn trọng âm và cảm xúc.
+3. Nhịp nói, khoảng nghỉ và tốc độ.
+4. Tên riêng, thuật ngữ và số liệu.
+5. Độ tự nhiên, không đều đều/máy móc.
+6. Chất lượng âm thanh, không rè/cắt/âm giả.
+7. Độ nhất quán giữa đầu và cuối đoạn.
+
+Ngưỡng đề xuất để đưa vào video:
+- Trung bình ít nhất 4/5 ở tiêu chí tự nhiên, phát âm và ngữ điệu.
+- Không có lỗi sai tên riêng, con số hoặc nội dung làm đổi nghĩa.
+- Không có lỗi rè, cắt tiếng, khoảng lặng bất thường.
+- Người nghe hiểu ngay ở tốc độ bình thường; không phải tăng tốc hoặc đoán từ.
+- Xác minh license đúng model/voice asset và quyền thương mại; không suy diễn license từ mã nguồn sang giọng thu âm/dữ liệu.
+- Không yêu cầu thanh toán, thẻ ngân hàng hoặc bật billing.
+
+**Giới hạn thực thi:** hiện chưa có file âm thanh mới từ KorvaTTS, VieNeu hoặc ZeroTTS được nhóm tạo và nghe A/B trên thiết bị đích. Vì vậy chưa thể chấm điểm 1–5 hoặc công bố model chiến thắng. Các bảng trên chỉ là dữ liệu tài liệu/benchmark có nguồn, không thay thế nghe thử người thật.
+
+## Nguồn mới bổ sung
+
+8. KorvaTTS repository: https://github.com/dogenthq/KorvaTTS
+9. KorvaTTS model card: https://huggingface.co/dogenthq/KorvaTTS
+10. ViTTS-Bench repository: https://github.com/yoonjae26/vietnamese-tts
+11. ViTTS-Bench full results and methodology: https://github.com/yoonjae26/vietnamese-tts/blob/main/docs/RESULTS.md
+12. ZeroTTS repository (current README, voice-cloning boundary and browser size): https://github.com/zeroweight-ai/ZeroTTS
+13. ViFastTts repository: https://github.com/vifast-oss/ViFastTts
+14. ViFastTts Ngọc Huyền model limitations/license: https://github.com/vifast-oss/ViFastTts/blob/main/docs/NGOC_HUYEN.md
