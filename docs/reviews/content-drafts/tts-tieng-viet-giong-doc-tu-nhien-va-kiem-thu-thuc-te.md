@@ -169,7 +169,7 @@ Chỉ đánh dấu **ĐẠT** khi tất cả mục sau được xác minh:
 
 Nguồn chính thức:
 - Repository: https://github.com/dogenthq/KorvaTTS
-- Model card: https://huggingface.co/danhcao/KorvaTTS
+- Model card: https://huggingface.co/dogenthq/KorvaTTS
 - Trang thử do dự án liên kết: https://heykorva.com/
 
 Thông tin có thể xác nhận từ README và model card tại ngày rà soát:
@@ -300,3 +300,47 @@ Ngưỡng đề xuất để đưa vào video:
 12. ZeroTTS repository (current README, voice-cloning boundary and browser size): https://github.com/zeroweight-ai/ZeroTTS
 13. ViFastTts repository: https://github.com/vifast-oss/ViFastTts
 14. ViFastTts Ngọc Huyền model limitations/license: https://github.com/vifast-oss/ViFastTts/blob/main/docs/NGOC_HUYEN.md
+
+
+## 5F. Kiểm tra sâu khả năng chạy KorvaTTS trên iPhone và ranh giới quyền riêng tư — 17/11/2026
+
+Đã kiểm tra trực tiếp README tiếng Việt, `pyproject.toml`, `korvatts/assets.py`, `korvatts/tts.py`, `MODEL_LICENSE.md` trong repository chính chủ, cùng trang model card và trang chủ HeyKorva.
+
+### Những gì mã nguồn thực sự xác nhận
+
+- Gói phát hành hiện tại là thư viện Python `korvatts`, yêu cầu Python >= 3.10; các dependency được khai báo gồm ONNX Runtime, NumPy, SoundFile và Hugging Face Hub.
+- Khi khởi tạo `TTS()`, nếu không tìm thấy assets cục bộ hợp lệ, `resolve_assets_dir()` gọi `snapshot_download` để tải các thư mục `onnx/*` và `voice_styles/*` từ Hugging Face. Đây là tải model/voice về môi trường đang chạy; không phải bằng chứng có ứng dụng iOS cài trực tiếp.
+- `tts.py` chạy chuỗi ONNX duration predictor, text encoder, vector estimator theo số bước và vocoder; mặc định 32 bước. README nêu 8–16 bước có thể nhanh hơn nhưng không thay thế kiểm thử chất lượng.
+- README nói assets có thể tương thích với các runtime Supertonic 3 gồm browser/WebGPU, Swift và Flutter. Đây là khả năng tương thích định dạng/đồ thị ONNX; repository hiện không chứa app iOS hoàn chỉnh hoặc giao diện browser độc lập để người dùng iPhone mở lên và dùng ngay.
+- Model card ghi riêng vector estimator khoảng 256 MB fp32. Không có đủ số liệu file trong tài liệu đã đọc để khẳng định tổng dung lượng toàn bộ model; không được lấy 256 MB làm tổng dung lượng tải.
+
+### HeyKorva: điều đã thấy và điều chưa xác minh
+
+Trang chủ HeyKorva đang hiển thị:
+- 500 ký tự/ngày khi dùng thử không cần tài khoản; đăng ký miễn phí được quảng bá là 10.000 ký tự/ngày.
+- 10 giọng và tải WAV; voice cloning/API vẫn được ghi là sắp ra mắt.
+- Nhà cung cấp tuyên bố văn bản không lưu hoặc ghi log; âm thanh tạo ra thuộc về người dùng.
+
+Giới hạn xác minh:
+- Trang công khai có các mục liên kết “Chính sách bảo mật” và “Điều khoản sử dụng”, nhưng nội dung pháp lý đầy đủ không được hiển thị trong bản trang đã kiểm tra; chưa xác nhận được chủ thể pháp lý, thời gian lưu, nhà xử lý phụ, quyền thương mại cụ thể của voice và cơ chế yêu cầu xóa.
+- Chưa kiểm tra network trace hoặc mã frontend của HeyKorva. Vì vậy **chưa xác minh được suy luận TTS chạy hoàn toàn trên thiết bị hay gửi văn bản tới máy chủ để xử lý**. Không được suy diễn chỉ từ câu “không lưu/ghi log” hoặc “không xếp hàng”.
+- Cụm “công nghệ độc quyền” trên website cũng chưa chứng minh dịch vụ đang chạy đúng checkpoint/weights Apache-2.0 trong repository công khai.
+
+### Quyết định vận hành
+
+- **Không đăng ký tài khoản, không nhập văn bản, không tải model lớn và không bật quyền/thanh toán** trong vòng rà soát hiện tại.
+- Chưa đủ căn cứ để dùng HeyKorva với bất kỳ nội dung chưa công bố nào; ngay cả câu thử giả lập cũng tạm hoãn cho đến khi xác định được luồng xử lý và điều khoản pháp lý.
+- KorvaTTS local vẫn là ứng viên mã nguồn mở đáng theo dõi, nhưng không phải giải pháp có thể tự cài trực tiếp trên iPhone theo repository hiện tại.
+- Để đánh giá tiếp mà không cần anh thao tác kỹ thuật, cần có môi trường chạy Python/ONNX đã được cấp quyền và phù hợp; hiện chưa có môi trường như vậy trong phạm vi công cụ đã xác minh. Không thuê máy chủ, không tạo tài khoản trả phí và không thay đổi Production để giải quyết giới hạn này.
+
+**Kết luận:** KorvaTTS chưa vượt qua cổng khả năng sử dụng trên iPhone và quyền riêng tư của dịch vụ thử nghiệm. Giữ ở trạng thái nghiên cứu, không nâng thành lựa chọn sản xuất.
+
+### Nguồn đã kiểm tra bổ sung
+
+15. KorvaTTS README tiếng Việt: https://github.com/dogenthq/KorvaTTS/blob/main/README.vi.md
+16. KorvaTTS package dependencies: https://github.com/dogenthq/KorvaTTS/blob/main/pyproject.toml
+17. KorvaTTS asset download implementation: https://github.com/dogenthq/KorvaTTS/blob/main/korvatts/assets.py
+18. KorvaTTS ONNX inference implementation: https://github.com/dogenthq/KorvaTTS/blob/main/korvatts/tts.py
+19. KorvaTTS model license: https://github.com/dogenthq/KorvaTTS/blob/main/MODEL_LICENSE.md
+20. KorvaTTS model card and asset descriptions: https://huggingface.co/dogenthq/KorvaTTS
+21. HeyKorva public page and its current free-use/privacy claims: https://heykorva.com/
