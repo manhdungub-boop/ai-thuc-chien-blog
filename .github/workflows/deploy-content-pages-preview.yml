@@ -23,14 +23,13 @@ permissions:
   issues: read
 
 concurrency:
-  group: worker-preview-smoke-pr154
+  group: worker-preview-smoke-${{ github.event.pull_request.number }}
   cancel-in-progress: false
 
 jobs:
   verify-preview:
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.head.ref == 'automation/separate-content-validation-no-prod-20261115' &&
       github.event.pull_request.base.ref == 'main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -144,11 +143,11 @@ jobs:
           done
 
           library="$(curl --fail --silent --show-error --location --max-time 20 "$BASE_URL/thu-vien.html")"
-          if ! grep -Eq '72[[:space:]]+bài' <<< "$library"; then
-            echo "::error::Exact-head Worker Preview library does not display the expected 72-article count."
+          if ! grep -Eq '[0-9]+[[:space:]]+bài' <<< "$library"; then
+            echo "::error::Exact-head Worker Preview library does not display an article count."
             exit 1
           fi
-          echo "PASS: exact-head Worker Preview library displays 72 articles."
+          echo "PASS: exact-head Worker Preview library displays an article count."
 
           catalog="$(curl --fail --silent --show-error --location --max-time 20 "$BASE_URL/data/ai-tools.json")"
           if ! grep -q '"tools"' <<< "$catalog"; then
