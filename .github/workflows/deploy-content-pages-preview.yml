@@ -1,4 +1,4 @@
-name: Deploy reviewed content to Cloudflare Pages Preview
+name: Verify Cloudflare Workers Preview without secrets
 
 on:
   pull_request:
@@ -22,71 +22,83 @@ permissions:
   contents: read
 
 concurrency:
-  group: pages-preview-content-pr154
+  group: worker-preview-smoke-pr154
   cancel-in-progress: false
 
 jobs:
-  deploy-preview:
+  verify-preview:
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.head.ref == 'automation/separate-content-validation-no-prod-20261115' &&
       github.event.pull_request.base.ref == 'main'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
-      - name: Check out the reviewed PR revision
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          persist-credentials: false
-
-      - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: 22
-
-      - name: Validate content and SEO
-        run: |
-          npm run test:content
-          npm run test:seo
-
-      - name: Build static Pages output
-        run: npm run build
-
-      - name: Require the dedicated Cloudflare Pages token
+      - name: Wait for the branch-isolated Cloudflare Workers Preview
         shell: bash
-        env:
-          CF_PAGES_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_API_TOKEN }}
         run: |
           set -euo pipefail
-          if [[ -z "$CF_PAGES_TOKEN" ]]; then
-            echo "::error::Preview deploy stopped: CLOUDFLARE_PAGES_API_TOKEN is not configured."
+          base="https://automation-separate-content-ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev"
+          ready=false
+          for attempt in $(seq 1 24); do
+            code="$(curl --silent --show-error --max-time 15 -o /dev/null -w '%{http_code}' "$base/" 2>/dev/null || true)"
+            if [[ "$code" == "200" ]]; then
+              ready=true
+              echo "PASS: Worker Preview root returned HTTP 200 on attempt $attempt."
+              break
+            fi
+            echo "Waiting for Worker Preview (attempt $attempt/24; HTTP $code)."
+            sleep 10
+          done
+          if [[ "$ready" != "true" ]]; then
+            echo "::error::Branch Worker Preview did not become ready within four minutes."
             exit 1
           fi
-          echo "Dedicated Pages token is configured."
 
-      - name: Deploy only to the isolated Pages Preview branch
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: "92cf091bbac8b4879ec65feb30b4715b"
-        run: npx --yes wrangler@4.151.3 pages deploy dist --project-name=ai-thuc-chien-blog --branch=preview-content-pr154
-
-      - name: Verify the Pages Preview routes
+      - name: Verify public content and discovery routes
         shell: bash
         run: |
           set -euo pipefail
-          base="https://preview-content-pr154.ai-thuc-chien-blog.pages.dev"
-          for path in / /thu-vien.html /ngan-hang-ai.html /sitemap.xml /feed.xml; do
-            code="$(curl --silent --show-error --location --max-time 30 -o /dev/null -w '%{http_code}' "$base$path")"
+          base="https://automation-separate-content-ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev"
+          for path in / /thu-vien.html /ngan-hang-ai.html /sitemap.xml /feed.xml /data/ai-tools.json /articles/mcp-filesystem-server-an-toan; do
+            code="$(curl --silent --show-error --location --max-time 20 -o /dev/null -w '%{http_code}' "$base$path")"
             if [[ "$code" != "200" ]]; then
-              echo "::error::Preview route $path returned HTTP $code"
+              echo "::error::Worker Preview route $path returned HTTP $code"
               exit 1
             fi
             echo "PASS: $path returned HTTP 200"
           done
-          page="$(curl --fail --silent --show-error --location --max-time 30 "$base/thu-vien.html")"
-          printf '%s' "$page" | grep -Eq '72 bài|72\s+bài' || {
-            echo "::error::Preview library page does not show the expected 72 article count."
+
+          library="$(curl --fail --silent --show-error --location --max-time 20 "$base/thu-vien.html")"
+          printf '%s' "$library" | grep -Eq '72[[:space:]]+bài' || {
+            echo "::error::Worker Preview library does not display the expected 72-article count."
             exit 1
           }
-          echo "PASS: Preview library displays 72 articles."
+          echo "PASS: Worker Preview library displays 72 articles."
+
+          catalog="$(curl --fail --silent --show-error --location --max-time 20 "$base/data/ai-tools.json")"
+          printf '%s' "$catalog" | grep -q '"tools"' || {
+            echo "::error::Worker Preview AI Bank JSON is missing the tools collection."
+            exit 1
+          }
+          echo "PASS: Worker Preview AI Bank JSON is readable."
+
+      - name: Verify Worker Preview security headers
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://automation-separate-content-ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev"
+          headers="$(mktemp)"
+          trap 'rm -f "$headers"' EXIT
+          curl --fail --silent --show-error --location --max-time 20 -D "$headers" -o /dev/null "$base/"
+          for expected in \
+            'X-Content-Type-Options: nosniff' \
+            'X-Frame-Options: DENY' \
+            'Referrer-Policy: strict-origin-when-cross-origin' \
+            'Strict-Transport-Security: max-age=31536000'; do
+            grep -Fqi "$expected" "$headers" || {
+              echo "::error::Worker Preview is missing security header: $expected"
+              exit 1
+            }
+          done
+          echo "PASS: required Worker Preview security headers are present."
