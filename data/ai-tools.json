@@ -1476,7 +1476,7 @@
         "multimodal"
       ],
       "pricing_model": "freemium",
-      "pricing_status": "verified_free",
+      "pricing_status": "unknown",
       "license": "Proprietary model; use is governed by the Google APIs Terms and Gemini API Additional Terms. Model weights are not distributed as open weights.",
       "platforms": [
         "web",
@@ -1485,7 +1485,7 @@
         "android"
       ],
       "description": "Mô hình Gemini 4 ổn định cho coding và agentic workflows, context window 1.048.576 token; nhận text, image, video, audio và PDF, trả text; hỗ trợ function calling, code execution, computer use và structured outputs.",
-      "free_tier_summary": "Gemini API/Google AI Studio Free tier: input và output tokens của Gemini 4 Hydrogen được niêm yết miễn phí; quota RPM/TPM/RPD phụ thuộc model, project, tier và tài khoản, xem giá trị đang áp dụng trong AI Studio (không có một con số cố định được bảo đảm). Gemini app: người dùng Free được dùng Hydrogen qua auto model selection khi hệ thống thấy phù hợp. Gemini API/AI Studio có Vietnam trong danh sách vùng hỗ trợ. Standard paid price được công bố là $1.50/1M input và $7.50/1M output tokens; không cần bật billing để dùng free tier. Lưu ý nghiêm trọng: nội dung gửi qua Free/unpaid API có thể được dùng để cải thiện sản phẩm; nhân viên đánh giá có thể đọc/ghi chú; không gửi dữ liệu nhạy cảm, bí mật hoặc dữ liệu cá nhân. Không bật billing hoặc chuyển sang paid tier. Điều khoản Gemini API/AI Studio yêu cầu người dùng từ 18 tuổi và định hướng cho phát triển chuyên nghiệp/kinh doanh, không phải dịch vụ tiêu dùng; không xây API client hướng tới hoặc có khả năng được người dưới 18 tuổi sử dụng.",
+      "free_tier_summary": "Gemini app: người dùng Free có thể nhận Hydrogen qua auto model selection khi hệ thống thấy phù hợp; đây là quyền sử dụng trong ứng dụng Gemini, không phải quota API miễn phí. Gemini API/Google AI Studio: Google công bố giá Standard $1.50/1M input tokens và $7.50/1M output tokens; trang pricing chỉ mô tả Free tier có quyền truy cập giới hạn tới một số model và chưa xác nhận Hydrogen có quota API miễn phí riêng. Vì vậy không coi API Hydrogen là miễn phí hoặc chạy thử bằng billing. Quota và khả năng truy cập model có thể thay đổi theo project/tier/tài khoản. Free/unpaid API content may be used to improve Google products; nhân viên đánh giá có thể đọc/ghi chú. Không gửi dữ liệu nhạy cảm, bí mật hoặc dữ liệu cá nhân. Không bật billing hoặc chuyển sang paid tier.",
       "official_sources": [
         "https://blog.google/innovation-and-ai/models-and-research/gemini-models/introducing-gemini-4-hydrogen/",
         "https://ai.google.dev/gemini-api/docs/models/gemini-4-hydrogen",
