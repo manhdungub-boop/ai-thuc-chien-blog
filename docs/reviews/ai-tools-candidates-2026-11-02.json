@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-11-15T22:00:00+07:00",
+  "generated_at": "2026-11-16T11:09:00+07:00",
   "catalog_policy": {
     "default_locale": "vi",
     "currency": "USD",
@@ -91,6 +91,43 @@
         "playground",
         "agents",
         "evaluation"
+      ]
+    },
+    {
+      "id": "exllamav3",
+      "name": "ExLlamaV3",
+      "vendor": "Turboderp",
+      "website": "https://github.com/turboderp-org/exllamav3",
+      "categories": [
+        "developer",
+        "local-ai",
+        "inference",
+        "model-optimization"
+      ],
+      "pricing_model": "open_source",
+      "pricing_status": "Phần mềm mã nguồn mở MIT, tải và sử dụng miễn phí. Không phải dịch vụ API cloud có quota miễn phí. Cần GPU NVIDIA tương thích, CUDA và PyTorch; người dùng tự chịu chi phí phần cứng, điện và tải mô hình. Không bật dịch vụ cloud hoặc API tính phí.",
+      "license": "MIT cho mã nguồn ExLlamaV3 theo LICENSE của repository. Giấy phép model weights, tokenizer và các thành phần tải từ bên thứ ba phải kiểm tra riêng theo từng model.",
+      "platforms": [
+        "windows",
+        "linux"
+      ],
+      "description": "Thư viện suy luận LLM chạy cục bộ trên GPU tiêu dùng, hỗ trợ lượng tử hóa EXL3, song song tensor/expert, CPU offloading và nhiều tối ưu suy luận. Có thể tích hợp API tương thích OpenAI thông qua TabbyAPI.",
+      "free_tier_summary": "Miễn phí mã nguồn mở theo MIT; chạy inference trên phần cứng của người dùng, không có hosted API miễn phí được xác nhận. Tài liệu cài đặt yêu cầu PyTorch phù hợp và CUDA 12.4 trở lên; có wheel phát hành cho Linux và Windows. Đây là thư viện kỹ thuật, không phải ứng dụng chat cài là dùng cho người mới. Khi chạy local, prompt có thể ở trên máy; nếu dùng TabbyAPI từ xa, tải model từ Hugging Face hoặc kết nối dịch vụ bên ngoài thì luồng dữ liệu phụ thuộc cấu hình đó. Model weights có giấy phép riêng.",
+      "official_sources": [
+        "https://github.com/turboderp-org/exllamav3",
+        "https://github.com/turboderp-org/exllamav3/blob/master/LICENSE",
+        "https://github.com/turboderp-org/exllamav3/releases",
+        "https://github.com/turboderp-org/exllamav3#installation"
+      ],
+      "last_verified": "2026-11-16",
+      "verification_status": "needs_review",
+      "status": "active",
+      "tags": [
+        "local-llm",
+        "inference",
+        "quantization",
+        "gpu",
+        "open-source"
       ]
     }
   ]
