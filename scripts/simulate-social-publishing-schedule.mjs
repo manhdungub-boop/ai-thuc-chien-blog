@@ -4,7 +4,7 @@ import path from "node:path";
 import { createHash, randomBytes } from "node:crypto";
 
 const OFFSET_MINUTES = 7 * 60; // Asia/Ho_Chi_Minh (UTC+07:00)
-const PLATFORMS = ["Facebook Page", "TikTok", "YouTube Shorts"];
+const PLATFORMS = ["TikTok"]; // Only the project TikTok account is currently verified for use.
 const MIN_PLATFORM_GAP_HOURS = 24;
 const MAX_PLATFORM_GAP_HOURS = 72;
 const MIN_GLOBAL_GAP_HOURS = 3;
@@ -119,6 +119,9 @@ function renderMarkdown(schedule, { days, generatedAt, seedLabel }) {
     "- Nguồn ngẫu nhiên: " + seedLabel,
     "- Khung giờ đủ điều kiện: 08:00–21:00, chỉ là giới hạn; giờ thực tế được xáo trộn.",
     "- Giới hạn: 2 khung giờ/nền tảng trong mô phỏng; cách nhau 24–72 giờ; mọi bài giữa các nền tảng cách nhau ít nhất 3 giờ.",
+    "- Chỉ mô phỏng TikTok vì đây là nền tảng duy nhất hiện có tài khoản dự án được xác minh.",
+    "- Facebook bị loại khỏi mô phỏng vì chưa kết nối; YouTube bị loại vì kênh Metricool đang trỏ tới kênh không thuộc dự án.",
+    "- Không tự động thêm nền tảng mới khi chưa xác minh đúng tài khoản và quyền đăng.",
     "- Không bảo đảm đây là giờ tốt nhất; cần dữ liệu phân tích tài khoản thật đã xác minh trước khi tối ưu.", "",
     "| Thứ tự | Nền tảng | Thời điểm đề xuất |",
     "|---:|---|---|"
@@ -132,7 +135,7 @@ function selfTest() {
   const first = createSchedule({ startMs, days: 14, seed: "repeatable-test" });
   const second = createSchedule({ startMs, days: 14, seed: "repeatable-test" });
   if (JSON.stringify(first) !== JSON.stringify(second)) throw new Error("Seeded simulation is not reproducible.");
-  if (first.length !== 6) throw new Error("Expected exactly two simulated slots per platform.");
+  if (first.length !== 2) throw new Error("Expected exactly two simulated slots for the verified TikTok platform.");
   for (const platform of PLATFORMS) {
     const rows = first.filter(item => item.platform === platform);
     if (rows.length !== 2) throw new Error("Incorrect slot count for " + platform);
@@ -150,7 +153,7 @@ function selfTest() {
   }
   const alternate = createSchedule({ startMs, days: 14, seed: "different-seed" });
   if (JSON.stringify(first) === JSON.stringify(alternate)) throw new Error("Different seeds produced the same schedule.");
-  console.log("PASS: randomized dry-run schedule, reproducible seeded test, 24–72h per-platform spacing, 3h global spacing, Vietnam local-time window, and no-publish boundary.");
+  console.log("PASS: TikTok-only randomized dry-run, reproducible seeded test, 24–72h spacing, 3h global spacing, Vietnam local-time window, and no-publish boundary.");
 }
 if (process.argv.includes("--self-test")) {
   selfTest();
