@@ -190,3 +190,15 @@ Thông tin có thể xác nhận từ README và model card tại ngày rà soá
 **Quyết định:** đưa KorvaTTS vào danh sách *ứng viên ưu tiên để nghe thử*, chưa thay VieNeu-TTS v3 Turbo hoặc CapCut trong khuyến nghị cuối. Chỉ nâng hạng sau khi có mẫu âm thanh thực tế được nghe và chấm cùng bộ câu thử, xác nhận cách chạy không mất phí và kiểm tra điều khoản áp dụng cho đúng voice asset.
 
 **Kiểm thử tiếp theo không yêu cầu anh cài đặt:** trước hết kiểm tra khả năng chạy browser demo trên iPhone bằng câu giả lập, xem có phát sinh đăng nhập, trả phí, tải xuống lớn hoặc yêu cầu quyền bất thường không. Nếu không đáp ứng tiêu chí miễn phí/an toàn/đơn giản, dừng tại bước rà soát tài liệu và không yêu cầu anh thao tác kỹ thuật.
+
+
+### Bổ sung phân biệt website HeyKorva và model mã nguồn mở — 17/11/2026
+
+Đã rà soát trang chủ https://heykorva.com/:
+- Trang hiện công bố dùng thử không cần tài khoản với hạn mức 500 ký tự/ngày; đăng ký tài khoản miễn phí được quảng bá là 10.000 ký tự/ngày. Đây là hạn mức website tự công bố, chưa được nhóm xác minh bằng tài khoản hoặc kiểm thử thực tế.
+- Trang quảng bá 10 giọng và tải WAV; voice cloning/API được ghi là “sắp ra mắt”.
+- Trang chủ tuyên bố văn bản không được lưu hoặc ghi log. Đây mới là tuyên bố của nhà cung cấp; chưa kiểm tra độc lập bằng chính sách bảo mật đầy đủ, network trace hoặc kiểm toán hệ thống.
+- Trang chủ cũng dùng cụm “công nghệ độc quyền”, trong khi repository KorvaTTS là dự án mã nguồn mở. Không được mặc định dịch vụ hosted HeyKorva đang chạy đúng cùng bản model/weights Apache-2.0 công khai; cần hỏi/đối chiếu điều khoản dịch vụ và model triển khai.
+- Vì website là dịch vụ hosted, văn bản thử sẽ được gửi đến hạ tầng bên ngoài theo luồng sử dụng thông thường; tuyên bố không lưu/log không đồng nghĩa không truyền dữ liệu. Chỉ dùng câu giả lập công khai, tuyệt đối không gửi kịch bản nội bộ, thông tin cá nhân, dữ liệu khách hàng hoặc nội dung chưa xuất bản.
+
+**Kết luận cập nhật:** HeyKorva có thể là phương án thử ngắn miễn phí theo hạn mức công bố, nhưng chưa đủ căn cứ để xếp vào phương án ưu tiên về quyền riêng tư hoặc quyền sử dụng thương mại. KorvaTTS tự triển khai và HeyKorva hosted phải được đánh giá như hai phương án khác nhau. Không đăng ký, không nhập dữ liệu của dự án và không yêu cầu anh thao tác cho đến khi điều khoản, cách xử lý dữ liệu và điều kiện sử dụng thương mại được xác minh rõ.
