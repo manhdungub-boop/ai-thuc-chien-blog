@@ -58,8 +58,19 @@ function selfTest() {
   const sample = '<?xml version="1.0"?><rss><channel><link>https://example.org/</link><item><title>Thử nghiệm &amp; AI</title><link>https://example.org/articles/demo</link><description><![CDATA[Hướng dẫn an toàn &amp; thực tế.]]></description></item></channel></rss>';
   const items = parseFeed(sample);
   const output = makePack(items, "2026-11-15");
-  if (items.length !== 1 || !output.includes("Thử nghiệm & AI") || output.includes("\\.") || !output.includes("Đã biên tập")) throw new Error("Self-test failed.");
-  console.log("PASS: RSS parsing, readable draft text, language-review gate and no-publish policy.");
+  const channels = ["### TikTok — bản nháp", "### YouTube Shorts — bản nháp", "### Facebook Page — bản nháp"];
+  if (items.length !== 1 || !output.includes("Thử nghiệm & AI") || output.includes("\\.") || !output.includes("Đã biên tập")) throw new Error("RSS parsing or baseline draft self-test failed.");
+  if (channels.some(channel => !output.includes(channel))) throw new Error("A required social destination draft is missing.");
+  if (output.includes("Cần biên tập")) throw new Error("Vietnamese RSS summary was incorrectly flagged for translation.");
+
+  const englishPack = makePack([{
+    title: "Practical AI guide",
+    link: "https://example.org/articles/english",
+    description: "A practical guide to safe AI automation."
+  }], "2026-11-15");
+  if (!englishPack.includes("Cần biên tập")) throw new Error("Non-Vietnamese RSS summary must be flagged for translation and source review.");
+  if (englishPack.includes("### Facebook Page — bản nháp") === false) throw new Error("Facebook draft missing from non-Vietnamese pack.");
+  console.log("PASS: RSS parsing, all three destination drafts, Vietnamese/translation gate and no-publish policy.");
 }
 if (process.argv.includes("--self-test")) selfTest();
 else {
