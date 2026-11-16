@@ -252,12 +252,14 @@
         "desktop"
       ],
       "description": "Công cụ biên tập video với mẫu và các tính năng AI.",
-      "free_tier_summary": "Có gói Free $0 với công cụ biên tập cơ bản. CapCut Pro là thuê bao trả phí; quyền lợi có thể khác theo khu vực và nền tảng, gồm mẫu/tính năng cao cấp và dung lượng đám mây. Trang giá chính thức hiển thị giá theo khu vực; không coi Pro là miễn phí. Một số tính năng AI dùng tín dụng riêng; tín dụng không thay thế phí thuê bao Pro. Pro có thể dùng trên web, desktop và mobile khi đăng nhập cùng tài khoản. Trước khi dùng tài nguyên/mẫu cho nội dung thương mại, kiểm tra quyền sử dụng cụ thể của từng tài nguyên.",
+      "free_tier_summary": "Có gói Free $0 với công cụ biên tập cơ bản. CapCut Pro là thuê bao trả phí; quyền lợi có thể khác theo khu vực và nền tảng, gồm mẫu/tính năng cao cấp và dung lượng đám mây. Trang giá chính thức hiển thị giá theo khu vực; không coi Pro là miễn phí. Một số tính năng AI dùng tín dụng riêng; tín dụng không thay thế phí thuê bao Pro. Pro có thể dùng trên web, desktop và mobile khi đăng nhập cùng tài khoản. Trước khi dùng tài nguyên/mẫu cho nội dung thương mại, kiểm tra quyền sử dụng cụ thể của từng tài nguyên. Tính năng Text-to-Speech tích hợp có thể tạo voiceover dùng cho mục đích thương mại theo hướng dẫn CapCut cập nhật tháng 11/2026, với điều kiện tuân thủ Điều khoản CapCut và quy định nền tảng; quyền này không mặc nhiên áp dụng cho nhạc, hiệu ứng âm thanh, mẫu hoặc mọi tài nguyên khác. Cần nghe thử giọng tiếng Việt và kiểm tra từng tài nguyên trước khi xuất bản.",
       "official_sources": [
         "https://www.capcut.com/pricing",
         "https://www.capcut.com/help/capcut-pro",
         "https://www.capcut.com/help/capcut-subscription-multi-platform",
-        "https://www.capcut.com/help/how-much-does-capcut-pro-cost"
+        "https://www.capcut.com/help/how-much-does-capcut-pro-cost",
+        "https://www.capcut.com/resource/how-to-add-or-replace-voiceovers-music-and-sound-effects-in-capcut",
+        "https://www.capcut.com/vi-vn/help/text-to-speech-feature"
       ],
       "last_verified": "2026-11-16",
       "verification_status": "verified",
