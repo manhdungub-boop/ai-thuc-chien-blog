@@ -60,18 +60,40 @@ jobs:
             echo "::error::No changed files found; refusing to package content."
             exit 1
           fi
-          printf '%s\n' "$changed_files"
-          while IFS= read -r path; do
-            [[ -z "$path" ]] && continue
-            case "$path" in
-              articles/*.html|data/ai-tools.json|index.html|thu-vien.html|ngan-hang-ai.html|sitemap.xml|feed.xml|.github/workflows/auto-publish-articles.yml|.github/workflows/deploy-content-pages-preview.yml) ;;
-              *)
-                echo "::error::Blocked non-content file in content package: $path"
-                exit 1
-                ;;
-            esac
-          done <<< "$changed_files"
-          echo "PASS: only approved public content or the two explicitly scoped no-Production release workflows changed."
+          printf '%s\\n' "$changed_files"
+
+          # Workflow changes must be isolated from public-content changes.
+          # This prevents a content PR from weakening the checks that validate it.
+          workflow_files="$(grep -E '^\\.github/workflows/(auto-publish-articles|deploy-content-pages-preview)\\.yml$' <<< "$changed_files" || true)"
+          unexpected_workflows="$(grep -E '^\\.github/workflows/' <<< "$changed_files" | grep -Ev '^\\.github/workflows/(auto-publish-articles|deploy-content-pages-preview)\\.yml$' || true)"
+
+          if [[ -n "$unexpected_workflows" ]]; then
+            echo "::error::Blocked workflow outside the two reviewed release-control files:"
+            printf '%s\\n' "$unexpected_workflows"
+            exit 1
+          fi
+
+          if [[ -n "$workflow_files" ]]; then
+            non_workflow_files="$(grep -Ev '^\\.github/workflows/(auto-publish-articles|deploy-content-pages-preview)\\.yml$' <<< "$changed_files" || true)"
+            if [[ -n "$non_workflow_files" ]]; then
+              echo "::error::Workflow changes must be isolated in a workflow-only PR; do not mix workflow edits with public content:"
+              printf '%s\\n' "$non_workflow_files"
+              exit 1
+            fi
+            echo "PASS: only the explicitly reviewed no-Production release-control workflows changed."
+          else
+            while IFS= read -r path; do
+              [[ -z "$path" ]] && continue
+              case "$path" in
+                articles/*.html|data/ai-tools.json|index.html|thu-vien.html|ngan-hang-ai.html|sitemap.xml|feed.xml) ;;
+                *)
+                  echo "::error::Blocked non-content file in content package: $path"
+                  exit 1
+                  ;;
+              esac
+            done <<< "$changed_files"
+            echo "PASS: only approved public content files changed; workflow files are not permitted in content PRs."
+          fi
 
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
