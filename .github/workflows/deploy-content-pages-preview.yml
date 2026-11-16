@@ -70,17 +70,17 @@ jobs:
           done
 
           library="$(curl --fail --silent --show-error --location --max-time 20 "$base/thu-vien.html")"
-          printf '%s' "$library" | grep -Eq '72[[:space:]]+bài' || {
+          if ! grep -Eq '72[[:space:]]+bài' <<< "$library"; then
             echo "::error::Worker Preview library does not display the expected 72-article count."
             exit 1
-          }
+          fi
           echo "PASS: Worker Preview library displays 72 articles."
 
           catalog="$(curl --fail --silent --show-error --location --max-time 20 "$base/data/ai-tools.json")"
-          printf '%s' "$catalog" | grep -q '"tools"' || {
+          if ! grep -q '"tools"' <<< "$catalog"; then
             echo "::error::Worker Preview AI Bank JSON is missing the tools collection."
             exit 1
-          }
+          fi
           echo "PASS: Worker Preview AI Bank JSON is readable."
 
       - name: Verify Worker Preview security headers
