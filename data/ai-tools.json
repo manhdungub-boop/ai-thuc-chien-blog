@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-11-15T19:30:00+07:00",
+  "generated_at": "2026-11-16T09:14:27+07:00",
   "catalog_policy": {
     "default_locale": "vi",
     "currency": "USD",
@@ -1399,14 +1399,15 @@
         "kaggle"
       ],
       "description": "Mô hình embedding đa phương thức mã nguồn mở của Google DeepMind, chuyển văn bản, mã nguồn, hình ảnh, video và âm thanh thành vector trong cùng không gian để phục vụ tìm kiếm ngữ nghĩa, RAG, phân loại và gom cụm.",
-      "free_tier_summary": "Trọng số được cung cấp theo Apache 2.0 để tải về và tự triển khai; không có phí bản quyền mô hình cho cách dùng này. Chi phí phần cứng hoặc máy chủ do người dùng tự chịu. Chưa xác minh có API suy luận hosted miễn phí chính thức hoặc quota miễn phí; không coi dịch vụ inference bên thứ ba là miễn phí.",
+      "free_tier_summary": "Trọng số được cung cấp theo Apache 2.0 để tải về và tự triển khai; không có phí bản quyền mô hình cho cách dùng này. Chi phí phần cứng hoặc máy chủ do người dùng tự chịu. Nếu chạy hoàn toàn cục bộ, nơi xử lý và lưu trữ do người triển khai quản lý; nếu dùng cloud host hoặc dịch vụ inference bên thứ ba, cần kiểm tra riêng điều khoản và chính sách dữ liệu của nhà cung cấp đó. Chưa xác minh có API suy luận hosted miễn phí chính thức hoặc quota miễn phí; không coi dịch vụ inference bên thứ ba là miễn phí.",
       "official_sources": [
         "https://ai.google.dev/gemma/docs/embeddinggemma/model_card_2",
         "https://ai.google.dev/gemma/docs/embeddinggemma",
         "https://developers.googleblog.com/en/embeddinggemma-2-the-developer-guide/",
-        "https://huggingface.co/google/embeddinggemma-2"
+        "https://huggingface.co/google/embeddinggemma-2",
+        "https://ollama.com/library/embeddinggemma-2"
       ],
-      "last_verified": "2026-11-15",
+      "last_verified": "2026-11-16",
       "verification_status": "verified",
       "status": "active",
       "tags": [
