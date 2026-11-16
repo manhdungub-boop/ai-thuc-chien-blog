@@ -163,3 +163,30 @@ Chỉ đánh dấu **ĐẠT** khi tất cả mục sau được xác minh:
 - Đánh giá biên tập: mẫu đạt mức dễ hiểu và có thể dùng để thử quy trình, nhưng hiện chưa đạt mục tiêu giọng đọc tự nhiên cho video chuyên nghiệp do còn cảm giác tổng hợp và tốc độ hơi nhanh.
 - Khuyến nghị thử tiếp: nếu CapCut cho phép chỉnh tốc độ miễn phí, giảm nhẹ tốc độ rồi nghe lại cùng một đoạn; không bật Pro, không đăng ký trả phí. Cần nghe thêm đoạn 30–60 giây có tên riêng, số liệu và câu dài trước khi quyết định.
 - Kết quả này là tự đánh giá của người dùng đối với giọng đã nghe; không phải kiểm thử độc lập và không xác nhận quyền thương mại của voice cụ thể.
+
+
+## 5B. Ứng viên mới cần kiểm thử: KorvaTTS — rà soát tài liệu ngày 17/11/2026
+
+Nguồn chính thức:
+- Repository: https://github.com/dogenthq/KorvaTTS
+- Model card: https://huggingface.co/danhcao/KorvaTTS
+- Trang thử do dự án liên kết: https://heykorva.com/
+
+Thông tin có thể xác nhận từ README và model card tại ngày rà soát:
+- KorvaTTS tự mô tả là TTS ưu tiên tiếng Việt, hỗ trợ câu tiếng Việt xen tên thương hiệu và thuật ngữ tiếng Anh (code-switching).
+- Dự án công bố chạy ONNX Runtime, không cần GPU hoặc API, đầu ra 44.1 kHz; đây là tuyên bố của nhà phát triển, chưa phải kết quả benchmark độc lập của AI Thực Chiến.
+- Có 10 voice style đóng gói sẵn: 5 giọng nữ (Bảo Kim, Khánh Vy, Ngọc Huyền, Phương Linh, Quỳnh Như) và 5 giọng nam (Gia Bảo, Hoàng Nam, Hữu Đạt, Quang Huy, Thanh Phong).
+- README mô tả kiến trúc 99M tham số, tái triển khai Supertonic 3 và vocoder dựa trên BlueCodec. Model card liệt kê vector estimator ONNX khoảng 256 MB fp32; không được lấy riêng con số này làm tổng dung lượng tải.
+- Repository ghi Apache-2.0 cho mã nguồn; MODEL_LICENSE.md ghi Apache-2.0 cho model weights và voice styles. Phần mã được điều chỉnh từ Supertonic và vocoder dựa trên BlueCodec có ghi nhận giấy phép MIT trong NOTICE.
+- Voice cloning và công cụ huấn luyện mới nằm trong roadmap giai đoạn 2, chưa phải tính năng đã phát hành ở bản hiện tại.
+- Tài liệu nói định dạng ONNX tương thích với các runtime Supertonic trên Python, Node.js, WebGPU, Rust, C++, Swift và Flutter. Điều đó không đồng nghĩa đã có ứng dụng iPhone cài sẵn hoặc đã xác minh chạy tốt trên iPhone.
+
+Đánh giá phù hợp với tiêu chí của AI Thực Chiến:
+- **Điểm đáng thử:** tập trung tiếng Việt, có nhiều voice preset, xử lý câu trộn tiếng Anh, công bố chạy cục bộ và license tương đối rõ.
+- **Rủi ro/giới hạn:** dự án còn mới (README tại thời điểm rà soát hiển thị 14 commits và 31 stars); số liệu tốc độ/độ tự nhiên chưa được nhóm kiểm chứng. Chưa có kết quả nghe độc lập, chưa xác nhận tải model và chạy trực tiếp trên iPhone, chưa xác nhận chất lượng giọng ở đoạn dài.
+- **Quyền riêng tư:** nếu chạy thực sự cục bộ bằng runtime phù hợp thì không cần gửi văn bản đến API theo mô tả dự án. Tuy nhiên, không mặc định trang web thử nghiệm xử lý hoàn toàn cục bộ trước khi kiểm tra network/privacy behavior; chỉ dùng câu giả lập công khai cho đến khi xác minh.
+- **Chi phí:** mã nguồn và model được công bố miễn phí theo Apache-2.0; không đồng nghĩa chi phí thiết bị, dữ liệu di động hoặc hạ tầng khác bằng 0.
+
+**Quyết định:** đưa KorvaTTS vào danh sách *ứng viên ưu tiên để nghe thử*, chưa thay VieNeu-TTS v3 Turbo hoặc CapCut trong khuyến nghị cuối. Chỉ nâng hạng sau khi có mẫu âm thanh thực tế được nghe và chấm cùng bộ câu thử, xác nhận cách chạy không mất phí và kiểm tra điều khoản áp dụng cho đúng voice asset.
+
+**Kiểm thử tiếp theo không yêu cầu anh cài đặt:** trước hết kiểm tra khả năng chạy browser demo trên iPhone bằng câu giả lập, xem có phát sinh đăng nhập, trả phí, tải xuống lớn hoặc yêu cầu quyền bất thường không. Nếu không đáp ứng tiêu chí miễn phí/an toàn/đơn giản, dừng tại bước rà soát tài liệu và không yêu cầu anh thao tác kỹ thuật.
