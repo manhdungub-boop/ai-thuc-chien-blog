@@ -98,8 +98,7 @@ const strictBlockers = [
   ...missingSources.map(id => ({ type: "missing_official_sources", id })),
   ...candidateStatusWarnings.map(id => ({ type: "candidate_not_needs_review", id })),
   ...hardDuplicateCandidates.map(x => ({ type: "candidate_matches_main_catalog", id: x.id, matches: x })),
-  ...candidatePairDuplicates.map(x => ({ type: "duplicate_candidates", pair: x })),
-  ...verifiedUnknownPricing.map(id => ({ type: "verified_record_has_unknown_pricing", id }))
+  ...candidatePairDuplicates.map(x => ({ type: "duplicate_candidates", pair: x }))
 ];
 
 const report = {
@@ -124,7 +123,7 @@ const report = {
     not_needs_review: candidateStatusWarnings
   },
   strict_blockers: strictBlockers,
-  note: "Needs-review records remain visible as review warnings and do not fail strict mode by themselves. Strict mode fails stale or invalid verification dates, missing official sources, duplicate candidates, candidate status drift, future dates, or active/other verified records with unknown pricing. Deprecated records may retain unknown pricing when their sunset is verified and they are excluded from public results. Domain matches are review warnings, not automatic duplicates. No network requests are performed."
+  note: "Needs-review records remain visible as review warnings and do not fail strict mode by themselves. Strict mode fails stale or invalid verification dates, missing official sources, duplicate candidates, candidate status drift, and future dates. A product may have verified identity/capabilities while its pricing remains unknown; that condition is reported separately for explicit public disclosure and is not a strict blocker. Deprecated records may also retain unknown pricing when their sunset is verified and they are excluded from public results. Domain matches are review warnings, not automatic duplicates. No network requests are performed."
 };
 console.log(JSON.stringify(report, null, 2));
 
