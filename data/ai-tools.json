@@ -341,13 +341,13 @@
         "self_hosted"
       ],
       "description": "Nền tảng workflow automation kết nối ứng dụng, trigger/action và AI agent.",
-      "free_tier_summary": "Activepieces Cloud Free hiện công bố $0, không cần thẻ, 100 credits mỗi ngày, unlimited flows, Tables, Agents, MCP và API access; khi hết quota, các lượt chạy vượt mức sẽ chờ đến lần làm mới ngày tiếp theo, không tự động tính phí ở Free. AI steps có thể tiêu thụ thêm credits theo loại model. Community Edition tự lưu trữ dùng lõi MIT; tính năng Enterprise/Cloud nâng cao thuộc Commercial License. Self-host cần máy chủ, vận hành và cập nhật riêng.",
+      "free_tier_summary": "Activepieces Cloud Free hiện công bố $0, không cần thẻ, 1.000 credits mỗi tháng, unlimited flows và tối đa 5 users; gồm Flows, Agents, Tables, MCP và API access. Khi hết 1.000 credits, flow vẫn bật nhưng các lượt chạy vượt quota sẽ tạm dừng đến kỳ làm mới tháng tiếp theo; không tự động tính phí trên Free. AI steps tiêu thụ credits bổ sung theo loại model (trang giá nêu fast 2, smart 10, frontier 20 credits mỗi AI step). Không chuyển sang Plus/Team hoặc bật thanh toán nếu giữ ngân sách 0 đồng. Community Edition tự lưu trữ dùng lõi MIT; tính năng Enterprise/Cloud nâng cao thuộc Commercial License. Self-host cần máy chủ, vận hành và cập nhật riêng.",
       "official_sources": [
         "https://www.activepieces.com/pricing",
         "https://www.activepieces.com/docs/about/license",
         "https://www.activepieces.com/docs/install/overview"
       ],
-      "last_verified": "2026-11-15",
+      "last_verified": "2026-11-16",
       "verification_status": "verified",
       "status": "active",
       "tags": [
