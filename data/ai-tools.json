@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-11-16T17:13:33+07:00",
+  "generated_at": "2026-11-17T19:00:00+07:00",
   "catalog_policy": {
     "default_locale": "vi",
     "currency": "USD",
@@ -61,7 +61,7 @@
         "android"
       ],
       "description": "Trợ lý AI của Google cho hỏi đáp, viết và xử lý nội dung.",
-      "free_tier_summary": "Personal accounts without a Google AI plan receive standard compute-based usage limits. Limits vary by model, feature, demand and account; the current help documentation describes refreshes every 5 hours until a weekly limit is reached. Paid Google AI plans provide higher limits.",
+      "free_tier_summary": "Tài khoản cá nhân không có gói Google AI được dùng Gemini theo hạn mức tính toán. Giới hạn thay đổi theo model, tính năng, nhu cầu hệ thống và tài khoản; hạn mức thường làm mới sau mỗi 5 giờ cho đến khi chạm giới hạn tuần. Gói Google AI trả phí cung cấp hạn mức cao hơn. Google có thể thay đổi giới hạn mà không báo trước.",
       "official_sources": [
         "https://gemini.google.com/",
         "https://support.google.com/gemini/answer/16275805?hl=en"
@@ -155,7 +155,7 @@
         "web"
       ],
       "description": "Không gian nghiên cứu dựa trên tài liệu và nguồn do người dùng cung cấp.",
-      "free_tier_summary": "Gemini Notebook Standard is available free with a Gmail account and currently lists up to 100 notebooks per user and 50 sources per notebook. AI usage is compute-based and may be capped; limits can change and refresh according to the usage window. Paid Google AI plans provide higher limits.",
+      "free_tier_summary": "Gemini Notebook Standard có gói miễn phí khi dùng tài khoản Gmail; hạn mức công bố hiện gồm tối đa 100 notebook/người dùng và 50 nguồn/notebook. Hạn mức AI phụ thuộc mức sử dụng và có thể thay đổi theo thời điểm; các gói Google AI trả phí cung cấp hạn mức cao hơn. Người dùng tại Việt Nam cần lưu ý có thể xuất hiện watermark trên một số nội dung theo trang trợ giúp Google.",
       "official_sources": [
         "https://notebooklm.google.com/",
         "https://support.google.com/gemininotebook/answer/16213268",
@@ -219,7 +219,7 @@
         "web"
       ],
       "description": "Công cụ tạo và chỉnh sửa hình ảnh, vector, video và audio bằng AI trong hệ sinh thái Adobe; các tính năng tiêu thụ generative credits theo loại tính năng và gói.",
-      "free_tier_summary": "Free users receive a limited number of free daily generations across generative AI features on selected models. Limits refresh daily and may change; additional generations and expanded capabilities require a paid Adobe plan. Do not describe the free allowance as a fixed monthly credit allocation.",
+      "free_tier_summary": "Người dùng miễn phí chưa đăng ký gói được cấp một số lượt tạo nội dung AI miễn phí mỗi ngày, dùng chung trên các tính năng AI tạo sinh được hỗ trợ và một nhóm model được chọn. Hạn mức được làm mới hằng ngày nhưng số lượt, tính năng và model có thể thay đổi. Muốn tạo thêm hoặc dùng đầy đủ model/tính năng cần gói Adobe trả phí; không coi lượt miễn phí là một số credits cố định mỗi tháng.",
       "official_sources": [
         "https://firefly.adobe.com/",
         "https://helpx.adobe.com/creative-cloud/apps/generative-ai/generative-credits-faq.html"
@@ -285,7 +285,7 @@
         "web"
       ],
       "description": "Nền tảng tạo và chỉnh sửa video, hình ảnh bằng mô hình AI.",
-      "free_tier_summary": "Free plan is $0 and includes 125 credits as a one-time, non-expiring allocation plus 5GB asset storage and access to selected generative tools. Credits do not renew or refresh after being spent.",
+      "free_tier_summary": "Gói Free $0 cung cấp 125 credits một lần (không hết hạn khi chưa sử dụng hết), 5 GB lưu trữ tài sản và quyền truy cập một số công cụ tạo sinh được chọn. Credits không được cấp lại hằng tháng; khi dùng hết cần chờ hoặc mua thêm, vì vậy không bật mua credits nếu giữ ngân sách 0 đồng.",
       "official_sources": [
         "https://runway.com/pricing"
       ],
@@ -622,7 +622,7 @@
         "cloud"
       ],
       "description": "Dịch vụ API gateway tổng hợp nhiều nhà cung cấp LLM, chuẩn hóa API, hỗ trợ routing/fallback và lựa chọn mô hình miễn phí hoặc trả phí.",
-      "free_tier_summary": "Free plan currently lists 25+ free models and 4 free providers. Availability and rate limits vary by model/provider; paid inference and purchased credits can incur charges.",
+      "free_tier_summary": "Gói Free hiện liệt kê hơn 25 model miễn phí và 4 nhà cung cấp miễn phí. Model khả dụng và giới hạn tốc độ thay đổi theo model/nhà cung cấp; không phải mọi model đều miễn phí. Sử dụng model trả phí hoặc mua credits có thể phát sinh chi phí; cần kiểm tra nhãn miễn phí và giá của từng model trước khi gọi API.",
       "official_sources": [
         "https://openrouter.ai/",
         "https://openrouter.ai/pricing",
