@@ -438,5 +438,11 @@
     <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/dong-goi-dich-vu-ai-cho-doanh-nghiep-nho</guid>
     <description>Cách đóng gói dịch vụ AI cho doanh nghiệp nhỏ bằng phạm vi rõ, SOW một trang, KPI đo được, tiêu chí nghiệm thu và quy trình bảo vệ dữ liệu.</description>
   </item>
+  <item>
+    <title>Google AI Edge Gallery: chạy AI cục bộ trên iPhone và Android | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/google-ai-edge-gallery-ai-cuc-bo</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/google-ai-edge-gallery-ai-cuc-bo</guid>
+    <description>Hướng dẫn dùng Google AI Edge Gallery trên iPhone và Android: tải mô hình, chạy AI cục bộ, hiểu giới hạn phần cứng, MCP và quyền riêng tư.</description>
+  </item>
   </channel>
 </rss>
