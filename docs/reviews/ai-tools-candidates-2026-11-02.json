@@ -521,6 +521,54 @@
         "local-inference"
       ],
       "project_fit": "Phù hợp để nghiên cứu trên iPhone hơn các công cụ chỉ chạy desktop: yêu cầu A12 Bionic trở lên nên iPhone 11 Pro Max (A13) đáp ứng điều kiện tối thiểu theo tài liệu, nhưng dung lượng RAM/hiệu năng thực tế chưa được kiểm thử. App hiện khoảng 489.4 MB và các model có thể chiếm thêm hàng trăm MB đến nhiều GB; chỉ thử model nhỏ 2B nếu người dùng chủ động cho phép tải. Không có giao diện tiếng Việt trong danh sách 11 ngôn ngữ hiện tại. Có thể hữu ích cho đọc PDF/tài liệu và AI offline; không cần thiết để kết nối vào tài khoản dự án. Chưa cài đặt, chưa tải model, chưa cấp quyền và chưa gửi dữ liệu. Chỉ đánh giá bằng dữ liệu công khai/giả lập, bật Off-grid Mode, tắt remote providers/MCP/iCloud sync, và kiểm tra license của model weights."
+    },
+    {
+      "id": "loci-local-ai",
+      "name": "Loci: Private, Local AI",
+      "vendor": "Loci AI, Inc.",
+      "website": "https://askloci.ai/",
+      "categories": [
+        "local-ai",
+        "mobile-ai",
+        "ios",
+        "android",
+        "offline-ai",
+        "document-chat",
+        "voice-assistant"
+      ],
+      "pricing_model": "free",
+      "pricing_status": "Website chính thức (cập nhật 30/10/2026) nói ứng dụng miễn phí, không quảng cáo, không subscription, không giới hạn tin nhắn và không cần tài khoản cho local chat. App Store Việt Nam cũng niêm yết Free. Tải model cần Internet và dung lượng dữ liệu; chưa có bằng chứng về chi phí inference theo token khi chạy model local. Không dùng web search hoặc kết nối assistant bên ngoài nếu chưa kiểm tra chính sách dịch vụ nhận dữ liệu.",
+      "license": "Chưa tìm thấy giấy phép mã nguồn ứng dụng trong nguồn chính thức đã kiểm tra; không phân loại là open-source. Model weights được cung cấp bởi các bên thứ ba (ví dụ Gemma, Qwen, Llama); phải kiểm tra giấy phép và điều khoản riêng của từng model.",
+      "platforms": [
+        "ios",
+        "ipados",
+        "android",
+        "macos",
+        "windows"
+      ],
+      "description": "Trợ lý AI chạy mô hình cục bộ trên thiết bị; hỗ trợ trò chuyện ngoại tuyến sau khi tải model, hỏi đáp PDF/Word/EPUB, ảnh, giọng nói, công cụ lịch/nhắc việc, Apple Shortcuts và tùy chọn tìm kiếm web. Ứng dụng chọn model theo thiết bị; Mac/Windows beta theo website tại ngày xác minh.",
+      "free_tier_summary": "Website chính thức askloci.ai ghi miễn phí, không quảng cáo, không subscription, không giới hạn tin nhắn và không cần tài khoản cho local chat. App Store Việt Nam niêm yết Free, yêu cầu iOS 18+, dung lượng khoảng 86.2 MB, ngôn ngữ English/German/Spanish (không có tiếng Việt). Local chat, file, ảnh, memories và model ở trên thiết bị; web search gửi truy vấn tới dịch vụ tìm kiếm bên thứ ba. Privacy Policy 05/11/2026 nói diagnostic sharing thường bật mặc định trên phần lớn phiên bản; có thể gửi thông tin thiết bị, phiên bản, model, tính năng, số lượng/độ dài tin nhắn, lỗi và dữ liệu chẩn đoán, nhưng không gồm nội dung prompt, câu trả lời, file, ảnh, giọng nói hay vị trí chính xác. Google ad measurement cũng hoạt động khi diagnostic sharing bật. Có thể tắt diagnostic sharing và ad measurement trong Privacy settings; phải tắt trước khi dùng nếu ưu tiên quyền riêng tư. App Store privacy disclosure của nhà phát triển còn liệt kê dữ liệu liên kết người dùng gồm vị trí gần đúng, định danh, tương tác và diagnostics; Apple nói khai báo chưa được xác minh. Không gửi dữ liệu dự án hoặc thông tin nhạy cảm.",
+      "official_sources": [
+        "https://askloci.ai/",
+        "https://askloci.ai/about",
+        "https://askloci.ai/privacy/",
+        "https://apps.apple.com/vn/app/loci-private-unlimited-ai/id6762100748",
+        "https://github.com/AskLoci"
+      ],
+      "last_verified": "2026-11-18",
+      "verification_status": "needs_review",
+      "status": "active",
+      "tags": [
+        "iphone",
+        "offline-llm",
+        "local-ai",
+        "document-chat",
+        "local-voice",
+        "shortcuts",
+        "privacy-settings",
+        "model-license-review"
+      ],
+      "project_fit": "Ứng viên đáng nghiên cứu cho iPhone vì có local chat, đọc tài liệu, voice và Shortcuts, không cần tài khoản cho local use. Tuy nhiên app hiện không có tiếng Việt theo App Store; chưa xác minh hiệu năng trên iPhone 11 Pro Max/A13, model nào chạy ổn hoặc model có thể tải miễn phí tại Việt Nam. Privacy Policy nêu diagnostic sharing thường bật mặc định và App Store disclosure có dữ liệu linked-to-user; nếu thử sau này cần tắt diagnostic sharing/ad measurement trước, không bật web search/connected assistants, chỉ dùng dữ liệu giả lập. Chưa cài đặt, chưa tải model, chưa cấp quyền và chưa gửi dữ liệu."
     }
   ]
 }
