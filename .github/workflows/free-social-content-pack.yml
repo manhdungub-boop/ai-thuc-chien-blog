@@ -46,7 +46,7 @@ jobs:
         run: |
           node scripts/generate-social-content-pack.mjs --feed feed.xml --out reports/social/social-content-pack.md
 
-      - name: Generate zero-slot schedule simulation until a social account is verified
+      - name: Generate TikTok-only randomized schedule simulation
         run: |
           node scripts/simulate-social-publishing-schedule.mjs --days 14 --out reports/social/social-publishing-schedule-simulation.md
 
@@ -57,9 +57,11 @@ jobs:
             echo
             echo "- Source: repository RSS only"
             echo "- Output: five newest published articles, or fewer if RSS contains fewer entries"
-            echo "- Destination: internal draft only; no social network is connected to the Metricool brand, so no channel-specific destination is verified"
-            echo "- Schedule: zero slots until a project social account is connected and verified; randomized-spacing algorithm is tested only with a synthetic TEST platform"
-            echo "- No publishing, account access, external API, paid service, or secret access"
+            echo "- Destination simulation: TikTok only, for project handle @ai_thuc_chien_dungai; Metricool connection was confirmed by read-only inspection on 2026-11-17"
+            echo "- Excluded: Facebook is not verified in this Metricool brand; YouTube connection belongs to the unrelated channel Tín Hiệu Cơ Thể"
+            echo "- Schedule: two randomized TikTok slots in a 14-day simulation window; artifact only, not a public Planner schedule"
+            echo "- Publishing remains disabled; no API, account write, token, secret, paid service, or public scheduling is used"
+            echo "- TikTok voice-over videos remain paused; the simulation is for static-image content only (JPEG/WebP, not PNG)"
             echo "- The Wednesday workflow schedule is for internal draft generation only, not a public posting schedule"
             echo
             cat reports/social/social-content-pack.md
