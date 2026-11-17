@@ -547,3 +547,34 @@ Rủi ro/điều chưa xác minh:
 - Phản hồi nghe thử người dùng đã xác nhận cho mẫu TTS trước đó: **rõ**, **hơi giống giọng máy**, **hơi nhanh**, và được chọn ở mức **miễn phí**. Đây là đánh giá chủ quan của người dùng đối với mẫu đã nghe, không phải benchmark độc lập và chưa xác nhận quyền thương mại của đúng voice.
 - Không có audio mới được tạo, tải lên hoặc gửi tới dịch vụ bên ngoài trong lần cập nhật này. Không yêu cầu người dùng gửi lại tệp đã có.
 - **Cổng lựa chọn:** Male 1 vẫn là lựa chọn ưu tiên, nhưng chưa được phê duyệt cho video công khai cho tới khi xác định đúng voice/provider, điều khoản sử dụng của voice cụ thể, và nghe/chấm bản xuất dài hơn với cùng bộ câu thử. Không bật Pro, không thanh toán, không thêm phương thức thanh toán.
+
+
+
+## 5N. Kiểm thử thực tế PocketPal AI trên iPhone — Alex / Supertonic M1 — 17/11/2026
+
+### Cấu hình người dùng đã xác nhận
+- Ứng dụng: PocketPal AI trên iPhone.
+- Engine: Supertonic.
+- Voice hiển thị: **Alex**; đối chiếu mã nguồn PocketPal xác nhận Alex tương ứng preset **M1 (Male 1)**.
+- Ngôn ngữ tổng hợp: **Vietnamese** đã được người dùng chọn trong thiết lập Supertonic.
+- Người dùng đã phát thử câu tiếng Việt trực tiếp trên thiết bị và phản hồi nguyên văn: **“Giọng Alex đọc tiếng việt rõ ràng, tự nhiên.”**
+
+### Kết quả và phạm vi kết luận
+- **Kết quả nghe thử thực tế do người dùng xác nhận: PASS định tính** về độ rõ và cảm nhận tự nhiên đối với đoạn thử ngắn.
+- Đây là kết quả nghe trực tiếp trên thiết bị của người dùng, có giá trị hơn việc chỉ suy luận từ model card hoặc mã nguồn. Tuy nhiên, không có tệp âm thanh mẫu được lưu/đính kèm trong repository, nên chưa thể đo độc lập tốc độ, độ ổn định, clipping, độ đồng nhất giữa nhiều đoạn hoặc chất lượng phát âm tên riêng/số liệu.
+- Chốt **Alex / M1 + Vietnamese trong PocketPal** làm cấu hình TTS ưu tiên cho video thử nghiệm tiếp theo. Không thay bằng CapCut, Speechma, PyroSoft hoặc dịch vụ khác nếu không có lý do kỹ thuật và kết quả nghe so sánh tốt hơn.
+- Giữ nguyên nguyên tắc không sử dụng API TTS trả phí, không bật billing, không mua PocketPal Plus/Pals, không dùng PalsHub hoặc remote inference. Không nhập dữ liệu riêng tư vào tính năng online.
+
+### Việc còn phải xác minh trước khi dựng video
+1. Xác minh PocketPal có chức năng xuất/chia sẻ tệp âm thanh TTS hay chỉ phát trong ứng dụng; không giả định có nút Export nếu chưa kiểm tra.
+2. Nếu có thể xuất audio, kiểm tra định dạng, sample rate, thời lượng và nghe lại tệp xuất.
+3. Kiểm tra một đoạn lời thoại 30–60 giây có số liệu, tên riêng và thuật ngữ; không chỉ dựa vào một câu ngắn.
+4. Tạo transcript từ chính lời thoại đã được chốt, sau đó căn SRT theo audio thực tế; không tạo timestamp ước lượng rồi tuyên bố đã đồng bộ.
+5. Dựng MP4 Preview bằng tài nguyên có quyền sử dụng rõ ràng; kiểm tra hình, tiếng, phụ đề và watermark/giới hạn xuất trên phương án miễn phí.
+6. Người biên tập nghe/xem duyệt bản cuối trước mọi quyết định công khai.
+
+### Trạng thái cổng phát hành
+- TTS engine + voice + language trên iPhone: **đã xác nhận hoạt động theo phản hồi người dùng**.
+- Độ rõ/tự nhiên đoạn thử ngắn: **PASS định tính theo người dùng**.
+- Xuất audio từ PocketPal, kiểm thử đoạn dài, đồng bộ SRT, dựng MP4, license từng asset và duyệt video cuối: **CHƯA XÁC MINH**.
+- Vì vậy, chỉ mở cổng **chuẩn bị video Preview**, chưa mở cổng đăng công khai. PR vẫn Draft; không merge, không deploy Production và không đăng bài/video công khai.
