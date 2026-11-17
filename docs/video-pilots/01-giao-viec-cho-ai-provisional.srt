@@ -1,0 +1,36 @@
+1
+00:00:00,000 --> 00:00:08,000
+Bạn đã từng hỏi AI một câu rất đơn giản,
+nhưng nhận lại câu trả lời dài dòng và không đúng điều mình cần chưa?
+
+2
+00:00:08,000 --> 00:00:15,000
+Không hẳn AI kém.
+Nhiều khi, yêu cầu của chúng ta chưa đủ rõ để AI hiểu đúng việc cần làm.
+
+3
+00:00:15,000 --> 00:00:18,000
+Hãy thử ba bước.
+
+4
+00:00:18,000 --> 00:00:24,000
+Một: Nói rõ bạn muốn AI thực hiện công việc gì.
+
+5
+00:00:24,000 --> 00:00:30,000
+Hai: Cung cấp bối cảnh và thông tin cần thiết.
+
+6
+00:00:30,000 --> 00:00:39,000
+Ba: Nêu rõ kết quả bạn mong muốn,
+chẳng hạn một bảng so sánh, bản kế hoạch hay hướng dẫn từng bước.
+
+7
+00:00:39,000 --> 00:00:49,000
+Và đừng quên kiểm tra lại thông tin quan trọng.
+AI có thể hỗ trợ rất tốt, nhưng không phải lúc nào cũng chính xác.
+
+8
+00:00:49,000 --> 00:00:58,000
+Giao việc rõ ràng là bước đầu để nhận kết quả hữu ích hơn.
+Theo dõi DUNG - AI để cùng ứng dụng AI vào công việc và cuộc sống.
