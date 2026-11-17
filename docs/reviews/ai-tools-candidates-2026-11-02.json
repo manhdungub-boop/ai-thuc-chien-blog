@@ -22,18 +22,18 @@
       ],
       "pricing_model": "free",
       "pricing_status": "needs_review",
-      "license": "Apache-2.0 for repository code, model weights and voice styles according to project README; review NOTICE and MODEL_LICENSE.md before adoption.",
+      "license": "Apache-2.0 for repository code, model weights and voice styles according to LICENSE and MODEL_LICENSE.md; NOTICE credits adapted Supertonic and BlueTTS components under MIT. PhoAudiobook and the private training-data corpus require separate provenance/terms review.",
       "platforms": [
         "python",
         "self_hosted",
         "web"
       ],
       "description": "Hệ thống chuyển văn bản thành giọng nói ưu tiên tiếng Việt, hỗ trợ đọc câu có xen thuật ngữ tiếng Anh; dùng ONNX Runtime và xuất WAV 44,1 kHz theo tài liệu dự án.",
-      "free_tier_summary": "Dự án công bố mã nguồn, trọng số và voice styles theo Apache-2.0; có gói Python cài qua pip và bản demo trên trình duyệt. Chạy local không cần API inference trả phí nhưng cần tải model, thiết lập môi trường Python ≥3.10 và tài nguyên thiết bị. Chưa xác minh chạy trực tiếp trên iPhone, chưa nghe/chấm chất lượng giọng, chưa kiểm tra độ ổn định hoặc quyền dùng thương mại trong quy trình video. Không thay thế giọng Supertonic Alex / Male 1 đã được người dùng chọn.",
+      "free_tier_summary": "Dự án công bố mã nguồn, trọng số và voice styles theo Apache-2.0; có gói Python cài qua pip và bản demo trên trình duyệt. Chạy local không cần API inference trả phí nhưng cần tải model, thiết lập môi trường Python ≥3.10 và tài nguyên thiết bị. Chưa có ứng dụng iOS native được xác minh; chưa xác minh khả năng tích hợp Swift runtime trên iPhone, chưa nghe/chấm chất lượng giọng hoặc kiểm tra độ ổn định. Demo web chưa được rà soát luồng dữ liệu; chỉ thử bằng văn bản công khai, không nhập nội dung nhạy cảm. Dù MODEL_LICENSE.md nêu quyền dùng thương mại theo Apache-2.0, cần rà soát riêng nguồn dữ liệu huấn luyện và nghĩa vụ NOTICE trước khi dùng trong quy trình video thương mại. Không thay thế giọng Supertonic Alex / Male 1 đã được người dùng chọn.",
       "official_sources": [
         "https://github.com/dogenthq/KorvaTTS",
         "https://github.com/dogenthq/KorvaTTS/blob/main/README.vi.md",
-        "https://huggingface.co/danhcao/KorvaTTS",
+        "https://huggingface.co/dogenthq/KorvaTTS",
         "https://pypi.org/project/korvatts/"
       ],
       "last_verified": "2026-11-17",
