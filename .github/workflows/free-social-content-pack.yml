@@ -1,0 +1,65 @@
+name: Free social content draft pack
+
+on:
+  schedule:
+    # 09:00 Asia/Ho_Chi_Minh every Wednesday
+    - cron: "0 2 * * 3"
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - "feed.xml"
+      - "scripts/generate-social-content-pack.mjs"
+      - ".github/workflows/free-social-content-pack.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: free-social-content-pack
+  cancel-in-progress: false
+
+jobs:
+  build-draft-pack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+
+      - name: Check script syntax and deterministic self-test
+        run: |
+          node --check scripts/generate-social-content-pack.mjs
+          node scripts/generate-social-content-pack.mjs --self-test
+
+      - name: Generate social drafts from published RSS entries
+        run: |
+          node scripts/generate-social-content-pack.mjs --feed feed.xml --out reports/social/social-content-pack.md
+
+      - name: Add draft summary to workflow run
+        run: |
+          {
+            echo "## Free social content draft pack"
+            echo
+            echo "- Source: repository RSS only"
+            echo "- Output: five newest published articles, or fewer if RSS contains fewer entries"
+            echo "- Destinations: Facebook Page, TikTok, and YouTube Shorts draft copy"
+            echo "- No social publishing, account mutation, external API, paid service, or secret access"
+            echo
+            cat reports/social/social-content-pack.md
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Preserve draft pack
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: free-social-content-pack-${{ github.run_id }}
+          path: reports/social/social-content-pack.md
+          if-no-files-found: error
+          retention-days: 14
