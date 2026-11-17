@@ -1,11 +1,51 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-11-11T00:00:00+07:00",
+  "generated_at": "2026-11-17T19:00:00+07:00",
   "catalog_policy": {
     "default_locale": "vi",
     "currency": "USD",
     "new_entry_status": "needs_review",
     "note": "Candidate intake only. All new records remain needs_review; pricing, license scope, regional availability and public-listing eligibility require editorial approval."
   },
-  "tools": []
+  "tools": [
+    {
+      "id": "korvatts",
+      "name": "KorvaTTS",
+      "vendor": "dogenthq",
+      "website": "https://github.com/dogenthq/KorvaTTS",
+      "categories": [
+        "audio",
+        "voice",
+        "text-to-speech",
+        "developer",
+        "on-device-ai"
+      ],
+      "pricing_model": "free",
+      "pricing_status": "needs_review",
+      "license": "Apache-2.0 for repository code, model weights and voice styles according to project README; review NOTICE and MODEL_LICENSE.md before adoption.",
+      "platforms": [
+        "python",
+        "self_hosted",
+        "web"
+      ],
+      "description": "Hệ thống chuyển văn bản thành giọng nói ưu tiên tiếng Việt, hỗ trợ đọc câu có xen thuật ngữ tiếng Anh; dùng ONNX Runtime và xuất WAV 44,1 kHz theo tài liệu dự án.",
+      "free_tier_summary": "Dự án công bố mã nguồn, trọng số và voice styles theo Apache-2.0; có gói Python cài qua pip và bản demo trên trình duyệt. Chạy local không cần API inference trả phí nhưng cần tải model, thiết lập môi trường Python ≥3.10 và tài nguyên thiết bị. Chưa xác minh chạy trực tiếp trên iPhone, chưa nghe/chấm chất lượng giọng, chưa kiểm tra độ ổn định hoặc quyền dùng thương mại trong quy trình video. Không thay thế giọng Supertonic Alex / Male 1 đã được người dùng chọn.",
+      "official_sources": [
+        "https://github.com/dogenthq/KorvaTTS",
+        "https://github.com/dogenthq/KorvaTTS/blob/main/README.vi.md",
+        "https://huggingface.co/danhcao/KorvaTTS",
+        "https://pypi.org/project/korvatts/"
+      ],
+      "last_verified": "2026-11-17",
+      "verification_status": "needs_review",
+      "status": "needs_review",
+      "tags": [
+        "vietnamese-tts",
+        "code-switching",
+        "onnx",
+        "apache-2.0",
+        "candidate-only"
+      ]
+    }
+  ]
 }
