@@ -474,6 +474,53 @@
         "permission-review"
       ],
       "project_fit": "Ứng viên có tiềm năng làm giao diện AI Agent trên iPhone, nhưng chưa phù hợp để kết nối vào tài khoản dự án: cần BYO model provider và không có inference miễn phí được bảo đảm; shell/browser/MCP cùng quyền Calendar, Contacts, Location, Photos, HealthKit tạo bề mặt rủi ro cao. Chưa cài đặt, chưa đăng nhập, chưa cấp quyền, chưa nhập API key và chưa thử nghiệm. Nếu sau này đánh giá, chỉ dùng dữ liệu công khai giả lập, không cấp quyền nhạy cảm, và phải xác minh nhà cung cấp có quota 0 đồng trước khi gửi bất kỳ request nào."
+    },
+    {
+      "id": "noema-local-ai",
+      "name": "Noema: Local AI & Offline LLM",
+      "vendor": "NoemaAI LLC",
+      "website": "https://noemaai.com/",
+      "categories": [
+        "local-ai",
+        "mobile-ai",
+        "ios",
+        "assistant",
+        "document-chat",
+        "offline-ai"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "Ứng dụng cá nhân được NoemaAI và App Store niêm yết miễn phí; website chính thức nói dùng cá nhân không cần tài khoản Noema. Có sản phẩm Noema Teams dành cho tổ chức và các dịch vụ/provider từ bên thứ ba có thể tính phí. Chạy mô hình local sau khi tải về không yêu cầu trả phí theo token; không bật remote provider, không mua dịch vụ Teams và không bật billing.",
+      "license": "Mã nguồn community edition của ứng dụng Noema trên GitHub chính thức được cấp phép Apache-2.0. Các model weights Noema 1.5 được mô tả là open-weight, không phải open-source; phải kiểm tra giấy phép riêng của từng model và model nền (ví dụ Qwen) trước khi sử dụng/phân phối.",
+      "platforms": [
+        "ios",
+        "ipados",
+        "macos",
+        "visionos"
+      ],
+      "description": "Ứng dụng AI cục bộ cho iPhone/iPad/Mac/Apple Vision, chạy các mô hình tương thích GGUF, MLX, ExecuTorch, Core ML và Apple Foundation Models; hỗ trợ trò chuyện ngoại tuyến, hỏi đáp tài liệu PDF/EPUB, RAG, công cụ Python trên thiết bị, nhận dạng giọng nói cục bộ và tùy chọn tìm kiếm web/remote providers.",
+      "free_tier_summary": "App Store Việt Nam niêm yết Free; website chính thức ghi Free on the App Store và personal use không cần tài khoản. Phiên bản App Store hiện hiển thị 4.4, dung lượng 489.4 MB, yêu cầu iOS 18 trở lên, ngôn ngữ English và 10 ngôn ngữ khác (không liệt kê tiếng Việt). Mã nguồn ứng dụng community edition Apache-2.0; model weights có điều khoản riêng. Tài liệu chính thức ghi iPhone/iPad cần A12 Bionic trở lên và đủ bộ nhớ/lưu trữ cho model; model có thể từ vài trăm MB đến nhiều GB. Privacy Policy (02/11/2026) nói chat, tài liệu, model và index local lưu trên thiết bị; local inference không cần gửi prompt/tài liệu về Noema. Tìm kiếm web, iCloud sync, remote model/API, MCP servers, remote transcription và các kết nối tùy chọn có thể gửi dữ liệu tới dịch vụ tương ứng; app yêu cầu cho phép trước khi gửi tới third-party AI/web/transcription. Off-grid Mode chặn HTTP/HTTPS từ network stack của Noema. Apple App Store hiển thị Data Not Collected theo khai báo của nhà phát triển, chưa được Apple xác minh. Không có bảo đảm hiệu năng trên iPhone đời cũ; chọn model nhỏ và benchmark trước. Ngôn ngữ giao diện không có tiếng Việt theo danh sách hiện tại. Không bật remote providers, MCP, iCloud sync hoặc quyền thiết bị nhạy cảm trong thử nghiệm 0 đồng.",
+      "official_sources": [
+        "https://noemaai.com/",
+        "https://noemaai.com/privacy",
+        "https://noemaai.com/terms",
+        "https://github.com/noemaai-labs/noema",
+        "https://apps.apple.com/vn/app/noema-local-ai-offline-llm/id6751169935",
+        "https://noemaai.com/models",
+        "https://noemaai.com/changelog"
+      ],
+      "last_verified": "2026-11-18",
+      "verification_status": "needs_review",
+      "status": "active",
+      "tags": [
+        "iphone",
+        "on-device-llm",
+        "offline-ai",
+        "rag",
+        "document-chat",
+        "apache-2.0",
+        "local-inference"
+      ],
+      "project_fit": "Phù hợp để nghiên cứu trên iPhone hơn các công cụ chỉ chạy desktop: yêu cầu A12 Bionic trở lên nên iPhone 11 Pro Max (A13) đáp ứng điều kiện tối thiểu theo tài liệu, nhưng dung lượng RAM/hiệu năng thực tế chưa được kiểm thử. App hiện khoảng 489.4 MB và các model có thể chiếm thêm hàng trăm MB đến nhiều GB; chỉ thử model nhỏ 2B nếu người dùng chủ động cho phép tải. Không có giao diện tiếng Việt trong danh sách 11 ngôn ngữ hiện tại. Có thể hữu ích cho đọc PDF/tài liệu và AI offline; không cần thiết để kết nối vào tài khoản dự án. Chưa cài đặt, chưa tải model, chưa cấp quyền và chưa gửi dữ liệu. Chỉ đánh giá bằng dữ liệu công khai/giả lập, bật Off-grid Mode, tắt remote providers/MCP/iCloud sync, và kiểm tra license của model weights."
     }
   ]
 }
