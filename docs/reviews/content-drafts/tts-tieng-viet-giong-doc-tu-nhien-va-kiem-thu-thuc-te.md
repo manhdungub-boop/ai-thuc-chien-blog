@@ -578,3 +578,20 @@ Rủi ro/điều chưa xác minh:
 - Độ rõ/tự nhiên đoạn thử ngắn: **PASS định tính theo người dùng**.
 - Xuất audio từ PocketPal, kiểm thử đoạn dài, đồng bộ SRT, dựng MP4, license từng asset và duyệt video cuối: **CHƯA XÁC MINH**.
 - Vì vậy, chỉ mở cổng **chuẩn bị video Preview**, chưa mở cổng đăng công khai. PR vẫn Draft; không merge, không deploy Production và không đăng bài/video công khai.
+
+
+
+## 5O. Kiểm tra khả năng xuất tệp âm thanh PocketPal — rà soát mã nguồn 17/11/2026
+
+Đã kiểm tra đường phát TTS trong PocketPal tại commit mã nguồn `c076d8d66f334a3e6288a9fce0e3a21036c3249d`:
+- `TTSStore.play()` gọi engine để phát một utterance và quản lý trạng thái playback.
+- `SupertonicEngine.play()` gọi `Speech.speak(text, voice.id, { language, inferenceSteps })`; đây là đường phát âm thanh, không phải API xuất MP3/WAV.
+- Trong các đường mã nguồn đã kiểm tra, chưa tìm thấy chức năng lưu/chia sẻ trực tiếp audio TTS thành tệp. Kết luận này giới hạn ở các tệp/đường phát đã rà soát; không khẳng định mọi phiên bản ứng dụng đều không có tính năng khác ở giao diện.
+
+**Hệ quả:** không hướng dẫn người dùng tìm nút Export/Share chưa được xác minh. Trước mắt, PocketPal đã đạt bước chọn giọng và nghe thử; khả năng đưa audio ra trình dựng video vẫn là blocker kỹ thuật cần kiểm tra. Không ghi âm màn hình hoặc dùng mẹo thu âm làm phương án mặc định khi chưa xác nhận chất lượng, quyền ghi âm và khả năng tách âm thanh.
+
+**Phương án tiếp theo:** kiểm tra một đường chuyển giao audio miễn phí, ít thao tác trên iPhone và không gửi nội dung riêng tư lên dịch vụ ngoài. Chỉ chọn phương án sau khi xác minh được file âm thanh thực sự có thể đưa vào trình dựng video và nghe lại được. Không dùng TTS trả phí, không yêu cầu cài thêm ứng dụng lớn hoặc cấp quyền rộng nếu chưa cần.
+
+Nguồn mã nguồn:
+- TTSStore playback: https://github.com/a-ghorbani/pocketpal-ai/blob/c076d8d66f334a3e6288a9fce0e3a21036c3249d/src/store/TTSStore.ts
+- Supertonic playback engine: https://github.com/a-ghorbani/pocketpal-ai/blob/c076d8d66f334a3e6288a9fce0e3a21036c3249d/src/services/tts/engines/supertonic/index.ts
