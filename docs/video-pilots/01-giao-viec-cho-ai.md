@@ -117,3 +117,19 @@ No audio or video file has been produced in this repository. The next real-world
 ## 8. Safety and release boundary
 
 This is a draft production asset on an isolated branch. It does not modify Worker Production, DNS, D1, secrets, live site content, or social accounts. It does not schedule or publish any post.
+
+## 9. Voice research and current free-tier status (2026-11-17)
+
+- **Reference voice remains PocketPal / Supertonic Alex (Male 1), Vietnamese, Quality 5**, because the user personally auditioned it and described it as natural. New voices are candidates only, not replacements.
+- **Magnific voice catalog candidates:** Bao Quyen (male, Northern Vietnamese narrator; slow-paced, structured narration), Khanh Nguyen (male; warm, deep, emotive, conversational), and Vu Lam (male, Northern Vietnamese conversational voice). Catalog descriptions are vendor metadata, not an audio quality verdict.
+- A short voiceover attempt with the free Magnific plan was refused because today's free voiceover allowance was already exhausted. The tool confirmed that no credits were charged. Do not retry the voiceover today; its daily free limit resets at 00:00 UTC.
+- **HeyGen:** workspace voice chooser had no selectable Vietnamese male public/private voice in the checked catalog. Language engine support alone is not proof that a Vietnamese voice is selectable.
+- **OfflineTTS / Supertonic 3:** vendor page claims local Vietnamese synthesis, five male and five female presets, and WAV/MP3 export without sign-up or per-character fees. Actual iPhone compatibility and audible quality remain unverified. Do not claim this is a tested production voice.
+- **Speechma:** offers Vietnamese male voice choices and MP3 export, but sends submitted text to a remote service. Use only non-sensitive public script text; free limits and current availability should be checked before each use.
+- **Browser automation blocker:** the available browser automation service refused to start because its wallet balance was below zero. No top-up was made. Do not use this service unless it can run without any user payment.
+- **Visual preview:** three free 16:9 key frames for opening, middle, and ending were generated in the ChatGPT-connected creative workspace. These are still images for review, not a rendered video.
+- **Video generation:** the connected creative workspace currently marks video generation as paid-only. Do not upgrade or spend credits. A silent local animatic may be considered only as a clearly labeled preview; it must not be represented as the completed narrated video.
+
+## 10. Release gate
+
+The pilot is not complete until a real Vietnamese narration track is available, its quality is listened to and accepted, subtitles are synchronized to the actual track, and a playable MP4 is reviewed. Keep this PR in Draft. No production deploy, merge, or public posting is authorized by this document.
