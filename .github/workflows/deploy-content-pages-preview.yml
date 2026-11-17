@@ -183,11 +183,31 @@ jobs:
           # reports a successful Workers Builds check on this exact commit.
           for body in reversed(bot_comments):
               match = re.search(
-                  r"### Preview URL: (https://[a-z0-9-]+-ai-thuc-chien-blog-auth-app-preview\.manhdungub\.workers\.dev)",
+                  r"### Preview URL: (https://[a-z0-9-]+-ai-thuc-chien-blog-auth-app-preview\\.manhdungub\\.workers\\.dev)",
                   body
               )
               if match:
                   print(match.group(1))
+                  raise SystemExit(0)
+
+          # Cloudflare's bot comment may retain an "in progress" row after the
+          # exact-SHA Workers Builds check succeeds. Its details URL contains
+          # the Preview slug. Derive the stable alias only from that successful
+          # exact-head check; route and security-header probes remain mandatory.
+          for check in cloudflare:
+              if check.get("status") != "completed" or check.get("conclusion") != "success":
+                  continue
+              details_url = check.get("details_url") or ""
+              match = re.search(
+                  r"/production/previews/([a-z0-9-]+)/builds/[0-9a-f-]+/?$",
+                  details_url
+              )
+              if match:
+                  print(
+                      "https://"
+                      + match.group(1)
+                      + "-ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev"
+                  )
                   raise SystemExit(0)
           raise SystemExit(1)
           PY
