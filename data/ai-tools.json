@@ -622,7 +622,7 @@
         "cloud"
       ],
       "description": "Dịch vụ API gateway tổng hợp nhiều nhà cung cấp LLM, chuẩn hóa API, hỗ trợ routing/fallback và lựa chọn mô hình miễn phí hoặc trả phí.",
-      "free_tier_summary": "Gói Free hiện liệt kê hơn 25 model miễn phí và 4 nhà cung cấp miễn phí. Model khả dụng và giới hạn tốc độ thay đổi theo model/nhà cung cấp; không phải mọi model đều miễn phí. Sử dụng model trả phí hoặc mua credits có thể phát sinh chi phí; cần kiểm tra nhãn miễn phí và giá của từng model trước khi gọi API.",
+      "free_tier_summary": "Gói Free công bố hơn 25 model miễn phí và 4 nhà cung cấp miễn phí. Các model có biến thể :free được giới hạn 20 requests/phút và 50 requests/ngày; model $0 khác có thể chịu giới hạn riêng của model/nhà cung cấp. Mua từ $10 credits có thể nâng giới hạn ngày lên 1.000 requests nhưng sẽ phát sinh khoản nạp tiền, vì vậy không thực hiện trong quy trình 0 đồng. Chỉ chọn đúng model có giá $0 và nhãn/ID :free; không bật paid fallback, không nạp credits, không thêm phương thức thanh toán. Model miễn phí có thể thay đổi và một số endpoint có context window thấp hơn bản trả phí. Lỗi request vẫn có thể tính vào quota ngày. Kiểm tra giá và giới hạn ngay trước khi sử dụng.",
       "official_sources": [
         "https://openrouter.ai/",
         "https://openrouter.ai/pricing",
@@ -630,7 +630,7 @@
         "https://openrouter.ai/docs",
         "https://openrouter.ai/docs/limits"
       ],
-      "last_verified": "2026-11-17",
+      "last_verified": "2026-11-18",
       "verification_status": "verified",
       "status": "active",
       "tags": [
