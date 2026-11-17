@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-11-11T01:00:00+07:00",
+  "generated_at": "2026-11-16T17:13:33+07:00",
   "catalog_policy": {
     "default_locale": "vi",
     "currency": "USD",
@@ -28,12 +28,12 @@
         "desktop"
       ],
       "description": "Trợ lý AI đa năng cho hỏi đáp, viết, phân tích tệp và sáng tạo nội dung.",
-      "free_tier_summary": "Có gói Free; chat văn bản và các công cụ như tải tệp, phân tích dữ liệu, tạo ảnh, thoại có giới hạn riêng và có thể thay đổi.",
+      "free_tier_summary": "Gói Free $0: trò chuyện văn bản rộng rãi (chịu guardrails); tải tệp, tạo ảnh, thoại, deep research, bộ nhớ và Codex/Work đều có hạn mức riêng. Hạn mức và khả năng truy cập tính năng có thể thay đổi theo thời điểm.",
       "official_sources": [
-        "https://help.openai.com/en/articles/9275245-chatgpt-free-tier-faq",
-        "https://chatgpt.com/vi-VN/pricing/"
+        "https://chatgpt.com/pricing/",
+        "https://help.openai.com/en/articles/9275245-chatgpt-free-tier-faq"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-15",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -94,12 +94,12 @@
         "desktop"
       ],
       "description": "Trợ lý AI hỗ trợ soạn thảo, phân tích và lập trình.",
-      "free_tier_summary": "Có gói Free $0 với dung lượng sử dụng giới hạn; các gói trả phí mở rộng hạn mức.",
+      "free_tier_summary": "Gói Free $0; giới hạn sử dụng theo cửa sổ 5 giờ và hạn mức tuần. Có chat web/desktop/mobile, web search, tạo tệp và chạy code; hạn mức thực tế thay đổi theo model, độ dài hội thoại và tính năng.",
       "official_sources": [
-        "https://www.anthropic.com/pricing",
+        "https://claude.com/pricing?country=VN",
         "https://support.claude.com/en/articles/11049762-choose-a-claude-plan"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-15",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -190,11 +190,11 @@
         "desktop"
       ],
       "description": "Nền tảng thiết kế trực quan cho bài đăng, hình ảnh, slide và tài liệu.",
-      "free_tier_summary": "Gói Free $0; hạn mức AI chia sẻ tối đa 20 lượt Standard hoặc Premium AI mỗi tháng theo trang giá hiện hành.",
+      "free_tier_summary": "Canva Free $0 cho một người, gồm công cụ thiết kế cơ bản và 5GB lưu trữ. AI có hạn mức miễn phí chia sẻ; trang giá hiện công bố tối đa khoảng 20 lượt Standard hoặc Premium AI/tháng tùy tính năng và độ phức tạp. Một số tính năng AI cao cấp không có trong Free; không mua AI Pass/top-up nếu giữ ngân sách 0 đồng.",
       "official_sources": [
         "https://www.canva.com/pricing/"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-15",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -252,11 +252,16 @@
         "desktop"
       ],
       "description": "Công cụ biên tập video với mẫu và các tính năng AI.",
-      "free_tier_summary": "Có gói Free $0 với công cụ biên tập cơ bản; một số tính năng AI, tài nguyên và mẫu cao cấp cần Pro hoặc tín dụng.",
+      "free_tier_summary": "Có gói Free $0 với công cụ biên tập cơ bản. CapCut Pro là thuê bao trả phí; quyền lợi có thể khác theo khu vực và nền tảng, gồm mẫu/tính năng cao cấp và dung lượng đám mây. Trang giá chính thức hiển thị giá theo khu vực; không coi Pro là miễn phí. Một số tính năng AI dùng tín dụng riêng; tín dụng không thay thế phí thuê bao Pro. Pro có thể dùng trên web, desktop và mobile khi đăng nhập cùng tài khoản. Trước khi dùng tài nguyên/mẫu cho nội dung thương mại, kiểm tra quyền sử dụng cụ thể của từng tài nguyên. Tính năng Text-to-Speech tích hợp có thể tạo voiceover dùng cho mục đích thương mại theo hướng dẫn CapCut cập nhật tháng 11/2026, với điều kiện tuân thủ Điều khoản CapCut và quy định nền tảng; quyền này không mặc nhiên áp dụng cho nhạc, hiệu ứng âm thanh, mẫu hoặc mọi tài nguyên khác. Cần nghe thử giọng tiếng Việt và kiểm tra từng tài nguyên trước khi xuất bản.",
       "official_sources": [
-        "https://www.capcut.com/pricing"
+        "https://www.capcut.com/pricing",
+        "https://www.capcut.com/help/capcut-pro",
+        "https://www.capcut.com/help/capcut-subscription-multi-platform",
+        "https://www.capcut.com/help/how-much-does-capcut-pro-cost",
+        "https://www.capcut.com/resource/how-to-add-or-replace-voiceovers-music-and-sound-effects-in-capcut",
+        "https://www.capcut.com/vi-vn/help/text-to-speech-feature"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-16",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -334,19 +339,20 @@
         "integration"
       ],
       "pricing_model": "freemium",
-      "pricing_status": "verified_free_tier",
-      "license": "open_source_with_hosted_paid",
+      "pricing_status": "limited_credits",
+      "license": "MIT for Activepieces core; Commercial License for enterprise/cloud edition features",
       "platforms": [
         "web",
         "self_hosted"
       ],
       "description": "Nền tảng workflow automation kết nối ứng dụng, trigger/action và AI agent.",
-      "free_tier_summary": "Cloud Free $0, không cần thẻ, gồm 100 credits/ngày; lõi Community Edition dùng giấy phép MIT, tính năng enterprise/cloud nâng cao có điều kiện riêng.",
+      "free_tier_summary": "Activepieces Cloud Free hiện công bố $0, không cần thẻ, unlimited flows và tối đa 5 users; gồm Flows, Agents, Tables, MCP và API access. Lưu ý trang giá chính thức đang có thông tin không nhất quán về chu kỳ credits: phần đầu và FAQ nêu 1.000 credits mỗi tháng, nhưng bảng so sánh ghi Free reset hằng ngày và hết quota thì chờ đến ngày sau. Vì vậy không khẳng định chu kỳ làm mới cho đến khi nhà cung cấp làm rõ. Free không thu phí vượt quota; AI steps tiêu thụ credits bổ sung theo loại model (trang giá nêu fast 2, smart 10, frontier 20 credits mỗi AI step). Không chuyển sang Plus/Team hoặc bật thanh toán nếu giữ ngân sách 0 đồng. Community Edition tự lưu trữ dùng lõi MIT; tính năng Enterprise/Cloud nâng cao thuộc Commercial License. Self-host cần máy chủ, vận hành và cập nhật riêng.",
       "official_sources": [
         "https://www.activepieces.com/pricing",
-        "https://www.activepieces.com/docs/about/license"
+        "https://www.activepieces.com/docs/about/license",
+        "https://www.activepieces.com/docs/install/overview"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-16",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -367,18 +373,19 @@
       ],
       "pricing_model": "self_hosted_free_and_cloud_paid",
       "pricing_status": "self_hosted_free",
-      "license": "sustainable_use_license",
+      "license": "Sustainable Use License (fair-code, không phải giấy phép OSI open-source); giới hạn theo mục đích sử dụng và cách cung cấp dịch vụ.",
       "platforms": [
         "web",
         "self_hosted"
       ],
       "description": "Nền tảng workflow automation có bản Community Edition tự lưu trữ.",
-      "free_tier_summary": "Community Edition tự lưu trữ miễn phí theo Sustainable Use License; n8n Cloud tính phí. Giấy phép có giới hạn đối với việc cung cấp dịch vụ hoặc cho khách hàng tự cấu hình workflow.",
+      "free_tier_summary": "Community Edition tự lưu trữ có thể dùng miễn phí cho cá nhân hoặc hoạt động nội bộ của tổ chức. Theo FAQ giấy phép cập nhật 06/10/2026, nếu chỉ người dùng hoặc nhân sự nội bộ tạo/sửa workflow thì có thể dùng miễn phí; trường hợp khách hàng bên ngoài được mở editor/API/MCP hoặc agent thay họ cấu hình workflow, cung cấp n8n như dịch vụ, hoặc white-label có thể cần giấy phép thương mại. n8n Cloud là gói trả phí; kiểm tra điều khoản hiện hành trước khi triển khai.",
       "official_sources": [
         "https://n8n.io/pricing/",
-        "https://support.n8n.io/article/can-i-use-your-license-for-my-use-case"
+        "https://support.n8n.io/article/can-i-use-your-license-for-my-use-case",
+        "https://github.com/n8n-io/n8n-docs/blob/main/docs/n8n-community-license/README.md"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-15",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -577,7 +584,7 @@
         "cloud"
       ],
       "description": "Runtime tải và chạy LLM local trên máy cá nhân hoặc server, cung cấp CLI và API tương thích để tích hợp ứng dụng, agent và workflow.",
-      "free_tier_summary": "Ollama Free $0 cho chạy model trên phần cứng của người dùng; Pro $20/tháng, Max $100/tháng (tạm ngừng đăng ký mới), Team $25/seat/tháng, tối thiểu 5 seats. License MIT chỉ áp dụng phần mềm Ollama, không áp dụng model weights.",
+      "free_tier_summary": "Ollama software cho phép tải và chạy model local trên máy tính/server của người dùng; chạy local không tính phí theo lượt và không giới hạn bởi quota cloud. Tài khoản Free có starter usage cho một số cloud models; sử dụng cloud theo token/credits và có thể phải mua thêm để mở model khác. Ollama công bố prompt/response không được log hoặc dùng huấn luyện; cloud compute chủ yếu tại Hoa Kỳ và có thể định tuyến sang châu Âu hoặc Singapore. MIT chỉ áp dụng phần mềm Ollama, không áp dụng trọng số model; phải kiểm tra license từng model riêng.",
       "official_sources": [
         "https://ollama.com/",
         "https://ollama.com/pricing",
@@ -585,7 +592,7 @@
         "https://github.com/ollama/ollama/blob/main/LICENSE",
         "https://docs.ollama.com/"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-15",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -1373,6 +1380,137 @@
         "dubbing",
         "speech-to-text",
         "audio-generation"
+      ]
+    },
+    {
+      "id": "embeddinggemma-2",
+      "name": "EmbeddingGemma 2",
+      "vendor": "Google DeepMind",
+      "website": "https://ai.google.dev/gemma/docs/embeddinggemma",
+      "categories": [
+        "developer",
+        "search",
+        "data",
+        "multimodal",
+        "rag"
+      ],
+      "pricing_model": "self_hosted_free_and_cloud_paid",
+      "pricing_status": "self_hosted_free",
+      "license": "Apache 2.0 (open weights)",
+      "platforms": [
+        "local",
+        "self_hosted",
+        "python",
+        "huggingface",
+        "ollama",
+        "kaggle"
+      ],
+      "description": "Mô hình embedding đa phương thức mã nguồn mở của Google DeepMind, chuyển văn bản, mã nguồn, hình ảnh, video và âm thanh thành vector trong cùng không gian để phục vụ tìm kiếm ngữ nghĩa, RAG, phân loại và gom cụm.",
+      "free_tier_summary": "Trọng số được cung cấp theo Apache 2.0 để tải về và tự triển khai; không có phí bản quyền mô hình cho cách dùng này. Chi phí phần cứng hoặc máy chủ do người dùng tự chịu. Nếu chạy hoàn toàn cục bộ, nơi xử lý và lưu trữ do người triển khai quản lý; nếu dùng cloud host hoặc dịch vụ inference bên thứ ba, cần kiểm tra riêng điều khoản và chính sách dữ liệu của nhà cung cấp đó. Chưa xác minh có API suy luận hosted miễn phí chính thức hoặc quota miễn phí; không coi dịch vụ inference bên thứ ba là miễn phí.",
+      "official_sources": [
+        "https://ai.google.dev/gemma/docs/embeddinggemma/model_card_2",
+        "https://ai.google.dev/gemma/docs/embeddinggemma",
+        "https://developers.googleblog.com/en/embeddinggemma-2-the-developer-guide/",
+        "https://huggingface.co/google/embeddinggemma-2",
+        "https://ollama.com/library/embeddinggemma-2"
+      ],
+      "last_verified": "2026-11-16",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "embedding",
+        "multimodal",
+        "semantic-search",
+        "rag",
+        "apache-2.0",
+        "on-device",
+        "google-deepmind"
+      ]
+    },
+    {
+      "id": "google-ai-edge-gallery",
+      "name": "Google AI Edge Gallery",
+      "vendor": "Google LLC",
+      "website": "https://github.com/google-ai-edge/gallery",
+      "categories": [
+        "on-device-ai",
+        "mobile-ai",
+        "multimodal",
+        "local-llm"
+      ],
+      "pricing_model": "free",
+      "pricing_status": "verified_free",
+      "license": "Apache-2.0 for the Google AI Edge Gallery application source; downloaded model weights and third-party skills have separate licenses and terms.",
+      "platforms": [
+        "android",
+        "ios"
+      ],
+      "description": "Ứng dụng thử nghiệm AI trên thiết bị di động, cho phép tải mô hình mở và chạy suy luận cục bộ; hỗ trợ chat, ảnh, âm thanh, tìm kiếm media, đo hiệu năng và các kỹ năng mở rộng.",
+      "free_tier_summary": "Ứng dụng được niêm yết miễn phí ($0) trên Google Play và App Store Việt Nam. Mã nguồn ứng dụng theo Apache-2.0; từng model tải về và kỹ năng bên thứ ba có giấy phép/điều khoản riêng. Inference local không cần quota API trả phí nhưng cần thiết bị tương thích, dung lượng, pin và mạng cho lần tải/cập nhật. Google Play khai báo không chia sẻ dữ liệu với bên thứ ba nhưng có thể thu thập App activity và App info/performance; nhãn App Store iOS liệt kê identifiers, diagnostics và other data liên kết với người dùng, cùng coarse location, usage và crash data không liên kết; các câu trả lời quyền riêng tư do nhà phát triển cung cấp và nhà phát triển chịu trách nhiệm cập nhật cho đúng thực tế.",
+      "official_sources": [
+        "https://github.com/google-ai-edge/gallery",
+        "https://github.com/google-ai-edge/gallery/blob/main/LICENSE",
+        "https://play.google.com/store/apps/details?id=com.google.ai.edge.gallery",
+        "https://apps.apple.com/vn/app/google-ai-edge-gallery/id6749645337",
+        "https://developers.googleblog.com/en/a-smarter-google-ai-edge-gallery-mcp-integration-notifications-and-session-continuity/",
+        "https://policies.google.com/privacy",
+        "https://developer.apple.com/app-store/app-privacy-details/"
+      ],
+      "last_verified": "2026-11-16",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "on-device-inference",
+        "offline-ai",
+        "mobile",
+        "multimodal",
+        "model-management",
+        "privacy-review"
+      ]
+    },
+    {
+      "id": "gemini-4-hydrogen",
+      "name": "Gemini 4 Hydrogen",
+      "vendor": "Google",
+      "website": "https://ai.google.dev/gemini-api/docs/models/gemini-4-hydrogen",
+      "categories": [
+        "model",
+        "reasoning",
+        "coding",
+        "agentic",
+        "multimodal"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "verified_free_tier",
+      "license": "Proprietary model; use is governed by the Google APIs Terms and Gemini API Additional Terms. Model weights are not distributed as open weights.",
+      "platforms": [
+        "web",
+        "api",
+        "ios",
+        "android"
+      ],
+      "description": "Mô hình Gemini 4 ổn định cho coding và agentic workflows, context window 1.048.576 token; nhận text, image, video, audio và PDF, trả text; hỗ trợ function calling, code execution, computer use và structured outputs.",
+      "free_tier_summary": "Gemini API Standard: trang giá chính thức liệt kê Free Tier với input/output miễn phí cho model này, subject to model/project rate limits; Paid Tier là $1.50/1M input tokens và $7.50/1M output tokens. Gemini app: người dùng Free có thể nhận Hydrogen qua auto model selection khi hệ thống thấy phù hợp. Free API tier cho phép Google dùng nội dung để cải thiện sản phẩm; không gửi dữ liệu cá nhân nhạy cảm, bí mật hoặc nội bộ. Không bật billing hoặc chuyển sang Paid tier nếu giữ ngân sách 0 đồng. Hạn mức và khả năng truy cập có thể thay đổi.",
+      "official_sources": [
+        "https://blog.google/innovation-and-ai/models-and-research/gemini-models/introducing-gemini-4-hydrogen/",
+        "https://ai.google.dev/gemini-api/docs/models/gemini-4-hydrogen",
+        "https://ai.google.dev/gemini-api/docs/pricing",
+        "https://ai.google.dev/gemini-api/docs/rate-limits",
+        "https://ai.google.dev/gemini-api/docs/terms",
+        "https://ai.google.dev/gemini-api/docs/available-regions",
+        "https://support.google.com/gemini/answer/16275805?hl=en"
+      ],
+      "last_verified": "2026-11-16",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "gemini-4",
+        "free-tier",
+        "agentic",
+        "coding",
+        "multimodal",
+        "1m-context",
+        "privacy-review"
       ]
     }
   ]
