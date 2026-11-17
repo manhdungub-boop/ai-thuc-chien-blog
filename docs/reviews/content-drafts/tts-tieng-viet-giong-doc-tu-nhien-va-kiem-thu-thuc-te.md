@@ -595,3 +595,33 @@ Rủi ro/điều chưa xác minh:
 Nguồn mã nguồn:
 - TTSStore playback: https://github.com/a-ghorbani/pocketpal-ai/blob/c076d8d66f334a3e6288a9fce0e3a21036c3249d/src/store/TTSStore.ts
 - Supertonic playback engine: https://github.com/a-ghorbani/pocketpal-ai/blob/c076d8d66f334a3e6288a9fce0e3a21036c3249d/src/services/tts/engines/supertonic/index.ts
+
+
+
+## 5P. Phương án thử chuyển audio PocketPal sang CapCut bằng Screen Recording iOS — 17/11/2026
+
+### Cơ sở và giới hạn
+- Apple xác nhận iPhone có thể quay màn hình và lưu video vào Photos; thao tác bật microphone nằm trong menu nhấn giữ Screen Recording. Apple đồng thời cảnh báo một số ứng dụng không cho phép ghi nội dung của chúng.
+- Tài liệu Apple không bảo đảm âm thanh nội bộ của PocketPal sẽ được ghi lại trên mọi phiên bản/thiết bị. Vì vậy, đây chỉ là phép thử 10 giây, không phải giải pháp đã được xác nhận.
+- CapCut hướng dẫn trên trang chính thức rằng bản mobile có thể nhập video, chọn clip và dùng **Extract audio** để tách track âm thanh. Đây là bước tách track trong dự án; không mặc định rằng ứng dụng mobile có thể xuất riêng MP3/WAV.
+
+### Quy trình kiểm thử tối thiểu
+1. Chỉ dùng một câu thử công khai, không có dữ liệu riêng tư.
+2. Trên iPhone, mở Control Center, nhấn giữ nút Screen Recording, để Microphone OFF và bắt đầu ghi.
+3. Quay lại PocketPal, phát câu thử bằng Alex/M1 + Vietnamese trong khoảng 10 giây rồi dừng ghi.
+4. Mở Photos, phát lại video màn hình để xác nhận có tiếng Alex. Nếu không có tiếng, dừng phương án này; không cố ghi nội dung bị ứng dụng chặn.
+5. Nếu có tiếng rõ, nhập video màn hình vào CapCut, chọn clip và dùng Extract audio. Sau đó có thể thay hình màn hình bằng hình minh họa trong timeline; phải nghe lại track sau khi tách.
+6. Không đăng video thử và không tải nội dung riêng tư lên dịch vụ web/cloud.
+
+### Điều kiện chấp nhận
+- Có tiếng Alex trong bản screen recording khi phát lại.
+- Không lẫn âm thanh thông báo, tiếng môi trường hoặc thao tác chạm.
+- Track sau khi tách vẫn rõ, không méo/đứt và không thay đổi bất thường về tốc độ.
+- Nếu bất kỳ điều kiện nào không đạt, đánh dấu workaround **FAIL/NOT SUITABLE** và không dùng cho video công khai.
+
+Nguồn:
+- Apple Support — quay màn hình iPhone và giới hạn ứng dụng: https://support.apple.com/en-us/102653
+- Apple iPhone User Guide — Screen Recording: https://support.apple.com/guide/iphone/take-a-screen-recording-iph52f6e1987/27/ios
+- CapCut — hướng dẫn Extract Audio trên mobile: https://www.capcut.com/resource/extract-audio-from-video-iphone
+
+**Trạng thái:** chưa chạy phép thử trên thiết bị; chưa xác nhận PocketPal cho phép ghi âm nội bộ. Chỉ thử đoạn giả lập 10 giây trước khi quyết định.
