@@ -52,7 +52,7 @@ function makePack(items, generatedAt) {
     const channelTitle = vietnameseCopy ? shortTitle : "Nội dung đang chờ biên tập tiếng Việt";
     const channelSummary = vietnameseCopy ? summary : "Nội dung đang chờ biên dịch và xác minh từ bài gốc; không sử dụng tiêu đề hoặc tóm tắt nguồn này để đăng.";
     lines.push("## " + (index + 1) + ". " + title, "", "**Bài gốc:** " + item.link, "", "**Nguồn RSS (chỉ để tham khảo, chưa phải nội dung đăng):** " + summary, "");
-    lines.push("### TikTok — bản nháp", "", languageNote + "Khám phá: " + channelTitle + ". " + channelSummary, "", "Đọc hướng dẫn đầy đủ tại: " + item.link, "#AIThucChien #DungAI #UngDungAI #TuDongHoa", "");
+    lines.push("### Bản nháp nội bộ — chưa gắn nền tảng", "", languageNote + "Khám phá: " + channelTitle + ". " + channelSummary, "", "Đọc hướng dẫn đầy đủ tại: " + item.link, "#AIThucChien #DungAI #UngDungAI #TuDongHoa", "");
     lines.push("### Kiểm tra trước khi đăng", "", "- [ ] Đã đọc bài gốc và xác nhận mọi tuyên bố.", "- [ ] Đã biên tập tiếng Việt tự nhiên, không chỉ sao chép RSS.", "- [ ] Video/hình ảnh có quyền sử dụng phù hợp.", "- [ ] Không lộ dữ liệu cá nhân, khóa API hoặc thông tin riêng tư.", "- [ ] Đã kiểm tra liên kết, CTA và được người quản trị duyệt.", "", "---", "");
   });
   return lines.join("\n");
@@ -61,9 +61,9 @@ function selfTest() {
   const sample = '<?xml version="1.0"?><rss><channel><link>https://example.org/</link><item><title>Thử nghiệm &amp; AI</title><link>https://example.org/articles/demo</link><description><![CDATA[Hướng dẫn an toàn &amp; thực tế.]]></description></item></channel></rss>';
   const items = parseFeed(sample);
   const output = makePack(items, "2026-11-15");
-  const channels = ["### TikTok — bản nháp"];
+  const channels = ["### Bản nháp nội bộ — chưa gắn nền tảng"];
   if (items.length !== 1 || !output.includes("Thử nghiệm & AI") || output.includes("\\.") || !output.includes("Đã biên tập")) throw new Error("RSS parsing or baseline draft self-test failed.");
-  if (channels.some(channel => !output.includes(channel))) throw new Error("The verified TikTok destination draft is missing.");
+  if (channels.some(channel => !output.includes(channel))) throw new Error("The internal platform-neutral draft section is missing.");
   if (output.includes("YouTube Shorts") || output.includes("Facebook Page")) throw new Error("An unverified social destination leaked into the destination-ready draft pack.");
   if (output.includes("Cần biên tập")) throw new Error("Vietnamese RSS summary was incorrectly flagged for translation.");
 
@@ -93,7 +93,7 @@ function selfTest() {
   expectFailure('<?xml version="1.0"?><rss><channel><link>http://example.org/</link><item><title>HTTP</title><link>http://example.org/post</link><description>Text</description></item></channel></rss>', "non-HTTPS feed origin");
   expectFailure('<?xml version="1.0"?><rss><channel><link>https://example.org/</link><item><title>Missing description</title><link>https://example.org/post</link></item></channel></rss>', "missing description");
   expectFailure('<?xml version="1.0"?><rss><channel><link>https://example.org/</link><item><link>https://example.org/post</link><description>Text</description></item></channel></rss>', "missing title");
-  console.log("PASS: RSS parsing, TikTok-only destination draft, conservative title+summary language gate, blocked unverified copy and no-publish policy.");
+  console.log("PASS: RSS parsing, platform-neutral internal draft, conservative title+summary language gate, blocked unverified copy and no-publish policy.");
 }
 if (process.argv.includes("--self-test")) selfTest();
 else {
