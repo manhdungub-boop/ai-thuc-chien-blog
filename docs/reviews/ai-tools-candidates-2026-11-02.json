@@ -573,49 +573,14 @@
         "model-license-review"
       ],
       "project_fit": "Ứng viên đáng nghiên cứu cho iPhone vì có local chat, đọc tài liệu, voice và Shortcuts, không cần tài khoản cho local use. Tuy nhiên app hiện không có tiếng Việt theo App Store; chưa xác minh hiệu năng trên iPhone 11 Pro Max/A13, model nào chạy ổn hoặc model có thể tải miễn phí tại Việt Nam. Privacy Policy nêu diagnostic sharing thường bật mặc định và App Store disclosure có dữ liệu linked-to-user; nếu thử sau này cần tắt diagnostic sharing/ad measurement trước, không bật web search/connected assistants, chỉ dùng dữ liệu giả lập. Chưa cài đặt, chưa tải model, chưa cấp quyền và chưa gửi dữ liệu."
-    },
+    }
+  ],
+  "excluded_duplicates": [
     {
       "id": "google-ai-edge-gallery",
       "name": "Google AI Edge Gallery",
       "vendor": "Google",
-      "website": "https://github.com/google-ai-edge/gallery",
-      "categories": [
-        "local-ai",
-        "mobile-ai",
-        "ios",
-        "android",
-        "offline-ai",
-        "on-device-llm"
-      ],
-      "pricing_model": "free",
-      "pricing_status": "Ứng dụng được niêm yết miễn phí trên App Store Việt Nam và Google Play tại thời điểm kiểm tra 18/11/2026. Tải model cần Internet và dung lượng lưu trữ; chi phí dữ liệu di động tùy gói cước. Chưa thấy bằng chứng về phí inference cho các model chạy cục bộ trong ứng dụng. Model weights có thể có giấy phép và điều kiện riêng; phải kiểm tra model card trước khi tải hoặc dùng thương mại.",
-      "license": "Mã nguồn ứng dụng trong repository chính thức được cấp phép Apache License 2.0. Không suy rộng giấy phép này sang model weights, dữ liệu, Agent Skills hoặc MCP server bên thứ ba; từng thành phần có điều khoản riêng.",
-      "platforms": [
-        "ios",
-        "android"
-      ],
-      "description": "Ứng dụng thử nghiệm của Google để tải và chạy các mô hình AI tương thích trực tiếp trên thiết bị di động. Có AI Chat, Prompt Lab, xử lý ảnh/âm thanh, quản lý model và benchmark. Inference local có thể hoạt động ngoại tuyến sau khi tải model; các kết nối MCP hoặc dịch vụ ngoài là miền xử lý riêng.",
-      "free_tier_summary": "App Store Việt Nam niêm yết miễn phí, yêu cầu iOS 17 trở lên; Google Play cũng niêm yết miễn phí và cảnh báo hiệu năng phụ thuộc CPU/GPU của thiết bị. Repository chính thức mô tả Android 12+ và iOS 17+. App Store hiện liệt kê tiếng Việt trong danh sách ngôn ngữ. Inference của model chạy cục bộ không cần gửi prompt tới máy chủ model, nhưng tải model/cập nhật cần mạng. Google Play Data safety khai báo có thể thu thập App activity và App info/performance; dữ liệu được mã hóa khi truyền. MCP hiện được tài liệu Google mô tả là thử nghiệm trên Android, iOS update từng được nói là coming soon; không giả định MCP đã hỗ trợ trên iPhone. Kiểm tra model card, quyền riêng tư và yêu cầu phần cứng từng model; chưa kiểm thử hiệu năng trên thiết bị iPhone cụ thể.",
-      "official_sources": [
-        "https://github.com/google-ai-edge/gallery",
-        "https://github.com/google-ai-edge/gallery/blob/main/LICENSE",
-        "https://apps.apple.com/vn/app/google-ai-edge-gallery/id6749645337",
-        "https://play.google.com/store/apps/details?id=com.google.ai.edge.gallery",
-        "https://developers.googleblog.com/a-smarter-google-ai-edge-gallery-mcp-integration-notifications-and-session-continuity/",
-        "https://github.com/google-ai-edge/gallery/tree/main/mcp"
-      ],
-      "last_verified": "2026-11-18",
-      "verification_status": "needs_review",
-      "status": "active",
-      "tags": [
-        "iphone",
-        "offline-inference",
-        "on-device-ai",
-        "gemma",
-        "model-benchmark",
-        "app-store-vietnam"
-      ],
-      "project_fit": "Ứng viên phù hợp để nghiên cứu cho quy trình nội dung trên iPhone vì app miễn phí, có tiếng Việt trong danh sách ngôn ngữ và hỗ trợ inference cục bộ. Chưa xác minh model nào chạy mượt trên iPhone 11 Pro Max/A13, dung lượng tải thực tế, tốc độ tiếng Việt và mức tiêu thụ pin. Không cài đặt, tải model, cấp quyền hoặc gửi dữ liệu dự án khi chưa được anh đồng ý. Ưu tiên thử model nhỏ bằng dữ liệu giả; tách rõ inference local với Agent Skills/MCP server bên ngoài. Không đưa vào danh mục công khai trước khi kiểm thử thực tế và rà soát model license."
+      "reason": "Đã có trong data/ai-tools.json; loại khỏi hàng đợi ứng viên để tránh nhập trùng."
     }
   ]
 }
