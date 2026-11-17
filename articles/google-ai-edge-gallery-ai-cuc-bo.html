@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Hướng dẫn dùng Google AI Edge Gallery trên iPhone và Android: tải mô hình, chạy AI cục bộ, hiểu giới hạn phần cứng, MCP và quyền riêng tư.">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<meta name="author" content="DUNG - AI">
+<meta name="theme-color" content="#0b1020">
+<title>Google AI Edge Gallery: chạy AI cục bộ trên iPhone và Android</title>
+<link rel="canonical" href="https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/google-ai-edge-gallery-ai-cuc-bo">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<meta property="og:type" content="article">
+<meta property="og:locale" content="vi_VN">
+<meta property="og:site_name" content="AI Thực Chiến">
+<meta property="og:title" content="Google AI Edge Gallery: chạy AI cục bộ trên iPhone và Android">
+<meta property="og:description" content="Tải mô hình mở về điện thoại, thử chat/ảnh/âm thanh ngoại tuyến và kiểm tra telemetry, MCP, giấy phép trước khi dùng dữ liệu thật.">
+<meta property="og:url" content="https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/google-ai-edge-gallery-ai-cuc-bo">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Google AI Edge Gallery: chạy AI cục bộ trên iPhone và Android">
+<meta name="twitter:description" content="Tải mô hình mở về điện thoại, thử chat/ảnh/âm thanh ngoại tuyến và kiểm tra telemetry, MCP, giấy phép trước khi dùng dữ liệu thật.">
+<script type="application/ld+json">{
+  "@context":"https://schema.org",
+  "@type":"BlogPosting",
+  "headline":"Google AI Edge Gallery: chạy AI cục bộ trên iPhone và Android",
+  "description":"Hướng dẫn dùng Google AI Edge Gallery trên iPhone và Android: tải mô hình, chạy AI cục bộ, hiểu giới hạn phần cứng, MCP và quyền riêng tư.",
+  "url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/google-ai-edge-gallery-ai-cuc-bo",
+  "mainEntityOfPage":{"@type":"WebPage","@id":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/google-ai-edge-gallery-ai-cuc-bo"},
+  "datePublished":"2026-11-16",
+  "dateModified":"2026-11-16",
+  "inLanguage":"vi-VN",
+  "author":{"@type":"Person","name":"DUNG - AI"},
+  "publisher":{"@type":"Organization","name":"AI Thực Chiến","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/","logo":"https://ai-thuc-chien-blog.manhdungub.workers.dev/logo.svg"}
+}</script>
+<link rel="alternate" type="application/rss+xml" title="AI Thực Chiến RSS" href="../feed.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap"></noscript>
+<link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+<a class="skip-link" href="#main-content">Bỏ qua đến nội dung chính</a>
+<header class="site-header"><a class="brand" href="../"><span class="brand-mark">AI</span><span>AI <b>Thực Chiến</b></span></a><a class="header-cta" href="../thu-vien.html">← Thư viện</a></header>
+<main id="main-content" class="section" style="max-width:900px;margin:auto;line-height:1.8">
+<p class="article-byline" style="font-size:14px;color:var(--muted);margin:0 0 16px"><strong>Tác giả:</strong> DUNG - AI</p>
+<p class="section-kicker">AI CỤC BỘ · ĐIỆN THOẠI · QUYỀN RIÊNG TƯ</p>
+<h1 style="font-size:clamp(34px,5vw,54px);letter-spacing:-1.4px;line-height:1.16">Google AI Edge Gallery: chạy AI cục bộ trên iPhone và Android</h1>
+<figure class="article-diagram" data-article-diagram="google-ai-edge-gallery-ai-cuc-bo" role="group" aria-labelledby="article-diagram-title-google-ai-edge-gallery-ai-cuc-bo" style="max-width:660px;margin:30px auto;padding:18px;border:1px solid var(--line);border-radius:18px;background:#0b1424">
+<svg viewBox="0 0 620 500" width="100%" height="auto" role="img" aria-labelledby="article-diagram-title-google-ai-edge-gallery-ai-cuc-bo article-diagram-desc-google-ai-edge-gallery-ai-cuc-bo" style="display:block;max-width:100%;height:auto">
+<title id="article-diagram-title-google-ai-edge-gallery-ai-cuc-bo">Sơ đồ: Google AI Edge Gallery chạy AI cục bộ và các ranh giới dữ liệu</title>
+<desc id="article-diagram-desc-google-ai-edge-gallery-ai-cuc-bo">Ba bước: tải mô hình từ nguồn tin cậy; chạy suy luận trên điện thoại; kiểm tra riêng các kết nối MCP, telemetry và dịch vụ bên ngoài.</desc>
+<defs><linearGradient id="diagram-accent-google-ai-edge-gallery-ai-cuc-bo" x1="0" x2="1"><stop offset="0" stop-color="#55d6b5"/><stop offset="1" stop-color="#8ab4ff"/></linearGradient></defs>
+<text x="310" y="38" text-anchor="middle" fill="#73dfc2" font-size="16" font-weight="700" letter-spacing="2">BA RANH GIỚI CẦN NHỚ</text>
+<rect x="58" y="76" width="504" height="94" rx="18" fill="#14243b" stroke="#36506f" stroke-width="2"/>
+<circle cx="108" cy="123" r="22" fill="url(#diagram-accent-google-ai-edge-gallery-ai-cuc-bo)"/>
+<text x="108" y="130" text-anchor="middle" fill="#081421" font-size="19" font-weight="800">1</text>
+<text x="154" y="115" fill="#eef4ff" font-size="19" font-weight="600"><tspan x="154" dy="0">Tải mô hình và kiểm tra</tspan><tspan x="154" dy="24">nguồn, dung lượng, giấy phép</tspan></text>
+<path d="M310 172 V214" fill="none" stroke="#68d8bd" stroke-width="3" stroke-linecap="round"/>
+<path d="M301 204 L310 215 L319 204" fill="none" stroke="#68d8bd" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="58" y="222" width="504" height="94" rx="18" fill="#14243b" stroke="#36506f" stroke-width="2"/>
+<circle cx="108" cy="269" r="22" fill="url(#diagram-accent-google-ai-edge-gallery-ai-cuc-bo)"/>
+<text x="108" y="276" text-anchor="middle" fill="#081421" font-size="19" font-weight="800">2</text>
+<text x="154" y="261" fill="#eef4ff" font-size="19" font-weight="600"><tspan x="154" dy="0">Chạy suy luận trên thiết bị</tspan><tspan x="154" dy="24">và thử khi ngoại tuyến</tspan></text>
+<path d="M310 318 V360" fill="none" stroke="#68d8bd" stroke-width="3" stroke-linecap="round"/>
+<path d="M301 350 L310 361 L319 350" fill="none" stroke="#68d8bd" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="58" y="368" width="504" height="94" rx="18" fill="#14243b" stroke="#36506f" stroke-width="2"/>
+<circle cx="108" cy="415" r="22" fill="url(#diagram-accent-google-ai-edge-gallery-ai-cuc-bo)"/>
+<text x="108" y="422" text-anchor="middle" fill="#081421" font-size="19" font-weight="800">3</text>
+<text x="154" y="407" fill="#eef4ff" font-size="19" font-weight="600"><tspan x="154" dy="0">Rà soát MCP, telemetry</tspan><tspan x="154" dy="24">và dịch vụ bên ngoài</tspan></text>
+</svg>
+<figcaption style="margin-top:10px;color:var(--muted);font-size:13px;line-height:1.6">Sơ đồ do AI Thực Chiến tự thiết kế. “Suy luận cục bộ” không đồng nghĩa mọi tính năng kết nối đều ngoại tuyến.</figcaption>
+</figure>
+<p style="font-size:1.1rem;color:var(--muted)">Một mô hình AI chạy ngay trên điện thoại có thể xử lý prompt, ảnh hoặc âm thanh mà không phải gửi từng yêu cầu lên máy chủ suy luận đám mây. Google AI Edge Gallery là ứng dụng thử nghiệm của Google cho cách làm này. Tuy nhiên, để dùng đúng và không hiểu nhầm về quyền riêng tư, cần tách ba việc: tải mô hình, chạy mô hình trên thiết bị và kết nối các công cụ bên ngoài.</p>
+<p><strong>Đối tượng đọc:</strong> người dùng iPhone hoặc Android muốn thử AI cục bộ, nhà phát triển muốn đánh giá mô hình trên thiết bị và người quan tâm đến quyền riêng tư. <strong>Kết quả mong đợi:</strong> cài ứng dụng từ nguồn chính thức, thử một tác vụ bằng dữ liệu mẫu, biết điểm nào cần internet và biết dữ liệu nào có thể rời khỏi điện thoại.</p>
+
+<section>
+<h2>1. Google AI Edge Gallery là gì?</h2>
+<p>Google AI Edge Gallery là ứng dụng thử nghiệm để khám phá các mô hình AI mở trên thiết bị di động. Thay vì gửi mọi prompt đến một dịch vụ suy luận từ xa, ứng dụng tải mô hình tương thích về điện thoại rồi sử dụng CPU/GPU và bộ nhớ của chính thiết bị để chạy inference. Trang dự án chính thức mô tả các chức năng như AI Chat, Ask Image, Audio Scribe, Prompt Lab, quản lý mô hình, benchmark và các tính năng tìm kiếm media cục bộ.</p>
+<p>Ở phiên bản được kiểm tra ngày <time datetime="2026-11-16">16/11/2026</time>, trang Google Play giới thiệu thêm Instant Media Search và Video Moment Finder dựa trên EmbeddingGemma 2; trang App Store Việt Nam cũng liệt kê ứng dụng miễn phí cho iPhone. Đây là một ứng dụng thử nghiệm đang phát triển, không phải lời hứa rằng mọi model hoặc mọi tác vụ sẽ chạy mượt trên mọi điện thoại.</p>
+<p>Không nên nhầm ứng dụng này với Gemini trên web. Gemini web thường sử dụng mô hình ở hạ tầng đám mây; AI Edge Gallery hướng tới việc tải model về thiết bị. Chất lượng, tốc độ và giới hạn phụ thuộc model cụ thể cùng phần cứng mà bạn đang có.</p>
+</section>
+
+<section>
+<h2>2. Cài đặt và thử lần đầu an toàn</h2>
+<ol>
+<li><strong>Kiểm tra hệ điều hành.</strong> README chính thức ghi Android 12 trở lên và iOS 17 trở lên. App Store Việt Nam hiện liệt kê Google AI Edge Gallery là ứng dụng miễn phí dành cho iPhone. Với Android, mở đúng trang Google Play của ứng dụng do Google LLC phát hành; khả năng hiển thị có thể phụ thuộc quốc gia, tài khoản và thiết bị.</li>
+<li><strong>Cài từ nguồn chính thức.</strong> Dùng Google Play hoặc App Store; không tải APK từ trang chia sẻ không rõ chủ sở hữu. Nếu cửa hàng không hiển thị ứng dụng, đừng tìm bản cài đặt không xác định chỉ để vượt qua cảnh báo khu vực.</li>
+<li><strong>Mở phần quản lý mô hình.</strong> Chọn model tương thích được ứng dụng liệt kê. Trước khi tải, xem dung lượng, định dạng, yêu cầu phần cứng và model card/giấy phép. Mỗi model có thể có điều khoản khác nhau dù được dùng bên trong cùng một ứng dụng.</li>
+<li><strong>Chờ tải hoàn tất khi có Wi-Fi.</strong> Lần đầu cần internet để tải model và thành phần cần thiết. Tệp mô hình có thể lớn; kiểm tra dung lượng trống và tránh tải qua dữ liệu di động nếu gói cước bị giới hạn.</li>
+<li><strong>Thử bằng dữ liệu vô hại.</strong> Bắt đầu với một câu hỏi ngắn, một ảnh mẫu không có người/giấy tờ riêng tư hoặc một đoạn âm thanh tự tạo. Quan sát thời gian phản hồi, mức nóng máy, pin và bộ nhớ trước khi thử việc dài hơn.</li>
+<li><strong>Kiểm tra chế độ ngoại tuyến.</strong> Sau khi model đã tải, bật chế độ máy bay và thử lại một tác vụ chỉ cần model cục bộ. Nếu một tính năng dừng hoạt động, có thể nó cần tải thêm tài nguyên hoặc gọi dịch vụ bên ngoài; ghi nhận điều đó thay vì kết luận toàn bộ ứng dụng không chạy offline.</li>
+</ol>
+<p>Không có một con số RAM tối thiểu chung cho mọi model trong hướng dẫn này. Hãy dùng danh sách tương thích và chỉ số hiệu năng của chính ứng dụng. Model lớn hơn không tự động có trải nghiệm tốt hơn trên điện thoại có bộ nhớ hoặc GPU hạn chế.</p>
+</section>
+
+<section>
+<h2>3. Điều gì thực sự ở trên điện thoại, điều gì có thể đi ra ngoài?</h2>
+<p>Google mô tả inference của các model được hỗ trợ là chạy trên phần cứng thiết bị; Google Play và App Store cũng quảng bá khả năng xử lý cục bộ. Điều này có nghĩa prompt và dữ liệu đầu vào của một tác vụ inference local không cần gửi đến máy chủ model chỉ để tạo câu trả lời. Nhưng cần phân biệt với các hoạt động khác:</p>
+<ul>
+<li><strong>Tải model và cập nhật:</strong> cần kết nối mạng để lấy tệp từ nguồn phân phối. Nguồn tải và model card cần được kiểm tra riêng.</li>
+<li><strong>Agent Skills hoặc MCP:</strong> Google Developers Blog ngày 19/05/2026 mô tả MCP là tính năng thử nghiệm trên Android. Mô hình có thể suy luận trên điện thoại nhưng yêu cầu công cụ được gửi tới MCP server, có thể nằm trên máy tính ở nhà hoặc endpoint đám mây. Dữ liệu truyền tới server đó chịu chính sách và quyền truy cập của server, không được bảo vệ chỉ vì model chạy local.</li>
+<li><strong>Telemetry và chẩn đoán ứng dụng:</strong> trang Google Play khai báo không chia sẻ dữ liệu với bên thứ ba, nhưng ứng dụng có thể thu thập App activity và App info/performance; dữ liệu được mã hóa khi truyền. Trang App Store iOS liệt kê identifiers, diagnostics và other data có thể liên kết với người dùng cho analytics/chức năng; coarse location, usage data và crash data được liệt kê là không liên kết. Apple ghi rõ nhãn quyền riêng tư do nhà phát triển cung cấp; Apple yêu cầu nhà phát triển chịu trách nhiệm giữ câu trả lời chính xác và cập nhật.</li>
+</ul>
+<p>Vì vậy, câu chính xác là: <strong>model inference có thể chạy cục bộ; điều đó không chứng minh ứng dụng không có telemetry hoặc mọi kết nối mở rộng đều offline.</strong> Không nên dùng cụm “100% riêng tư” như một cam kết tuyệt đối nếu chưa tự kiểm tra phiên bản ứng dụng, quyền hệ điều hành, kết nối mạng và máy chủ MCP.</p>
+<p>Thực hành an toàn: chỉ cấp quyền ảnh, microphone hoặc camera khi thật sự dùng chức năng tương ứng; không đưa hợp đồng, hồ sơ nhân sự, giấy tờ định danh hoặc dữ liệu khách hàng vào bản thử nghiệm; kiểm tra địa chỉ MCP server trước khi kết nối; không cài skill không rõ nguồn; và xóa model/tệp thử khi không còn cần.</p>
+</section>
+
+<section>
+<h2>4. Giấy phép ứng dụng không phải giấy phép của mọi mô hình</h2>
+<p>Repository chính thức của Google AI Edge Gallery công bố mã nguồn ứng dụng theo Apache License 2.0. Giấy phép này áp dụng cho phần mềm trong repository theo phạm vi giấy phép, không tự động chuyển sang mọi model weights được tải qua ứng dụng. Mỗi model có thể có model card, điều khoản sử dụng hoặc giấy phép riêng; một số model mở cho tải xuống nhưng vẫn kèm điều kiện cụ thể.</p>
+<p>Trước khi dùng model trong sản phẩm thương mại, hãy mở model card gốc, kiểm tra tên nhà cung cấp, phiên bản, giấy phép, mục đích bị hạn chế, điều kiện phân phối lại và yêu cầu ghi công. Tương tự, MCP server và Agent Skill của bên thứ ba có mã nguồn, quyền truy cập và chính sách dữ liệu riêng. Không suy luận “ứng dụng Apache 2.0” thành “mọi thứ bên trong đều Apache 2.0”.</p>
+</section>
+
+<section>
+<h2>5. Khi nào nên dùng AI cục bộ?</h2>
+<p>AI cục bộ đáng thử khi bạn cần thử nghiệm nhanh, muốn giảm việc gửi prompt đến dịch vụ suy luận đám mây, làm việc khi kết nối yếu hoặc đánh giá một model trên phần cứng thực tế. Những tác vụ nhỏ như tóm tắt ghi chú không nhạy cảm, phân loại ảnh mẫu, thử prompt, nhận dạng đoạn âm thanh ngắn hoặc tìm kiếm media cá nhân có thể là điểm bắt đầu phù hợp.</p>
+<p>Không nên mặc định dùng model cục bộ cho quyết định y tế, pháp lý, tài chính hoặc quyết định ảnh hưởng đến quyền lợi của người khác. Model trên điện thoại có thể thiếu kiến thức cập nhật, suy luận yếu hơn model đám mây lớn hoặc tạo câu trả lời sai mà không có nguồn. Với dữ liệu quan trọng, cần người kiểm tra và nguồn đối chiếu độc lập.</p>
+<p>Hiệu năng phụ thuộc bộ nhớ khả dụng, CPU/GPU, định dạng model, độ dài ngữ cảnh và tác vụ. Nếu máy nóng, pin tụt nhanh, ứng dụng bị đóng hoặc thời gian phản hồi tăng, hãy chuyển sang model nhỏ hơn, rút ngắn prompt hoặc dừng thử nghiệm. Không nên ép máy chạy model vượt khả năng chỉ vì muốn đạt kết quả giống máy chủ chuyên dụng.</p>
+</section>
+
+<section>
+<h2>6. Checklist trước khi đưa vào công việc</h2>
+<ul>
+<li>Đã cài đúng ứng dụng Google AI Edge Gallery do Google LLC phát hành từ cửa hàng chính thức.</li>
+<li>Đã kiểm tra phiên bản hệ điều hành, model tương thích, dung lượng tải và bộ nhớ trống.</li>
+<li>Đã đọc model card và giấy phép riêng của model; không nhầm với Apache 2.0 của ứng dụng.</li>
+<li>Đã thử một tác vụ bằng dữ liệu giả và xác nhận hoạt động offline sau khi tải model.</li>
+<li>Đã xem quyền camera, microphone, ảnh, chẩn đoán và thông tin quyền riêng tư trong cửa hàng ứng dụng.</li>
+<li>Đã kiểm tra MCP server/Agent Skill nếu dùng; xác nhận nơi nhận dữ liệu và quyền mà công cụ được cấp.</li>
+<li>Không đưa dữ liệu bí mật, token, hồ sơ khách hàng hoặc tài liệu nội bộ vào bài thử ban đầu.</li>
+<li>Đã có bước con người kiểm tra trước khi dùng đầu ra để gửi, đăng, ghi dữ liệu hoặc ra quyết định.</li>
+</ul>
+</section>
+
+<section>
+<h2>Kết luận</h2>
+<p>Google AI Edge Gallery là một cách tiếp cận đáng chú ý để thử AI ngay trên iPhone và Android mà không cần trả phí cho từng request suy luận đám mây. Giá ứng dụng là miễn phí, nhưng model, phần cứng, lưu trữ và các công cụ kết nối có điều kiện riêng. Hãy bắt đầu bằng model nhỏ, dữ liệu mẫu và thử nghiệm ngoại tuyến; sau đó mới cân nhắc tác vụ thực tế, đồng thời giữ rõ ranh giới giữa inference cục bộ, telemetry và MCP server bên ngoài.</p>
+<p>Thông tin được đối chiếu theo tài liệu chính thức truy cập ngày <time datetime="2026-11-16">16/11/2026</time>. Giá ứng dụng, khả năng phân phối theo khu vực, model tương thích và khai báo quyền riêng tư có thể thay đổi; hãy mở nguồn gốc trước khi triển khai.</p>
+</section>
+
+<section>
+<h2>Nguồn tham khảo chính thức</h2>
+<ul>
+<li><a href="https://github.com/google-ai-edge/gallery" target="_blank" rel="noopener noreferrer">Google AI Edge Gallery — repository và README</a>: tính năng, hệ điều hành được hỗ trợ và hướng dẫn cài đặt.</li>
+<li><a href="https://github.com/google-ai-edge/gallery/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">Google AI Edge Gallery — Apache License 2.0</a>: phạm vi giấy phép mã nguồn ứng dụng.</li>
+<li><a href="https://play.google.com/store/apps/details?id=com.google.ai.edge.gallery" target="_blank" rel="noopener noreferrer">Google AI Edge Gallery — Google Play</a>: nhà phát hành, tính năng, cập nhật và Data safety do nhà phát triển khai báo.</li>
+<li><a href="https://apps.apple.com/vn/app/google-ai-edge-gallery/id6749645337" target="_blank" rel="noopener noreferrer">Google AI Edge Gallery — App Store Việt Nam</a>: giá niêm yết, thiết bị tương thích và nhãn quyền riêng tư do nhà phát triển cung cấp.</li>
+<li><a href="https://developers.googleblog.com/en/a-smarter-google-ai-edge-gallery-mcp-integration-notifications-and-session-continuity/" target="_blank" rel="noopener noreferrer">Google Developers Blog — MCP integration, notifications and session continuity</a> (19/05/2026): mô tả MCP thử nghiệm trên Android và cách MCP server nhận yêu cầu.</li>
+<li><a href="https://developer.apple.com/app-store/app-privacy-details/" target="_blank" rel="noopener noreferrer">Apple Developer — App Privacy Details</a>: nhà phát triển tự khai báo và có trách nhiệm cập nhật thông tin quyền riêng tư hiển thị trên App Store.</li>
+<li><a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">Google Privacy Policy</a>: chính sách quyền riêng tư tổng quát của Google; cần đọc cùng khai báo riêng của ứng dụng.</li>
+</ul>
+<p>Đây là bài hướng dẫn kỹ thuật, không phải đánh giá hiệu năng độc lập trên mọi mẫu điện thoại. Tác giả không tuyên bố đã kiểm thử trực tiếp tất cả model, thiết bị hoặc khu vực phân phối.</p>
+</section>
+
+<section class="article-faq" aria-labelledby="faq-google-ai-edge-gallery-ai-cuc-bo">
+<h2 id="faq-google-ai-edge-gallery-ai-cuc-bo">Câu hỏi thường gặp</h2>
+<h3>Google AI Edge Gallery có miễn phí không?</h3>
+<p>Ứng dụng được niêm yết miễn phí trên Google Play và App Store Việt Nam tại ngày kiểm tra. Việc tải model có thể cần dữ liệu mạng và dung lượng lưu trữ; từng model có giấy phép riêng.</p>
+<h3>Chạy AI cục bộ có cần internet không?</h3>
+<p>Sau khi tải model và tài nguyên cần thiết, tác vụ inference local có thể chạy ngoại tuyến. Tải model, cập nhật hoặc gọi MCP server/dịch vụ bên ngoài vẫn cần mạng.</p>
+<h3>Ứng dụng có gửi dữ liệu cá nhân lên máy chủ không?</h3>
+<p>Google mô tả inference local, nhưng các cửa hàng ứng dụng vẫn có khai báo về dữ liệu hoạt động và chẩn đoán. Ngoài ra, MCP server có thể nhận dữ liệu mà công cụ cần xử lý. Hãy kiểm tra từng kết nối và không đưa dữ liệu nhạy cảm vào thử nghiệm.</p>
+<h3>Apache 2.0 có áp dụng cho model tải về không?</h3>
+<p>Không mặc nhiên. Apache 2.0 trong repository là giấy phép mã nguồn ứng dụng; mỗi model weights và skill bên thứ ba có điều khoản riêng.</p>
+</section>
+
+<section class="related-articles" aria-labelledby="related-google-ai-edge-gallery-ai-cuc-bo">
+<h2 id="related-google-ai-edge-gallery-ai-cuc-bo">Bài viết liên quan</h2>
+<nav class="related-articles-grid" aria-label="Bài viết liên quan">
+<a class="related-article" href="/articles/chon-mo-hinh-ai-cho-cong-viec"><strong>Chọn mô hình AI theo công việc</strong><span>Đánh đổi giữa chất lượng, tốc độ, dữ liệu và chi phí.</span></a>
+<a class="related-article" href="/articles/bao-ve-du-lieu-khi-dung-ai"><strong>Bảo vệ dữ liệu khi dùng AI</strong><span>Phân loại thông tin và giảm dữ liệu đưa vào công cụ.</span></a>
+<a class="related-article" href="/articles/so-sanh-goi-mien-phi-ai"><strong>So sánh gói miễn phí AI</strong><span>Đọc đúng giới hạn, điều kiện và thay đổi của từng gói.</span></a>
+<a class="related-article" href="/articles/nhan-biet-prompt-injection-ai"><strong>Nhận diện Prompt Injection</strong><span>Giữ quyền kiểm soát khi kết nối model với công cụ ngoài.</span></a>
+</nav>
+</section>
+<section class="article-author-note" aria-label="Ghi công tác giả và sử dụng nội dung">
+<p><strong>Tác giả:</strong> DUNG - AI</p>
+<p>Khi trích dẫn hoặc sử dụng lại bài viết này, vui lòng ghi rõ tác giả <strong>DUNG - AI</strong>, tên website <strong>AI Thực Chiến Blog</strong> và dẫn liên kết về bài viết gốc. Việc ghi nguồn không thay thế giấy phép nếu pháp luật yêu cầu.</p>
+</section>
+</main>
+<footer><a class="brand" href="../"><span class="brand-mark">AI</span><span>AI <b>Thực Chiến</b></span></a><span>Học thật · Thử thật · Tối ưu từng bước · <a href="../feed.xml">RSS</a></span><span>© 2026 AI Thực Chiến</span></footer>
+</body>
+</html>
