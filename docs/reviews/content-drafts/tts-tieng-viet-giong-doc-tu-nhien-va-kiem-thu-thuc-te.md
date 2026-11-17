@@ -539,3 +539,11 @@ Rủi ro/điều chưa xác minh:
 5. Cổng phát hành video vẫn BLOCKED: cần audio nghe/chấm đạt, transcript/phụ đề tiếng Việt được kiểm tra, quyền sử dụng voice/music/assets rõ ràng và bản MP4 Preview được xem lại trước khi lên lịch.
 
 **Kết luận:** chưa có công cụ miễn phí nào được chứng minh đồng thời đáp ứng đủ ba điều kiện: giọng Việt tự nhiên, phụ đề Việt chính xác và dựng/xuất video không watermark trên iPhone. Giữ quy trình ở mức ứng viên và không phát hành khi chưa đủ bằng chứng.
+
+## 5M. Ghi nhận lựa chọn giọng Male 1 — 17/11/2026
+
+- Người dùng đã nghe các mẫu giọng và chọn **Male 1** làm lựa chọn ưu tiên. Giữ nguyên lựa chọn này khi tiếp tục đánh giá; không tự thay bằng giọng khác chỉ vì một công cụ khác có nhãn tương tự.
+- Bằng chứng hiện có chưa xác định được nhà cung cấp, model, voice ID, vùng giọng hoặc license gắn với nhãn “Male 1”. Không gán nhãn này cho PyroSoft/Supertonic, CapCut, Speechma, VieNeu-TTS, ZeroTTS, KorvaTTS hay dịch vụ nào nếu chưa có tên chính xác trong giao diện hoặc metadata của tệp.
+- Phản hồi nghe thử người dùng đã xác nhận cho mẫu TTS trước đó: **rõ**, **hơi giống giọng máy**, **hơi nhanh**, và được chọn ở mức **miễn phí**. Đây là đánh giá chủ quan của người dùng đối với mẫu đã nghe, không phải benchmark độc lập và chưa xác nhận quyền thương mại của đúng voice.
+- Không có audio mới được tạo, tải lên hoặc gửi tới dịch vụ bên ngoài trong lần cập nhật này. Không yêu cầu người dùng gửi lại tệp đã có.
+- **Cổng lựa chọn:** Male 1 vẫn là lựa chọn ưu tiên, nhưng chưa được phê duyệt cho video công khai cho tới khi xác định đúng voice/provider, điều khoản sử dụng của voice cụ thể, và nghe/chấm bản xuất dài hơn với cùng bộ câu thử. Không bật Pro, không thanh toán, không thêm phương thức thanh toán.
