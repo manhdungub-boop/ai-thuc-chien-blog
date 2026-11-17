@@ -110,9 +110,13 @@ Theo dõi DUNG - AI để cùng ứng dụng AI vào công việc và cuộc s�
 - [ ] Full video reviewed on an iPhone-sized screen.
 - [ ] Explicit release approval obtained before public posting.
 
-## 7. Current limitations / next dependency
+## 7. Current limitations / next dependency — updated 2026-11-17
 
-No audio or video file has been produced in this repository. The next real-world dependency is an audio export from PocketPal (or another already-available free local method). The assistant cannot access or operate the user's iPhone directly. Until an audio file is available, subtitle timing remains provisional.
+- The user reports that the audio file has already been downloaded to the iPhone.
+- The audio file is not attached to this repository and is not accessible to the assistant through the current session. Do not ask the user to regenerate the voice; do not claim the pilot audio has been listened to or verified.
+- The user's latest listening feedback confirms PocketPal / Supertonic / Alex (Male 1) / Vietnamese as clear and natural. This is user-reported listening feedback, not an independent quality check of the specific pilot audio file.
+- The remaining dependency is access to that existing audio file through a supported attachment or device export route. Once accessible, measure the true runtime, synchronize every SRT cue, listen to the full track and then assemble/review the MP4.
+- Until the actual pilot audio can be inspected, subtitle timings remain provisional and the video is not complete or releasable.
 
 ## 8. Safety and release boundary
 
