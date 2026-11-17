@@ -110,6 +110,7 @@ jobs:
             preview_url="$(EXPECTED_SHA="$EXPECTED_SHA" COMMENTS_FILE="$comments_file" CHECKS_FILE="$checks_file" python3 - <<'PY'
           import json, os, re
           from html.parser import HTMLParser
+          from urllib.parse import urlparse
 
           class PreviewTableParser(HTMLParser):
               def __init__(self):
@@ -147,13 +148,35 @@ jobs:
               checks = json.load(stream).get("check_runs", [])
           cloudflare = [
               check for check in checks
-              if check.get("name", "").startswith("Workers Builds:")
+              if check.get("name") == "Workers Builds: ai-thuc-chien-blog-auth-app-preview"
           ]
           if not any(
               check.get("status") == "completed" and check.get("conclusion") == "success"
               for check in cloudflare
           ):
               raise SystemExit(1)
+
+          # Workers Builds check details contain the Preview branch slug and
+          # build UUID. Resolve the documented workers.dev branch alias from
+          # the exact-SHA check; Worker Previews do not always publish PR comments.
+          expected_worker = "ai-thuc-chien-blog-auth-app-preview"
+          for check in reversed(cloudflare):
+              details_url = check.get("details_url") or ""
+              parsed = urlparse(details_url)
+              match = re.fullmatch(
+                  r"/[a-f0-9]+/workers/services/view/([^/]+)/production/previews/([a-z0-9-]+)/builds/([a-f0-9-]+)",
+                  parsed.path
+              )
+              if (
+                  parsed.scheme == "https"
+                  and parsed.netloc == "dash.cloudflare.com"
+                  and match
+                  and match.group(1) == expected_worker
+                  and (not check.get("external_id") or match.group(3) == check.get("external_id"))
+              ):
+                  preview_slug, worker_name = match.group(2), match.group(1)
+                  print(f"https://{preview_slug}-{worker_name}.manhdungub.workers.dev")
+                  raise SystemExit(0)
 
           with open(os.environ["COMMENTS_FILE"], encoding="utf-8") as stream:
               comments = json.load(stream)
