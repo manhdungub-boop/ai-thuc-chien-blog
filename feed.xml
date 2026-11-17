@@ -4,6 +4,24 @@
     <title>AI Thực Chiến</title>
     <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/</link>
     <description>Kiến thức AI thực hành, tự động hóa và công nghệ cho người Việt.</description>
+<item>
+    <title>Bảo mật MCP Server: OAuth, token và kết nối AI an toàn | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/bao-mat-mcp-server-oauth-ai</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/bao-mat-mcp-server-oauth-ai</guid>
+    <description>Hướng dẫn bảo mật MCP khi kết nối AI với công cụ và dữ liệu: kiểm tra nguồn máy chủ, giới hạn quyền OAuth, xác thực token, cô lập công cụ và kiểm thử trước khi sử dụng.</description>
+  </item>
+<item>
+    <title>Google AI Edge Gallery: chạy AI cục bộ trên iPhone và Android | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/google-ai-edge-gallery-ai-cuc-bo</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/google-ai-edge-gallery-ai-cuc-bo</guid>
+    <description>Hướng dẫn dùng Google AI Edge Gallery trên iPhone và Android: tải mô hình, chạy AI cục bộ, hiểu giới hạn phần cứng, MCP và quyền riêng tư.</description>
+  </item>
+<item>
+    <title>AntiScam Pango: AI phát hiện lừa đảo trên điện thoại có gì đáng chú ý? | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/antiscam-pango-ai-phat-hien-lua-dao-tren-dien-thoai</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/antiscam-pango-ai-phat-hien-lua-dao-tren-dien-thoai</guid>
+    <description>Phân tích AntiScam Pango: AI phát hiện hội thoại lừa đảo ngay trên Android, cách xử lý dữ liệu, quyền thông báo, giới hạn tiếng Anh và lưu ý với người dùng Việt Nam.</description>
+  </item>
     <item>
     <title>Đặt giới hạn quota cho AI Agent: hard-stop, ngân sách và circuit breaker | AI Thực Chiến</title>
     <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/gioi-han-quota-ai-agent</link>
