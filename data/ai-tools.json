@@ -285,11 +285,11 @@
         "web"
       ],
       "description": "Nền tảng tạo và chỉnh sửa video, hình ảnh bằng mô hình AI.",
-      "free_tier_summary": "Gói Free $0 cung cấp 125 credits một lần (không hết hạn khi chưa sử dụng hết), 5 GB lưu trữ tài sản và quyền truy cập một số công cụ tạo sinh được chọn. Credits không được cấp lại hằng tháng; khi dùng hết cần chờ hoặc mua thêm, vì vậy không bật mua credits nếu giữ ngân sách 0 đồng.",
+      "free_tier_summary": "Gói Free cung cấp 125 credits một lần (không hết hạn, không làm mới), 5 GB lưu trữ và quyền truy cập một số công cụ/model được chọn; danh sách có thể thay đổi. Video tạo trên Free plan có watermark Runway. Không thể mua thêm credits trên Free; muốn thêm credits hoặc bỏ watermark phải nâng cấp gói trả phí. Vì dự án yêu cầu 0 đồng và video chuyên nghiệp không watermark, chỉ dùng Runway để thử nghiệm nội bộ nếu chấp nhận watermark; không dùng làm nguồn xuất bản chính. Không nhập dữ liệu riêng tư hoặc nội dung chưa công khai vào dịch vụ cloud.",
       "official_sources": [
         "https://runway.com/pricing"
       ],
-      "last_verified": "2026-11-17",
+      "last_verified": "2026-11-18",
       "verification_status": "verified",
       "status": "active",
       "tags": [
