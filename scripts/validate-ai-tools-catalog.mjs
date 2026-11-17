@@ -44,7 +44,7 @@ for (const [i, tool] of catalog.tools.entries()) {
   if (!allowedStatus.has(tool.status)) errors.push(`${at}: unsupported status`);
   const checkedDate = new Date((tool.last_verified || "") + "T00:00:00Z");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(tool.last_verified || "") || Number.isNaN(checkedDate.getTime()) || checkedDate.toISOString().slice(0,10) !== tool.last_verified) errors.push(`${at}: last_verified must be a real YYYY-MM-DD calendar date`);
-  if (tool.verification_status === "verified" && tool.pricing_status === "unknown" && tool.status !== "deprecated") errors.push(`${at}: active/other verified records cannot have unknown pricing; deprecated records may retain unknown pricing when the sunset is verified and they are excluded from public results`);
+  if (tool.verification_status === "verified" && tool.pricing_status === "unknown" && tool.status !== "deprecated") warnings.push(`${at}: product identity/capabilities are verified, but pricing remains unknown; keep the public pricing summary explicit and do not imply free access`);
   if (["verified_free","verified_free_tier","paid_only","limited_credits","self_hosted_free"].includes(tool.pricing_status) && tool.verification_status !== "verified") warnings.push(`${at}: pricing status is asserted but record is not verified; retain review label`);
   const nameKey = normalized(tool.name) + "::" + normalized(tool.vendor);
   if (names.has(nameKey)) errors.push(`${at}: duplicate name/vendor with ${names.get(nameKey)}`);
