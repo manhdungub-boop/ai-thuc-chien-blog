@@ -1,11 +1,479 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-11-11T00:00:00+07:00",
+  "generated_at": "2026-11-18T00:00:00+07:00",
   "catalog_policy": {
     "default_locale": "vi",
     "currency": "USD",
     "new_entry_status": "needs_review",
     "note": "Candidate intake only. All new records remain needs_review; pricing, license scope, regional availability and public-listing eligibility require editorial approval."
   },
-  "tools": []
+  "tools": [
+    {
+      "id": "groqcloud",
+      "name": "GroqCloud",
+      "vendor": "Groq",
+      "website": "https://console.groq.com/home",
+      "categories": [
+        "developer",
+        "assistant",
+        "automation",
+        "audio"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "Free tier có giới hạn theo tổ chức/model; giới hạn cụ thể xem trong tài khoản. Developer tier là pay-as-you-go, cần phương thức thanh toán hợp lệ; có thể phát sinh hóa đơn theo ngưỡng hoặc cuối tháng. Không bật Developer tier khi chưa có phê duyệt ngân sách.",
+      "license": "Dịch vụ nền tảng/API thương mại; điều khoản dịch vụ áp dụng. Giấy phép mô hình phụ thuộc từng model, chưa xác minh đồng nhất.",
+      "platforms": [
+        "web",
+        "api"
+      ],
+      "description": "Nền tảng inference cho mô hình ngôn ngữ lớn, cung cấp API tương thích OpenAI và tài liệu về mô hình, giới hạn tốc độ, tích hợp và công cụ.",
+      "free_tier_summary": "GroqCloud Free tier có giới hạn theo model/tổ chức; Developer tier yêu cầu phương thức thanh toán hợp lệ và tính phí pay-as-you-go (có hóa đơn theo ngưỡng hoặc cuối kỳ), vì vậy không bật nếu chưa duyệt ngân sách. Về dữ liệu: tài liệu Your Data in GroqCloud nói inference không được lưu mặc định; log đầu vào/đầu ra có thể được giữ tối đa 30 ngày khi xử lý sự cố/điều tra lạm dụng, trừ khi bật ZDR. Groq cho phép mọi khách hàng bật ZDR trong Data Controls; tính năng Batch/Fine-tuning cần lưu trữ sẽ bị ảnh hưởng. Tài liệu nêu dữ liệu lưu trữ ở GCP tại Hoa Kỳ; vùng xử lý theo khu vực là thỏa thuận Enterprise. Kiểm tra cấu hình thực tế trước khi gửi dữ liệu nhạy cảm.",
+      "official_sources": [
+        "https://console.groq.com/home",
+        "https://console.groq.com/docs/overview",
+        "https://console.groq.com/docs/rate-limits",
+        "https://console.groq.com/docs/billing-faqs",
+        "https://console.groq.com/docs/legal/services-agreement",
+        "https://trust.groq.com/faq",
+        "https://groq.com/privacy-policy",
+        "https://console.groq.com/docs/your-data",
+        "https://console.groq.com/docs/model-permissions"
+      ],
+      "last_verified": "2026-11-15",
+      "verification_status": "needs_review",
+      "status": "active",
+      "tags": [
+        "llm-inference",
+        "api",
+        "openai-compatible",
+        "developer-platform"
+      ]
+    },
+    {
+      "id": "mistral-studio",
+      "name": "Mistral Studio",
+      "vendor": "Mistral AI",
+      "website": "https://console.mistral.ai/",
+      "categories": [
+        "developer",
+        "agents",
+        "automation",
+        "data"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "Free mode có ngân sách tháng giới hạn cho Vibe và Studio, nhưng KHÔNG bao gồm API. Tài liệu Usage and limits hiện xác nhận rõ việc tạo API key và gọi API yêu cầu kích hoạt billing và pay-as-you-go. Không kích hoạt billing, không mua tín dụng và không giới thiệu API Mistral là miễn phí.",
+      "license": "Dịch vụ nền tảng/API thương mại; điều khoản dịch vụ áp dụng. Giấy phép từng model có thể khác nhau, cần kiểm tra riêng model được chọn.",
+      "platforms": [
+        "web",
+        "api"
+      ],
+      "description": "Bảng điều khiển dành cho nhà phát triển của Mistral AI, hỗ trợ API, API keys, Playground, đánh giá mô hình, agents và SDK.",
+      "free_tier_summary": "Free mode chỉ bao gồm ngân sách tháng để thử Vibe/Studio, không có API access. Tạo API key và sử dụng API yêu cầu bật billing/pay-as-you-go; do đó không phù hợp điều kiện 0 đồng của dự án. ZDR chỉ dành cho Scale plan trả phí và chỉ áp dụng cho một số API stateless; không áp dụng cho Agents, files, conversations, libraries, Vibe Work/Chat. Chính sách quyền riêng tư và retention khác nhau theo sản phẩm; phải kiểm tra điều khoản đúng endpoint trước khi gửi dữ liệu. Không gửi dữ liệu nhạy cảm.",
+      "official_sources": [
+        "https://docs.mistral.ai/",
+        "https://console.mistral.ai/",
+        "https://mistral.ai/pricing/",
+        "https://mistral.ai/pricing/api/",
+        "https://docs.mistral.ai/studio/governance",
+        "https://docs.mistral.ai/admin/monitor-comply/zero-data-retention",
+        "https://docs.mistral.ai/admin/billing-usage/subscriptions",
+        "https://docs.mistral.ai/admin/billing-usage/usage-limits",
+        "https://docs.mistral.ai/getting-started/quickstarts/studio/activate-and-generate-api-key",
+        "https://help.mistral.ai/en/articles/347612-can-i-activate-zero-data-retention-zdr",
+        "https://legal.mistral.ai/terms/privacy-policy/"
+      ],
+      "last_verified": "2026-11-17",
+      "verification_status": "needs_review",
+      "status": "active",
+      "tags": [
+        "developer-console",
+        "llm-api",
+        "playground",
+        "agents",
+        "evaluation"
+      ]
+    },
+    {
+      "id": "exllamav3",
+      "name": "ExLlamaV3",
+      "vendor": "Turboderp",
+      "website": "https://github.com/turboderp-org/exllamav3",
+      "categories": [
+        "developer",
+        "local-ai",
+        "inference",
+        "model-optimization"
+      ],
+      "pricing_model": "open_source",
+      "pricing_status": "Phần mềm mã nguồn mở MIT, tải và sử dụng miễn phí. Không phải dịch vụ API cloud có quota miễn phí. Cần GPU NVIDIA tương thích, CUDA và PyTorch; người dùng tự chịu chi phí phần cứng, điện và tải mô hình. Không bật dịch vụ cloud hoặc API tính phí.",
+      "license": "MIT cho mã nguồn ExLlamaV3 theo LICENSE của repository. Giấy phép model weights, tokenizer và các thành phần tải từ bên thứ ba phải kiểm tra riêng theo từng model.",
+      "platforms": [
+        "windows",
+        "linux"
+      ],
+      "description": "Thư viện suy luận LLM chạy cục bộ trên GPU tiêu dùng, hỗ trợ lượng tử hóa EXL3, song song tensor/expert, CPU offloading và nhiều tối ưu suy luận. Có thể tích hợp API tương thích OpenAI thông qua TabbyAPI.",
+      "free_tier_summary": "Miễn phí mã nguồn mở theo MIT; chạy inference trên phần cứng của người dùng, không có hosted API miễn phí được xác nhận. Tài liệu cài đặt yêu cầu PyTorch phù hợp và CUDA 12.4 trở lên; có wheel phát hành cho Linux và Windows. Đây là thư viện kỹ thuật, không phải ứng dụng chat cài là dùng cho người mới. Khi chạy local, prompt có thể ở trên máy; nếu dùng TabbyAPI từ xa, tải model từ Hugging Face hoặc kết nối dịch vụ bên ngoài thì luồng dữ liệu phụ thuộc cấu hình đó. Model weights có giấy phép riêng.",
+      "official_sources": [
+        "https://github.com/turboderp-org/exllamav3",
+        "https://github.com/turboderp-org/exllamav3/blob/master/LICENSE",
+        "https://github.com/turboderp-org/exllamav3/releases",
+        "https://github.com/turboderp-org/exllamav3#installation"
+      ],
+      "last_verified": "2026-11-16",
+      "verification_status": "needs_review",
+      "status": "active",
+      "tags": [
+        "local-llm",
+        "inference",
+        "quantization",
+        "gpu",
+        "open-source"
+      ]
+    },
+    {
+      "id": "gemini-4-carbon",
+      "name": "Gemini 4 Carbon",
+      "vendor": "Google DeepMind",
+      "website": "https://deepmind.google/models/gemini/",
+      "categories": [
+        "model",
+        "reasoning",
+        "coding",
+        "agentic"
+      ],
+      "pricing_model": "paid",
+      "pricing_status": "Google Gemini API: không có Free tier; Standard $2/1 triệu input tokens và $10/1 triệu output tokens đến 30/11/2026, từ 01/12/2026 là $4/$20. GitHub Copilot công bố 16/11/2026 model này chỉ khả dụng cho Copilot Pro+, Max, Business và Enterprise; không có quyền Free được xác nhận. Không bật billing hoặc dùng model này trong quy trình 0 đồng.",
+      "license": "Proprietary model; model/API access is governed by Google's applicable terms.",
+      "platforms": [
+        "api",
+        "google-ai-studio"
+      ],
+      "description": "Mô hình reasoning cao cấp của Google DeepMind, được định vị cho kỹ thuật phần mềm phức tạp, khoa học và agent nhiều bước.",
+      "free_tier_summary": "Không có Free tier trên Gemini API; mọi token được tính phí. Google AI Studio hiển thị model để thử nhưng không đồng nghĩa với miễn phí. Giá Standard API: $2/$10 mỗi 1 triệu input/output tokens đến 30/11/2026; $4/$20 từ 01/12/2026. GitHub Copilot: có cho Pro+, Max, Business và Enterprise, không có Free tier được xác nhận trong thông báo. Không bật billing, không thêm thẻ, không dùng trong workflow 0 đồng.",
+      "official_sources": [
+        "https://deepmind.google/models/model-cards/gemini-4-carbon/",
+        "https://deepmind.google/models/gemini/",
+        "https://ai.google.dev/gemini-api/docs/pricing",
+        "https://blog.google/innovation-and-ai/models-and-research/gemini-models/introducing-gemini-4-carbon/",
+        "https://cloud.google.com/model-garden/pricing",
+        "https://github.blog/changelog/2026-11-16-github-copilot-weekly-releases-november-9/"
+      ],
+      "last_verified": "2026-11-17",
+      "verification_status": "needs_review",
+      "status": "active",
+      "tags": [
+        "frontier-model",
+        "paid-api",
+        "reasoning",
+        "research-queue"
+      ]
+    },
+    {
+      "id": "claude-fable-5-2",
+      "name": "Claude Fable 5.2",
+      "vendor": "Anthropic",
+      "website": "https://www.anthropic.com/claude-fable-and-mythos-5-2",
+      "categories": [
+        "model",
+        "agentic-coding",
+        "reasoning",
+        "science"
+      ],
+      "pricing_model": "paid",
+      "pricing_status": "Claude Free: Fable không khả dụng. Claude Pro: Fable dùng usage credits; Max/Ultra bao gồm Fable tối đa 50% giới hạn tuần theo bảng giá hiện hành. API: $8/1 triệu input tokens và $40/1 triệu output tokens; Fast mode $16/$80. Giá Claude.com Việt Nam hiển thị $17/tháng khi thanh toán năm ($200 trả trước) hoặc $20/tháng; Max $100, Ultra $200, chưa gồm thuế. GitHub Copilot công bố Fable 5.2 cho Pro+, Max, Business và Enterprise, không xác nhận Copilot Free; Fable yêu cầu data retention mặc định và admin Business/Enterprise phải bật policy. Không dùng dưới chính sách 0 đồng.",
+      "license": "Proprietary model; access is subject to Anthropic's consumer or platform terms and any model-specific restrictions.",
+      "platforms": [
+        "web",
+        "api",
+        "ios",
+        "android",
+        "desktop",
+        "aws",
+        "google-cloud",
+        "azure"
+      ],
+      "description": "Mô hình Anthropic Claude Fable 5.2 cho coding, reasoning, vision và công việc kỹ thuật/agent dài hạn; model ID API là claude-fable-5-2, có trên Claude Platform và các nền tảng cloud được Anthropic nêu.",
+      "free_tier_summary": "Claude Free $0 có giới hạn 5 giờ/tuần nhưng không có Fable. Pro hiển thị Fable dưới dạng usage credits; Max/Ultra bao gồm Fable tối đa 50% giới hạn tuần. Giá tại trang Claude Việt Nam: Pro $17/tháng khi thanh toán năm (200 USD trả trước) hoặc $20/tháng; Max $100/tháng; Ultra $200/tháng, chưa gồm thuế. API $8/$40 mỗi 1 triệu input/output tokens, Fast mode $16/$80. GitHub Copilot Fable 5.2 chỉ được liệt kê cho Pro+, Max, Business và Enterprise; không có Free access được xác nhận. Fable 5.2 yêu cầu retention 30 ngày cho safety monitoring và không nằm trong ZDR nếu Anthropic chưa cho phép rõ ràng; Copilot Fable có data retention mặc định, admin Business/Enterprise phải bật policy. Không mua gói, usage credits hoặc API; không gửi dữ liệu nhạy cảm.",
+      "official_sources": [
+        "https://www.anthropic.com/claude/fable",
+        "https://www.anthropic.com/claude-fable-and-mythos-5-2",
+        "https://claude.com/pricing?country=VN",
+        "https://platform.claude.com/docs/en/models/fable-5-2/overview",
+        "https://platform.claude.com/docs/en/models/fable-5-2/whats-new-fable-5-2",
+        "https://github.blog/changelog/2026-11-16-github-copilot-weekly-releases-november-9/",
+        "https://platform.claude.com/docs/en/build-with-claude/fast-mode"
+      ],
+      "last_verified": "2026-11-17",
+      "verification_status": "needs_review",
+      "status": "active",
+      "tags": [
+        "frontier-model",
+        "paid-feature",
+        "agentic-coding",
+        "research-queue"
+      ]
+    },
+    {
+      "id": "vieneu-tts-v3-turbo",
+      "name": "VieNeu-TTS v3 Turbo",
+      "vendor": "Phạm Nguyễn Ngọc Bảo",
+      "website": "https://github.com/pnnbao97/VieNeu-TTS",
+      "categories": [
+        "audio",
+        "text-to-speech",
+        "local-ai",
+        "developer"
+      ],
+      "pricing_model": "open_source",
+      "pricing_status": "Phần mềm và model v3 Turbo được phát hành theo Apache License 2.0; tải và chạy cục bộ miễn phí, không phải dịch vụ TTS cloud có quota miễn phí. Trang model chính thức hiện không liệt kê Inference Provider đang triển khai. Chi phí hạ tầng có thể phát sinh nếu tự thuê máy/GPU hoặc dùng notebook/cloud bên thứ ba; không sử dụng các lựa chọn đó nếu chưa xác minh miễn phí 100%.",
+      "license": "Apache License 2.0 cho mã nguồn, model weights, ONNX exports, cấu hình, tokenizer và preset-voice assets theo FAQ chính thức của model card. Model card nói preset voices và audio sinh từ các giọng dựng sẵn có thể dùng thương mại/kiếm tiền. Giữ nguyên LICENSE và attribution. VieNeu-TTS v4 là bản proprietary, không phải mã nguồn mở; không gộp v4 vào mục này.",
+      "platforms": [
+        "windows",
+        "linux",
+        "macos",
+        "local",
+        "api"
+      ],
+      "description": "Mô hình chuyển văn bản thành giọng nói tiếng Việt chạy cục bộ. Upstream GitHub snapshot được kiểm tra ngày 17/11/2026 khai báo 25 preset voices trong runtime asset `voices_v3_turbo.json`; bảng trên Hugging Face model card vẫn ghi 23. Số lượng phụ thuộc phiên bản, cần dùng `vieneu.list_preset_voices()` ở SDK đã cài để xác nhận. Bản v3 Turbo có âm thanh 48 kHz, streaming và tùy chọn clone giọng từ clip ngắn. Có SDK Python, ONNX Runtime trên CPU và PyTorch/CUDA trên GPU; cần môi trường máy tính để cài đặt. Model card hiện không liệt kê Inference Provider hosted; API tương thích OpenAI là server tự host, không phải API cloud miễn phí.",
+      "free_tier_summary": "Miễn phí theo Apache 2.0 khi tự tải và chạy trên phần cứng của mình; không có quota cloud miễn phí được xác nhận. README chính thức mô tả cài trên Windows/Linux/macOS, CPU dùng ONNX Runtime (không cần GPU nhưng tốc độ phụ thuộc CPU), GPU cần NVIDIA/CUDA. Trang Hugging Face model v3 Turbo ghi rõ hiện không được triển khai bởi Inference Provider, nên không có endpoint hosted miễn phí chính thức để người dùng chỉ mở iPhone và dùng ngay. Dự án có tích hợp notebook/Colab/Kaggle nhưng hạn mức, quyền truy cập và chi phí compute phụ thuộc nền tảng, chưa xác minh nên không cam kết miễn phí. Chạy local thì văn bản/âm thanh xử lý tại máy; chế độ remote gửi nội dung và mã giọng tham chiếu đến server do người vận hành cấu hình. Model card xác nhận quyền sử dụng preset voices và âm thanh sinh ra, nhưng dữ liệu huấn luyện chi tiết không được công khai đầy đủ và dataset chính bị gated. Voice cloning chỉ dùng giọng của chính mình hoặc người đã đồng ý; không giả mạo người khác. Chưa thử nghiệm chất lượng đầu ra thực tế cho video của AI Thực Chiến; giữ needs_review đến khi nghe và chấm 3 mẫu tiếng Việt.",
+      "official_sources": [
+        "https://github.com/pnnbao97/VieNeu-TTS",
+        "https://github.com/pnnbao97/VieNeu-TTS/blob/main/LICENSE",
+        "https://huggingface.co/pnnbao-ump/VieNeu-TTS-v3-Turbo",
+        "https://huggingface.co/pnnbao-ump/VieNeu-TTS",
+        "https://pypi.org/project/vieneu/",
+        "https://docs.vieneu.io/docs/sdk/overview/",
+        "https://docs.vieneu.io/vi/docs/sdk/overview/"
+      ],
+      "last_verified": "2026-11-17",
+      "verification_status": "needs_review",
+      "status": "active",
+      "tags": [
+        "vietnamese-tts",
+        "speech-synthesis",
+        "local-inference",
+        "voice-cloning",
+        "apache-2.0",
+        "voiceover"
+      ],
+      "project_fit": "Not a direct iPhone installation path: official SDK is Python/ONNX CPU or PyTorch/CUDA GPU for desktop/server hardware. The official docs mention v3 Nano as an ARM/edge-device preview, but do not document a native iOS app. Keep it for a future free local desktop/server experiment only; not a replacement for the existing Supertonic Alex/Male 1 audio sample and not approved for video until actual Vietnamese audio is listened to and export is verified."
+    },
+    {
+      "id": "draw-things",
+      "name": "Draw Things",
+      "vendor": "Draw Things, Inc.",
+      "website": "https://drawthings.ai/",
+      "categories": [
+        "image",
+        "design",
+        "video",
+        "mobile-ai",
+        "local-ai"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "Freemium. Free Edition supports local on-device generation and model downloads. The official pricing page also lists a free Community account with Cloud Compute on managed servers; usage limits and eligibility are not fully specified there, and this is not offline/local processing. Cloud Compute requires optional Apple Sign-in and sends jobs/LoRAs to provider infrastructure, so do not use it for sensitive project data. Draw Things+ is listed at USD 8.99/month; the Vietnam App Store lists VND 399,000 and separate paid Boost Bundles, but the billing period for the localized in-app-purchase amount is not shown. Do not buy Boosts or subscribe under the project's zero-cost rule.",
+      "license": "The Draw Things app is proprietary. This does not grant a blanket license to all generated outputs. Each imported or community model and LoRA has its own license and usage restrictions. Draw Things' official community-model repository requires a LICENSE file for every model/LoRA entry; the repository's CC0 license applies to repository materials, not automatically to third-party model weights.",
+      "platforms": [
+        "ios",
+        "ipados",
+        "macos"
+      ],
+      "description": "Apple-device image creation and editing app with local text-to-image, image-to-image, inpainting/outpainting, ControlNet, local LoRA training and selected local image-to-video workflows. Local generation is distinct from optional Cloud Compute; supported workflows depend on the selected model and device resources.",
+      "free_tier_summary": "Free Edition: download models and generate locally on the device; after download, local generation can run offline. Community: the official pricing page says a free account can use managed Cloud Compute, but current usage limits/eligibility are not fully specified. Cloud Compute is a separate network service, not private on-device inference: the privacy policy says it requires optional Apple Sign-in and uploaded LoRAs are stored on cloud servers. Draw Things+ is USD 8.99/month on the official site; the Vietnam App Store lists VND 399,000 and paid Boost Bundles, with no billing period shown beside that localized IAP amount. The App Store privacy disclosure also lists purchase history, user content and a user ID not linked to identity, with Apple's note that the disclosure has not been verified by Apple. iOS 15.4+ is only a minimum OS requirement, not proof every model fits a given device's memory/thermal budget. Keep needs_review until a specific model, device performance, and per-model license are checked.",
+      "official_sources": [
+        "https://drawthings.ai/",
+        "https://apps.apple.com/vn/app/draw-things-offline-ai-art/id6444050820",
+        "https://drawthings.ai/policy/",
+        "https://drawthings.ai/downloads/",
+        "https://github.com/drawthingsai/community-models",
+        "https://github.com/drawthingsai/community-docs/blob/main/Documentation.docc/2.Models.md",
+        "https://drawthings.ai/pricing/"
+      ],
+      "last_verified": "2026-11-17",
+      "verification_status": "needs_review",
+      "status": "active",
+      "tags": [
+        "ios",
+        "iphone",
+        "on-device-image-generation",
+        "offline-ai",
+        "image-to-video",
+        "model-license-review"
+      ],
+      "project_fit": "iOS/iPadOS app with a free local-generation edition, but do not recommend as the default production image tool on this project's older 4-GB-class iPhone. Model loading and image generation are memory intensive; App Store device compatibility alone does not guarantee a model will run reliably. Prefer generating/validating site artwork through free isolated CI or other verified no-cost workflow; keep Draw Things as an optional small-model experiment only if a real device test passes. Do not use Cloud Compute for private content or buy Draw Things+ / Boosts."
+    },
+    {
+      "id": "pocketpal-ai",
+      "name": "PocketPal AI",
+      "vendor": "Gooya UG (haftungsbeschränkt)",
+      "website": "https://pocketpal.dev/",
+      "categories": [
+        "chat",
+        "local-ai",
+        "mobile-ai",
+        "offline-ai",
+        "speech-to-text",
+        "text-to-speech"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "Ứng dụng cơ bản miễn phí và mã nguồn mở; chat, model, voice và tools cục bộ được công bố miễn phí. Bản App Store/Google Play có PocketPal Plus là khoản mua một lần để mở khóa hands-free voice và local API server; PalsHub có nội dung/pals trả phí riêng. Không mua Plus, không mua PalsHub và không dùng các tính năng online cần API key hoặc dịch vụ bên ngoài theo chính sách 0 đồng.",
+      "license": "Ứng dụng mã nguồn mở MIT. Model LLM tải từ Hugging Face là nội dung bên thứ ba, phải kiểm tra license từng model. TTS engines có license riêng: Kokoro Apache-2.0, Supertonic code MIT và weights BigScience OpenRAIL-M, Kitten TTS Apache-2.0; kiểm tra từng model/voice trước khi dùng thương mại.",
+      "platforms": [
+        "ios",
+        "ipados",
+        "android"
+      ],
+      "description": "Ứng dụng AI cục bộ cho iPhone/iPad/Android, chạy mô hình GGUF bằng llama.cpp, hỗ trợ chat offline, tải model từ Hugging Face, nhận dạng giọng nói bằng Whisper và đọc phản hồi bằng các engine TTS trên thiết bị gồm Supertonic, Kokoro, Kitten và Phonon trên thiết bị tương thích.",
+      "free_tier_summary": "Bản cơ bản miễn phí, không cần tài khoản để chat offline sau khi tải model. Ứng dụng công bố prompt, câu trả lời và tài liệu ở trên thiết bị trừ khi người dùng bật web search/page reading, remote server hoặc system voice online. Model/voice downloads cần mạng và kết nối trực tiếp Hugging Face; PalsHub, mua hàng, benchmark leaderboard opt-in, feedback/reports và một số kiểm tra tương thích cũng dùng dịch vụ mạng. App Store Việt Nam ghi iOS 15.1+, nhưng model GGUF có thể chiếm nhiều RAM/lưu trữ và hiệu năng phụ thuộc thiết bị/model. App Store privacy disclosure ghi Data Not Collected, nhưng đó là thông tin do nhà phát triển tự khai và chưa được Apple xác minh; privacy policy mô tả dữ liệu được xử lý khi người dùng tự gửi benchmark, feedback, reports hoặc dùng dịch vụ tùy chọn. PocketPal Plus là khoản mua một lần cho hands-free voice và local API server trong bản store; không mua theo quy tắc 0 đồng. Supertonic TTS có danh sách 31 ngôn ngữ gồm tiếng Việt theo mã nguồn chính chủ, nhưng chưa xác minh giọng M1 có trong giao diện PocketPal hoặc chất lượng tiếng Việt trên iPhone thực tế. Giữ needs_review đến khi xác minh model/voice, hiệu năng và quyền sử dụng.",
+      "official_sources": [
+        "https://github.com/a-ghorbani/pocketpal-ai",
+        "https://github.com/a-ghorbani/pocketpal-ai/blob/main/src/locales/en.json",
+        "https://pocketpal.dev/terms",
+        "https://pocketpal.dev/privacy-policy",
+        "https://apps.apple.com/vn/app/pocketpal-ai/id6502579498",
+        "https://huggingface.co/Supertone/supertonic-3",
+        "https://pocketpal.dev/about"
+      ],
+      "last_verified": "2026-11-17",
+      "verification_status": "needs_review",
+      "status": "active",
+      "tags": [
+        "iphone",
+        "offline-llm",
+        "gguf",
+        "local-tts",
+        "vietnamese-tts",
+        "whisper",
+        "model-license-review"
+      ],
+      "project_fit": "Potential iPhone-side assistant, not yet approved for project use. Official repository says on-device GGUF chat and local neural TTS (Kokoro, Kitten, Supertonic, Phonon on supported devices), with prompts/results remaining local unless optional online features are enabled. On this project's older 4-GB-class iPhone, restrict evaluation to very small quantized models; memory, thermal load, generation speed and available storage must be benchmarked on-device. App supports iOS/iPadOS, but iOS 18 is required for Metal acceleration; CPU fallback remains available. Supertonic voice availability inside PocketPal is not proof it contains the same Alex/Male 1 voice selected for the existing video workflow. No purchase of PocketPal Plus; it is not yet validated as an audio-file export tool for the video pipeline."
+    },
+    {
+      "id": "cloudflare-kitesurf",
+      "name": "Kitesurf",
+      "vendor": "Cloudflare",
+      "website": "https://kitesurf.dev/",
+      "categories": [
+        "browser-automation",
+        "agents",
+        "mcp",
+        "developer"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "Kitesurf hosted beta is described as free behind per-account limits; its Kitesurf-specific quota is not published. Browser Run on Workers Free has 10 browser minutes/day, 3 concurrent Browser Sessions per account, and 1 new Browser Session every 20 seconds; usage beyond Free allowances requires Workers Paid and may incur charges. Self-hosting Kitesurf on Cloudflare Workers requires Workers Paid because it depends on Dynamic Workers. Local development uses Wrangler but requires Node.js 22+, pnpm 9.15.4, Bazel/Bazelisk and a desktop build environment. Do not enable Paid or billing for this project.",
+      "license": "Apache-2.0 for Kitesurf repository; bundled fonts, data and dependencies retain their individual licenses. Review NOTICE and third-party dependency licenses before redistribution.",
+      "platforms": [
+        "cloudflare-workers",
+        "local-development",
+        "nodejs",
+        "puppeteer-cdp"
+      ],
+      "description": "Trình duyệt thử nghiệm không trạng thái dành cho AI Agent, chạy trên Cloudflare Workers; phân tích HTML, áp dụng CSS, thực thi JavaScript trang và kết xuất ảnh chụp mà không cần container Chrome. Hỗ trợ Chrome DevTools Protocol để kết nối Puppeteer và client tương thích.",
+      "free_tier_summary": "Cloudflare's Kitesurf documentation (updated 13/11/2026) states the hosted beta is free behind per-account limits, but does not publish a separate Kitesurf quota. Browser Run's general Workers Free limits are 10 browser minutes/day, 3 concurrent Browser Sessions per account and 1 new browser instance every 20 seconds; paid-plan pricing applies beyond the Free allowances. Self-hosting Kitesurf on Cloudflare Workers requires Workers Paid because it uses Dynamic Workers. Local development uses Wrangler but requires Node.js 22+, pnpm 9.15.4, Bazel/Bazelisk and a desktop build environment, so it is not suitable for the project's iPhone-only operating setup. Kitesurf remains experimental, does not render WebGL or video and cannot handle long-running authenticated sessions. A deployed workers.dev URL is public by default and has no built-in authentication; protect it with Cloudflare Access before deployment. Do not deploy into the project account, enable paid billing or send private data. Hosted beta is only a candidate for tightly limited tests of public content, after checking current account quota.",
+      "official_sources": [
+        "https://blog.cloudflare.com/kitesurf-open-source/",
+        "https://developers.cloudflare.com/browser-run/kitesurf/",
+        "https://developers.cloudflare.com/changelog/post/2026-11-12-kitesurf-open-source/",
+        "https://github.com/cloudflare/kitesurf",
+        "https://developers.cloudflare.com/browser-run/pricing/",
+        "https://developers.cloudflare.com/browser-run/limits/"
+      ],
+      "last_verified": "2026-11-17",
+      "verification_status": "needs_review",
+      "status": "active",
+      "tags": [
+        "browser-agent",
+        "stateless-browser",
+        "cdp",
+        "experimental",
+        "free-beta-limits",
+        "workers-paid-self-host"
+      ]
+    },
+    {
+      "id": "openread-offline-read-aloud",
+      "name": "OpenRead: Offline Read Aloud",
+      "vendor": "Vu Bach",
+      "website": "https://apps.apple.com/vn/app/openread-offline-read-aloud/id6796673874",
+      "categories": [
+        "audio",
+        "text-to-speech",
+        "local-ai",
+        "reading"
+      ],
+      "pricing_model": "free",
+      "pricing_status": "Ứng dụng miễn phí đầy đủ chức năng đọc; App Store Việt Nam liệt kê khoản tip tự nguyện 29.000₫ (Buy Me a Coffee), không mở khóa tính năng. Không có phí đăng ký hoặc thanh toán bắt buộc được công bố. Chưa xác minh khả năng xuất tệp âm thanh; không coi đây là công cụ xuất WAV/MP3 cho video.",
+      "license": "Ứng dụng OpenRead là phần mềm độc quyền của nhà phát triển; không tìm thấy giấy phép mã nguồn ứng dụng. Bộ giọng tiếng Việt tích hợp lấy từ VieNeu-TTS của Phạm Nguyễn Ngọc Bảo, Apache-2.0 theo trang credits của nhà phát triển. Gói đa ngôn ngữ Supertonic 3 có giấy phép BigScience OpenRAIL-M và các hạn chế sử dụng riêng; chỉ dùng khi đã đọc điều kiện hiển thị trong ứng dụng.",
+      "platforms": [
+        "ios",
+        "iphone",
+        "ipad"
+      ],
+      "description": "Ứng dụng đọc văn bản/sách ngoại tuyến trên iPhone/iPad, hỗ trợ tiếng Việt với 14 giọng dựng sẵn (7 nam, 7 nữ), nhiều vùng giọng và phong cách Natural/News/Storytelling. Xử lý giọng trên thiết bị, có thể nghe sau khi tải voice pack. Phù hợp thử nghe và đánh giá giọng tiếng Việt, nhưng chưa có bằng chứng về chức năng xuất file âm thanh để dựng video.",
+      "free_tier_summary": "App Store Việt Nam ghi Free · In-App Purchases; khoản mua duy nhất được mô tả là tip 29.000₫ và không mở khóa chức năng. Hỗ trợ iPhone/iPad chạy iOS/iPadOS 16 trở lên; kích thước ứng dụng trên listing khoảng 29.9 MB, dung lượng voice pack chưa xác minh. Nhà phát triển mô tả không cần tài khoản, không quảng cáo/analytics; sách, ghi chú, vị trí đọc và cài đặt lưu trên thiết bị, yêu cầu mạng chỉ khi người dùng tải voice pack hoặc mở trang web trong trình duyệt tích hợp. App Store hiển thị khai báo Data Not Collected do nhà phát triển cung cấp, chưa được Apple xác minh độc lập. Bộ giọng tiếng Việt dựa trên VieNeu-TTS Apache-2.0. Không thấy tính năng export audio trong mô tả hiện hành; không dùng để tạo voice-over/video cho đến khi xác minh được xuất âm thanh miễn phí. Ứng dụng có thể chạy trên iPhone/iPad từ iOS 16 theo yêu cầu tương thích của App Store, nhưng dung lượng voice pack, mức tiêu thụ RAM/nhiệt và chất lượng thực tế trên iPhone đời cũ chưa được thử nghiệm. Chưa có bằng chứng hỗ trợ đúng giọng Supertonic Alex/Male 1 mà dự án đang chọn.",
+      "official_sources": [
+        "https://apps.apple.com/vn/app/openread-offline-read-aloud/id6796673874",
+        "https://opr.vuba.one/credits.php",
+        "https://github.com/pnnbao97/VieNeu-TTS",
+        "https://github.com/pnnbao97/VieNeu-TTS/blob/main/LICENSE"
+      ],
+      "last_verified": "2026-11-17",
+      "verification_status": "needs_review",
+      "status": "active",
+      "tags": [
+        "vietnamese-tts",
+        "offline-tts",
+        "ios",
+        "voice-evaluation",
+        "audio"
+      ]
+    },
+    {
+      "id": "open-minis",
+      "name": "Open Minis",
+      "vendor": "OpenMinis (App Store developer: 森 王)",
+      "website": "https://openminis.app/",
+      "categories": [
+        "ai-agent",
+        "mobile-ai",
+        "ios",
+        "automation",
+        "mcp-client",
+        "browser-agent"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "Ứng dụng App Store Việt Nam được niêm yết miễn phí tải về; không thấy giá mua trong ứng dụng trên trang niêm yết đã kiểm tra. Ứng dụng không kèm mô hình AI miễn phí: cần tự cấu hình API key hoặc đăng nhập tài khoản của nhà cung cấp (OpenAI, Anthropic, Google, OpenRouter và các endpoint tương thích). Chi phí inference, quota và điều khoản do từng nhà cung cấp quyết định; không có bảo đảm rằng sử dụng AI sẽ miễn phí. Không bật billing, không nhập thẻ và không cấu hình nhà cung cấp trả phí.",
+      "license": "Mã nguồn ứng dụng công bố GNU GPL-3.0. Thành phần phụ thuộc có giấy phép riêng được liệt kê trong THIRD_PARTY_LICENSES.md; phải tuân thủ điều kiện GPL và rà soát giấy phép của các thành phần khi phân phối hoặc sửa đổi.",
+      "platforms": [
+        "ios",
+        "ipados",
+        "macos",
+        "visionos",
+        "android"
+      ],
+      "description": "Ứng dụng AI Agent đa nền tảng, tích hợp trình duyệt, MCP, skills, bộ nhớ, Linux shell sandbox và các công cụ iOS như Calendar, Reminders, Photos, Location, HealthKit và HomeKit. Kết nối mô hình qua API key hoặc đăng nhập tài khoản của nhà cung cấp; không phải mô hình AI cục bộ độc lập.",
+      "free_tier_summary": "App Store Việt Nam niêm yết Free, yêu cầu iOS 16.0 trở lên; trang hiện hiển thị dung lượng 97.1 MB, độ tuổi 16+ và 2 lượt đánh giá tại thời điểm kiểm tra. Nhà phát triển khai báo Data Not Collected, nhưng Apple ghi rõ khai báo này chưa được Apple xác minh. Chính sách riêng tư của nhà phát triển nói dữ liệu lưu trên thiết bị; khi dùng mô hình bên thứ ba, prompt, lịch sử hội thoại, tệp đính kèm và dữ liệu thiết bị được cấp quyền có thể được gửi trực tiếp đến nhà cung cấp đó. API key/OAuth token lưu trong iOS Keychain. Ứng dụng có Linux shell, browser automation, MCP và quyền truy cập nhiều dữ liệu nhạy cảm; chỉ cấp từng quyền tối thiểu, tắt tích hợp không cần thiết và không đưa dữ liệu thật/Production vào thử nghiệm. Không có model inference miễn phí đi kèm; phí phụ thuộc tài khoản và quota của nhà cung cấp. Trang App Store Việt Nam liệt kê ngôn ngữ English và 7 ngôn ngữ khác, không liệt kê tiếng Việt. Không khẳng định ứng dụng điều khiển được giao diện các app iOS khác; iOS sandbox giới hạn thao tác xuyên ứng dụng.",
+      "official_sources": [
+        "https://openminis.app/",
+        "https://github.com/OpenMinis/OpenMinis",
+        "https://github.com/OpenMinis/OpenMinis/blob/main/LICENSE",
+        "https://github.com/OpenMinis/OpenMinis/blob/main/THIRD_PARTY_LICENSES.md",
+        "https://openminis.app/privacy-policy.html",
+        "https://apps.apple.com/vn/app/open-minis/id6759188481"
+      ],
+      "last_verified": "2026-11-18",
+      "verification_status": "needs_review",
+      "status": "active",
+      "tags": [
+        "ios-agent",
+        "mcp",
+        "browser-automation",
+        "linux-shell",
+        "gpl-3.0",
+        "byo-api-key",
+        "permission-review"
+      ],
+      "project_fit": "Ứng viên có tiềm năng làm giao diện AI Agent trên iPhone, nhưng chưa phù hợp để kết nối vào tài khoản dự án: cần BYO model provider và không có inference miễn phí được bảo đảm; shell/browser/MCP cùng quyền Calendar, Contacts, Location, Photos, HealthKit tạo bề mặt rủi ro cao. Chưa cài đặt, chưa đăng nhập, chưa cấp quyền, chưa nhập API key và chưa thử nghiệm. Nếu sau này đánh giá, chỉ dùng dữ liệu công khai giả lập, không cấp quyền nhạy cảm, và phải xác minh nhà cung cấp có quota 0 đồng trước khi gửi bất kỳ request nào."
+    }
+  ]
 }
