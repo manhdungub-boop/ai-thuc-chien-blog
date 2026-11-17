@@ -1512,6 +1512,180 @@
         "1m-context",
         "privacy-review"
       ]
+    },
+    {
+      "id": "invideo",
+      "name": "InVideo",
+      "vendor": "InVideo",
+      "website": "https://invideo.io/",
+      "categories": [
+        "video",
+        "video-editing",
+        "ai-generation"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "limited_credits",
+      "license": "proprietary",
+      "platforms": [
+        "web",
+        "cloud"
+      ],
+      "description": "Nền tảng tạo video bằng AI và biên tập timeline thủ công, hỗ trợ tạo, chỉnh sửa và xuất video cho mạng xã hội.",
+      "free_tier_summary": "Gói Free $0 không yêu cầu thẻ thanh toán, cấp hạn mức AI giới hạn và làm mới hàng tuần vào thứ Hai lúc 00:00 UTC. Tín dụng AI được dùng cho các tính năng tạo sinh; số tín dụng tiêu hao phụ thuộc model và thiết lập. Biên tập timeline thủ công (cắt, tách, sắp xếp clip) và xuất/tải video không tiêu tốn credits. Không giả định AI generation luôn khả dụng khi số dư bằng 0; kiểm tra số dư trước mỗi lần tạo.",
+      "official_sources": [
+        "https://help.invideo.io/en/articles/9380226-can-i-use-invideo-ai-for-free",
+        "https://help.invideo.io/en/articles/11528140-invideo-plans-and-credits-everything-you-need-to-know",
+        "https://invideo.io/pricing/"
+      ],
+      "last_verified": "2026-11-18",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "video-generation",
+        "video-editing",
+        "weekly-credits",
+        "social-video"
+      ]
+    },
+    {
+      "id": "heygen",
+      "name": "HeyGen",
+      "vendor": "HeyGen",
+      "website": "https://www.heygen.com/",
+      "categories": [
+        "video",
+        "text-to-speech",
+        "avatar",
+        "localization"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "verified_free_tier",
+      "license": "proprietary",
+      "platforms": [
+        "web",
+        "cloud"
+      ],
+      "description": "Nền tảng tạo video người dẫn ảo, avatar nói chuyện, voiceover và chuyển văn bản thành giọng nói đa ngôn ngữ.",
+      "free_tier_summary": "Gói Free $0: hạn mức khoảng 1–3 video/tháng tùy khu vực; video tối đa 1 phút, chia sẻ ở 720p và có watermark. Người dùng Free không dùng credit trả phí mà dùng quota video riêng; số lượng cụ thể có thể khác theo vùng và tài khoản. Phù hợp làm bản thử nghiệm ngắn, không phù hợp nếu yêu cầu xuất 1080p không watermark. Nghe thử giọng tiếng Việt và kiểm tra phát âm trước khi dùng công khai.",
+      "official_sources": [
+        "https://www.heygen.com/pricing",
+        "https://help.heygen.com/en/articles/15125761-heygen-credit-based-pricing-plans-subscriptions-explained",
+        "https://www.heygen.com/tool/ai-video-generator"
+      ],
+      "last_verified": "2026-11-18",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "ai-avatar",
+        "text-to-speech",
+        "video-generation",
+        "voiceover"
+      ]
+    },
+    {
+      "id": "metricool",
+      "name": "Metricool",
+      "vendor": "Metricool",
+      "website": "https://metricool.com/",
+      "categories": [
+        "social-media",
+        "publishing",
+        "analytics",
+        "scheduling"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "verified_free_tier",
+      "license": "proprietary",
+      "platforms": [
+        "web",
+        "cloud",
+        "api"
+      ],
+      "description": "Nền tảng quản lý mạng xã hội, lập lịch và tự xuất bản bài đăng, theo dõi phân tích và quản lý tương tác trong một brand.",
+      "free_tier_summary": "Gói Free $0, không hết hạn và không cần thẻ: 1 brand, tối đa 20 bài được xuất bản mỗi tháng, 1 hồ sơ cho mỗi mạng xã hội trong brand, 30 ngày lịch sử analytics và 5 AI text credits/tháng. Bài nháp và bài chỉ lên lịch chưa tính vào quota xuất bản; mỗi mạng xã hội được tính riêng khi đăng chéo. Free không có API, Make/Zapier, LinkedIn hoặc X. Có thể tự xuất bản và quản lý tin nhắn theo khả năng từng mạng; cần xác minh đúng tài khoản trước khi đăng.",
+      "official_sources": [
+        "https://metricool.com/pricing/",
+        "https://help.metricool.com/main-differences-between-free-and-paid-plans-bl0v9",
+        "https://help.metricool.com/plans-add-ons-and-api-access-explained-xux1u"
+      ],
+      "last_verified": "2026-11-18",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "social-scheduling",
+        "auto-publishing",
+        "analytics",
+        "free-plan"
+      ]
+    },
+    {
+      "id": "vidiq",
+      "name": "vidIQ",
+      "vendor": "vidIQ",
+      "website": "https://vidiq.com/",
+      "categories": [
+        "youtube",
+        "analytics",
+        "seo",
+        "content-research"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "verified_free_tier",
+      "license": "proprietary",
+      "platforms": [
+        "web",
+        "browser-extension",
+        "api"
+      ],
+      "description": "Bộ công cụ nghiên cứu từ khóa, xu hướng, đối thủ và tối ưu nội dung dành cho nhà sáng tạo YouTube; MCP kết nối dữ liệu kênh với trợ lý AI.",
+      "free_tier_summary": "Gói Free $0 gồm 150 AI credits mỗi tháng, làm mới theo ngày đăng ký; nghiên cứu từ khóa miễn phí bị giới hạn kết quả, tối đa 3 đối thủ theo dõi và một số tính năng phân tích nâng cao chỉ có ở gói trả phí. MCP có trên gói Free và dùng chung 150 credits. Khi đăng nhập OAuth, có thể hỗ trợ cập nhật metadata/lịch đăng của video đã có sau khi người dùng duyệt; MCP không tải video mới lên YouTube. Không coi công cụ này là bộ xuất bản video tự động.",
+      "official_sources": [
+        "https://vidiq.com/plans/",
+        "https://support.vidiq.com/en/articles/13928456-features-credits-by-plan",
+        "https://support.vidiq.com/en/articles/15082430-vidiq-mcp"
+      ],
+      "last_verified": "2026-11-18",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "youtube-seo",
+        "keyword-research",
+        "creator-analytics",
+        "mcp"
+      ]
+    },
+    {
+      "id": "higgsfield",
+      "name": "Higgsfield",
+      "vendor": "Higgsfield",
+      "website": "https://higgsfield.ai/",
+      "categories": [
+        "video",
+        "image",
+        "ai-generation"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "limited_credits",
+      "license": "proprietary",
+      "platforms": [
+        "web",
+        "cloud"
+      ],
+      "description": "Bộ công cụ AI tạo và chỉnh sửa hình ảnh, video, nhân vật và nội dung quảng cáo ngắn.",
+      "free_tier_summary": "Gói Free $0 không có hạn mức credit hàng tháng; chỉ mở một số model/tính năng giới hạn và một tác vụ tạo tại một thời điểm. Một số chương trình có free generations riêng nhưng không áp dụng cho mọi tài khoản/model. Video tạo miễn phí có thể có watermark; quyền sử dụng thương mại không được bao gồm trong Free. Chỉ dùng khi tài khoản thực sự có free generation còn lại và điều khoản cho phép mục đích sử dụng; không coi là công cụ sản xuất chính.",
+      "official_sources": [
+        "https://higgsfield.ai/creator-hub/help-center/plans/what-does-the-free-plan-include",
+        "https://higgsfield.ai/pricing"
+      ],
+      "last_verified": "2026-11-18",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "video-generation",
+        "image-generation",
+        "limited-free",
+        "watermark"
+      ]
     }
   ]
 }
