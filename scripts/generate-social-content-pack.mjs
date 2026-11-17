@@ -31,7 +31,7 @@ function parseFeed(xml) {
   });
 }
 function clean(value) { return value.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim(); }
-function isVietnamese(value) { return /[ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởởợúùủũụứừửữựýỳỷỹỵ]/i.test(value); }
+function isVietnamese(value) { return /[ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ]/i.test(value); }
 function makePack(items, generatedAt) {
   const lines = [
     "# Bản nháp Facebook — AI Thực Chiến", "",
@@ -78,6 +78,7 @@ function selfTest() {
     throw new Error("RSS parsing or Facebook draft self-test failed.");
   }
   if (/TikTok|YouTube Shorts/i.test(output)) throw new Error("Non-Facebook destination leaked into the draft pack.");
+  if (!isVietnamese("ỡ")) throw new Error("Vietnamese ỡ diacritic must be recognized.");
   const englishPack = makePack([{
     title: "Practical AI guide",
     link: "https://example.org/articles/english",
@@ -102,7 +103,7 @@ function selfTest() {
   expectFailure('<?xml version="1.0"?><rss><channel><link>http://example.org/</link><item><title>HTTP</title><link>http://example.org/post</link><description>Text</description></item></channel></rss>', "non-HTTPS feed origin");
   expectFailure('<?xml version="1.0"?><rss><channel><link>https://example.org/</link><item><title>Missing description</title><link>https://example.org/post</link></item></channel></rss>', "missing description");
   expectFailure('<?xml version="1.0"?><rss><channel><link>https://example.org/</link><item><link>https://example.org/post</link><description>Text</description></item></channel></rss>', "missing title");
-  console.log("PASS: Facebook-only RSS draft, Vietnamese content gate, safe URL checks and no-publish policy.");
+  console.log("PASS: Facebook-only RSS draft, Vietnamese diacritics gate, safe URL checks and no-publish policy.");
 }
 if (process.argv.includes("--self-test")) selfTest();
 else {
