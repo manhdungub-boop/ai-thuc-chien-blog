@@ -53,8 +53,6 @@ function makePack(items, generatedAt) {
     const channelSummary = vietnameseCopy ? summary : "Nội dung đang chờ biên dịch và xác minh từ bài gốc; không sử dụng tiêu đề hoặc tóm tắt nguồn này để đăng.";
     lines.push("## " + (index + 1) + ". " + title, "", "**Bài gốc:** " + item.link, "", "**Nguồn RSS (chỉ để tham khảo, chưa phải nội dung đăng):** " + summary, "");
     lines.push("### TikTok — bản nháp", "", languageNote + "Khám phá: " + channelTitle + ". " + channelSummary, "", "Đọc hướng dẫn đầy đủ tại: " + item.link, "#AIThucChien #DungAI #UngDungAI #TuDongHoa", "");
-    lines.push("### YouTube Shorts — bản nháp", "", "**Tiêu đề:** " + channelTitle.slice(0, 95), "", "**Mô tả:**", "", languageNote + channelSummary, "", "Đọc bài đầy đủ: " + item.link, "#AI #TuDongHoa #AIThucChien", "");
-    lines.push("### Facebook Page — bản nháp", "", languageNote + "**" + channelTitle + "**", "", channelSummary, "", "Bài viết hướng dẫn đầy đủ: " + item.link, "", "Bạn đang áp dụng cách này trong công việc như thế nào? Chia sẻ kinh nghiệm hoặc câu hỏi ở phần bình luận nhé.", "", "#AIThucChien #DungAI #UngDungAI #TuDongHoa", "");
     lines.push("### Kiểm tra trước khi đăng", "", "- [ ] Đã đọc bài gốc và xác nhận mọi tuyên bố.", "- [ ] Đã biên tập tiếng Việt tự nhiên, không chỉ sao chép RSS.", "- [ ] Video/hình ảnh có quyền sử dụng phù hợp.", "- [ ] Không lộ dữ liệu cá nhân, khóa API hoặc thông tin riêng tư.", "- [ ] Đã kiểm tra liên kết, CTA và được người quản trị duyệt.", "", "---", "");
   });
   return lines.join("\n");
@@ -63,9 +61,10 @@ function selfTest() {
   const sample = '<?xml version="1.0"?><rss><channel><link>https://example.org/</link><item><title>Thử nghiệm &amp; AI</title><link>https://example.org/articles/demo</link><description><![CDATA[Hướng dẫn an toàn &amp; thực tế.]]></description></item></channel></rss>';
   const items = parseFeed(sample);
   const output = makePack(items, "2026-11-15");
-  const channels = ["### TikTok — bản nháp", "### YouTube Shorts — bản nháp", "### Facebook Page — bản nháp"];
+  const channels = ["### TikTok — bản nháp"];
   if (items.length !== 1 || !output.includes("Thử nghiệm & AI") || output.includes("\\.") || !output.includes("Đã biên tập")) throw new Error("RSS parsing or baseline draft self-test failed.");
-  if (channels.some(channel => !output.includes(channel))) throw new Error("A required social destination draft is missing.");
+  if (channels.some(channel => !output.includes(channel))) throw new Error("The verified TikTok destination draft is missing.");
+  if (output.includes("YouTube Shorts") || output.includes("Facebook Page")) throw new Error("An unverified social destination leaked into the destination-ready draft pack.");
   if (output.includes("Cần biên tập")) throw new Error("Vietnamese RSS summary was incorrectly flagged for translation.");
 
   const englishPack = makePack([{
@@ -74,7 +73,7 @@ function selfTest() {
     description: "A practical guide to safe AI automation."
   }], "2026-11-15");
   if (!englishPack.includes("TẠM DỪNG — CHƯA ĐƯỢC ĐĂNG")) throw new Error("Non-Vietnamese RSS summary must be blocked from publication pending translation and source review.");
-  if (!englishPack.includes("### Facebook Page — bản nháp")) throw new Error("Facebook draft missing from non-Vietnamese pack.");
+  if (englishPack.includes("YouTube Shorts") || englishPack.includes("Facebook Page")) throw new Error("An unverified destination appeared in the non-Vietnamese draft pack.");
   if (!englishPack.includes("Nội dung đang chờ biên dịch") || !englishPack.includes("Nội dung đang chờ biên tập tiếng Việt")) throw new Error("Non-Vietnamese title or safe placeholder is missing.");
   if (englishPack.includes("Khám phá: Practical AI guide") || englishPack.includes("**Tiêu đề:** Practical AI guide") || englishPack.includes("**Practical AI guide**")) throw new Error("Non-Vietnamese title leaked into publish-ready channel copy.");
 
@@ -94,7 +93,7 @@ function selfTest() {
   expectFailure('<?xml version="1.0"?><rss><channel><link>http://example.org/</link><item><title>HTTP</title><link>http://example.org/post</link><description>Text</description></item></channel></rss>', "non-HTTPS feed origin");
   expectFailure('<?xml version="1.0"?><rss><channel><link>https://example.org/</link><item><title>Missing description</title><link>https://example.org/post</link></item></channel></rss>', "missing description");
   expectFailure('<?xml version="1.0"?><rss><channel><link>https://example.org/</link><item><link>https://example.org/post</link><description>Text</description></item></channel></rss>', "missing title");
-  console.log("PASS: RSS parsing, all three destination drafts, conservative title+summary language gate, blocked unverified copy and no-publish policy.");
+  console.log("PASS: RSS parsing, TikTok-only destination draft, conservative title+summary language gate, blocked unverified copy and no-publish policy.");
 }
 if (process.argv.includes("--self-test")) selfTest();
 else {
