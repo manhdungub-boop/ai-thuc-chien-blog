@@ -9,24 +9,25 @@ const catalog = JSON.parse(fs.readFileSync(catalogPath, "utf8"));
 const activeTools = catalog.tools.filter(t => t && t.status === "active");
 const needsReview = catalog.tools.filter(t => t.verification_status === "needs_review");
 const activeNeedsReview = activeTools.filter(t => t.verification_status === "needs_review");
-const newIds = ["anythingllm", "opencode", "comfyui", "qdrant", "whisper-cpp", "mlflow", "pydantic-ai", "haystack", "elevenlabs", "embeddinggemma-2", "google-ai-edge-gallery", "gemini-4-hydrogen"];
+const newIds = ["anythingllm", "opencode", "comfyui", "qdrant", "whisper-cpp", "mlflow", "pydantic-ai", "haystack", "elevenlabs", "embeddinggemma-2", "google-ai-edge-gallery", "gemini-4-hydrogen", "invideo", "heygen", "metricool", "vidiq", "higgsfield"];
 const searchNames = [
   ["anythingllm", "AnythingLLM"], ["opencode", "OpenCode"], ["comfyui", "ComfyUI"],
   ["qdrant", "Qdrant"], ["whisper-cpp", "whisper.cpp"], ["mlflow", "MLflow"],
   ["pydantic-ai", "Pydantic AI"], ["haystack", "Haystack"], ["elevenlabs", "ElevenLabs"],
   ["embeddinggemma-2", "EmbeddingGemma 2"], ["google-ai-edge-gallery", "Google AI Edge Gallery"],
-  ["gemini-4-hydrogen", "Gemini 4 Hydrogen"]
+  ["gemini-4-hydrogen", "Gemini 4 Hydrogen"], ["invideo", "InVideo"], ["heygen", "HeyGen"],
+  ["metricool", "Metricool"], ["vidiq", "vidIQ"], ["higgsfield", "Higgsfield"]
 ].filter(([id]) => catalog.tools.some(tool => tool.id === id)).map(([, name]) => name);
-const expectedActiveByTotal = new Map([[36, 35], [39, 38]]);
+const expectedActiveByTotal = new Map([[36, 35], [39, 38], [44, 43]]);
 const expectedActive = expectedActiveByTotal.get(catalog.tools.length);
 
-assert.ok(expectedActive !== undefined, `catalog total ${catalog.tools.length} is not an approved baseline (36) or reconciled catalog (39)`);
+assert.ok(expectedActive !== undefined, `catalog total ${catalog.tools.length} is not an approved baseline (36), reconciled catalog (39), or expanded catalog (44)`);
 assert.equal(activeTools.length, expectedActive, "public AI Bank active count must match the approved catalog baseline; deprecated Flowise stays hidden");
 assert.deepEqual(needsReview.map(t => t.id).sort(), [], "all active catalog records have verified editorial status");
 assert.equal(activeNeedsReview.length, 0, "no active record should remain in the needs-review filter");
 for (const id of newIds) {
   const tool = catalog.tools.find(t => t.id === id);
-  if (catalog.tools.length === 39) assert.ok(tool, `${id} must exist in the reconciled catalog`);
+  if (catalog.tools.length >= 39) assert.ok(tool, `${id} must exist in the reconciled/expanded catalog`);
   if (tool) {
     assert.equal(tool.status, "active", `${id} must be active`);
     assert.equal(tool.verification_status, "verified", `${id} must pass editorial/source review`);
