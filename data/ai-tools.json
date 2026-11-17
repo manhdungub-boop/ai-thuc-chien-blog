@@ -1566,7 +1566,7 @@
         "cloud"
       ],
       "description": "Nền tảng tạo video người dẫn ảo, avatar nói chuyện, voiceover và chuyển văn bản thành giọng nói đa ngôn ngữ.",
-      "free_tier_summary": "Gói Free $0: hạn mức khoảng 1–3 video/tháng tùy khu vực; video tối đa 1 phút, chia sẻ ở 720p và có watermark. Người dùng Free không dùng credit trả phí mà dùng quota video riêng; số lượng cụ thể có thể khác theo vùng và tài khoản. Phù hợp làm bản thử nghiệm ngắn, không phù hợp nếu yêu cầu xuất 1080p không watermark. Nghe thử giọng tiếng Việt và kiểm tra phát âm trước khi dùng công khai.",
+      "free_tier_summary": "Gói Free $0: hạn mức khoảng 1–3 video/tháng tùy khu vực; video tối đa 1 phút, chia sẻ ở 720p và có watermark. Người dùng Free dùng quota video riêng, không dùng credit trả phí; số lượng cụ thể có thể khác theo vùng và tài khoản. Trong lần kiểm tra workspace này, bộ lọc giọng công khai language=vi trả về 0 giọng; tìm 'Vietnamese' chỉ trả về một voice có language=en, nên chưa xác nhận được giọng TTS tiếng Việt tự nhiên. Không dùng làm nguồn voice tiếng Việt cho video xuất bản nếu chưa nghe thử mẫu thật.",
       "official_sources": [
         "https://www.heygen.com/pricing",
         "https://help.heygen.com/en/articles/15125761-heygen-credit-based-pricing-plans-subscriptions-explained",
