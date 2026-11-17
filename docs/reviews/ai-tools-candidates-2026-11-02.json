@@ -316,15 +316,15 @@
         "text-to-speech"
       ],
       "pricing_model": "freemium",
-      "pricing_status": "Ứng dụng cơ bản miễn phí và mã nguồn mở; chat, model, voice và tools cục bộ được công bố miễn phí. Bản App Store/Google Play có PocketPal Plus là khoản mua một lần để mở khóa hands-free voice và local API server; PalsHub có nội dung/pals trả phí riêng. Không mua Plus, không mua PalsHub và không dùng các tính năng online cần API key hoặc dịch vụ bên ngoài theo chính sách 0 đồng.",
+      "pricing_status": "Ứng dụng cơ bản miễn phí, mã nguồn mở MIT; chat cục bộ, model/voice/tools được công bố miễn phí sau khi tải về. Bản App Store Việt Nam có PocketPal Plus là mua một lần 699.000đ (giá hiển thị ngày 18/11/2026), mở hands-free voice và local API server; không mua. PalsHub có nội dung trả phí riêng. Không dùng tính năng online cần API key/dịch vụ ngoài nếu chưa xác minh 0 đồng.",
       "license": "Ứng dụng mã nguồn mở MIT. Model LLM tải từ Hugging Face là nội dung bên thứ ba, phải kiểm tra license từng model. TTS engines có license riêng: Kokoro Apache-2.0, Supertonic code MIT và weights BigScience OpenRAIL-M, Kitten TTS Apache-2.0; kiểm tra từng model/voice trước khi dùng thương mại.",
       "platforms": [
         "ios",
         "ipados",
         "android"
       ],
-      "description": "Ứng dụng AI cục bộ cho iPhone/iPad/Android, chạy mô hình GGUF bằng llama.cpp, hỗ trợ chat offline, tải model từ Hugging Face, nhận dạng giọng nói bằng Whisper và đọc phản hồi bằng các engine TTS trên thiết bị gồm Supertonic, Kokoro, Kitten và Phonon trên thiết bị tương thích.",
-      "free_tier_summary": "Bản cơ bản miễn phí, không cần tài khoản để chat offline sau khi tải model. Ứng dụng công bố prompt, câu trả lời và tài liệu ở trên thiết bị trừ khi người dùng bật web search/page reading, remote server hoặc system voice online. Model/voice downloads cần mạng và kết nối trực tiếp Hugging Face; PalsHub, mua hàng, benchmark leaderboard opt-in, feedback/reports và một số kiểm tra tương thích cũng dùng dịch vụ mạng. App Store Việt Nam ghi iOS 15.1+, nhưng model GGUF có thể chiếm nhiều RAM/lưu trữ và hiệu năng phụ thuộc thiết bị/model. App Store privacy disclosure ghi Data Not Collected, nhưng đó là thông tin do nhà phát triển tự khai và chưa được Apple xác minh; privacy policy mô tả dữ liệu được xử lý khi người dùng tự gửi benchmark, feedback, reports hoặc dùng dịch vụ tùy chọn. PocketPal Plus là khoản mua một lần cho hands-free voice và local API server trong bản store; không mua theo quy tắc 0 đồng. Supertonic TTS có danh sách 31 ngôn ngữ gồm tiếng Việt theo mã nguồn chính chủ, nhưng chưa xác minh giọng M1 có trong giao diện PocketPal hoặc chất lượng tiếng Việt trên iPhone thực tế. Giữ needs_review đến khi xác minh model/voice, hiệu năng và quyền sử dụng.",
+      "description": "Ứng dụng AI cục bộ cho iPhone/iPad/Android: chạy GGUF bằng llama.cpp, chat offline, tải model từ Hugging Face, Whisper nhận dạng giọng nói và TTS neural trên thiết bị gồm Supertonic, Kokoro, Kitten, Phonon trên thiết bị tương thích. Có web search/page reading tùy chọn và remote server; không bật các tính năng này nếu yêu cầu giữ dữ liệu cục bộ.",
+      "free_tier_summary": "App Store Việt Nam hiện hiển thị bản 1.23.0, cập nhật 5 ngày trước, tải miễn phí, dung lượng 140.3 MB, yêu cầu iOS 15.1+, ngôn ngữ giao diện chỉ English; Apple ghi Data Not Collected nhưng nêu rõ chưa xác minh khai báo nhà phát triển. PocketPal Plus hiển thị 699.000đ mua một lần, không mua. Official GitHub README xác nhận chat GGUF offline, TTS on-device Kokoro/Kitten/Supertonic/Phonon trên thiết bị tương thích, Whisper on-device; web search/page reading, remote server và system voice online là tính năng người dùng chủ động bật có thể đưa dữ liệu ra ngoài. App Store version history ghi Supertonic có 31 ngôn ngữ, nhưng chưa xác minh giọng Alex/Male 1 có trong app, chất lượng trên iPhone cụ thể hoặc xuất WAV/audio file. Không có căn cứ khẳng định xuất file âm thanh. Supertonic code MIT nhưng weights BigScience OpenRAIL-M; Kokoro Apache-2.0, Kitten Apache-2.0; license từng model/voice vẫn phải kiểm tra. Tải model/voice cần mạng và dung lượng lớn; không tải trong lần rà soát này.",
       "official_sources": [
         "https://github.com/a-ghorbani/pocketpal-ai",
         "https://github.com/a-ghorbani/pocketpal-ai/blob/main/src/locales/en.json",
@@ -334,7 +334,7 @@
         "https://huggingface.co/Supertone/supertonic-3",
         "https://pocketpal.dev/about"
       ],
-      "last_verified": "2026-11-17",
+      "last_verified": "2026-11-18",
       "verification_status": "needs_review",
       "status": "active",
       "tags": [
@@ -346,7 +346,7 @@
         "whisper",
         "model-license-review"
       ],
-      "project_fit": "Potential iPhone-side assistant, not yet approved for project use. Official repository says on-device GGUF chat and local neural TTS (Kokoro, Kitten, Supertonic, Phonon on supported devices), with prompts/results remaining local unless optional online features are enabled. On this project's older 4-GB-class iPhone, restrict evaluation to very small quantized models; memory, thermal load, generation speed and available storage must be benchmarked on-device. App supports iOS/iPadOS, but iOS 18 is required for Metal acceleration; CPU fallback remains available. Supertonic voice availability inside PocketPal is not proof it contains the same Alex/Male 1 voice selected for the existing video workflow. No purchase of PocketPal Plus; it is not yet validated as an audio-file export tool for the video pipeline."
+      "project_fit": "Có tiềm năng hỗ trợ đọc tiếng Việt và thử nghiệm TTS cục bộ, nhưng chưa được xác nhận cho pipeline video. iPhone A13/iOS hiện có thể cài theo yêu cầu iOS 15.1, nhưng hiệu năng model/TTS và nhiệt/ RAM chưa benchmark trên thiết bị. Supertonic 31 ngôn ngữ không chứng minh có đúng voice Alex/Male 1; chưa xác minh xuất WAV. Không mua Plus (699.000đ), không dùng PalsHub trả phí, API key, remote server hoặc tính năng online. Chỉ đánh giá tiếp nếu user chủ động đồng ý cài và nghe mẫu; video publishing vẫn paused."
     },
     {
       "id": "cloudflare-kitesurf",
