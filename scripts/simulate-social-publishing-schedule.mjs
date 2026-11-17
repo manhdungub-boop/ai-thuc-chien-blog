@@ -4,7 +4,9 @@ import path from "node:path";
 import { createHash, randomBytes } from "node:crypto";
 
 const OFFSET_MINUTES = 7 * 60; // Asia/Ho_Chi_Minh (UTC+07:00)
-const PLATFORMS = []; // No social network is currently connected to the project's Metricool brand.
+// Read-only Metricool brand inspection on 2026-11-17 confirmed the project's
+// TikTok handle. Keep this as a simulation allowlist; it does not grant publish permission.
+const PLATFORMS = ["tiktok"];
 const MIN_PLATFORM_GAP_HOURS = 24;
 const MAX_PLATFORM_GAP_HOURS = 72;
 const MIN_GLOBAL_GAP_HOURS = 3;
@@ -118,10 +120,11 @@ function renderMarkdown(schedule, { days, generatedAt, seedLabel }) {
     "- Múi giờ: Asia/Ho_Chi_Minh (UTC+07:00)",
     "- Nguồn ngẫu nhiên: " + seedLabel,
     "- Khung giờ đủ điều kiện: 08:00–21:00, chỉ là giới hạn; giờ thực tế được xáo trộn.",
-    "- Giới hạn: 2 khung giờ/nền tảng trong mô phỏng; cách nhau 24–72 giờ; mọi bài giữa các nền tảng cách nhau ít nhất 3 giờ.",
-    "- Metricool brand hiện chưa có mạng xã hội nào được kết nối; chưa có tài khoản/kênh nào được xác minh cho dự án.",
-    "- Vì vậy không tạo lịch gắn với TikTok, Facebook, YouTube hay nền tảng khác; kết quả phải có 0 khung giờ.",
-    "- Chỉ tạo bản nháp nội bộ; mọi hành động xuất bản cần xác minh tài khoản và phê duyệt riêng.",
+    "- Giới hạn: 2 khung giờ cho TikTok trong mô phỏng; cách nhau 24–72 giờ.",
+    "- Tài khoản TikTok dự án `@ai_thuc_chien_dungai` đã được xác nhận có kết nối trong Metricool bằng truy vấn chỉ đọc ngày 17/11/2026.",
+    "- Chỉ đưa TikTok vào mô phỏng. Facebook chưa được xác minh là kết nối của brand này; YouTube đang kết nối là kênh “Tín Hiệu Cơ Thể”, không phải kênh AI Thực Chiến nên bị loại trừ.",
+    "- Mô phỏng không xác nhận quyền đăng, hạn mức còn lại hoặc trạng thái xuất bản thực tế; phải kiểm tra lại trước khi tạo lịch công khai.",
+    "- Video/Short có giọng đọc vẫn tạm dừng. Mô phỏng chỉ định hướng cho nội dung ảnh tĩnh; ảnh TikTok phải là JPEG hoặc WebP.",
     "- Không bảo đảm đây là giờ tốt nhất; cần dữ liệu phân tích tài khoản thật đã xác minh trước khi tối ưu.", "",
     "| Thứ tự | Nền tảng | Thời điểm đề xuất |",
     "|---:|---|---|"
@@ -129,9 +132,15 @@ function renderMarkdown(schedule, { days, generatedAt, seedLabel }) {
   if (schedule.length) {
     for (const item of schedule) lines.push("| " + item.order + " | " + item.platform + " | " + item.local_time + " |");
   } else {
-    lines.push("| — | Chưa có tài khoản xác minh | Không tạo lịch | ");
+    lines.push("| — | Chưa có tài khoản xác minh | Không tạo lịch |");
   }
-  lines.push("", "## Kiểm soát", "", "- [x] Không có mạng xã hội nào được kết nối/xác minh; vì vậy không tạo khung giờ xuất bản.", "- [x] Thuật toán khoảng cách ngẫu nhiên chỉ được kiểm thử bằng nền tảng giả lập `TEST`, không đại diện tài khoản thật.", "- [x] Không gọi API, không truy cập tài khoản, không đăng công khai.", "- [ ] Chưa xác minh tài khoản và quyền đăng — không được kích hoạt xuất bản.", "- [ ] Chưa có dữ liệu phân tích người xem — chưa kết luận khung giờ tối ưu.", "");
+  lines.push("", "## Kiểm soát", "",
+    "- [x] Chỉ mô phỏng 2 khung giờ TikTok cho tài khoản dự án đã xác minh kết nối.",
+    "- [x] Không đưa Facebook hoặc YouTube vào lịch.",
+    "- [x] Thuật toán khoảng cách ngẫu nhiên được kiểm thử riêng bằng nền tảng giả lập `TEST`.",
+    "- [x] Không gọi API, không tạo lịch Planner, không đăng công khai.",
+    "- [ ] Chưa xác minh quyền đăng và hạn mức tháng còn lại — không được kích hoạt xuất bản.",
+    "- [ ] Chưa có dữ liệu phân tích người xem đủ để kết luận khung giờ tối ưu.", "");
   return lines.join("\n");
 }
 function selfTest() {
@@ -140,26 +149,35 @@ function selfTest() {
   const second = createSchedule({ startMs, days: 14, seed: "repeatable-test", platforms: ["TEST"] });
   if (JSON.stringify(first) !== JSON.stringify(second)) throw new Error("Seeded simulation is not reproducible.");
   if (first.length !== 2) throw new Error("Expected exactly two synthetic TEST slots for the spacing regression test.");
-  for (const platform of ["TEST"]) {
-    const rows = first.filter(item => item.platform === platform);
-    if (rows.length !== 2) throw new Error("Incorrect slot count for " + platform);
-    const gap = (Date.parse(rows[1].timestamp) - Date.parse(rows[0].timestamp)) / 3600000;
-    if (gap < MIN_PLATFORM_GAP_HOURS || gap > MAX_PLATFORM_GAP_HOURS) throw new Error("Platform gap is outside 24–72 hours.");
-  }
+  const rows = first.filter(item => item.platform === "TEST");
+  if (rows.length !== 2) throw new Error("Incorrect slot count for TEST");
+  const gap = (Date.parse(rows[1].timestamp) - Date.parse(rows[0].timestamp)) / 3600000;
+  if (gap < MIN_PLATFORM_GAP_HOURS || gap > MAX_PLATFORM_GAP_HOURS) throw new Error("Platform gap is outside 24–72 hours.");
   for (let i = 0; i < first.length; i++) {
     const d = new Date(Date.parse(first[i].timestamp) + OFFSET_MINUTES * 60000);
     const minute = d.getUTCHours() * 60 + d.getUTCMinutes();
     if (minute < WINDOW_START_MINUTE || minute > WINDOW_END_MINUTE) throw new Error("Slot outside allowed local-time window.");
     for (let j = i + 1; j < first.length; j++) {
-      const gap = Math.abs(Date.parse(first[i].timestamp) - Date.parse(first[j].timestamp)) / 3600000;
-      if (gap < MIN_GLOBAL_GAP_HOURS) throw new Error("Cross-platform spacing is too short.");
+      const gapHours = Math.abs(Date.parse(first[i].timestamp) - Date.parse(first[j].timestamp)) / 3600000;
+      if (gapHours < MIN_GLOBAL_GAP_HOURS) throw new Error("Cross-platform spacing is too short.");
     }
   }
   const alternate = createSchedule({ startMs, days: 14, seed: "different-seed", platforms: ["TEST"] });
   if (JSON.stringify(first) === JSON.stringify(alternate)) throw new Error("Different seeds produced the same schedule.");
-  const noAccount = createSchedule({ startMs, days: 14, seed: "no-account" });
+  const projectSlots = createSchedule({ startMs, days: 14, seed: "project-test", platforms: PLATFORMS });
+  if (projectSlots.length !== 2 || projectSlots.some(item => item.platform !== "tiktok")) {
+    throw new Error("The verified project plan must contain exactly two TikTok simulation slots.");
+  }
+  const noAccount = createSchedule({ startMs, days: 14, seed: "no-account", platforms: [] });
   if (noAccount.length !== 0) throw new Error("No verified social account must produce zero schedule slots.");
-  console.log("PASS: synthetic randomized-spacing regression and zero-slot output when no social account is verified; no-publish boundary.");
+  const rendered = renderMarkdown(projectSlots, { days: 14, generatedAt: "2026-11-17T00:00:00.000Z", seedLabel: "test" });
+  if (!rendered.includes("`@ai_thuc_chien_dungai`") || !rendered.includes("Chỉ đưa TikTok vào mô phỏng")) {
+    throw new Error("Verified TikTok destination evidence is missing from the simulation report.");
+  }
+  if (rendered.includes("Facebook |") || rendered.includes("YouTube |") || !rendered.includes("KHÔNG ĐĂNG BÀI")) {
+    throw new Error("An excluded platform or publishing action leaked into the simulation.");
+  }
+  console.log("PASS: two TikTok-only project simulation slots, synthetic spacing regression, seeded reproducibility, zero slots without a verified account, no-publish boundary.");
 }
 if (process.argv.includes("--self-test")) {
   selfTest();
@@ -171,7 +189,7 @@ if (process.argv.includes("--self-test")) {
   const seed = seedArg >= 0 ? process.argv[seedArg + 1] : "";
   const out = outArg >= 0 ? process.argv[outArg + 1] : "reports/social/social-publishing-schedule-simulation.md";
   const startMs = Date.now();
-  const schedule = createSchedule({ startMs, days, seed });
+  const schedule = createSchedule({ startMs, days, seed, platforms: PLATFORMS });
   const markdown = renderMarkdown(schedule, {
     days,
     generatedAt: new Date().toISOString(),
