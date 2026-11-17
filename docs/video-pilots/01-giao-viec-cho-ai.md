@@ -110,14 +110,16 @@ Theo dõi DUNG - AI để cùng ứng dụng AI vào công việc và cuộc s�
 - [ ] Full video reviewed on an iPhone-sized screen.
 - [ ] Explicit release approval obtained before public posting.
 
-## 7. Current limitations / next dependency — updated 2026-11-17
+## 7. Media QA status — updated 2026-11-18
 
-- The user reports that the audio file has already been downloaded to the iPhone.
-- The audio file is not attached to this repository and is not accessible to the assistant through the current session. Do not ask the user to regenerate the voice; do not claim the pilot audio has been listened to or verified.
-- The user's latest listening feedback confirms PocketPal / Supertonic / Alex (Male 1) / Vietnamese as clear and natural. This is user-reported listening feedback, not an independent quality check of the specific pilot audio file.
-- The remaining dependency is access to that existing audio file through a supported attachment or device export route. Once accessible, measure the true runtime, synchronize every SRT cue, listen to the full track and then assemble/review the MP4.
-- Until the actual pilot audio can be inspected, subtitle timings remain provisional and the video is not complete or releasable.
-
+- An existing MP4 is available in the current ChatGPT project workspace and has been inspected locally; no regeneration or paid service was used.
+- Technical metadata: 50.2 seconds, H.264, 512×910 portrait, AAC stereo 44.1 kHz, approximately 29.9 MB.
+- Sampled frames show a repeated CapCut AI watermark, small/low-contrast subtitles near the lower edge, and a DUNG - AI end card requiring full-resolution layout review.
+- The audio stream is present. Technical level check: peak approximately -3.9 dBFS and mean approximately -22.5 dBFS. This is not a listening or speech-transcription verdict.
+- The actual Vietnamese speech has not been transcribed or independently listened to. No local speech-to-text engine is available in this workspace; do not upload private media to paid or credit-based services.
+- The provisional SRT in section 4 ends at 58 seconds and must not be used unchanged on this 50.2-second MP4. Retiming must follow the actual spoken words, not a proportional guess.
+- The user's separate feedback that PocketPal / Supertonic / Alex (Male 1) / Vietnamese sounds natural remains useful as a voice-setting baseline, but does not verify this MP4's narration.
+- The pilot is not releasable until speech, caption accuracy/timing, watermark rights/removal, and full-screen visual quality are verified. Keep this PR in Draft.
 ## 8. Safety and release boundary
 
 This is a draft production asset on an isolated branch. It does not modify Worker Production, DNS, D1, secrets, live site content, or social accounts. It does not schedule or publish any post.
