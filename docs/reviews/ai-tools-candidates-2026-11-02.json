@@ -401,21 +401,22 @@
         "local-ai",
         "reading"
       ],
-      "pricing_model": "freemium",
-      "pricing_status": "Ứng dụng tải miễn phí. App Store Việt Nam hiện liệt kê OpenRead Pro Lifetime 119.000₫ (mua một lần) cho chế độ tiết kiệm năng lượng tối đa và voice packs cao cấp; tip Buy Me a Coffee 29.000₫ là tự nguyện. Không mua Pro/tip. Các tính năng cơ bản vẫn miễn phí; không giả định mọi voice pack nâng cao đều miễn phí.",
+      "pricing_model": "free",
+      "pricing_status": "App Store Việt Nam hiện ghi Free; In-App Purchase được liệt kê là Buy Me a Coffee 29.000₫ (tip tự nguyện, không mở khóa tính năng) theo mô tả listing VN. Một storefront App Store khác đã hiển thị ghi chú OpenRead PRO one-time purchase cho premium voice packs và maximum energy-saving mode trong version history; chưa xác minh khoản mua này có áp dụng cho storefront Việt Nam hoặc giá VN. Vì vậy không khẳng định Pro 119.000₫ ở Việt Nam; không mua bất kỳ IAP nào.",
       "license": "Ứng dụng OpenRead là phần mềm độc quyền; chưa thấy giấy phép mã nguồn app. Nhà phát triển ghi bộ giọng tiếng Việt lấy từ VieNeu-TTS của Phạm Nguyễn Ngọc Bảo, Apache-2.0. Các gói giọng đa ngôn ngữ có license riêng cần kiểm tra trong Settings → Licences & credits; không gộp license của app với license model/voice.",
       "platforms": [
         "ios",
         "iphone",
         "ipad"
       ],
-      "description": "Ứng dụng đọc sách/tài liệu ngoại tuyến trên iPhone/iPad, hỗ trợ văn bản, EPUB, PDF và trang web; voice synthesis xử lý trên thiết bị sau khi tải voice pack. App Store hiện mô tả 31 ngôn ngữ, preview giọng trước khi tải, đọc nền và điều khiển màn hình khóa. Các voice pack cao cấp và chế độ tiết kiệm năng lượng tối đa thuộc Pro tùy chọn.",
-      "free_tier_summary": "App Store Việt Nam hiện ghi Free, iOS/iPadOS 16+, dung lượng 41.5 MB, English + 30 ngôn ngữ. OpenRead Pro Lifetime giá 119.000₫; tip tự nguyện 29.000₫. Không mua cả hai. Listing nói xử lý sách và voice trên thiết bị, không tài khoản, không quảng cáo/behavioral analytics; voice pack tải riêng, web pages và mua hàng cần mạng. App Store privacy disclosure Data Not Collected là tự khai và chưa được Apple xác minh. Listing hiện mô tả 31 ngôn ngữ, preview voice, downloadable packs; Pro bao gồm premium voice packs và maximum energy-saving mode. Chưa xác định cụ thể những voice packs/14 Vietnamese voices nào nằm trong free tier so với Pro. Bộ tiếng Việt được ghi nhận dựa trên VieNeu-TTS Apache-2.0, nhưng không có bằng chứng OpenRead xuất WAV/MP3. Không dùng để làm voice-over video cho đến khi có xác nhận xuất file miễn phí. Không có bằng chứng app chứa Supertonic Alex/Male 1.",
+      "description": "Ứng dụng đọc sách/tài liệu ngoại tuyến trên iPhone/iPad, hỗ trợ text, EPUB, PDF và web page. App Store VN mô tả 14 giọng tiếng Việt (7 nam, 7 nữ; Bắc/Trung/Nam), ba phong cách Natural/News/Storytelling, tốc độ 0.5x–2x; TTS xử lý trên iPhone sau khi tải voice pack. Có preview voice, đọc nền và điều khiển màn hình khóa.",
+      "free_tier_summary": "App Store Việt Nam hiện ghi Free, iOS/iPadOS 16+, 29.9 MB, ngôn ngữ English và Vietnamese. Listing VN hiện liệt kê IAP Buy Me a Coffee 29.000₫ và mô tả đây là tip không mở khóa tính năng; không thấy giá Pro 119.000₫ trong listing VN được truy xuất. Một storefront khác có version history 26.11.02 ghi OpenRead PRO one-time purchase cho premium reading voice packs và maximum energy-saving mode, nhưng chưa xác minh tính khả dụng/giá trên VN storefront. 14 giọng tiếng Việt (7 nam, 7 nữ; 3 vùng giọng; Natural/News/Storytelling) dựa trên VieNeu-TTS Apache-2.0. Xử lý audio cục bộ; không tài khoản, không analytics, không ads theo khai báo nhà phát triển, Apple chưa xác minh. Voice pack phải tải riêng. Không thấy bằng chứng xuất WAV/MP3. Không dùng làm voice-over video trước khi xác minh xuất file miễn phí. Không có bằng chứng hỗ trợ Supertonic Alex/Male 1.",
       "official_sources": [
         "https://apps.apple.com/vn/app/openread-offline-read-aloud/id6796673874",
         "https://opr.vuba.one/credits.php",
         "https://github.com/pnnbao97/VieNeu-TTS",
-        "https://github.com/pnnbao97/VieNeu-TTS/blob/main/LICENSE"
+        "https://github.com/pnnbao97/VieNeu-TTS/blob/main/LICENSE",
+        "https://apps.apple.com/kz/app/openread-offline-read-aloud/id6796673874"
       ],
       "last_verified": "2026-11-18",
       "verification_status": "needs_review",
@@ -429,7 +430,7 @@
         "pro-lifetime-119000-vnd",
         "no-audio-export-evidence"
       ],
-      "project_fit": "Rất đáng cân nhắc làm công cụ NGHE THỬ giọng tiếng Việt miễn phí trên iPhone, nhưng không phải lựa chọn đã xác nhận cho sản xuất video. Có thể preview voices trong app; tuy nhiên phải phân biệt giọng free với voice pack Pro (119.000₫, không mua). Chưa xác minh xuất WAV/MP3, đúng voice Alex/Male 1, và hiệu năng/nhiệt trên iPhone A13. Không tải voice packs trả phí hoặc mua Pro. Chỉ thử phần miễn phí nếu user muốn; không tự cài."
+      "project_fit": "Rất phù hợp để nghe thử nhiều giọng tiếng Việt trực tiếp trên iPhone, đặc biệt 14 giọng nam/nữ và các vùng giọng. Tuy nhiên, đây là VieNeu-TTS chứ không phải Supertonic Alex/Male 1; không thay đổi lựa chọn hiện tại của dự án. App Store VN hiện chỉ cho thấy tip 29.000₫, còn Pro voice packs xuất hiện trong một storefront khác nên chưa rõ vùng VN. Không mua IAP. Chưa xác minh xuất WAV/MP3, do đó chỉ đánh giá để nghe thử, chưa dùng cho video. Chưa cài ứng dụng hoặc tải voice pack."
     },
     {
       "id": "open-minis",
