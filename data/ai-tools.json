@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-11-16T17:13:33+07:00",
+  "generated_at": "2026-11-17T19:00:00+07:00",
   "catalog_policy": {
     "default_locale": "vi",
     "currency": "USD",
@@ -61,12 +61,12 @@
         "android"
       ],
       "description": "Trợ lý AI của Google cho hỏi đáp, viết và xử lý nội dung.",
-      "free_tier_summary": "Có quyền truy cập tiêu chuẩn miễn phí; giới hạn prompt và tính năng có thể thay đổi theo thời điểm, khu vực và gói AI.",
+      "free_tier_summary": "Tài khoản cá nhân không có gói Google AI được dùng Gemini theo hạn mức tính toán. Giới hạn thay đổi theo model, tính năng, nhu cầu hệ thống và tài khoản; hạn mức thường làm mới sau mỗi 5 giờ cho đến khi chạm giới hạn tuần. Gói Google AI trả phí cung cấp hạn mức cao hơn. Google có thể thay đổi giới hạn mà không báo trước.",
       "official_sources": [
         "https://gemini.google.com/",
         "https://support.google.com/gemini/answer/16275805?hl=en"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-17",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -130,7 +130,7 @@
       "official_sources": [
         "https://www.perplexity.ai/enterprise/pricing"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-17",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -155,13 +155,13 @@
         "web"
       ],
       "description": "Không gian nghiên cứu dựa trên tài liệu và nguồn do người dùng cung cấp.",
-      "free_tier_summary": "Có gói Standard miễn phí; giới hạn hiện được công bố gồm 100 notebook/người dùng và 50 nguồn/notebook. Hạn mức có thể thay đổi.",
+      "free_tier_summary": "Gemini Notebook Standard có gói miễn phí khi dùng tài khoản Gmail; hạn mức công bố hiện gồm tối đa 100 notebook/người dùng và 50 nguồn/notebook. Hạn mức AI phụ thuộc mức sử dụng và có thể thay đổi theo thời điểm; các gói Google AI trả phí cung cấp hạn mức cao hơn. Người dùng tại Việt Nam cần lưu ý có thể xuất hiện watermark trên một số nội dung theo trang trợ giúp Google.",
       "official_sources": [
         "https://notebooklm.google.com/",
         "https://support.google.com/gemininotebook/answer/16213268",
         "https://support.google.com/gemininotebook/answer/17670842"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-17",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -219,12 +219,12 @@
         "web"
       ],
       "description": "Công cụ tạo và chỉnh sửa hình ảnh, vector, video và audio bằng AI trong hệ sinh thái Adobe; các tính năng tiêu thụ generative credits theo loại tính năng và gói.",
-      "free_tier_summary": "Gói miễn phí được cấp generative credits khi người dùng sử dụng tính năng Firefly lần đầu; credits miễn phí hết hạn sau một tháng kể từ ngày cấp và được cấp lại khi bắt đầu lần sử dụng đầu tiên ở tháng tiếp theo. Số credits và mức tiêu thụ phụ thuộc gói, tính năng và model; credits không cộng dồn. Tính năng premium có thể tiêu thụ nhiều credits, ví dụ Generate Video 1080p/24fps dùng 100 credits mỗi giây theo FAQ Adobe cập nhật 27/10/2026.",
+      "free_tier_summary": "Người dùng miễn phí chưa đăng ký gói được cấp một số lượt tạo nội dung AI miễn phí mỗi ngày, dùng chung trên các tính năng AI tạo sinh được hỗ trợ và một nhóm model được chọn. Hạn mức được làm mới hằng ngày nhưng số lượt, tính năng và model có thể thay đổi. Muốn tạo thêm hoặc dùng đầy đủ model/tính năng cần gói Adobe trả phí; không coi lượt miễn phí là một số credits cố định mỗi tháng.",
       "official_sources": [
         "https://firefly.adobe.com/",
         "https://helpx.adobe.com/creative-cloud/apps/generative-ai/generative-credits-faq.html"
       ],
-      "last_verified": "2026-11-05",
+      "last_verified": "2026-11-17",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -285,11 +285,11 @@
         "web"
       ],
       "description": "Nền tảng tạo và chỉnh sửa video, hình ảnh bằng mô hình AI.",
-      "free_tier_summary": "Gói Free $0 cung cấp 125 tín dụng một lần để trải nghiệm; không phải hạn mức tín dụng miễn phí làm mới hằng tháng.",
+      "free_tier_summary": "Gói Free $0 cung cấp 125 credits một lần (không hết hạn khi chưa sử dụng hết), 5 GB lưu trữ tài sản và quyền truy cập một số công cụ tạo sinh được chọn. Credits không được cấp lại hằng tháng; khi dùng hết cần chờ hoặc mua thêm, vì vậy không bật mua credits nếu giữ ngân sách 0 đồng.",
       "official_sources": [
         "https://runway.com/pricing"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-17",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -319,7 +319,7 @@
         "https://aistudio.google.com/",
         "https://ai.google.dev/gemini-api/docs/pricing"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-17",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -425,7 +425,7 @@
         "https://langfuse.com/self-hosting",
         "https://github.com/langfuse/langfuse"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-17",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -467,7 +467,7 @@
         "https://github.com/BerriAI/litellm/blob/main/enterprise/LICENSE.md",
         "https://github.com/BerriAI/litellm/blob/main/pyproject.toml"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-17",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -508,7 +508,7 @@
         "https://github.com/alibaba/dify/blob/main/LICENSE",
         "https://docs.dify.ai/"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-17",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -622,7 +622,7 @@
         "cloud"
       ],
       "description": "Dịch vụ API gateway tổng hợp nhiều nhà cung cấp LLM, chuẩn hóa API, hỗ trợ routing/fallback và lựa chọn mô hình miễn phí hoặc trả phí.",
-      "free_tier_summary": "Free plan hiện công bố 25+ free models và 4 free providers; free model variants có rate limits 20 requests/min và 50/day (có thể tăng sau khi mua credits). Paid inference tính theo token; Standard có platform fee 5.5% khi mua credits.",
+      "free_tier_summary": "Gói Free hiện liệt kê hơn 25 model miễn phí và 4 nhà cung cấp miễn phí. Model khả dụng và giới hạn tốc độ thay đổi theo model/nhà cung cấp; không phải mọi model đều miễn phí. Sử dụng model trả phí hoặc mua credits có thể phát sinh chi phí; cần kiểm tra nhãn miễn phí và giá của từng model trước khi gọi API.",
       "official_sources": [
         "https://openrouter.ai/",
         "https://openrouter.ai/pricing",
@@ -630,7 +630,7 @@
         "https://openrouter.ai/docs",
         "https://openrouter.ai/docs/limits"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-17",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -670,7 +670,7 @@
         "https://tesseract-ocr.github.io/tessdoc/",
         "https://github.com/tesseract-ocr/tessdata"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-17",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -751,7 +751,7 @@
         "https://www.datalab.to/pricing",
         "https://github.com/datalab-to/surya/blob/master/MODEL_LICENSE"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-17",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -792,7 +792,7 @@
         "https://unstructured.io/pricing",
         "https://github.com/Unstructured-IO/unstructured/blob/main/LICENSE.md"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-17",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -832,7 +832,7 @@
         "https://github.com/datalab-to/marker/blob/master/LICENSE",
         "https://github.com/datalab-to/marker/blob/master/MODEL_LICENSE"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-17",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -878,7 +878,7 @@
         "https://github.com/snakers4/silero-vad/blob/master/LICENSE",
         "https://pypi.org/project/whisperx/"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-17",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -923,7 +923,7 @@
         "https://github.com/OpenHands/enterprise",
         "https://github.com/OpenHands/enterprise/blob/main/LICENSE"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-17",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -964,7 +964,7 @@
         "https://github.com/Aider-AI/aider/blob/main/LICENSE.txt",
         "https://aider.chat/docs/"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-17",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -1006,7 +1006,7 @@
         "https://huggingface.co/docs/hub/security",
         "https://huggingface.co/docs/hub/repositories"
       ],
-      "last_verified": "2026-11-05",
+      "last_verified": "2026-11-17",
       "verification_status": "verified",
       "status": "active",
       "tags": [
