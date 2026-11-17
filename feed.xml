@@ -5,6 +5,13 @@
     <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/</link>
     <description>Kiến thức AI thực hành, tự động hóa và công nghệ cho người Việt.</description>
     <item>
+    <title>Bảo mật MCP Server: OAuth, token và kết nối AI an toàn | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/bao-mat-mcp-server-oauth-ai</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/bao-mat-mcp-server-oauth-ai</guid>
+    <description>Hướng dẫn bảo mật MCP khi kết nối AI với công cụ và dữ liệu: kiểm tra nguồn máy chủ, giới hạn quyền OAuth, xác thực token, cô lập công cụ và kiểm thử trước khi sử dụng.</description>
+  </item>
+
+    <item>
     <title>Đặt giới hạn quota cho AI Agent: hard-stop, ngân sách và circuit breaker | AI Thực Chiến</title>
     <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/gioi-han-quota-ai-agent</link>
     <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/gioi-han-quota-ai-agent</guid>
