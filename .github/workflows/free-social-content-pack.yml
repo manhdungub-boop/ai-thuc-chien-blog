@@ -46,7 +46,7 @@ jobs:
         run: |
           node scripts/generate-social-content-pack.mjs --feed feed.xml --out reports/social/social-content-pack.md
 
-      - name: Generate randomized schedule simulation only
+      - name: Generate zero-slot schedule simulation until a social account is verified
         run: |
           node scripts/simulate-social-publishing-schedule.mjs --days 14 --out reports/social/social-publishing-schedule-simulation.md
 
@@ -57,8 +57,9 @@ jobs:
             echo
             echo "- Source: repository RSS only"
             echo "- Output: five newest published articles, or fewer if RSS contains fewer entries"
-            echo "- Destination draft: TikTok only; Facebook is not connected and YouTube is excluded until the correct project channel is verified"
-            echo "- Randomized schedule: simulation artifact only; no publishing, account access, external API, paid service, or secret access"
+            echo "- Destination: internal draft only; no social network is connected to the Metricool brand, so no channel-specific destination is verified"
+            echo "- Schedule: zero slots until a project social account is connected and verified; randomized-spacing algorithm is tested only with a synthetic TEST platform"
+            echo "- No publishing, account access, external API, paid service, or secret access"
             echo "- The Wednesday workflow schedule is for internal draft generation only, not a public posting schedule"
             echo
             cat reports/social/social-content-pack.md
