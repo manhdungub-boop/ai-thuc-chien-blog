@@ -4,7 +4,7 @@ import path from "node:path";
 import { createHash, randomBytes } from "node:crypto";
 
 const OFFSET_MINUTES = 7 * 60; // Asia/Ho_Chi_Minh (UTC+07:00)
-const PLATFORMS = ["TikTok"]; // Only the project TikTok account is currently verified for use.
+const PLATFORMS = []; // No social network is currently connected to the project's Metricool brand.
 const MIN_PLATFORM_GAP_HOURS = 24;
 const MAX_PLATFORM_GAP_HOURS = 72;
 const MIN_GLOBAL_GAP_HOURS = 3;
@@ -65,19 +65,19 @@ function candidatesFor(startMs, days) {
   }
   return candidates;
 }
-function createSchedule({ startMs, days = 14, seed }) {
+function createSchedule({ startMs, days = 14, seed, platforms = PLATFORMS }) {
   if (!Number.isFinite(startMs) || !Number.isInteger(days) || days < 7 || days > 30) {
     throw new Error("startMs must be valid and days must be an integer from 7 to 30.");
   }
   const random = makeRandom(seed);
   const allSlots = [];
-  for (const platform of PLATFORMS) {
+  for (const platform of platforms) {
     allSlots.push({ platform, sequence: 1 }, { platform, sequence: 2 });
   }
   const order = shuffle(allSlots, random);
   const candidates = shuffle(candidatesFor(startMs, days), random);
   const chosen = [];
-  const byPlatform = new Map(PLATFORMS.map(name => [name, []]));
+  const byPlatform = new Map(platforms.map(name => [name, []]));
   let attempts = 0;
   function place(index) {
     if (index === order.length) return true;
@@ -119,24 +119,28 @@ function renderMarkdown(schedule, { days, generatedAt, seedLabel }) {
     "- Nguồn ngẫu nhiên: " + seedLabel,
     "- Khung giờ đủ điều kiện: 08:00–21:00, chỉ là giới hạn; giờ thực tế được xáo trộn.",
     "- Giới hạn: 2 khung giờ/nền tảng trong mô phỏng; cách nhau 24–72 giờ; mọi bài giữa các nền tảng cách nhau ít nhất 3 giờ.",
-    "- Chỉ mô phỏng TikTok vì đây là nền tảng duy nhất hiện có tài khoản dự án được xác minh.",
-    "- Facebook bị loại khỏi mô phỏng vì chưa kết nối; YouTube bị loại vì kênh Metricool đang trỏ tới kênh không thuộc dự án.",
-    "- Không tự động thêm nền tảng mới khi chưa xác minh đúng tài khoản và quyền đăng.",
+    "- Metricool brand hiện chưa có mạng xã hội nào được kết nối; chưa có tài khoản/kênh nào được xác minh cho dự án.",
+    "- Vì vậy không tạo lịch gắn với TikTok, Facebook, YouTube hay nền tảng khác; kết quả phải có 0 khung giờ.",
+    "- Chỉ tạo bản nháp nội bộ; mọi hành động xuất bản cần xác minh tài khoản và phê duyệt riêng.",
     "- Không bảo đảm đây là giờ tốt nhất; cần dữ liệu phân tích tài khoản thật đã xác minh trước khi tối ưu.", "",
     "| Thứ tự | Nền tảng | Thời điểm đề xuất |",
     "|---:|---|---|"
   ];
-  for (const item of schedule) lines.push("| " + item.order + " | " + item.platform + " | " + item.local_time + " |");
-  lines.push("", "## Kiểm soát", "", "- [x] Ngày và giờ được xáo trộn; không dùng lịch cố định theo tuần.", "- [x] Khoảng cách từng nền tảng từ 24 đến 72 giờ.", "- [x] Không có hai bài mô phỏng cách nhau dưới 3 giờ trên toàn hệ thống.", "- [x] Không gọi API, không truy cập tài khoản, không đăng công khai.", "- [ ] Chưa xác minh tài khoản và quyền đăng — không được kích hoạt xuất bản.", "- [ ] Chưa có dữ liệu phân tích người xem — chưa kết luận khung giờ tối ưu.", "");
+  if (schedule.length) {
+    for (const item of schedule) lines.push("| " + item.order + " | " + item.platform + " | " + item.local_time + " |");
+  } else {
+    lines.push("| — | Chưa có tài khoản xác minh | Không tạo lịch | ");
+  }
+  lines.push("", "## Kiểm soát", "", "- [x] Không có mạng xã hội nào được kết nối/xác minh; vì vậy không tạo khung giờ xuất bản.", "- [x] Thuật toán khoảng cách ngẫu nhiên chỉ được kiểm thử bằng nền tảng giả lập `TEST`, không đại diện tài khoản thật.", "- [x] Không gọi API, không truy cập tài khoản, không đăng công khai.", "- [ ] Chưa xác minh tài khoản và quyền đăng — không được kích hoạt xuất bản.", "- [ ] Chưa có dữ liệu phân tích người xem — chưa kết luận khung giờ tối ưu.", "");
   return lines.join("\n");
 }
 function selfTest() {
   const startMs = Date.parse("2026-11-17T00:00:00.000Z");
-  const first = createSchedule({ startMs, days: 14, seed: "repeatable-test" });
-  const second = createSchedule({ startMs, days: 14, seed: "repeatable-test" });
+  const first = createSchedule({ startMs, days: 14, seed: "repeatable-test", platforms: ["TEST"] });
+  const second = createSchedule({ startMs, days: 14, seed: "repeatable-test", platforms: ["TEST"] });
   if (JSON.stringify(first) !== JSON.stringify(second)) throw new Error("Seeded simulation is not reproducible.");
-  if (first.length !== 2) throw new Error("Expected exactly two simulated slots for the verified TikTok platform.");
-  for (const platform of PLATFORMS) {
+  if (first.length !== 2) throw new Error("Expected exactly two synthetic TEST slots for the spacing regression test.");
+  for (const platform of ["TEST"]) {
     const rows = first.filter(item => item.platform === platform);
     if (rows.length !== 2) throw new Error("Incorrect slot count for " + platform);
     const gap = (Date.parse(rows[1].timestamp) - Date.parse(rows[0].timestamp)) / 3600000;
@@ -151,9 +155,11 @@ function selfTest() {
       if (gap < MIN_GLOBAL_GAP_HOURS) throw new Error("Cross-platform spacing is too short.");
     }
   }
-  const alternate = createSchedule({ startMs, days: 14, seed: "different-seed" });
+  const alternate = createSchedule({ startMs, days: 14, seed: "different-seed", platforms: ["TEST"] });
   if (JSON.stringify(first) === JSON.stringify(alternate)) throw new Error("Different seeds produced the same schedule.");
-  console.log("PASS: TikTok-only randomized dry-run, reproducible seeded test, 24–72h spacing, 3h global spacing, Vietnam local-time window, and no-publish boundary.");
+  const noAccount = createSchedule({ startMs, days: 14, seed: "no-account" });
+  if (noAccount.length !== 0) throw new Error("No verified social account must produce zero schedule slots.");
+  console.log("PASS: synthetic randomized-spacing regression and zero-slot output when no social account is verified; no-publish boundary.");
 }
 if (process.argv.includes("--self-test")) {
   selfTest();
