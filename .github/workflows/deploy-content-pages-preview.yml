@@ -86,6 +86,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
@@ -143,6 +144,7 @@ jobs:
                       self.row = None
 
           expected = os.environ["EXPECTED_SHA"]
+          branch = os.environ["HEAD_REF"]
           with open(os.environ["CHECKS_FILE"], encoding="utf-8") as stream:
               checks = json.load(stream).get("check_runs", [])
           cloudflare = [
@@ -203,9 +205,20 @@ jobs:
                   details_url
               )
               if match:
+                  slug = match.group(1)
+              elif re.search(r"/production/builds/[0-9a-f-]+/?$", details_url):
+                  # Preview builds created by a branch-specific Preview trigger
+                  # use the first 27 characters of the normalized branch name
+                  # as the stable alias. The check name is already restricted
+                  # to the dedicated Preview Worker above; HTTP and header
+                  # probes below remain mandatory.
+                  slug = re.sub(r"-+", "-", re.sub(r"[^a-z0-9-]+", "-", branch.lower())).strip("-")[:27].rstrip("-")
+              else:
+                  continue
+              if slug:
                   print(
                       "https://"
-                      + match.group(1)
+                      + slug
                       + "-ai-thuc-chien-blog-auth-app-preview.manhdungub.workers.dev"
                   )
                   raise SystemExit(0)
