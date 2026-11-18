@@ -177,6 +177,22 @@ export class AgentDraftStore extends DurableObject {
     const draft = JSON.parse(current.draft_json);
     if (!Array.isArray(draft.claims)) return { recorded: false, reason: "claim_manifest_required" };
 
+    let ledgerJson;
+    let reviewRecordJson;
+    try {
+      ledgerJson = JSON.stringify(ledger);
+      reviewRecordJson = JSON.stringify(reviewRecord);
+    } catch {
+      return { recorded: false, reason: "evidence_review_serialization_failed" };
+    }
+    if (typeof ledgerJson !== "string" || typeof reviewRecordJson !== "string") {
+      return { recorded: false, reason: "evidence_review_serialization_failed" };
+    }
+    const inputReviewBytes = new TextEncoder().encode(ledgerJson + reviewRecordJson).byteLength;
+    if (inputReviewBytes > MAX_EVIDENCE_REVIEW_BYTES) {
+      return { recorded: false, reason: "evidence_review_too_large" };
+    }
+
     let readiness;
     try {
       readiness = await assessArticleEvidenceReadiness({ draft, ledger, reviewRecord, now: Date.now() });
@@ -187,8 +203,6 @@ export class AgentDraftStore extends DurableObject {
       return { recorded: false, reason: "review_record_not_verified", readiness };
     }
 
-    const ledgerJson = JSON.stringify(ledger);
-    const reviewRecordJson = JSON.stringify(reviewRecord);
     const readinessJson = JSON.stringify(readiness);
     const reviewBytes = new TextEncoder().encode(ledgerJson + reviewRecordJson + readinessJson).byteLength;
     if (reviewBytes > MAX_EVIDENCE_REVIEW_BYTES) return { recorded: false, reason: "evidence_review_too_large" };
