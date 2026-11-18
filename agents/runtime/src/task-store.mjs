@@ -115,8 +115,8 @@ export class AgentTaskStore extends DurableObject {
   complete(taskId) {
     const now = Date.now();
     const result = this.ctx.storage.sql.exec(
-      "UPDATE tasks SET status = 'completed', lease_until = NULL, updated_at = ? WHERE id = ? AND status = 'leased'",
-      now, taskId
+      "UPDATE tasks SET status = 'completed', lease_until = NULL, updated_at = ? WHERE id = ? AND status = 'leased' AND lease_until > ?",
+      now, taskId, now
     );
     return { updated: result.rowsWritten === 1 };
   }
@@ -125,7 +125,7 @@ export class AgentTaskStore extends DurableObject {
     const now = Date.now();
     const safeError = String(errorCode).replace(/[^a-zA-Z0-9_.:-]/g, "_").slice(0, 80);
     const row = this.ctx.storage.sql.exec("SELECT * FROM tasks WHERE id = ?", taskId).toArray()[0];
-    if (!row || row.status !== "leased") return { updated: false };
+    if (!row || row.status !== "leased" || row.lease_until <= now) return { updated: false };
     const status = row.attempts >= MAX_ATTEMPTS ? "dead" : "pending";
     this.ctx.storage.sql.exec(
       "UPDATE tasks SET status = ?, lease_until = NULL, updated_at = ?, last_error = ? WHERE id = ? AND status = 'leased'",
