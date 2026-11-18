@@ -39,7 +39,7 @@ function makeDraft(claims = [{
     language: "vi",
     body_markdown: [
       "## Tổng quan",
-      "Nội dung [1] [2] [3]. " + words,
+      "Nội dung ${ledger.claims[0].claim} [1] [2] [3]. " + words,
       "## Quy trình",
       "Nội dung chi tiết.",
       "## Kiểm tra",
