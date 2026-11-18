@@ -78,6 +78,15 @@ export class AgentTaskStore extends DurableObject {
     this.ctx.storage.sql.exec(
       "CREATE INDEX IF NOT EXISTS tasks_status_created ON tasks(status, created_at)"
     );
+    this.ctx.storage.sql.exec(`
+      CREATE TABLE IF NOT EXISTS external_request_budgets (
+        budget_day TEXT NOT NULL,
+        scope TEXT NOT NULL,
+        used INTEGER NOT NULL DEFAULT 0,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (budget_day, scope)
+      )
+    `);
   }
 
   enqueue(task) {
@@ -186,6 +195,51 @@ export class AgentTaskStore extends DurableObject {
       status, now, safeError, taskId, now, leaseToken
     ).toArray();
     return { updated: updated.length === 1, status: updated.length === 1 ? status : undefined };
+  }
+
+  consumeExternalRequestBudget(day, scope) {
+    const limits = { ai_bank_discovery: 10, content_research: 8 };
+    if (typeof day !== "string" || !/^\\d{4}-\\d{2}-\\d{2}$/.test(day) ||
+        new Date(day + "T00:00:00.000Z").toISOString().slice(0, 10) !== day ||
+        !Object.hasOwn(limits, scope)) {
+      throw new TypeError("invalid_external_request_budget");
+    }
+
+    const cutoff = new Date(Date.parse(day + "T00:00:00.000Z") - 30 * 86_400_000)
+      .toISOString().slice(0, 10);
+    const now = Date.now();
+    this.ctx.storage.sql.exec(
+      "DELETE FROM external_request_budgets WHERE budget_day < ?", cutoff
+    );
+
+    const limit = limits[scope];
+    const consumed = this.ctx.storage.sql.exec(
+      `INSERT INTO external_request_budgets (budget_day, scope, used, updated_at)
+       VALUES (?, ?, 1, ?)
+       ON CONFLICT (budget_day, scope) DO UPDATE
+       SET used = used + 1, updated_at = excluded.updated_at
+       WHERE used < ?
+       RETURNING used`,
+      day, scope, now, limit
+    ).toArray();
+
+    if (consumed.length === 1) {
+      const used = consumed[0].used;
+      return { allowed: true, day, scope, used, limit, remaining: limit - used };
+    }
+    const current = this.ctx.storage.sql.exec(
+      "SELECT used FROM external_request_budgets WHERE budget_day = ? AND scope = ?",
+      day, scope
+    ).one();
+    return {
+      allowed: false,
+      day,
+      scope,
+      used: current.used,
+      limit,
+      remaining: 0,
+      reason: "daily_external_request_budget_exhausted"
+    };
   }
 
   stats() {
