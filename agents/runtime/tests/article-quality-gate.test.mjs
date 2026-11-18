@@ -90,7 +90,7 @@ describe("deterministic article quality gate", () => {
       "A long code sample that must not satisfy the article word-count requirement. ".repeat(100),
       "[1] [2] [3]",
       "```"
-    ].join("\\n");
+    ].join("\n");
     const result = reviewArticleDraft(draft);
     const codes = result.issues.map(issue => issue.code);
     expect(result.metrics.word_count).toBe(0);
