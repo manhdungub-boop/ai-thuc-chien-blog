@@ -83,7 +83,7 @@ export class AgentSupervisorWorkflow extends WorkflowEntrypoint {
       );
 
       const discoveryResult = discovery.result || null;
-      const externalCalls = discoveryResult?.sources_checked || 0;
+      const externalCalls = discovery.status === "completed" ? (discoveryResult?.sources_checked || 0) : 0;
       return {
         cycle_id: cycleId,
         scheduled_at: scheduledAt,
@@ -91,9 +91,9 @@ export class AgentSupervisorWorkflow extends WorkflowEntrypoint {
         mode: "bounded_health_and_readonly_discovery",
         queue: await store.stats(),
         tasks: { health, ai_bank_discovery: discovery },
-        tasks_dispatched: 2,
+        tasks_considered: 2,
         tasks_completed: [health, discovery].filter(item =>
-          item.status === "completed" || item.status === "already_completed"
+          item.status === "completed"
         ).length,
         external_calls: externalCalls,
         catalog_modified: false,
