@@ -93,6 +93,17 @@ test("task store has bounded leases, retry ceiling, and dead-letter state", () =
   assert.match(store, /row\.lease_token !== leaseToken/);
 });
 
+test("outbound requests are counted atomically against persistent per-day source budgets", () => {
+  assert.match(store, /external_request_budgets/);
+  assert.match(store, /ai_bank_discovery: 10, content_research: 8/);
+  assert.match(store, /ON CONFLICT \(budget_day, scope\) DO UPDATE/);
+  assert.match(store, /daily_external_request_budget_exhausted/);
+  assert.match(source, /createBudgetedFetch/);
+  assert.match(source, /consumeExternalRequestBudget\(day, scope\)/);
+  assert.match(source, /fetchImpl: budget\.fetchImpl/);
+  assert.match(source, /external_calls: budget\.count\(\)/);
+});
+
 test("completed and retried tasks release lease credentials and recheck expiry", () => {
   assert.match(store, /status = 'completed', lease_until = NULL, lease_token = NULL/);
   assert.match(store, /lease_until > \? AND lease_token = \?/);
