@@ -2,6 +2,7 @@ import { DurableObject } from "cloudflare:workers";
 import { reviewArticleDraft } from "./article-quality-gate.mjs";
 import { assessArticleEvidenceReadiness } from "./article-evidence-readiness.mjs";
 import { verifyGoogleReviewerSessionToken } from "./google-reviewer-oauth.mjs";
+import { buildHumanClaimReviewLedger } from "./human-claim-ledger-builder.mjs";
 
 const MAX_ARTIFACT_BYTES = 48 * 1024;
 const MAX_EVIDENCE_REVIEW_BYTES = 48 * 1024;
@@ -79,12 +80,20 @@ function validateDraft(draft) {
 }
 
 function parseEvidenceReview(row) {
-  if (!row.ledger_json || !row.review_record_json || !row.evidence_readiness_json) return null;
+  if (!row.ledger_json) return null;
   return {
     ledger: JSON.parse(row.ledger_json),
-    review_record: JSON.parse(row.review_record_json),
-    readiness: JSON.parse(row.evidence_readiness_json)
+    review_record: row.review_record_json ? JSON.parse(row.review_record_json) : null,
+    readiness: row.evidence_readiness_json ? JSON.parse(row.evidence_readiness_json) : null
   };
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return "[" + value.map(canonicalJson).join(",") + "]";
+  if (value && typeof value === "object") {
+    return "{" + Object.keys(value).sort().map(key => JSON.stringify(key) + ":" + canonicalJson(value[key])).join(",") + "}";
+  }
+  return JSON.stringify(value);
 }
 
 function safeArtifact(row) {
@@ -168,6 +177,44 @@ export class AgentDraftStore extends DurableObject {
     return { updated: true, artifact: safeArtifact(updated[0]) };
   }
 
+  /**
+   * Persist source excerpts retrieved by the trusted Worker research path.
+   * This Durable Object method is intentionally not exposed as a public HTTP route.
+   */
+  storeEvidenceLedger(id, expectedVersion, retrievedEvidence) {
+    if (typeof id !== "string" || !ID_PATTERN.test(id) || !Number.isInteger(expectedVersion) || expectedVersion < 1) {
+      return { stored: false, reason: "invalid_evidence_ledger_request" };
+    }
+    const current = this.ctx.storage.sql.exec("SELECT * FROM draft_artifacts WHERE id = ?", id).toArray()[0];
+    if (!current) return { stored: false, reason: "artifact_not_found" };
+    if (current.version !== expectedVersion) return { stored: false, reason: "version_conflict", current_version: current.version };
+    if (current.status !== "pending_human_review") return { stored: false, reason: "draft_not_quality_eligible" };
+    if (current.ledger_json) return { stored: false, reason: "evidence_ledger_already_exists" };
+    const draft = JSON.parse(current.draft_json);
+    if (!Array.isArray(draft.claims) || draft.claims.length < 1) {
+      return { stored: false, reason: "claim_manifest_required" };
+    }
+    const claims = draft.claims.map(claim => ({
+      claim_id: claim.claim_id,
+      claim: claim.claim,
+      evidence_urls: claim.evidence_urls
+    }));
+    const built = buildHumanClaimReviewLedger(claims, retrievedEvidence);
+    if (!built.ok) return { stored: false, reason: built.reason, ledger_status: built.status };
+    const ledger = { ...built, draft_version: current.version };
+    const ledgerJson = JSON.stringify(ledger);
+    if (new TextEncoder().encode(ledgerJson).byteLength > MAX_EVIDENCE_REVIEW_BYTES) {
+      return { stored: false, reason: "evidence_review_too_large" };
+    }
+    const updated = this.ctx.storage.sql.exec(
+      "UPDATE draft_artifacts SET ledger_json = ?, version = version + 1, updated_at = ? " +
+      "WHERE id = ? AND version = ? AND ledger_json IS NULL RETURNING *",
+      ledgerJson, new Date().toISOString(), id, expectedVersion
+    ).toArray();
+    if (updated.length !== 1) return { stored: false, reason: "version_conflict" };
+    return { stored: true, artifact: safeArtifact(updated[0]), publication_authorized: false };
+  }
+
   async recordEvidenceReview(id, expectedVersion, ledger, reviewRecord, reviewerSessionToken) {
     if (typeof id !== "string" || !ID_PATTERN.test(id) || !Number.isInteger(expectedVersion) || expectedVersion < 1) {
       return { recorded: false, reason: "invalid_review_request" };
@@ -199,6 +246,15 @@ export class AgentDraftStore extends DurableObject {
     if (!reviewerSession.authenticated) {
       return { recorded: false, reason: reviewerSession.status || "reviewer_session_required" };
     }
+    if (!current.ledger_json) return { recorded: false, reason: "evidence_ledger_required" };
+    let storedLedger;
+    try { storedLedger = JSON.parse(current.ledger_json); }
+    catch { return { recorded: false, reason: "stored_evidence_ledger_invalid" }; }
+    if (storedLedger.draft_version !== current.version - 1 ||
+        canonicalJson(ledger) !== canonicalJson(storedLedger)) {
+      return { recorded: false, reason: "evidence_ledger_version_or_snapshot_mismatch" };
+    }
+
     let readiness;
     try {
       readiness = await assessArticleEvidenceReadiness({
