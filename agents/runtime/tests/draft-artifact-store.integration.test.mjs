@@ -172,7 +172,7 @@ describe("AgentDraftStore Durable Object", () => {
     expect((await store.getDraft("draft-review-oversize")).evidence_review).toBeNull();
   });
 
-  it("returns bounded queue metadata and retrieves full content by ID", async () => {
+  it("requires a cryptographically verified reviewer session for queue metadata and full draft reads", async () => {\n    await store.createDraft("draft-review-auth-01", validDraft());\n    const queue = await store.listPendingReviewsForReviewer(20, "forged-session");\n    const detail = await store.getDraftForReviewer("draft-review-auth-01", "forged-session");\n    expect(queue).toMatchObject({ authorized: false, reason: "reviewer_auth_not_configured" });\n    expect(detail).toMatchObject({ authorized: false, reason: "reviewer_auth_not_configured" });\n  });\n\n  it("returns bounded queue metadata and retrieves full content by ID", async () => {
     const draft = validDraft(); await store.createDraft("draft-review-0008", draft);
     const [item] = await store.listPendingReviews(1000);
     expect(item.id).toBe("draft-review-0008");
