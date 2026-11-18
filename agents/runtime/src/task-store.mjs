@@ -137,10 +137,13 @@ export class AgentTaskStore extends DurableObject {
     if (!row) return { task: null };
     const leaseUntil = now + LEASE_MS;
     const leaseToken = crypto.randomUUID();
-    this.ctx.storage.sql.exec(
+    const updated = this.ctx.storage.sql.exec(
       "UPDATE tasks SET status = 'leased', attempts = attempts + 1, lease_until = ?, lease_token = ?, updated_at = ? WHERE id = ? AND status = 'pending'",
       leaseUntil, leaseToken, now, row.id
     );
+    // A competing caller may have claimed the selected row first. Never
+    // return a lease token unless this invocation actually acquired it.
+    if (updated.rowsWritten !== 1) return { task: null };
     const claimed = this.ctx.storage.sql.exec("SELECT * FROM tasks WHERE id = ?", row.id).one();
     return { task: safeTask(claimed), lease_token: leaseToken };
   }
