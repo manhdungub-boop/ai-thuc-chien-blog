@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const config = JSON.parse(await readFile(new URL("../wrangler.jsonc", import.meta.url), "utf8"));
+const previewConfig = JSON.parse(await readFile(new URL("../wrangler.preview.jsonc", import.meta.url), "utf8"));
 const source = await readFile(new URL("../src/index.mjs", import.meta.url), "utf8");
 const store = await readFile(new URL("../src/task-store.mjs", import.meta.url), "utf8");
 const research = await readFile(new URL("../src/research-discovery.mjs", import.meta.url), "utf8");
@@ -15,6 +16,23 @@ test("runtime uses a recurring Workflow schedule with single-instance concurrenc
   assert.equal(config.workflows.length, 1);
   assert.deepEqual(config.workflows[0].schedules, ["*/15 * * * *"]);
   assert.equal(config.workflows[0].concurrency.limit, 1);
+});
+
+test("manual preview config is paused, has no recurring schedule, and uses isolated Worker resources", () => {
+  assert.equal(previewConfig.name, "ai-thuc-chien-agent-runtime-preview");
+  assert.equal(previewConfig.workers_dev, true);
+  assert.deepEqual(previewConfig.vars, {
+    AGENT_ENABLED: "false",
+    AGENT_PAUSED: "true",
+    AGENT_SCHEDULE_MODE: "manual_only_no_cron"
+  });
+  assert.equal(previewConfig.workflows.length, 1);
+  assert.equal(previewConfig.workflows[0].schedules, undefined);
+  assert.equal(previewConfig.routes, undefined);
+  assert.equal(previewConfig.d1_databases, undefined);
+  assert.equal(previewConfig.ai, undefined);
+  assert.deepEqual(previewConfig.durable_objects.bindings, config.durable_objects.bindings);
+  assert.deepEqual(previewConfig.migrations, config.migrations);
 });
 
 test("runtime has isolated SQLite storage and no website Production bindings", () => {
@@ -40,6 +58,12 @@ test("health endpoint is read-only and does not expose task enqueue", () => {
   assert.match(source, /request\.method !== "GET"/);
   assert.match(source, /task_execution_enabled: env.AGENT_ENABLED === "true" && env.AGENT_PAUSED !== "true"/);
   assert.match(source, /task_enqueue_endpoint_enabled: false/);
+  assert.match(source, /scheduler: env.AGENT_SCHEDULE_MODE \|\| "not_configured"/);
+  assert.match(source, /ai_inference_enabled: false/);
+  assert.match(source, /content_draft_executor_enabled: false/);
+  assert.match(source, /quality_review_executor_enabled: false/);
+  assert.match(source, /website_publication_enabled: false/);
+  assert.match(source, /facebook_publication_enabled: false/);
   assert.match(source, /production_access: false/);
   assert.match(source, /AGENT_PAUSED/);
   assert.match(source, /AGENT_ENABLED !== "true"/);
