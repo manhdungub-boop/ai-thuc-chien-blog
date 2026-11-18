@@ -256,7 +256,7 @@ export class AgentSupervisorWorkflow extends WorkflowEntrypoint {
         cycle_id: cycleId,
         scheduled_at: scheduledAt,
         observed_at: new Date().toISOString(),
-        mode: "bounded_health_ai_bank_and_research_discovery",
+        mode: "bounded_health_ai_bank_research_and_authoring",
         queue: await store.stats(),
         retention,
         tasks: { health, ai_bank_discovery: discovery, content_research: research, content_draft: contentDraft },
