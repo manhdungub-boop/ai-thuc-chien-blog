@@ -32,7 +32,7 @@ function parseEntries(xml, source, cutoff) {
   return [...xml.matchAll(/<entry(?:\s[^>]*)?>([\s\S]*?)<\/entry>/gi)]
     .map(match => {
       const body = match[1];
-      const title = sanitizeTitle(body.match(/<title(?:\s[^>]*)?>([\s\S]*?)<\/title>/i)?.[1]?.trim() || "");
+      const title = sanitizeTitle(body.match(/<title(?:\s[^>]*)?>([\s\S]*?)<\/title>/i)?.[1]?.trim() || "").slice(0, 140);
       const link = body.match(/<link\b[^>]*href="([^"]+)"/i)?.[1] || "";
       const updated = body.match(/<updated>([^<]+)<\/updated>/i)?.[1] || "";
       const date = new Date(updated);
