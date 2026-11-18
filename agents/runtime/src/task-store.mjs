@@ -132,7 +132,7 @@ export class AgentTaskStore extends DurableObject {
     };
   }
 
-  claim(allowedTaskTypes = null) {
+  claim(allowedTaskTypes = null, taskId = null) {
     const now = Date.now();
     // Expired leases return to the queue; exhausted tasks move to dead-letter state.
     this.ctx.storage.sql.exec(
@@ -142,10 +142,14 @@ export class AgentTaskStore extends DurableObject {
     if (allowedTaskTypes !== null && (!Array.isArray(allowedTaskTypes) || allowedTaskTypes.length === 0 || allowedTaskTypes.some(type => !TASK_TYPES.has(type)))) {
       throw new TypeError("invalid_claim_task_types");
     }
-    const filter = allowedTaskTypes === null ? "" : " AND task_type IN (" + allowedTaskTypes.map(() => "?").join(",") + ")";
+    if (taskId !== null && (typeof taskId !== "string" || !/^[a-zA-Z0-9._:-]{8,128}$/.test(taskId))) {
+      throw new TypeError("invalid_claim_task_id");
+    }
+    const typeFilter = allowedTaskTypes === null ? "" : " AND task_type IN (" + allowedTaskTypes.map(() => "?").join(",") + ")";
+    const idFilter = taskId === null ? "" : " AND id = ?";
     const row = this.ctx.storage.sql.exec(
-      "SELECT * FROM tasks WHERE status = 'pending' AND attempts < ?" + filter + " ORDER BY created_at ASC LIMIT 1",
-      MAX_ATTEMPTS, ...(allowedTaskTypes ?? [])
+      "SELECT * FROM tasks WHERE status = 'pending' AND attempts < ?" + typeFilter + idFilter + " ORDER BY created_at ASC LIMIT 1",
+      MAX_ATTEMPTS, ...(allowedTaskTypes ?? []), ...(taskId === null ? [] : [taskId])
     ).toArray()[0];
     if (!row) return { task: null };
     const leaseUntil = now + LEASE_MS;
