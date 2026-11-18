@@ -214,6 +214,9 @@ test("AI Bank candidate storage is allowlisted, bounded, persistent, and review-
   assert.match(candidateStore, /catalog_write_authorized: false/);
   assert.match(candidateStore, /submitReviewEvidence/);
   assert.match(candidateStore, /listReviewEvidence/);
+  assert.match(candidateStore, /getReviewPacket/);
+  assert.match(candidateStore, /verification_status: "not_verified"/);
+  assert.match(candidateStore, /human_review_required: true/);
   assert.match(candidateStore, /submitted_source_not_verified/);
   assert.match(candidateStore, /pending_human_review/);
   assert.match(candidateStore, /MAX_EVIDENCE_PER_CHECK = 5/);
