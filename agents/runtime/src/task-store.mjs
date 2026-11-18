@@ -7,6 +7,7 @@ const TASK_TYPES = new Set([
   "quality_review"
 ]);
 const MAX_PAYLOAD_BYTES = 8192;
+const MAX_ACTIVE_TASKS = 500;
 const MAX_ATTEMPTS = 5;
 const LEASE_MS = 5 * 60 * 1000;
 
@@ -61,15 +62,33 @@ export class AgentTaskStore extends DurableObject {
       throw new TypeError("payload_too_large");
     }
 
+    const existing = this.ctx.storage.sql.exec(
+      "SELECT * FROM tasks WHERE id = ?", task.id
+    ).toArray()[0];
+    if (existing) return { accepted: true, duplicate: true, task: safeTask(existing) };
+
+    const active = this.ctx.storage.sql.exec(
+      "SELECT COUNT(*) AS count FROM tasks WHERE status IN ('pending','leased')"
+    ).one().count;
+    if (active >= MAX_ACTIVE_TASKS) {
+      return { accepted: false, reason: "queue_capacity_reached" };
+    }
+
     const now = Date.now();
-    this.ctx.storage.sql.exec(
+    const inserted = this.ctx.storage.sql.exec(
       `INSERT OR IGNORE INTO tasks
        (id, task_type, payload_json, status, attempts, created_at, updated_at)
        VALUES (?, ?, ?, 'pending', 0, ?, ?)`,
       task.id, task.task_type, payloadJson, now, now
     );
-    const row = this.ctx.storage.sql.exec("SELECT * FROM tasks WHERE id = ?", task.id).one();
-    return { accepted: true, duplicate: row.created_at !== now, task: safeTask(row) };
+    const row = this.ctx.storage.sql.exec(
+      "SELECT * FROM tasks WHERE id = ?", task.id
+    ).one();
+    return {
+      accepted: true,
+      duplicate: inserted.rowsWritten === 0,
+      task: safeTask(row)
+    };
   }
 
   claim() {
