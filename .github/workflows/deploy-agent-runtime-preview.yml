@@ -26,7 +26,6 @@ jobs:
         working-directory: agents/runtime
     env:
       CLOUDFLARE_ACCOUNT_ID: "92cf091bbac8b4879ec65feb30b4715b"
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}
     steps:
       - name: Check out source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -40,6 +39,8 @@ jobs:
 
       - name: Require a dedicated least-privilege Preview token
         shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}
         run: |
           set -euo pipefail
           if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
@@ -63,6 +64,8 @@ jobs:
 
       - name: Deploy isolated Agent Runtime Preview
         shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}
         run: |
           set -euo pipefail
           npx wrangler deploy --config wrangler.preview.jsonc 2>&1 | tee "$RUNNER_TEMP/agent-runtime-preview-deploy.log"
