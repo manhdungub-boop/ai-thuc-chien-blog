@@ -193,3 +193,37 @@ describe("authenticated reviewer draft read routes", () => {
     expect(post.status).toBe(405);
   });
 });
+
+
+describe("authenticated read-only AI Bank reviewer routes", () => {
+  const collection = origin + "/api/reviewer/ai-bank/candidates?limit=10";
+  const detail = origin + "/api/reviewer/ai-bank/candidates/ollama/ollama";
+
+  it("rejects candidate reads without a reviewer session", async () => {
+    const response = await worker.fetch(new Request(collection), {});
+    expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({ error: "reviewer_session_required" });
+  });
+
+  it("rejects cross-origin requests before session verification or store access", async () => {
+    const response = await worker.fetch(new Request(collection, {
+      headers: { origin: "https://attacker.example", cookie: "__Host-ai_reviewer_session=forged" }
+    }), {});
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ error: "review_request_origin_or_content_type_rejected" });
+  });
+
+  it("keeps AI Bank reviewer reads unavailable until Google reviewer auth is explicitly configured", async () => {
+    const response = await worker.fetch(new Request(collection, {
+      headers: { cookie: "__Host-ai_reviewer_session=forged" }
+    }), { AGENT_REVIEWER_AUTH_ENABLED: "false" });
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ error: "reviewer_auth_not_configured" });
+  });
+
+  it("rejects unsupported methods without touching the candidate store", async () => {
+    const response = await worker.fetch(new Request(collection, { method: "POST" }), {});
+    expect(response.status).toBe(405);
+    expect(await response.json()).toMatchObject({ error: "method_not_allowed" });
+  });
+});
