@@ -70,7 +70,8 @@ test("task store has bounded leases, retry ceiling, and dead-letter state", () =
 test("completed and retried tasks release lease credentials and recheck expiry", () => {
   assert.match(store, /status = 'completed', lease_until = NULL, lease_token = NULL/);
   assert.match(store, /lease_until > \? AND lease_token = \?/);
-  assert.match(store, /result\.rowsWritten === 1/);
+  assert.match(store, /RETURNING id/);
+  assert.match(store, /updated\.length === 1/);
 });
 
 test("idempotency keys cannot be reused for a different task payload", () => {
