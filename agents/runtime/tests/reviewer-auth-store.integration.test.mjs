@@ -85,7 +85,7 @@ describe("AgentReviewerAuthStore Durable Object", () => {
     )).toEqual({ created: false });
     expect(await store.createTransaction(
       "short", tx.browserHash, tx.nonce, tx.codeVerifier, tx.nowSeconds
-    )).toEqual({ created: false });
+    )).toEqual({ created: false, reason: "invalid_login_transaction" });
     expect(await store.consumeTransaction(
       tx.stateHash, tx.browserHash, tx.nowSeconds + 2
     )).toMatchObject({ nonce: tx.nonce });
