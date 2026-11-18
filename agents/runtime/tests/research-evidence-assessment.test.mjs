@@ -54,7 +54,7 @@ describe("research evidence readiness assessment", () => {
   });
 
   it("rejects invalid URL, missing metadata, short excerpts, and duplicate URLs", () => {
-    const first = item("OpenAI", "openai.com");
+    const first = item("OpenAI News", "openai.com");
     const duplicate = { ...first };
     const result = assessResearchEvidence([
       { ...item("OpenAI News", "openai.com"), url: "http://openai.com/index/article" },
