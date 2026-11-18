@@ -81,7 +81,7 @@ export const REVIEWER_CONSOLE_JS = `"use strict";
     }
     for (const item of items) {
       const li = node("li");
-      const button = node("button", item.title + " · " + item.status + " · " + item.word_count + " từ");
+      const button = node("button", item.title + " · " + item.status + " · " + item.word_count + " từ · Bằng chứng: " + (item.release_review_status || "chưa rà soát"));
       button.type = "button";
       button.addEventListener("click", () => loadDetail(item.id));
       li.append(button);
@@ -108,11 +108,12 @@ export const REVIEWER_CONSOLE_JS = `"use strict";
       add(item, "p", (source.publisher || "Nguồn") + ": " + (source.title || "Không có tiêu đề"));
       try {
         const url = new URL(source.url);
-        if (url.protocol === "https:") {
+        if (url.protocol === "https:" && !url.username && !url.password && (!url.port || url.port === "443")) {
           const link = node("a", url.href);
           link.href = url.href;
           link.target = "_blank";
           link.rel = "noopener noreferrer";
+          link.referrerPolicy = "no-referrer";
           item.append(link);
         } else {
           add(item, "p", "Đường dẫn không được phép hiển thị.");
