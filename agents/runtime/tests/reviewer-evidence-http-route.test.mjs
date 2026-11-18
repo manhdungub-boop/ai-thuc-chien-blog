@@ -114,3 +114,82 @@ describe("authenticated reviewer evidence HTTP route", () => {
     });
   });
 });
+
+describe("authenticated reviewer draft read routes", () => {
+  const collection = origin + "/api/reviewer/drafts?limit=5";
+  const detail = origin + "/api/reviewer/drafts/draft-review-12345678";
+  it("rejects queue reads without a session before accessing the store", async () => {
+    const response = await worker.fetch(new Request(collection), {});
+    expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({ error: "reviewer_session_required" });
+  });
+
+  it("rejects cross-origin queue reads even when a session cookie is present", async () => {
+    const response = await worker.fetch(new Request(collection, {
+      headers: { origin: "https://attacker.example", cookie: "__Host-ai_reviewer_session=forged" }
+    }), {});
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ error: "review_request_origin_or_content_type_rejected" });
+  });
+
+  it("passes the opaque session token to the Durable Object for independent queue authorization", async () => {
+    let received;
+    const token = "opaque-signed-reviewer-session";
+    const env = { AGENT_DRAFT_STORE: { getByName: () => ({
+      async listPendingReviewsForReviewer(...args) {
+        received = args;
+        return { authorized: false, reason: "reviewer_session_invalid" };
+      }
+    }) } };
+    const response = await worker.fetch(new Request(collection, {
+      headers: { cookie: "__Host-ai_reviewer_session=" + token }
+    }), env);
+    expect(received).toEqual([5, token]);
+    expect(response.status).toBe(401);
+  });
+
+  it("returns only queue metadata after the Durable Object authorizes the session", async () => {
+    const item = { id: "draft-review-12345678", status: "pending_human_review", version: 1, title: "Article", slug: "article", issue_count: 0, word_count: 700 };
+    const env = { AGENT_DRAFT_STORE: { getByName: () => ({
+      async listPendingReviewsForReviewer(limit, token) {
+        expect(limit).toBe(5);
+        expect(token).toBe("valid-session");
+        return { authorized: true, items: [item] };
+      }
+    }) } };
+    const response = await worker.fetch(new Request(collection, {
+      headers: { cookie: "__Host-ai_reviewer_session=valid-session" }
+    }), env);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ items: [item], count: 1, publication_authorized: false });
+  });
+
+  it("requires independent authorization before returning full draft details", async () => {
+    let received;
+    const token = "valid-session";
+    const artifact = { id: "draft-review-12345678", version: 1, draft: { body_markdown: "private draft" } };
+    const env = { AGENT_DRAFT_STORE: { getByName: () => ({
+      async getDraftForReviewer(...args) {
+        received = args;
+        return { authorized: true, artifact };
+      }
+    }) } };
+    const response = await worker.fetch(new Request(detail, {
+      headers: { cookie: "__Host-ai_reviewer_session=" + token }
+    }), env);
+    expect(received).toEqual(["draft-review-12345678", token]);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ artifact, publication_authorized: false });
+  });
+
+  it("rejects malformed queue limits and unsupported methods", async () => {
+    const invalid = await worker.fetch(new Request(origin + "/api/reviewer/drafts?limit=21", {
+      headers: { cookie: "__Host-ai_reviewer_session=token" }
+    }), { AGENT_DRAFT_STORE: { getByName: () => ({}) } });
+    const post = await worker.fetch(new Request(origin + "/api/reviewer/drafts", {
+      method: "POST", headers: { cookie: "__Host-ai_reviewer_session=token" }
+    }), {});
+    expect(invalid.status).toBe(400);
+    expect(post.status).toBe(405);
+  });
+});
