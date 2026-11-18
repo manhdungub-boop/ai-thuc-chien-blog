@@ -26,7 +26,7 @@ This directory is a separate Cloudflare Worker service. It is not imported by th
 - Discovery is read-only. Release signals are not verified AI Bank records; no pricing, free quota, license, privacy, regional availability, or product suitability is inferred. There is no catalog write, public content write, or publication step.
 - The supervisor processes at most three tasks per cycle (one health task, one AI Bank release scan, and one research-source scan). It makes no model calls and does not access private GitHub data.
 - `content_research` is currently limited to the fixed daily read-only discovery and bounded source-evidence retrieval described above; it is not free-form topic research. `content_draft` and `quality_review` remain queued task contracts without registered executors and are not claimed by the supervisor.
-- Completed task results are stored in the isolated queue database with an 8 KiB ceiling; completed/dead retention cleanup is not yet scheduled.
+- Completed task results are stored in the isolated queue database with an 8 KiB ceiling. Every supervisor cycle prunes completed tasks older than 24 hours, dead-letter tasks older than seven days, and request-budget counters older than 30 UTC days. Pending and leased tasks are never removed by this retention pass.
 - `GET /health` exposes service metadata only. No personal data, credentials, or website data are stored or transmitted by the current code.
 
 ## Explicit enable gate and emergency pause
