@@ -259,7 +259,7 @@ export class AgentAIBankCandidateStore extends DurableObject {
       throw new TypeError("invalid_evidence_list_limit");
     }
     return this.ctx.storage.sql.exec(
-      "SELECT evidence_id, candidate_id, check_type, source_title, source_url, excerpt, source_status, review_status, submitted_at FROM ai_bank_review_evidence WHERE candidate_id = ? ORDER BY submitted_at ASC, evidence_id ASC LIMIT ?",
+      "SELECT evidence_id, candidate_id, check_type, source_title, source_url, excerpt, source_status, review_status, submitted_at, candidate_release_url FROM ai_bank_review_evidence WHERE candidate_id = ? ORDER BY submitted_at ASC, evidence_id ASC LIMIT ?",
       candidateId, limit
     ).toArray().map(row => ({ ...row }));
   }
