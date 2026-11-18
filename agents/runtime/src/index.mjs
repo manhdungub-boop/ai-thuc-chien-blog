@@ -16,15 +16,20 @@ const json = (value, status = 200) => new Response(JSON.stringify(value), {
 export class AgentSupervisorWorkflow extends WorkflowEntrypoint {
   async run(event, step) {
     const startedAt = new Date().toISOString();
-    const cycle = await step.do("record-supervisor-cycle", async () => ({
-      cycle_id: String(event.instanceId || event.payload?.cycle_id || startedAt),
-      scheduled_at: event.timestamp ? new Date(event.timestamp).toISOString() : startedAt,
-      observed_at: startedAt,
-      mode: "safe_idle",
-      tasks_dispatched: 0,
-      external_calls: 0,
-      reason: "specialist_execution_and_external_adapters_not_yet_enabled"
-    }));
+    const cycle = await step.do("inspect-durable-queue", async () => {
+      const store = this.env.AGENT_TASK_STORE.getByName("primary");
+      const queue = await store.stats();
+      return {
+        cycle_id: String(event.instanceId || event.payload?.cycle_id || startedAt),
+        scheduled_at: event.timestamp ? new Date(event.timestamp).toISOString() : startedAt,
+        observed_at: startedAt,
+        mode: "safe_idle",
+        queue,
+        tasks_dispatched: 0,
+        external_calls: 0,
+        reason: "queue_observation_only_specialist_execution_not_enabled"
+      };
+    });
     return { service: SERVICE, version: VERSION, status: "healthy_idle", cycle };
   }
 }
