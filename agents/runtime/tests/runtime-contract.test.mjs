@@ -32,12 +32,13 @@ test("health endpoint is read-only and does not expose task enqueue", () => {
   assert.doesNotMatch(source, /fetch\(["']https?:/);
 });
 
-test("supervisor cycle remains idle and performs no external work", () => {
-  assert.match(source, /mode: "safe_idle"/);
-  assert.match(source, /tasks_dispatched: 0/);
+test("supervisor executes only one deterministic local health task per cycle", () => {
+  assert.match(source, /task_type: "runtime_health_check"/);
+  assert.match(source, /store\.claim\(\["runtime_health_check"\]\)/);
+  assert.match(source, /await store\.complete\(taskId, claimed\.lease_token, result\)/);
+  assert.match(source, /tasks_dispatched: 1/);
   assert.match(source, /external_calls: 0/);
-  assert.match(source, /this\.env\.AGENT_TASK_STORE\.getByName\("primary"\)/);
-  assert.match(source, /await store\.stats\(\)/);
+  assert.match(source, /production_access: false/);
 });
 
 test("task store enforces an allowlist, bounded payloads, and idempotent IDs", () => {
@@ -47,7 +48,10 @@ test("task store enforces an allowlist, bounded payloads, and idempotent IDs", (
   assert.match(store, /content_research: \["topic", "language"\]/);
   assert.match(store, /content_draft: \["topic", "research_task_id"\]/);
   assert.match(store, /quality_review: \["artifact_id", "artifact_type"\]/);
+  assert.match(store, /runtime_health_check: \[\]/);
   assert.match(store, /MAX_PAYLOAD_BYTES = 8192/);
+  assert.match(store, /result_json TEXT/);
+  assert.match(store, /result_too_large/);
   assert.match(store, /INSERT OR IGNORE INTO tasks/);
   assert.match(store, /inserted\.rowsWritten === 0/);
   assert.match(store, /MAX_ACTIVE_TASKS = 500/);
