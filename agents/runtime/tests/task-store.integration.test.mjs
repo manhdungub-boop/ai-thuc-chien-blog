@@ -114,6 +114,35 @@ describe("AgentTaskStore Durable Object", () => {
     expect(await store.stats()).toEqual({});
   });
 
+  it("never claims legacy queued tasks whose executors are not registered", async () => {
+    await runInDurableObject(store, async (_instance, state) => {
+      const now = Date.now();
+      state.storage.sql.exec(
+        "INSERT INTO tasks (id, task_type, payload_json, status, attempts, created_at, updated_at) VALUES (?, ?, ?, 'pending', 0, ?, ?)",
+        "legacy-content-draft-01",
+        "content_draft",
+        JSON.stringify({ topic: "AI agent an toàn", research_task_id: "research-task-0001" }),
+        now,
+        now
+      );
+      state.storage.sql.exec(
+        "INSERT INTO tasks (id, task_type, payload_json, status, attempts, created_at, updated_at) VALUES (?, ?, ?, 'pending', 0, ?, ?)",
+        "legacy-quality-review-01",
+        "quality_review",
+        JSON.stringify({ artifact_id: "article-artifact-01", artifact_type: "article" }),
+        now,
+        now
+      );
+    });
+
+    expect(await store.claim()).toEqual({ task: null });
+    await expect(Promise.resolve().then(() => store.claim(["content_draft"])))
+      .rejects.toThrow("invalid_claim_task_types");
+    await expect(Promise.resolve().then(() => store.claim(["quality_review"])))
+      .rejects.toThrow("invalid_claim_task_types");
+    expect(await store.stats()).toEqual({ pending: 2 });
+  });
+
   it("executes and persists only allowlisted local health-check results", async () => {
     const request = { id: "runtime-health-test-01", task_type: "runtime_health_check", payload: {} };
     await store.enqueue(request);
