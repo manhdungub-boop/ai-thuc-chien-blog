@@ -74,6 +74,15 @@ describe("human claim ledger builder", () => {
     expect(buildHumanClaimReviewLedger(claims, short).ok).toBe(false);
   });
 
+  it("rejects evidence URLs with query strings, credentials, or fragments", () => {
+    const queryEvidence = [{ ...evidence[0], url: evidence[0].url + "?tracking=1" }, evidence[1]];
+    const credentialEvidence = [{ ...evidence[0], url: "https://user:pass@openai.com/index/research-overview" }, evidence[1]];
+    const fragmentEvidence = [{ ...evidence[0], url: evidence[0].url + "#section" }, evidence[1]];
+    expect(buildHumanClaimReviewLedger(claims, queryEvidence).ok).toBe(false);
+    expect(buildHumanClaimReviewLedger(claims, credentialEvidence).ok).toBe(false);
+    expect(buildHumanClaimReviewLedger(claims, fragmentEvidence).ok).toBe(false);
+  });
+
   it("rejects duplicate claim IDs and missing human claim text", () => {
     const duplicate = [claims[0], { ...claims[0] }];
     expect(buildHumanClaimReviewLedger(duplicate, evidence)).toMatchObject({
