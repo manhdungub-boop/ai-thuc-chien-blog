@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The Agent Runtime may select a provider only when runtime access, task capability, zero-cost classification, and current quota evidence are verified. Quota exhaustion must never trigger paid usage.
+The Agent Runtime may select a provider only when runtime access, task capability, zero-cost classification, and trustworthy quota evidence are verified. Quota exhaustion must never trigger paid usage.
 
 ## Admission requirements
 
@@ -11,12 +11,21 @@ A provider is eligible for automated runtime execution only when all conditions 
 1. It is callable from the isolated Agent Runtime, not merely connected as a ChatGPT app.
 2. It is healthy and supports the requested task type.
 3. Its cost is verified as zero for the current account and operation.
-4. An external inference provider has a quota observation no older than 15 minutes and reports positive remaining capacity.
-5. The task type is explicitly allowlisted.
+4. External inference has a trusted, runtime-owned quota adapter that obtains authoritative evidence; a provider-supplied quota object is not sufficient.
+5. The quota evidence is current and reports positive remaining capacity.
+6. The task type is explicitly allowlisted.
 
-The only currently allowlisted `no_external_execution` implementation is the repository's deterministic `article-quality-gate`, and only for `quality_review`. A provider cannot bypass quota checks merely by self-declaring that it performs no external execution. Adding another local implementation requires a code change and tests to the local-provider allowlist.
+The only currently allowlisted `no_external_execution` implementation is the repository's deterministic `article-quality-gate`, and only for `quality_review`. A provider cannot bypass quota checks merely by self-declaring that it performs no external execution.
 
-Unknown, stale, paid, exhausted, or non-runtime provider records must defer.
+**No external inference provider is currently authorized.** The external adapter allowlist is intentionally empty until the runtime has a verified account-level usage source and a bounded local reservation mechanism. All external provider candidates must defer, even if their input object claims a fresh positive quota.
+
+## Cloudflare Workers AI quota evidence
+
+Cloudflare documents a 10,000 Neurons/day Free allocation and says usage can be monitored in the Workers AI dashboard. This published allowance is not proof of the account's current plan or remaining capacity.
+
+Cloudflare's Billable Usage API is documented as Alpha/Restricted and returns daily usage records. It is not documented as a real-time remaining-Neurons endpoint. A read-only request made during implementation returned HTTP 403 with the connected API credential. Cloudflare's billing documentation says billing API tokens require Account > Billing > Read (or Edit). No token permissions or secrets were changed.
+
+Daily billable-usage records may later support reconciliation, if access is explicitly granted and the returned records are validated. They must not be treated as real-time quota headroom by themselves.
 
 ## Failover behavior
 
@@ -29,6 +38,6 @@ Unknown, stale, paid, exhausted, or non-runtime provider records must defer.
 
 ## Current implementation boundary
 
-This module is a deterministic admission policy, not a quota meter and not an AI inference adapter. It does not query Cloudflare account billing or remaining Workers AI Neurons. The Agent Runtime must remain model-disabled until account-specific Free-plan status, remaining quota, and the actual runtime binding are verified. A published provider free allowance is not proof of the connected account's current entitlement or remaining capacity.
+This module is a deterministic admission policy, not an AI inference adapter. It does not invoke providers, query Cloudflare billing, or publish content. The Runtime must remain model-disabled until account-specific Free-plan status, a trustworthy quota source, and the actual runtime binding are verified.
 
-The policy does not itself invoke providers, generate content, publish articles, or post to social networks.
+The policy does not itself generate content, publish articles, or post to social networks.
