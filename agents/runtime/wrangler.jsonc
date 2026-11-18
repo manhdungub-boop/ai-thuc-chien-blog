@@ -1,0 +1,26 @@
+{
+  "$schema": "https://developers.cloudflare.com/workers/wrangler/config-schema.json",
+  "name": "ai-thuc-chien-agent-runtime-preview",
+  "main": "src/index.mjs",
+  "compatibility_date": "2026-11-18",
+  "workers_dev": true,
+  "preview_urls": true,
+  "observability": {
+    "enabled": true
+  },
+  "workflows": [
+    {
+      "name": "ai-thuc-chien-agent-supervisor-preview",
+      "binding": "AGENT_SUPERVISOR",
+      "class_name": "AgentSupervisorWorkflow",
+      "schedules": ["*/15 * * * *"],
+      "concurrency": {
+        "limit": 1
+      },
+      "default_retention": {
+        "success_retention": "1 day",
+        "error_retention": "7 days"
+      }
+    }
+  ]
+}
