@@ -29,7 +29,7 @@ describe("research evidence readiness assessment", () => {
   });
 
   it("rejects repeated publisher domains even when article URLs differ", () => {
-    const first = item("OpenAI", "openai.com");
+    const first = item("OpenAI News", "openai.com");
     const second = { ...item("OpenAI News", "openai.com"), url: "https://openai.com/index/another-update" };
     const result = assessResearchEvidence([first, second], { now });
     expect(result.ready_for_claim_review).toBe(false);
@@ -82,7 +82,7 @@ describe("research evidence readiness assessment", () => {
     expect(result.required_independent_sources).toBe(4);
     expect(result.max_source_age_days).toBe(90);
   });
-});\n
+
   it("rejects unrecognized publisher domains and mismatched publisher labels", () => {
     const unknown = assessResearchEvidence([
       item("OpenAI News", "openai.com"),
@@ -96,4 +96,4 @@ describe("research evidence readiness assessment", () => {
     expect(spoofed.rejected_sources[0].reason).toBe("publisher_identity_not_allowlisted");
   });
 
-
+});
