@@ -36,6 +36,25 @@ async function fingerprintClaim(claim) {
   return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
 }
 
+async function fingerprintReviewDecision(reviewedClaim) {
+  if (!globalThis.crypto?.subtle || typeof TextEncoder === "undefined") {
+    throw new Error("sha256_unavailable");
+  }
+  const snapshot = {
+    claim_id: reviewedClaim.claim_id,
+    claim: reviewedClaim.claim,
+    decision: reviewedClaim.decision,
+    reviewer_note: reviewedClaim.reviewer_note,
+    reviewer_ref: reviewedClaim.reviewer_ref,
+    reviewed_at: reviewedClaim.reviewed_at,
+    claim_fingerprint_sha256: reviewedClaim.claim_fingerprint_sha256,
+    evidence_urls: reviewedClaim.evidence_urls
+  };
+  const bytes = new TextEncoder().encode(JSON.stringify(snapshot));
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+}
+
 /**
  * Verify that a human-review record still matches the exact current ledger.
  * This detects changed claim/evidence snapshots; it does not authenticate the
@@ -104,6 +123,11 @@ export async function verifyHumanClaimReviewRecord(record, ledger, {
     const expectedFingerprint = await fingerprintClaim(claim);
     if (reviewed.claim_fingerprint_sha256 !== expectedFingerprint) {
       return { ok: false, status: "claim_or_evidence_fingerprint_mismatch" };
+    }
+
+    const expectedReviewFingerprint = await fingerprintReviewDecision(reviewed);
+    if (reviewed.review_fingerprint_sha256 !== expectedReviewFingerprint) {
+      return { ok: false, status: "review_decision_fingerprint_mismatch" };
     }
   }
 
