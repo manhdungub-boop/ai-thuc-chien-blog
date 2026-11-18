@@ -1,5 +1,5 @@
 const MAX_BODY_BYTES = 120_000;
-const MAX_EXCERPT_CHARS = 1_100;
+const MAX_EXCERPT_CHARS = 600;
 const MAX_EVIDENCE_ITEMS = 4;
 const TIMEOUT_MS = 6_000;
 const ALLOWED = [
