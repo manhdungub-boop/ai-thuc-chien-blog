@@ -34,7 +34,7 @@ const PUBLISHERS = [
 ];
 
 function normalizeLabel(value) {
-  return typeof value === "string" ? value.trim().toLowerCase().replace(/\\s+/g, " ") : "";
+  return typeof value === "string" ? value.trim().toLowerCase().split(" ").filter(Boolean).join(" ") : "";
 }
 
 /**
