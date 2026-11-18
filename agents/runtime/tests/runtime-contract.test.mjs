@@ -37,9 +37,15 @@ test("Preview deployment workflow is manual, explicitly confirmed, token-isolate
   );
 });
 
-test("runtime uses a recurring Workflow schedule with single-instance concurrency", () => {
+test("default runtime config is disabled, paused, and has no recurring Workflow schedule", () => {
+  assert.deepEqual(config.vars, {
+    AGENT_ENABLED: "false",
+    AGENT_PAUSED: "true",
+    AGENT_SCHEDULE_MODE: "manual_only_no_cron",
+    AGENT_REVIEWER_AUTH_ENABLED: "false"
+  });
   assert.equal(config.workflows.length, 1);
-  assert.deepEqual(config.workflows[0].schedules, ["*/15 * * * *"]);
+  assert.equal(config.workflows[0].schedules, undefined);
   assert.equal(config.workflows[0].concurrency.limit, 1);
 });
 
@@ -63,7 +69,13 @@ test("manual preview config is paused, has no recurring schedule, and uses isola
 
 test("runtime has isolated SQLite storage and no website Production bindings", () => {
   assert.equal(config.workers_dev, true);
-  assert.deepEqual(config.vars, { AGENT_ENABLED: "false", AGENT_PAUSED: "false", AGENT_SCHEDULE_MODE: "every_15_minutes" });
+  assert.deepEqual(config.vars, {
+    AGENT_ENABLED: "false",
+    AGENT_PAUSED: "true",
+    AGENT_SCHEDULE_MODE: "manual_only_no_cron",
+    AGENT_REVIEWER_AUTH_ENABLED: "false"
+  });
+  assert.equal(config.workflows[0].schedules, undefined);
   assert.equal(config.routes, undefined);
   assert.equal(config.d1_databases, undefined);
   assert.equal(config.ai, undefined);
