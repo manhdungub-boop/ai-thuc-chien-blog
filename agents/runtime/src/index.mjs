@@ -2,6 +2,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 import { discoverAiBankReleaseSignals } from "./ai-bank-discovery.mjs";
 import { discoverResearchSignals } from "./research-discovery.mjs";
 export { AgentTaskStore } from "./task-store.mjs";
+export { AgentDraftStore } from "./draft-artifact-store.mjs";
 
 const SERVICE = "ai-thuc-chien-agent-runtime-preview";
 const VERSION = "0.3.0";

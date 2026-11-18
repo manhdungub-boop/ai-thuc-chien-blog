@@ -36,3 +36,7 @@ jobs:
         run: npm test
       - name: Run runtime configuration and security contract tests
         run: node --test tests/runtime-contract.test.mjs
+      - name: Generate Cloudflare Worker types
+        run: npx wrangler types --config wrangler.jsonc
+      - name: Validate Worker deployment configuration without deploying
+        run: npx wrangler deploy --dry-run --config wrangler.jsonc
