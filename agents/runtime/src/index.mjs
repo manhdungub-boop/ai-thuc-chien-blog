@@ -334,13 +334,13 @@ export default {
       if (!session.authenticated) {
         return json({ error: session.status || "reviewer_session_invalid" }, session.status === "reviewer_auth_not_configured" ? 503 : 401);
       }
-      const candidateStore = env.AGENT_AI_BANK_CANDIDATE_STORE?.getByName("primary");
-      if (!candidateStore) return json({ error: "ai_bank_candidate_store_unavailable" }, 503);
       if (reviewerAIBankCollection) {
         const values = url.searchParams.getAll("limit");
         if (values.length > 1 || (values.length === 1 && !/^(?:[1-9]|1[0-9]|20)$/.test(values[0]))) {
           return json({ error: "invalid_ai_bank_candidate_limit" }, 400);
         }
+        const candidateStore = env.AGENT_AI_BANK_CANDIDATE_STORE?.getByName("primary");
+        if (!candidateStore) return json({ error: "ai_bank_candidate_store_unavailable" }, 503);
         const limit = values.length ? Number(values[0]) : 20;
         const items = await candidateStore.listCandidates(limit);
         return json({
@@ -351,6 +351,8 @@ export default {
           public_publication_authorized: false
         });
       }
+      const candidateStore = env.AGENT_AI_BANK_CANDIDATE_STORE?.getByName("primary");
+      if (!candidateStore) return json({ error: "ai_bank_candidate_store_unavailable" }, 503);
       const packet = await candidateStore.getReviewPacket("github:" + reviewerAIBankDetail[1] + "/" + reviewerAIBankDetail[2]);
       if (!packet) return json({ error: "ai_bank_candidate_not_found" }, 404);
       return json({
