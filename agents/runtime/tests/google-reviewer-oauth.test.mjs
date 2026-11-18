@@ -266,6 +266,31 @@ describe("Google reviewer OAuth session flow", () => {
     expect(await response.json()).toMatchObject({ authenticated: false });
   });
 
+  it("rejects cross-origin reviewer session and logout requests", async () => {
+    for (const path of ["/auth/google/me", "/auth/google/logout"]) {
+      const response = await handleGoogleReviewerAuth(
+        new Request(origin + path, { headers: { origin: "https://attacker.example" } }),
+        env,
+        { now }
+      );
+      expect(response.status).toBe(403);
+      expect(await response.json()).toMatchObject({ error: "origin_mismatch" });
+    }
+  });
+
+  it("clears reviewer and transaction cookies on same-origin logout", async () => {
+    const response = await handleGoogleReviewerAuth(
+      new Request(origin + "/auth/google/logout", { headers: { origin } }),
+      env,
+      { now }
+    );
+    expect(response.status).toBe(204);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    const cookies = response.headers.getSetCookie();
+    expect(cookies).toHaveLength(2);
+    expect(cookies.every(value => value.includes("Max-Age=0") && value.includes("Secure") && value.includes("HttpOnly"))).toBe(true);
+  });
+
   it("accepts only an unexpired HMAC session bound to the allowlisted Google subject and reviewer reference", async () => {
     const encode = bytes => {
       let binary = "";
