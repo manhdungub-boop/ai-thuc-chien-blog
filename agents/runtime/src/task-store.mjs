@@ -242,6 +242,26 @@ export class AgentTaskStore extends DurableObject {
     };
   }
 
+  pruneTerminalTasks(now = Date.now()) {
+    if (!Number.isSafeInteger(now) || now < 0) throw new TypeError("invalid_retention_timestamp");
+    const completedBefore = now - 24 * 60 * 60 * 1000;
+    const deadBefore = now - 7 * 24 * 60 * 60 * 1000;
+    const completed = this.ctx.storage.sql.exec(
+      "DELETE FROM tasks WHERE status = 'completed' AND updated_at < ? RETURNING id",
+      completedBefore
+    ).toArray().length;
+    const dead = this.ctx.storage.sql.exec(
+      "DELETE FROM tasks WHERE status = 'dead' AND updated_at < ? RETURNING id",
+      deadBefore
+    ).toArray().length;
+    const budgetCutoff = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const budgets = this.ctx.storage.sql.exec(
+      "DELETE FROM external_request_budgets WHERE budget_day < ? RETURNING budget_day",
+      budgetCutoff
+    ).toArray().length;
+    return { completed_deleted: completed, dead_deleted: dead, budget_days_deleted: budgets };
+  }
+
   stats() {
     const rows = this.ctx.storage.sql.exec(
       "SELECT status, COUNT(*) AS count FROM tasks GROUP BY status"
