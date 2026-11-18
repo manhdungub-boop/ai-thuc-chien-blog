@@ -300,10 +300,22 @@ export class AgentAIBankCandidateStore extends DurableObject {
       status: counts.has(checkType) ? "evidence_pending_human_review" : "evidence_missing",
       verified: false
     }));
+    const evidence = this.ctx.storage.sql.exec(
+      "SELECT e.evidence_id, e.check_type, e.source_title, e.source_url, e.excerpt, e.source_status, e.review_status, e.submitted_at " +
+      "FROM ai_bank_review_evidence e JOIN ai_bank_review_evidence_releases r ON r.evidence_id = e.evidence_id " +
+      "WHERE e.candidate_id = ? AND r.candidate_release_url = ? " +
+      "ORDER BY e.check_type ASC, e.submitted_at ASC, e.evidence_id ASC LIMIT 30",
+      candidateId, stored.candidate.latest_release.source_url
+    ).toArray().map(row => ({
+      ...row,
+      verified: false,
+      verification_authorized: false
+    }));
     const totalEvidence = checklist.reduce((sum, item) => sum + item.evidence_count, 0);
     return {
       candidate: stored,
       checklist,
+      evidence,
       total_evidence: totalEvidence,
       checks_with_evidence: checklist.filter(item => item.evidence_count > 0).length,
       checks_missing_evidence: checklist.filter(item => item.evidence_count === 0).length,
