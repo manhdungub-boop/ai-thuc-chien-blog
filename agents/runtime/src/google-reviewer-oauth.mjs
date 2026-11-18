@@ -152,6 +152,11 @@ export async function handleGoogleReviewerAuth(request, env, { fetchImpl = fetch
   if (url.origin !== cfg.redirectOrigin && path !== "/auth/google/start" && path !== "/auth/google/me" && path !== "/auth/google/logout") {
     return json({ error: "redirect_origin_mismatch" }, 400);
   }
+  const requestOrigin = request.headers.get("origin");
+  if (["/auth/google/me", "/auth/google/logout"].includes(path) &&
+      requestOrigin && requestOrigin !== cfg.redirectOrigin) {
+    return json({ error: "origin_mismatch" }, 403);
+  }
   const store = storeFrom(env);
   if (!store) return json({ error: "reviewer_auth_store_unavailable" }, 503);
   const nowSeconds = Math.floor(now / 1000);
