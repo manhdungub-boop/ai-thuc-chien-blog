@@ -9,19 +9,22 @@
   "vars": {
     "AGENT_ENABLED": "false",
     "AGENT_PAUSED": "true",
-    "AGENT_SCHEDULE_MODE": "manual_only_no_cron"
+    "AGENT_SCHEDULE_MODE": "manual_only_no_cron",
+    "AGENT_REVIEWER_AUTH_ENABLED": "false"
   },
   "durable_objects": {
     "bindings": [
       { "name": "AGENT_TASK_STORE", "class_name": "AgentTaskStore" },
       { "name": "AGENT_DRAFT_STORE", "class_name": "AgentDraftStore" },
-      { "name": "AGENT_AI_BANK_CANDIDATE_STORE", "class_name": "AgentAIBankCandidateStore" }
+      { "name": "AGENT_AI_BANK_CANDIDATE_STORE", "class_name": "AgentAIBankCandidateStore" },
+      { "name": "AGENT_REVIEWER_AUTH_STORE", "class_name": "AgentReviewerAuthStore" }
     ]
   },
   "migrations": [
     { "tag": "v1-agent-task-store", "new_sqlite_classes": ["AgentTaskStore"] },
     { "tag": "v2-agent-draft-store", "new_sqlite_classes": ["AgentDraftStore"] },
-    { "tag": "v3-ai-bank-candidate-store", "new_sqlite_classes": ["AgentAIBankCandidateStore"] }
+    { "tag": "v3-ai-bank-candidate-store", "new_sqlite_classes": ["AgentAIBankCandidateStore"] },
+    { "tag": "v4-reviewer-auth-store", "new_sqlite_classes": ["AgentReviewerAuthStore"] }
   ],
   "workflows": [
     {
