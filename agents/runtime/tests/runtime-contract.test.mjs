@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 const config = JSON.parse(await readFile(new URL("../wrangler.jsonc", import.meta.url), "utf8"));
 const source = await readFile(new URL("../src/index.mjs", import.meta.url), "utf8");
 const store = await readFile(new URL("../src/task-store.mjs", import.meta.url), "utf8");
+const research = await readFile(new URL("../src/research-discovery.mjs", import.meta.url), "utf8");
 
 test("runtime uses a recurring Workflow schedule with single-instance concurrency", () => {
   assert.equal(config.workflows.length, 1);
@@ -40,11 +41,14 @@ test("supervisor executes bounded health and daily read-only discovery tasks", (
   assert.match(source, /store\.claim\(\[taskType\], taskId\)/);
   assert.match(source, /await store\.complete\(taskId, claimed\.lease_token, result\)/);
   assert.match(source, /discoverAiBankReleaseSignals/);
+  assert.match(source, /discoverResearchSignals/);
+  assert.match(source, /research-scan-/);
+  assert.match(source, /content_research/);
   assert.match(source, /ai-bank-scan-/);
   assert.match(source, /ai_bank_discovery/);
   assert.match(source, /catalog_modified: false/);
-  assert.match(source, /tasks_considered: 2/);
-  assert.match(source, /external_calls: 0/);
+  assert.match(source, /tasks_considered: 3/);
+  assert.match(source, /external_calls: externalCalls/);
   assert.match(source, /production_access: false/);
 });
 
@@ -89,4 +93,15 @@ test("idempotency keys cannot be reused for a different task payload", () => {
   assert.match(store, /existing\.task_type === task\.task_type/);
   assert.match(store, /existing\.payload_json === payloadJson/);
   assert.match(store, /idempotency_key_conflict/);
+});
+
+test("research discovery uses fixed official feeds and read-only bounded fetches", () => {
+  assert.match(research, /https:\/\/openai\.com\/news\/rss\.xml/);
+  assert.match(research, /https:\/\/deepmind\.google\/blog\/rss\.xml/);
+  assert.match(research, /https:\/\/huggingface\.co\/blog\/feed\.xml/);
+  assert.match(research, /https:\/\/rss\.arxiv\.org\/rss\/cs\.AI/);
+  assert.match(research, /redirect: "error"/);
+  assert.match(research, /MAX_BYTES = 750_000/);
+  assert.match(research, /TIMEOUT_MS = 8_000/);
+  assert.match(research, /content_created: false/);
 });
