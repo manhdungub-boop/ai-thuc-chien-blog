@@ -255,6 +255,34 @@ export class AgentAIBankCandidateStore extends DurableObject {
     ).toArray().map(row => ({ ...row }));
   }
 
+  getReviewPacket(candidateId) {
+    const stored = this.getCandidate(candidateId);
+    if (!stored) return null;
+    const rows = this.ctx.storage.sql.exec(
+      "SELECT check_type, COUNT(*) AS evidence_count FROM ai_bank_review_evidence WHERE candidate_id = ? GROUP BY check_type",
+      candidateId
+    ).toArray();
+    const counts = new Map(rows.map(row => [row.check_type, row.evidence_count]));
+    const checklist = REQUIRED_CHECKS.map(checkType => ({
+      check_type: checkType,
+      evidence_count: counts.get(checkType) || 0,
+      status: counts.has(checkType) ? "evidence_pending_human_review" : "evidence_missing",
+      verified: false
+    }));
+    const totalEvidence = checklist.reduce((sum, item) => sum + item.evidence_count, 0);
+    return {
+      candidate: stored,
+      checklist,
+      total_evidence: totalEvidence,
+      checks_with_evidence: checklist.filter(item => item.evidence_count > 0).length,
+      checks_missing_evidence: checklist.filter(item => item.evidence_count === 0).length,
+      verification_status: "not_verified",
+      human_review_required: true,
+      catalog_write_authorized: false,
+      public_publication_authorized: false
+    };
+  }
+
   stats() {
     return {
       total: this.ctx.storage.sql.exec("SELECT COUNT(*) AS count FROM ai_bank_candidates").one().count,
