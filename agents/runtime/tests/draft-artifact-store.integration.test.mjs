@@ -109,8 +109,8 @@ describe("AgentDraftStore Durable Object", () => {
     }];
     const created = await store.createDraft("draft-review-0010", draft);
     const ledgerSources = [
-      { source: "Research Lab One", title: "One", url: sources[0].url, host: "research-one.example", excerpt: "This source describes isolated article evidence storage, review snapshots, and the limits of what a persisted record can establish. ".repeat(2).slice(0, 180) },
-      { source: "Research Lab Two", title: "Two", url: sources[1].url, host: "research-two.example", excerpt: "This second source describes controlled review workflows, evidence traceability, and the separation between review and publication. ".repeat(2).slice(0, 180) }
+      { source: "OpenAI News", title: "One", url: sources[0].url, host: "openai.com", excerpt: "This source describes isolated article evidence storage, review snapshots, and the limits of what a persisted record can establish. ".repeat(2).slice(0, 180) },
+      { source: "Google DeepMind", title: "Two", url: sources[1].url, host: "deepmind.google", excerpt: "This second source describes controlled review workflows, evidence traceability, and the separation between review and publication. ".repeat(2).slice(0, 180) }
     ];
     const ledger = {
       status: "all_claims_traceable_pending_human_review",
