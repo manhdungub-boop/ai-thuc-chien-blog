@@ -266,6 +266,16 @@ describe("Google reviewer OAuth session flow", () => {
     expect(await response.json()).toMatchObject({ authenticated: false });
   });
 
+  it("rejects cross-origin reviewer login initiation", async () => {
+    const response = await handleGoogleReviewerAuth(
+      new Request(origin + "/auth/google/start", { headers: { origin: "https://attacker.example" } }),
+      env,
+      { now }
+    );
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ error: "origin_mismatch" });
+  });
+
   it("rejects cross-origin reviewer session and logout requests", async () => {
     for (const path of ["/auth/google/me", "/auth/google/logout"]) {
       const response = await handleGoogleReviewerAuth(
