@@ -78,24 +78,51 @@ describe("Google reviewer OAuth session flow", () => {
     expect(stored[3]).toMatch(/^[A-Za-z0-9_-]{64}$/);
   });
 
-  it("rejects callback replay or a transaction not bound to the browser", async () => {
+  it("consumes a browser-bound login transaction once and rejects replay", async () => {
+    let transaction = null;
+    let consumed = false;
+    const testEnv = {
+      ...env,
+      AGENT_REVIEWER_AUTH_STORE: {
+        getByName() {
+          return {
+            createTransaction: async (stateHash, browserHash, nonce, codeVerifier, createdAt) => {
+              transaction = { stateHash, browserHash, nonce, code_verifier: codeVerifier, created_at: createdAt, expires_at: createdAt + 300 };
+              return { created: true };
+            },
+            consumeTransaction: async (stateHash, browserHash, nowSeconds) => {
+              if (!transaction || consumed || transaction.stateHash !== stateHash ||
+                  transaction.browserHash !== browserHash || transaction.expires_at <= nowSeconds) return null;
+              consumed = true;
+              return { nonce: transaction.nonce, code_verifier: transaction.code_verifier };
+            }
+          };
+        }
+      }
+    };
     const start = await handleGoogleReviewerAuth(
       new Request(origin + "/auth/google/start"),
-      env,
+      testEnv,
       { now }
     );
     const location = new URL(start.headers.get("location"));
     const setCookie = start.headers.get("set-cookie").split(";")[0];
-    const callback = await handleGoogleReviewerAuth(
-      new Request(origin + "/auth/google/callback?state=" +
-        encodeURIComponent(location.searchParams.get("state")) + "&code=valid-test-code", {
-          headers: { cookie: setCookie }
-        }),
-      env,
-      { now, fetchImpl: async () => { throw new Error("token exchange must not run"); } }
+    const callbackUrl = origin + "/auth/google/callback?state=" +
+      encodeURIComponent(location.searchParams.get("state")) + "&code=valid-test-code";
+    const first = await handleGoogleReviewerAuth(
+      new Request(callbackUrl, { headers: { cookie: setCookie } }),
+      testEnv,
+      { now, fetchImpl: async () => { throw new Error("mock token exchange failure after transaction consumption"); } }
     );
-    expect(callback.status).toBe(400);
-    expect(await callback.json()).toMatchObject({ error: "login_transaction_missing_or_replayed" });
+    const replay = await handleGoogleReviewerAuth(
+      new Request(callbackUrl, { headers: { cookie: setCookie } }),
+      testEnv,
+      { now, fetchImpl: async () => { throw new Error("replayed transaction must not reach Google"); } }
+    );
+    expect(first.status).toBe(502);
+    expect(replay.status).toBe(400);
+    expect(await replay.json()).toMatchObject({ error: "login_transaction_missing_or_replayed" });
+    expect(consumed).toBe(true);
   });
 
   it("does not authenticate a missing session", async () => {
