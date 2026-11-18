@@ -51,6 +51,22 @@ describe("human review record verifier", () => {
     expect(result.status).toBe("claim_or_evidence_fingerprint_mismatch");
   });
 
+  it("detects tampering with the review decision or reviewer note", async () => {
+    const record = await makeRecord();
+    const changedDecision = {
+      ...record,
+      claims: record.claims.map((claim, i) => i ? claim : ({ ...claim, decision: "unsupported" }))
+    };
+    const changedNote = {
+      ...record,
+      claims: record.claims.map((claim, i) => i ? claim : ({ ...claim, reviewer_note: "A different review explanation that was not originally recorded." }))
+    };
+    const decisionResult = await verifyHumanClaimReviewRecord(changedDecision, ledger, { now });
+    const noteResult = await verifyHumanClaimReviewRecord(changedNote, ledger, { now });
+    expect(decisionResult.status).toBe("review_decision_fingerprint_mismatch");
+    expect(noteResult.status).toBe("review_decision_fingerprint_mismatch");
+  });
+
   it("detects altered evidence URL order and missing review decisions", async () => {
     const record = await makeRecord();
     const altered = { ...record, claims: record.claims.map((claim, i) => i ? claim : ({ ...claim, evidence_urls: [...claim.evidence_urls].reverse() })) };
