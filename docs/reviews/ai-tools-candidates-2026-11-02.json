@@ -427,10 +427,9 @@
         "ios",
         "voice-evaluation",
         "audio",
-        "pro-lifetime-119000-vnd",
         "no-audio-export-evidence"
       ],
-      "project_fit": "Rất phù hợp để nghe thử nhiều giọng tiếng Việt trực tiếp trên iPhone, đặc biệt 14 giọng nam/nữ và các vùng giọng. Tuy nhiên, đây là VieNeu-TTS chứ không phải Supertonic Alex/Male 1; không thay đổi lựa chọn hiện tại của dự án. App Store VN hiện chỉ cho thấy tip 29.000₫, còn Pro voice packs xuất hiện trong một storefront khác nên chưa rõ vùng VN. Không mua IAP. Chưa xác minh xuất WAV/MP3, do đó chỉ đánh giá để nghe thử, chưa dùng cho video. Chưa cài ứng dụng hoặc tải voice pack."
+      "project_fit": "Rất phù hợp để nghe thử nhiều giọng tiếng Việt trực tiếp trên iPhone, đặc biệt 14 giọng nam/nữ và các vùng giọng. Tuy nhiên, đây là VieNeu-TTS chứ không phải Supertonic Alex/Male 1; không thay đổi lựa chọn hiện tại của dự án. App Store VN hiện chỉ cho thấy tip 29.000₫, còn Pro voice packs xuất hiện trong một storefront khác nên chưa rõ vùng VN. Không mua IAP. Chưa xác minh xuất WAV/MP3, do đó chỉ đánh giá để nghe thử, chưa dùng cho video. Chưa cài ứng dụng hoặc tải voice pack. Đã bỏ tag pro-lifetime-119000-vnd vì chưa xác minh được giá/khả năng áp dụng của gói PRO trên App Store Việt Nam; không suy diễn giá từ storefront khác."
     },
     {
       "id": "open-minis",
