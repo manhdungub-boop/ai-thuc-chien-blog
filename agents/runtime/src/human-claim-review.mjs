@@ -62,6 +62,25 @@ async function fingerprintClaim(claim) {
   return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
 }
 
+async function fingerprintReviewDecision(reviewedClaim) {
+  if (!globalThis.crypto?.subtle || typeof TextEncoder === "undefined") {
+    throw new Error("sha256_unavailable");
+  }
+  const snapshot = {
+    claim_id: reviewedClaim.claim_id,
+    claim: reviewedClaim.claim,
+    decision: reviewedClaim.decision,
+    reviewer_note: reviewedClaim.reviewer_note,
+    reviewer_ref: reviewedClaim.reviewer_ref,
+    reviewed_at: reviewedClaim.reviewed_at,
+    claim_fingerprint_sha256: reviewedClaim.claim_fingerprint_sha256,
+    evidence_urls: reviewedClaim.evidence_urls
+  };
+  const bytes = new TextEncoder().encode(JSON.stringify(snapshot));
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+}
+
 /**
  * Record a complete, explicit human review of a traceable claim batch.
  * A "supported" decision records the reviewer's judgment about the cited
@@ -120,7 +139,7 @@ export async function recordHumanClaimReview(ledger, decisions, reviewer, {
   const reviewedClaims = [];
   for (const claim of ledger.claims) {
     const review = decisionById.get(claim.claim_id);
-    reviewedClaims.push({
+    const reviewedClaim = {
       claim_id: claim.claim_id,
       claim: claim.claim,
       decision: review.decision,
@@ -129,7 +148,9 @@ export async function recordHumanClaimReview(ledger, decisions, reviewer, {
       reviewed_at: reviewedAt,
       claim_fingerprint_sha256: await fingerprintClaim(claim),
       evidence_urls: claim.sources.map(source => source.url)
-    });
+    };
+    reviewedClaim.review_fingerprint_sha256 = await fingerprintReviewDecision(reviewedClaim);
+    reviewedClaims.push(reviewedClaim);
   }
 
   return {
