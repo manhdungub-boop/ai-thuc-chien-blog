@@ -13,7 +13,7 @@ function validDraft() {
     title: "Xây dựng hệ thống AI agent an toàn và hiệu quả",
     slug: "xay-dung-he-thong-ai-agent-an-toan",
     meta_description: "Hướng dẫn xây dựng hệ thống AI agent có kiểm soát, an toàn, minh bạch và hiệu quả cho quy trình tự động hóa trong thực tế triển khai.",
-    author: "DUNG - AI", language: "vi", body_markdown: body, sources,
+    author: "DUNG - AI", language: "vi", body_markdown: body, sources: sources.map(source => ({ ...source })),
     copyright_notice: "© DUNG - AI. Bản quyền nội dung thuộc về tác giả; các nguồn tham khảo được ghi nhận riêng."
   };
 }
