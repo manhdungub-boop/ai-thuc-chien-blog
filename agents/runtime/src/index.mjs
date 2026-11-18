@@ -8,7 +8,7 @@ export { AgentDraftStore } from "./draft-artifact-store.mjs";
 export { AgentAIBankCandidateStore } from "./ai-bank-candidate-store.mjs";
 
 const SERVICE = "ai-thuc-chien-agent-runtime-preview";
-const VERSION = "0.3.0";
+const VERSION = "0.3.1";
 const json = (value, status = 200) => new Response(JSON.stringify(value), {
   status,
   headers: {
@@ -219,10 +219,15 @@ export default {
         mode: "preview_foundation",
         enabled: env.AGENT_ENABLED === "true",
         paused: env.AGENT_PAUSED === "true",
-        scheduler: "workflow_every_15_minutes",
+        scheduler: env.AGENT_SCHEDULE_MODE || "not_configured",
         task_execution_enabled: env.AGENT_ENABLED === "true" && env.AGENT_PAUSED !== "true",
         ai_bank_discovery: "read_only_daily_allowlisted_github_releases",
         content_research: "read_only_daily_official_feeds_and_bounded_source_evidence_retrieval",
+        ai_inference_enabled: false,
+        content_draft_executor_enabled: false,
+        quality_review_executor_enabled: false,
+        website_publication_enabled: false,
+        facebook_publication_enabled: false,
         task_enqueue_endpoint_enabled: false,
         production_access: false
       });
