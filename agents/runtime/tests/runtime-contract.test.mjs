@@ -6,6 +6,7 @@ const config = JSON.parse(await readFile(new URL("../wrangler.jsonc", import.met
 const source = await readFile(new URL("../src/index.mjs", import.meta.url), "utf8");
 const store = await readFile(new URL("../src/task-store.mjs", import.meta.url), "utf8");
 const research = await readFile(new URL("../src/research-discovery.mjs", import.meta.url), "utf8");
+const articleGate = await readFile(new URL("../src/article-quality-gate.mjs", import.meta.url), "utf8");
 
 test("runtime uses a recurring Workflow schedule with single-instance concurrency", () => {
   assert.equal(config.workflows.length, 1);
@@ -104,4 +105,14 @@ test("research discovery uses fixed official feeds and read-only bounded fetches
   assert.match(research, /MAX_BYTES = 750_000/);
   assert.match(research, /TIMEOUT_MS = 8_000/);
   assert.match(research, /content_created: false/);
+});
+
+test("article quality gate is deterministic and never authorizes publication", () => {
+  assert.match(articleGate, /MIN_WORDS = 600/);
+  assert.match(articleGate, /MIN_SOURCES = 3/);
+  assert.match(articleGate, /author !== "DUNG - AI"/);
+  assert.match(articleGate, /unsafe_markup/);
+  assert.match(articleGate, /missing_inline_citations/);
+  assert.match(articleGate, /publication_authorized: false/);
+  assert.match(articleGate, /eligible_for_human_review/);
 });
