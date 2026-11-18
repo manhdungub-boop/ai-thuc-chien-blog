@@ -12,6 +12,8 @@ This directory is a separate Cloudflare Worker service. It is not imported by th
 - Once per UTC day, the supervisor enqueues an idempotent `ai_bank_discovery` task. Its only handler fetches ten hard-coded public GitHub Atom release feeds over HTTPS using GET, rejects redirects, applies a 10-second per-source timeout and a 1 MB response ceiling, validates release URLs against the exact repository, and stores at most five sanitized recent signals in the task result.
 - The same daily cycle enqueues one idempotent `content_research` task for the fixed topic `AI agents, automation, and open-source AI tools`. Its discovery handler reads four fixed public feeds: OpenAI News, Google DeepMind, Hugging Face, and arXiv cs.AI. It uses GET only, rejects redirects, applies an 8-second timeout and a 750 KB response ceiling per feed, validates HTTPS host and path, and stores at most four recent source signals.
 - Research results are not an AI-generated article, a fact-checked report, or permission to publish. The handler does not fetch article bodies, infer claims, or write website content. A later research specialist must read original sources and corroborate material claims before any draft is created.
+- A standalone deterministic article quality gate checks Vietnamese language marker, DUNG - AI attribution, SEO title/description lengths, minimum article length and section count, three distinct HTTPS references, inline citation indexes, copyright notice, and unsafe active markup. It returns `eligible_for_human_review` or `needs_revision`; it always sets `publication_authorized: false`.
+- The quality gate is a structural pre-check only. It does not establish truth, originality, source reliability, license compatibility, copyright ownership, or publishability, and is not yet connected to an autonomous draft executor.
 - Discovery is read-only. Release signals are not verified AI Bank records; no pricing, free quota, license, privacy, regional availability, or product suitability is inferred. There is no catalog write, public content write, or publication step.
 - The supervisor processes at most three tasks per cycle (one health task, one AI Bank release scan, and one research-source scan). It makes no model calls and does not access private GitHub data.
 - `content_research` is currently limited to the fixed daily read-only source-discovery task described above; it is not free-form topic research. `content_draft` and `quality_review` remain queued task contracts without registered executors and are not claimed by the supervisor.
@@ -45,7 +47,7 @@ Do not deploy from this branch until the separate Preview account/resource bound
 2. Connect the supervisor to the queue while retaining a strict task-type allowlist.
 3. Add read-only GitHub/public-source adapters with bounded timeouts and rate limits.
 4. Add model execution only after verifying a genuinely no-cost quota; otherwise remain in deterministic planning mode.
-5. Add staging-only AI Bank/content/QA specialists with evidence contracts.
+5. Connect the deterministic article quality gate to a controlled draft artifact store and human-review queue after research and drafting specialists are implemented.
 6. Add an authenticated operator control plane, monitoring, alerting and a pause switch.
 7. Consider public actions only through the existing owner approval gates.
 
