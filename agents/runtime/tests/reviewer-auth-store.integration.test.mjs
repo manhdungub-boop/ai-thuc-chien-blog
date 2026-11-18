@@ -14,11 +14,11 @@ function transaction(seed, nowSeconds = 1_800_000_000) {
 
 describe("AgentReviewerAuthStore Durable Object", () => {
   let store;
-  let testIndex = 0;
+  let storeName;
 
   beforeEach(() => {
-    testIndex += 1;
-    store = env.AGENT_REVIEWER_AUTH_STORE.getByName("reviewer-auth-store-integration-" + testIndex);
+    storeName = "reviewer-auth-store-integration-" + crypto.randomUUID();
+    store = env.AGENT_REVIEWER_AUTH_STORE.getByName(storeName);
   });
 
   it("persists a browser-bound transaction and consumes it exactly once", async () => {
@@ -27,7 +27,7 @@ describe("AgentReviewerAuthStore Durable Object", () => {
       tx.stateHash, tx.browserHash, tx.nonce, tx.codeVerifier, tx.nowSeconds
     )).toEqual({ created: true });
 
-    const secondStub = env.AGENT_REVIEWER_AUTH_STORE.getByName("reviewer-auth-store-integration-" + testIndex);
+    const secondStub = env.AGENT_REVIEWER_AUTH_STORE.getByName(storeName);
     expect(await secondStub.consumeTransaction(
       tx.stateHash, tx.browserHash, tx.nowSeconds + 1
     )).toMatchObject({
