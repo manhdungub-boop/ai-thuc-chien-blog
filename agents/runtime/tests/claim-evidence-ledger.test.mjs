@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { buildClaimEvidenceLedger } from "../src/claim-evidence-ledger.mjs";
 
 const evidence = [
-  { source: "OpenAI", title: "A", url: "https://openai.com/index/a", status: "source_retrieved_not_fact_checked", excerpt: "A sufficiently long excerpt about the research topic, methods, limitations and reported observations. ".repeat(2).slice(0, 180) },
-  { source: "DeepMind", title: "B", url: "https://deepmind.google/blog/b", status: "source_retrieved_not_fact_checked", excerpt: "A second sufficiently long excerpt about the research topic, methods, limitations and reported observations. ".repeat(2).slice(0, 180) },
+  { source: "OpenAI News", title: "A", url: "https://openai.com/index/a", status: "source_retrieved_not_fact_checked", excerpt: "A sufficiently long excerpt about the research topic, methods, limitations and reported observations. ".repeat(2).slice(0, 180) },
+  { source: "Google DeepMind", title: "B", url: "https://deepmind.google/blog/b", status: "source_retrieved_not_fact_checked", excerpt: "A second sufficiently long excerpt about the research topic, methods, limitations and reported observations. ".repeat(2).slice(0, 180) },
   { source: "Hugging Face", title: "C", url: "https://huggingface.co/blog/c", status: "source_retrieved_not_fact_checked", excerpt: "A third sufficiently long excerpt about the research topic, methods, limitations and reported observations. ".repeat(2).slice(0, 180) }
 ];
 const assessment = { accepted_sources: evidence.map(({ url }) => ({ url })) };
@@ -101,4 +101,18 @@ describe("claim evidence provenance ledger", () => {
     expect(result.claims[0].sources).toHaveLength(0);
     expect(result.claims[0].reason).toBe("too_many_evidence_references");
   });
+
+  it("rejects a source whose publisher label does not match its host and path", () => {
+    const spoofedEvidence = [
+      evidence[0],
+      { ...evidence[1], source: "OpenAI News" }
+    ];
+    const result = buildClaimEvidenceLedger([
+      { id: "claim-spoof", text: "A factual statement requiring support.", evidence_urls: spoofedEvidence.map(item => item.url) }
+    ], spoofedEvidence, { accepted_sources: spoofedEvidence.map(({ url }) => ({ url })) });
+    expect(result.claims[0].status).toBe("needs_evidence_or_revision");
+    expect(result.claims[0].reason).toBe("unaccepted_evidence_reference");
+    expect(result.claims[0].distinct_publisher_count).toBe(1);
+  });
+
 });
