@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 
 function transaction(seed, nowSeconds = 1_800_000_000) {
-  const token = value => value.repeat(43).slice(0, 43);
+  const token = value => (seed + value).repeat(30).slice(0, 43);
   return {
     stateHash: token("s"),
     browserHash: token("b"),
