@@ -70,6 +70,6 @@ describe("bounded research evidence retrieval", () => {
     })), { fetchImpl: async () => { calls++; return new Response(html, { headers: { "content-type": "text/html" } }); } });
     expect(calls).toBe(4);
     expect(result.attempts).toBe(4);
-    expect(result.evidence.every(item => item.excerpt.length <= 1100)).toBe(true);
+    expect(result.evidence.every(item => item.excerpt.length <= 600)).toBe(true);
   });
 });
