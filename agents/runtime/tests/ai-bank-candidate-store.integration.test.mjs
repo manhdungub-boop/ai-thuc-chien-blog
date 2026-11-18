@@ -262,4 +262,36 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     expect(packet.verification_status).toBe("not_verified");
   });
 
+  it("applies the per-check evidence cap independently to each release version", async () => {
+    await store.upsertCandidates([candidate()], Date.parse("2026-11-19T08:06:00.000Z"));
+    const makeEvidence = (version, index) => ({
+      check_type: "license_scope",
+      source_title: "License reference " + version + " " + index,
+      source_url: "https://example.com/license/" + version + "/" + index,
+      excerpt: "License evidence awaiting human review."
+    });
+    for (let index = 0; index < 5; index += 1) {
+      expect((await store.submitReviewEvidence(
+        "github:ollama/ollama", makeEvidence("old", index)
+      )).accepted).toBe(true);
+    }
+
+    const newer = candidate(sources[0], "v1.2.4", "2026-11-19T11:00:00.000Z");
+    newer.discovered_at = "2026-11-19T11:05:00.000Z";
+    await store.upsertCandidates([newer], Date.parse("2026-11-19T11:06:00.000Z"));
+
+    for (let index = 0; index < 5; index += 1) {
+      expect((await store.submitReviewEvidence(
+        "github:ollama/ollama", makeEvidence("new", index)
+      )).accepted).toBe(true);
+    }
+    expect(await store.submitReviewEvidence(
+      "github:ollama/ollama", makeEvidence("new", 5)
+    )).toEqual({ accepted: false, reason: "evidence_limit_reached" });
+    const packet = await store.getReviewPacket("github:ollama/ollama");
+    expect(packet.total_evidence).toBe(5);
+    expect(packet.checklist.find(item => item.check_type === "license_scope").evidence_count).toBe(5);
+  });
+
+
 });
