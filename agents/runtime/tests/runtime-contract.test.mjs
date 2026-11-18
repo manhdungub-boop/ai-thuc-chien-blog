@@ -26,7 +26,7 @@ test("runtime has isolated SQLite storage and no website Production bindings", (
 
 test("health endpoint is read-only and does not expose task enqueue", () => {
   assert.match(source, /request\.method !== "GET"/);
-  assert.match(source, /task_execution_enabled: false/);
+  assert.match(source, /task_execution_enabled: true/);
   assert.match(source, /task_enqueue_endpoint_enabled: false/);
   assert.match(source, /production_access: false/);
   assert.doesNotMatch(source, /fetch\(["']https?:/);
