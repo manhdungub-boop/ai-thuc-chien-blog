@@ -185,12 +185,13 @@ export async function handleGoogleReviewerAuth(request, env, { fetchImpl = fetch
       provider: "google", sub: identity.reviewer.subject, email: identity.reviewer.email,
       reviewer_ref: identity.reviewer.reviewer_ref, iat: nowSeconds, exp: nowSeconds + SESSION_TTL_SECONDS
     });
-    return new Response(null, { status: 302, headers: {
-      location: cfg.redirectOrigin + "/",
-      "cache-control": "no-store",
-      "set-cookie": cookie(SESSION_COOKIE, session, SESSION_TTL_SECONDS) + "\n" + clearCookie(TX_COOKIE),
-      "referrer-policy": "no-referrer"
-    } });
+    return new Response(null, { status: 302, headers: [
+      ["location", cfg.redirectOrigin + "/"],
+      ["cache-control", "no-store"],
+      ["set-cookie", cookie(SESSION_COOKIE, session, SESSION_TTL_SECONDS)],
+      ["set-cookie", clearCookie(TX_COOKIE)],
+      ["referrer-policy", "no-referrer"]
+    ] });
   }
 
   if (path === "/auth/google/me") {
@@ -203,5 +204,5 @@ export async function handleGoogleReviewerAuth(request, env, { fetchImpl = fetch
     return json({ authenticated: true, reviewer: { provider: "google", subject: session.sub, email: session.email, reviewer_ref: session.reviewer_ref }, expires_at: new Date(session.exp * 1000).toISOString(), publication_authorized: false });
   }
 
-  return new Response(null, { status: 204, headers: { "cache-control": "no-store", "set-cookie": clearCookie(SESSION_COOKIE) + "\n" + clearCookie(TX_COOKIE) } });
+  return new Response(null, { status: 204, headers: [["cache-control", "no-store"], ["set-cookie", clearCookie(SESSION_COOKIE)], ["set-cookie", clearCookie(TX_COOKIE)]] });
 }
