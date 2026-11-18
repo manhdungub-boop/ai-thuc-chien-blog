@@ -323,7 +323,7 @@ export default {
       });
     }
     const reviewerAIBankCollection = url.pathname === "/api/reviewer/ai-bank/candidates";
-    const reviewerAIBankDetail = url.pathname.match(/^\/api\/reviewer\/ai-bank\/candidates\/([a-zA-Z0-9_.-]{1,160})$/);
+    const reviewerAIBankDetail = url.pathname.match(/^\/api\/reviewer\/ai-bank\/candidates\/([a-zA-Z0-9_.-]{1,100})\/([a-zA-Z0-9_.-]{1,100})$/);
     if (reviewerAIBankCollection || reviewerAIBankDetail) {
       if (request.method !== "GET") return json({ error: "method_not_allowed" }, 405);
       const origin = request.headers.get("origin");
@@ -351,7 +351,7 @@ export default {
           public_publication_authorized: false
         });
       }
-      const packet = await candidateStore.getReviewPacket("github:" + reviewerAIBankDetail[1]);
+      const packet = await candidateStore.getReviewPacket("github:" + reviewerAIBankDetail[1] + "/" + reviewerAIBankDetail[2]);
       if (!packet) return json({ error: "ai_bank_candidate_not_found" }, 404);
       return json({
         packet,
