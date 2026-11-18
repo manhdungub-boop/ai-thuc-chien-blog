@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { recordHumanClaimReview } from "../src/human-claim-review.mjs";
 
 const sources = [
-  { source: "OpenAI", title: "A", url: "https://openai.com/index/a", host: "openai.com", excerpt: "A sufficiently long excerpt about the research topic, methods, limitations and reported observations. ".repeat(2).slice(0, 180) },
-  { source: "DeepMind", title: "B", url: "https://deepmind.google/blog/b", host: "deepmind.google", excerpt: "A second sufficiently long excerpt about the research topic, methods, limitations and reported observations. ".repeat(2).slice(0, 180) }
+  { source: "OpenAI News", title: "A", url: "https://openai.com/index/a", host: "openai.com", excerpt: "A sufficiently long excerpt about the research topic, methods, limitations and reported observations. ".repeat(2).slice(0, 180) },
+  { source: "Google DeepMind", title: "B", url: "https://deepmind.google/blog/b", host: "deepmind.google", excerpt: "A second sufficiently long excerpt about the research topic, methods, limitations and reported observations. ".repeat(2).slice(0, 180) }
 ];
 const ledger = {
   status: "all_claims_traceable_pending_human_review",
@@ -14,9 +14,13 @@ const ledger = {
   ]
 };
 const reviewer = { reviewer_ref: "editor.dung", reviewed_at: "2026-11-18T12:00:00.000Z" };
+const evidenceReviews = [
+  { source_url: sources[0].url, decision: "supports", reviewer_note: "This passage directly supports the exact claim statement." },
+  { source_url: sources[1].url, decision: "supports", reviewer_note: "This second passage independently supports the exact claim statement." }
+];
 const decisions = [
-  { claim_id: "claim-1", decision: "supported", reviewer_note: "Both excerpts directly address the exact claim wording." },
-  { claim_id: "claim-2", decision: "needs_revision", reviewer_note: "The second source is relevant but does not support this wording." }
+  { claim_id: "claim-1", decision: "supported", reviewer_note: "Both excerpts directly address the exact claim wording.", evidence_reviews },
+  { claim_id: "claim-2", decision: "needs_revision", reviewer_note: "The second source is relevant but does not support this wording.", evidence_reviews: [evidenceReviews[0], { ...evidenceReviews[1], decision: "insufficient", reviewer_note: "This passage does not provide sufficient support for the exact claim wording." }] }
 ];
 
 describe("human claim review record", () => {
@@ -67,6 +71,24 @@ describe("human claim review record", () => {
     const altered = { ...ledger, claims: ledger.claims.map((claim, index) => index ? claim : ({ ...claim, sources: [sources[0], { ...sources[1], host: "openai.com" }] })) };
     const result = await recordHumanClaimReview(altered, decisions, reviewer);
     expect(result.status).toBe("invalid_review_ledger_claim");
+  });
+
+  it("requires a separate, exact-URL decision and note for every evidence source", async () => {
+    const missing = await recordHumanClaimReview(ledger, [
+      { ...decisions[0], evidence_reviews: [evidenceReviews[0]] },
+      decisions[1]
+    ], reviewer);
+    const mismatched = await recordHumanClaimReview(ledger, [
+      { ...decisions[0], evidence_reviews: [{ ...evidenceReviews[0], source_url: "https://forged.example/source" }, evidenceReviews[1] },
+      decisions[1]
+    ], reviewer);
+    const falselySupported = await recordHumanClaimReview(ledger, [
+      { ...decisions[0], evidence_reviews: [evidenceReviews[0], { ...evidenceReviews[1], decision: "insufficient" }] },
+      decisions[1]
+    ], reviewer);
+    expect(missing.status).toBe("evidence_reviews_incomplete_or_inconsistent");
+    expect(mismatched.status).toBe("evidence_reviews_incomplete_or_inconsistent");
+    expect(falselySupported.status).toBe("evidence_reviews_incomplete_or_inconsistent");
   });
 
   it("requires a meaningful reviewer note for every claim", async () => {
