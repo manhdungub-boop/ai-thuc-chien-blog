@@ -118,6 +118,18 @@ test("runtime has isolated SQLite storage and no website Production bindings", (
   ]);
 });
 
+test("AI Bank reviewer API is GET-only, session-authenticated, and read-only", () => {
+  assert.match(source, /verifyGoogleReviewerSessionToken/);
+  assert.match(source, /api\\/reviewer\\/ai-bank\\/candidates/);
+  assert.match(source, /candidateStore\\.listCandidates\\(limit\\)/);
+  assert.match(source, /candidateStore\\.getReviewPacket/);
+  assert.match(source, /catalog_write_authorized: false/);
+  assert.match(source, /public_publication_authorized: false/);
+  assert.match(source, /verification_authorized: false/);
+  assert.match(source, /reviewer_session_required/);
+  assert.match(source, /reviewer_auth_not_configured/);
+});
+
 test("health endpoint is read-only and does not expose task enqueue", () => {
   assert.match(source, /request\.method !== "GET"/);
   assert.match(source, /task_execution_enabled: env.AGENT_ENABLED === "true" && env.AGENT_PAUSED !== "true"/);
