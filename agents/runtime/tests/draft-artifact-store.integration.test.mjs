@@ -3,9 +3,9 @@ import { env } from "cloudflare:workers";
 import { recordHumanClaimReview } from "../src/human-claim-review.mjs";
 
 const sources = [
-  { title: "Official source one", publisher: "Research Lab One", url: "https://research-one.example/paper", accessed_at: "2026-11-18T00:00:00.000Z" },
-  { title: "Official source two", publisher: "Research Lab Two", url: "https://research-two.example/report", accessed_at: "2026-11-18T00:00:00.000Z" },
-  { title: "Official source three", publisher: "Research Lab Three", url: "https://research-three.example/guide", accessed_at: "2026-11-18T00:00:00.000Z" }
+  { title: "Official source one", publisher: "OpenAI News", url: "https://openai.com/index/paper", accessed_at: "2026-11-18T00:00:00.000Z" },
+  { title: "Official source two", publisher: "Google DeepMind", url: "https://deepmind.google/blog/report", accessed_at: "2026-11-18T00:00:00.000Z" },
+  { title: "Official source three", publisher: "Hugging Face", url: "https://huggingface.co/blog/guide", accessed_at: "2026-11-18T00:00:00.000Z" }
 ];
 function validDraft() {
   const p = "Trí tuệ nhân tạo đang thay đổi cách tổ chức nghiên cứu, phát triển phần mềm và tự động hóa quy trình. Các nhóm triển khai cần xác định mục tiêu, giới hạn dữ liệu, đánh giá kết quả và giám sát rủi ro trước khi đưa hệ thống vào sử dụng. ";
@@ -73,8 +73,8 @@ describe("AgentDraftStore Durable Object", () => {
     }];
     const created = await store.createDraft("draft-review-0009", draft);
     const ledgerSources = [
-      { source: "Research Lab One", title: "One", url: sources[0].url, host: "research-one.example", excerpt: "This source describes isolated article evidence storage, review snapshots, and the limits of what a persisted record can establish. ".repeat(2).slice(0, 180) },
-      { source: "Research Lab Two", title: "Two", url: sources[1].url, host: "research-two.example", excerpt: "This second source describes controlled review workflows, evidence traceability, and the separation between review and publication. ".repeat(2).slice(0, 180) }
+      { source: "OpenAI News", title: "One", url: sources[0].url, host: "openai.com", excerpt: "This source describes isolated article evidence storage, review snapshots, and the limits of what a persisted record can establish. ".repeat(2).slice(0, 180) },
+      { source: "Google DeepMind", title: "Two", url: sources[1].url, host: "deepmind.google", excerpt: "This second source describes controlled review workflows, evidence traceability, and the separation between review and publication. ".repeat(2).slice(0, 180) }
     ];
     const ledger = {
       status: "all_claims_traceable_pending_human_review",
@@ -89,7 +89,7 @@ describe("AgentDraftStore Durable Object", () => {
     const now = Date.now();
     const reviewRecord = await recordHumanClaimReview(
       ledger,
-      [{ claim_id: "claim-store-1", decision: "supported", reviewer_note: "Both cited excerpts address the stated storage behavior." }],
+      [{ claim_id: "claim-store-1", decision: "supported", reviewer_note: "Both cited excerpts address the stated storage behavior.", evidence_reviews: [{ source_url: sources[0].url, decision: "supports", reviewer_note: "The first passage directly supports the exact storage behavior described." }, { source_url: sources[1].url, decision: "supports", reviewer_note: "The second passage independently supports the exact storage behavior described." }] }],
       { reviewer_ref: "editor.dung", reviewed_at: new Date(now - 60_000).toISOString() },
       { now }
     );
@@ -109,8 +109,8 @@ describe("AgentDraftStore Durable Object", () => {
     }];
     const created = await store.createDraft("draft-review-0010", draft);
     const ledgerSources = [
-      { source: "Research Lab One", title: "One", url: sources[0].url, host: "research-one.example", excerpt: "This source describes isolated article evidence storage, review snapshots, and the limits of what a persisted record can establish. ".repeat(2).slice(0, 180) },
-      { source: "Research Lab Two", title: "Two", url: sources[1].url, host: "research-two.example", excerpt: "This second source describes controlled review workflows, evidence traceability, and the separation between review and publication. ".repeat(2).slice(0, 180) }
+      { source: "OpenAI News", title: "One", url: sources[0].url, host: "openai.com", excerpt: "This source describes isolated article evidence storage, review snapshots, and the limits of what a persisted record can establish. ".repeat(2).slice(0, 180) },
+      { source: "Google DeepMind", title: "Two", url: sources[1].url, host: "deepmind.google", excerpt: "This second source describes controlled review workflows, evidence traceability, and the separation between review and publication. ".repeat(2).slice(0, 180) }
     ];
     const ledger = {
       status: "all_claims_traceable_pending_human_review",
@@ -125,7 +125,7 @@ describe("AgentDraftStore Durable Object", () => {
     const now = Date.parse("2026-11-18T12:01:00.000Z");
     const reviewRecord = await recordHumanClaimReview(
       ledger,
-      [{ claim_id: "claim-store-2", decision: "supported", reviewer_note: "Both cited excerpts address the stated storage behavior." }],
+      [{ claim_id: "claim-store-2", decision: "supported", reviewer_note: "Both cited excerpts address the stated storage behavior.", evidence_reviews: [{ source_url: sources[0].url, decision: "supports", reviewer_note: "The first passage directly supports the exact storage behavior described." }, { source_url: sources[1].url, decision: "supports", reviewer_note: "The second passage independently supports the exact storage behavior described." }] }],
       { reviewer_ref: "editor.dung", reviewed_at: new Date(now - 60_000).toISOString() },
       { now }
     );

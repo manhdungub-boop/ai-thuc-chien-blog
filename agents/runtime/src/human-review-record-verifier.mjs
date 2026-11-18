@@ -1,3 +1,5 @@
+import { classifyResearchPublisher } from "./research-publisher-policy.mjs";
+
 const MAX_CLAIMS = 40;
 const MIN_NOTE_CHARS = 20;
 const MAX_NOTE_CHARS = 500;
@@ -48,7 +50,8 @@ async function fingerprintReviewDecision(reviewedClaim) {
     reviewer_ref: reviewedClaim.reviewer_ref,
     reviewed_at: reviewedClaim.reviewed_at,
     claim_fingerprint_sha256: reviewedClaim.claim_fingerprint_sha256,
-    evidence_urls: reviewedClaim.evidence_urls
+    evidence_urls: reviewedClaim.evidence_urls,
+    evidence_reviews: reviewedClaim.evidence_reviews
   };
   const bytes = new TextEncoder().encode(JSON.stringify(snapshot));
   const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
@@ -103,7 +106,8 @@ export async function verifyHumanClaimReviewRecord(record, ledger, {
         typeof reviewed.reviewer_note !== "string" ||
         reviewed.reviewer_note.length < MIN_NOTE_CHARS ||
         reviewed.reviewer_note.length > MAX_NOTE_CHARS ||
-        !Array.isArray(reviewed.evidence_urls)) {
+        !Array.isArray(reviewed.evidence_urls) ||
+        !Array.isArray(reviewed.evidence_reviews)) {
       return { ok: false, status: "invalid_reviewed_claim" };
     }
     recordById.set(reviewed.claim_id, reviewed);
@@ -117,9 +121,25 @@ export async function verifyHumanClaimReviewRecord(record, ledger, {
         reviewed.claim !== claim.claim ||
         !Array.isArray(claim.sources) ||
         reviewed.evidence_urls.length !== claim.sources.length ||
-        reviewed.evidence_urls.some((url, index) => url !== claim.sources[index]?.url)) {
+        reviewed.evidence_urls.some((url, index) => url !== claim.sources[index]?.url) ||
+        reviewed.evidence_reviews.length !== claim.sources.length ||
+        reviewed.evidence_reviews.some((review, index) =>
+          review?.source_url !== claim.sources[index]?.url ||
+          !["supports", "contradicts", "insufficient"].includes(review?.decision) ||
+          typeof review?.reviewer_note !== "string" ||
+          review.reviewer_note.trim().length < MIN_NOTE_CHARS ||
+          review.reviewer_note.length > MAX_NOTE_CHARS
+        ) || (reviewed.decision === "supported" && reviewed.evidence_reviews.some(review => review.decision !== "supports"))) {
       return { ok: false, status: "claim_or_evidence_snapshot_mismatch" };
     }
+
+    if (claim.sources.some(source => {
+      try {
+        const url = new URL(source?.url);
+        return url.protocol !== "https:" || url.hostname !== source.host ||
+          !classifyResearchPublisher(source.source, url.href).accepted;
+      } catch { return true; }
+    })) return { ok: false, status: "claim_source_publisher_identity_invalid" };
 
     const expectedFingerprint = await fingerprintClaim(claim);
     if (reviewed.claim_fingerprint_sha256 !== expectedFingerprint) {
