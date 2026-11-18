@@ -118,7 +118,7 @@ describe("article evidence readiness", () => {
     const codeOnly = makeDraft();
     codeOnly.body_markdown = codeOnly.body_markdown.replace(
       ledger.claims[0].claim,
-      "```text\\n" + ledger.claims[0].claim + "\\n```"
+      "```text\n" + ledger.claims[0].claim + "\n```"
     );
     const result = await assessArticleEvidenceReadiness({
       draft: codeOnly,
