@@ -98,6 +98,22 @@ describe("AgentTaskStore Durable Object", () => {
     expect(await store.stats()).toEqual({ dead: 1 });
   });
 
+  it("rejects draft and quality tasks until their executors are registered", async () => {
+    await expect(Promise.resolve().then(() => store.enqueue({
+      id: "content-draft-pending-01",
+      task_type: "content_draft",
+      payload: { topic: "AI agent an toàn", research_task_id: "research-task-0001" }
+    }))).rejects.toThrow("task_executor_not_registered");
+
+    await expect(Promise.resolve().then(() => store.enqueue({
+      id: "quality-review-pending-01",
+      task_type: "quality_review",
+      payload: { artifact_id: "article-artifact-01", artifact_type: "article" }
+    }))).rejects.toThrow("task_executor_not_registered");
+
+    expect(await store.stats()).toEqual({});
+  });
+
   it("executes and persists only allowlisted local health-check results", async () => {
     const request = { id: "runtime-health-test-01", task_type: "runtime_health_check", payload: {} };
     await store.enqueue(request);
