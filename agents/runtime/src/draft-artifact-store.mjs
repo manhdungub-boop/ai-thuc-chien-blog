@@ -166,7 +166,7 @@ export class AgentDraftStore extends DurableObject {
     return { updated: true, artifact: safeArtifact(updated[0]) };
   }
 
-  async recordEvidenceReview(id, expectedVersion, ledger, reviewRecord, now = Date.now()) {
+  async recordEvidenceReview(id, expectedVersion, ledger, reviewRecord) {
     if (typeof id !== "string" || !ID_PATTERN.test(id) || !Number.isInteger(expectedVersion) || expectedVersion < 1) {
       return { recorded: false, reason: "invalid_review_request" };
     }
@@ -177,7 +177,12 @@ export class AgentDraftStore extends DurableObject {
     const draft = JSON.parse(current.draft_json);
     if (!Array.isArray(draft.claims)) return { recorded: false, reason: "claim_manifest_required" };
 
-    const readiness = await assessArticleEvidenceReadiness({ draft, ledger, reviewRecord, now });
+    let readiness;
+    try {
+      readiness = await assessArticleEvidenceReadiness({ draft, ledger, reviewRecord, now: Date.now() });
+    } catch {
+      return { recorded: false, reason: "evidence_review_validation_failed" };
+    }
     if (readiness.status === "human_review_record_not_verified") {
       return { recorded: false, reason: "review_record_not_verified", readiness };
     }
