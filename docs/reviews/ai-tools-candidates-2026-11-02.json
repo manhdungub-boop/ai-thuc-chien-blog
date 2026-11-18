@@ -47,7 +47,8 @@
         "api",
         "openai-compatible",
         "developer-platform"
-      ]
+      ],
+      "project_fit": "Có thể thử nghiệm API với Free tier giới hạn, nhưng đây không phải công cụ chạy độc lập trên iPhone và không có quota bảo đảm lâu dài. Không kích hoạt Developer/pay-as-you-go, không nhập phương thức thanh toán; API key chỉ dùng trong môi trường thử nghiệm riêng nếu sau này xác minh quota miễn phí. Tài liệu dữ liệu nêu log đầu vào/đầu ra có thể được giữ tối đa 30 ngày trong một số trường hợp, vì vậy không gửi dữ liệu riêng tư, thông tin tài khoản hoặc dữ liệu Production. Chưa kết nối vào dự án."
     },
     {
       "id": "mistral-studio",
@@ -91,7 +92,8 @@
         "playground",
         "agents",
         "evaluation"
-      ]
+      ],
+      "project_fit": "Free mode chỉ có ngân sách giới hạn cho Vibe/Studio, không bao gồm API; tạo API key và gọi API yêu cầu bật billing/pay-as-you-go. Vì dự án yêu cầu 0 đồng và không thêm phương thức thanh toán, không phù hợp làm backend AI tự động. Có thể xem xét giao diện web miễn phí cho thử nghiệm thủ công, nhưng chưa cần kết nối hoặc gửi dữ liệu dự án."
     },
     {
       "id": "exllamav3",
@@ -128,7 +130,8 @@
         "quantization",
         "gpu",
         "open-source"
-      ]
+      ],
+      "project_fit": "Thư viện mã nguồn mở MIT dành cho suy luận LLM trên máy tính có GPU NVIDIA/CUDA, không phải ứng dụng iPhone hoặc dịch vụ hosted miễn phí. Không phù hợp với môi trường vận hành iPhone-only; cần phần cứng, thiết lập kỹ thuật và chi phí điện/tài nguyên riêng. Chỉ giữ làm tài liệu nghiên cứu kỹ thuật, không đưa vào luồng tự động hiện tại."
     },
     {
       "id": "gemini-4-carbon",
@@ -166,7 +169,8 @@
         "paid-api",
         "reasoning",
         "research-queue"
-      ]
+      ],
+      "project_fit": "Model trả phí theo token và không có Free tier API được xác nhận trong nguồn đã kiểm tra. Không phù hợp tiêu chí 0 đồng; không bật billing, không thêm thẻ, không đưa vào workflow tự động. Chỉ lưu thông tin tham khảo, không đề xuất kết nối."
     },
     {
       "id": "claude-fable-5-2",
@@ -211,7 +215,8 @@
         "paid-feature",
         "agentic-coding",
         "research-queue"
-      ]
+      ],
+      "project_fit": "Model cao cấp có phí trên API và quyền sử dụng trong ứng dụng phụ thuộc gói trả phí/usage credits; không có quyền Free được xác nhận. Không phù hợp tiêu chí 0 đồng; không mua gói, credits hoặc bật API billing. Chỉ lưu làm tham chiếu, không đưa vào workflow."
     },
     {
       "id": "vieneu-tts-v3-turbo",
@@ -388,7 +393,8 @@
         "experimental",
         "free-beta-limits",
         "workers-paid-self-host"
-      ]
+      ],
+      "project_fit": "Công cụ browser-agent thử nghiệm, beta có giới hạn tài khoản; triển khai Worker public có thể cần cấu hình bảo vệ và phát sinh rủi ro nếu thao tác trên tài khoản thật. Không chạy trên Production, không cấp quyền hoặc gửi dữ liệu riêng tư. Chỉ có thể đánh giá bằng trang công khai và dữ liệu giả lập trong môi trường cách ly; chưa có nhu cầu kết nối vào dự án."
     },
     {
       "id": "openread-offline-read-aloud",
