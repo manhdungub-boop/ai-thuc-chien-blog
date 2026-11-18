@@ -10,7 +10,7 @@ function text(value) {
 function removeFencedCode(markdown) {
   const kept = [];
   let fence = null;
-  for (const line of markdown.split("\\n")) {
+  for (const line of markdown.split("\n")) {
     const marker = line.match(/^ {0,3}(`{3,}|~{3,})/);
     if (!fence && marker) {
       fence = { character: marker[1][0], length: marker[1].length };
@@ -23,7 +23,7 @@ function removeFencedCode(markdown) {
     }
     kept.push(line);
   }
-  return kept.join("\\n");
+  return kept.join("\n");
 }
 
 function markdownText(markdown) {
@@ -86,7 +86,7 @@ export function reviewArticleDraft(draft) {
   if (words < MIN_WORDS || words > MAX_WORDS) add("body_word_count", "Article body must contain 600–2,500 whitespace-delimited words.");
   if (sections.length < MIN_SECTIONS) add("section_count", "Article must contain at least four H2/H3 sections.");
   if (!/©|bản quyền|quyền tác giả/i.test(copyrightNotice)) add("copyright_notice", "A clear copyright/attribution notice is required.");
-  if (/<\s*script\b|javascript:|data:text\/html/i.test(body)) add("unsafe_markup", "Potentially unsafe active markup or URL scheme detected.");
+  if (/<\s*script\b|javascript:|data:text\/html/i.test(proseBody)) add("unsafe_markup", "Potentially unsafe active markup or URL scheme detected.");
 
   for (const [index, source] of sources.entries()) {
     if (!validSource(source)) {
