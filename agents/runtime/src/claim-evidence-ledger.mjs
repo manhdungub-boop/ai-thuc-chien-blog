@@ -14,7 +14,9 @@ function boundedText(value, max) {
  * semantically entails, proves, or contradicts a claim.
  */
 export function buildClaimEvidenceLedger(claims, evidence, assessment) {
-  const input = Array.isArray(claims) ? claims.slice(0, MAX_CLAIMS) : [];
+  const suppliedClaims = Array.isArray(claims) ? claims : [];
+  const input = suppliedClaims.slice(0, MAX_CLAIMS);
+  const claimBatchTruncated = suppliedClaims.length > MAX_CLAIMS;
   const retrieved = Array.isArray(evidence) ? evidence.slice(0, 4) : [];
   const acceptedUrls = new Set(
     (Array.isArray(assessment?.accepted_sources) ? assessment.accepted_sources : [])
@@ -52,6 +54,7 @@ export function buildClaimEvidenceLedger(claims, evidence, assessment) {
     if (!/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,63}$/.test(id) || seenIds.has(id)) reason = "invalid_or_duplicate_claim_id";
     else if (!text) reason = "missing_claim_text";
     else if (!Array.isArray(claim?.evidence_urls)) reason = "missing_evidence_mapping";
+    else if (claim.evidence_urls.length > MAX_EVIDENCE_PER_CLAIM) reason = "too_many_evidence_references";
     if (id) seenIds.add(id);
 
     const mapped = [];
@@ -82,17 +85,19 @@ export function buildClaimEvidenceLedger(claims, evidence, assessment) {
     };
   });
 
-  const complete = input.length > 0 &&
+  const complete = !claimBatchTruncated && input.length > 0 &&
     claimResults.length === input.length &&
     claimResults.every(item => item.status === "traceable_evidence_pending_human_review");
   return {
     status: complete ? "all_claims_traceable_pending_human_review" : "claim_evidence_review_incomplete",
-    claims_received: input.length,
+    claims_received: suppliedClaims.length,
+    claim_batch_truncated: claimBatchTruncated,
     claims_assessed: claimResults.length,
     max_claims_assessed: MAX_CLAIMS,
     minimum_distinct_publishers_per_claim: MIN_SOURCES_PER_CLAIM,
     claims: claimResults,
     limitations: [
+      ...(claimBatchTruncated ? ["Input exceeded the claim limit; the batch is incomplete and must be split before review."] : []),
       "Traceability confirms only that a claim is linked to retrieved excerpts from distinct publisher domains.",
       "No semantic entailment, factual accuracy, contradiction, source authority, independence of ownership, or claim-level corroboration is assessed.",
       "Every claim remains pending human review; a reviewer must verify that each cited passage actually supports the exact claim."
