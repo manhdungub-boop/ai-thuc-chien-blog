@@ -142,7 +142,7 @@ export class AgentTaskStore extends DurableObject {
   complete(taskId, leaseToken) {
     const now = Date.now();
     const result = this.ctx.storage.sql.exec(
-      "UPDATE tasks SET status = 'completed', lease_until = NULL, updated_at = ? WHERE id = ? AND status = 'leased' AND lease_until > ? AND lease_token = ?",
+      "UPDATE tasks SET status = 'completed', lease_until = NULL, lease_token = NULL, updated_at = ? WHERE id = ? AND status = 'leased' AND lease_until > ? AND lease_token = ?",
       now, taskId, now, leaseToken
     );
     return { updated: result.rowsWritten === 1 };
@@ -154,11 +154,11 @@ export class AgentTaskStore extends DurableObject {
     const row = this.ctx.storage.sql.exec("SELECT * FROM tasks WHERE id = ?", taskId).toArray()[0];
     if (!row || row.status !== "leased" || row.lease_until <= now || row.lease_token !== leaseToken) return { updated: false };
     const status = row.attempts >= MAX_ATTEMPTS ? "dead" : "pending";
-    this.ctx.storage.sql.exec(
-      "UPDATE tasks SET status = ?, lease_until = NULL, lease_token = NULL, updated_at = ?, last_error = ? WHERE id = ? AND status = 'leased' AND lease_token = ?",
-      status, now, safeError, taskId, leaseToken
+    const result = this.ctx.storage.sql.exec(
+      "UPDATE tasks SET status = ?, lease_until = NULL, lease_token = NULL, updated_at = ?, last_error = ? WHERE id = ? AND status = 'leased' AND lease_until > ? AND lease_token = ?",
+      status, now, safeError, taskId, now, leaseToken
     );
-    return { updated: true, status };
+    return { updated: result.rowsWritten === 1, status: result.rowsWritten === 1 ? status : undefined };
   }
 
   stats() {
