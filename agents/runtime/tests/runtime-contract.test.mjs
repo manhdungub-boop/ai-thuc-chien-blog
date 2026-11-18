@@ -36,6 +36,8 @@ test("supervisor cycle remains idle and performs no external work", () => {
   assert.match(source, /mode: "safe_idle"/);
   assert.match(source, /tasks_dispatched: 0/);
   assert.match(source, /external_calls: 0/);
+  assert.match(source, /this\.env\.AGENT_TASK_STORE\.getByName\("primary"\)/);
+  assert.match(source, /await store\.stats\(\)/);
 });
 
 test("task store enforces an allowlist, bounded payloads, and idempotent IDs", () => {
@@ -53,4 +55,6 @@ test("task store has bounded leases, retry ceiling, and dead-letter state", () =
   assert.match(store, /LEASE_MS = 5 \* 60 \* 1000/);
   assert.match(store, /status IN \('pending','leased','completed','dead'\)/);
   assert.match(store, /attempts >= \?/);
+  assert.match(store, /lease_until > \?/);
+  assert.match(store, /row\.lease_until <= now/);
 });
