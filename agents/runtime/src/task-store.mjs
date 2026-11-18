@@ -11,6 +11,30 @@ const MAX_ACTIVE_TASKS = 500;
 const MAX_ATTEMPTS = 5;
 const LEASE_MS = 5 * 60 * 1000;
 
+function validatePayload(type, payload) {
+  const keys = Object.keys(payload);
+  const text = (value, min, max) =>
+    typeof value === "string" && value.trim().length >= min && value.length <= max;
+  const id = value => typeof value === "string" && /^[a-zA-Z0-9._:-]{8,128}$/.test(value);
+  const allowed = {
+    ai_bank_discovery: ["query"],
+    content_research: ["topic", "language"],
+    content_draft: ["topic", "research_task_id"],
+    quality_review: ["artifact_id", "artifact_type"]
+  }[type];
+  if (keys.some(key => !allowed.includes(key))) return false;
+  if (type === "ai_bank_discovery") return text(payload.query, 3, 160);
+  if (type === "content_research") {
+    return text(payload.topic, 5, 200) &&
+      (payload.language === undefined || payload.language === "vi");
+  }
+  if (type === "content_draft") return text(payload.topic, 5, 200) && id(payload.research_task_id);
+  if (type === "quality_review") {
+    return id(payload.artifact_id) && ["article", "ai_tool"].includes(payload.artifact_type);
+  }
+  return false;
+}
+
 function safeTask(row) {
   return {
     id: row.id,
@@ -54,7 +78,8 @@ export class AgentTaskStore extends DurableObject {
     if (typeof task.id !== "string" || !/^[a-zA-Z0-9._:-]{8,128}$/.test(task.id)) {
       throw new TypeError("invalid_task_id");
     }
-    if (!task.payload || typeof task.payload !== "object" || Array.isArray(task.payload)) {
+    if (!task.payload || typeof task.payload !== "object" || Array.isArray(task.payload) ||
+        !validatePayload(task.task_type, task.payload)) {
       throw new TypeError("invalid_payload");
     }
     const payloadJson = JSON.stringify(task.payload);
