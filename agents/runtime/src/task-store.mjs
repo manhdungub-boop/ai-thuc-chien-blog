@@ -184,6 +184,16 @@ export class AgentTaskStore extends DurableObject {
     return { updated: updated.length === 1 };
   }
 
+  abandon(taskId, leaseToken, errorCode = "non_retryable_task_failure") {
+    const now = Date.now();
+    const safeError = String(errorCode).replace(/[^a-zA-Z0-9_.:-]/g, "_").slice(0, 80);
+    const updated = this.ctx.storage.sql.exec(
+      "UPDATE tasks SET status = 'dead', lease_until = NULL, lease_token = NULL, updated_at = ?, last_error = ? WHERE id = ? AND status = 'leased' AND lease_until > ? AND lease_token = ? RETURNING id",
+      now, safeError, taskId, now, leaseToken
+    ).toArray();
+    return { updated: updated.length === 1, status: updated.length === 1 ? "dead" : undefined };
+  }
+
   retry(taskId, leaseToken, errorCode = "task_failed") {
     const now = Date.now();
     const safeError = String(errorCode).replace(/[^a-zA-Z0-9_.:-]/g, "_").slice(0, 80);
