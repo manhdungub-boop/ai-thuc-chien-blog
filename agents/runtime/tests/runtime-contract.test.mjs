@@ -72,3 +72,9 @@ test("completed and retried tasks release lease credentials and recheck expiry",
   assert.match(store, /lease_until > \? AND lease_token = \?/);
   assert.match(store, /result\.rowsWritten === 1/);
 });
+
+test("idempotency keys cannot be reused for a different task payload", () => {
+  assert.match(store, /existing\.task_type === task\.task_type/);
+  assert.match(store, /existing\.payload_json === payloadJson/);
+  assert.match(store, /idempotency_key_conflict/);
+});
