@@ -39,7 +39,7 @@ function makeDraft(claims = [{
     language: "vi",
     body_markdown: [
       "## Tổng quan",
-      "Nội dung [1] [2] [3]. " + words,
+      ledger.claims[0].claim + " [1] [2] [3]. " + words,
       "## Quy trình",
       "Nội dung chi tiết.",
       "## Kiểm tra",
@@ -89,6 +89,49 @@ describe("article evidence readiness", () => {
     const missingMarkerResult = await assessArticleEvidenceReadiness({ draft: missingMarker, ledger, reviewRecord, now });
     expect(wrongIndexResult.issues[0].code).toBe("claim_citation_source_order_mismatch");
     expect(missingMarkerResult.issues[0].code).toBe("claim_inline_citation_missing_from_body");
+  });
+
+  it("requires every reviewed claim to appear in the article body", async () => {
+    const reviewRecord = await makeReview();
+    const missing = makeDraft();
+    missing.body_markdown = missing.body_markdown.replace(ledger.claims[0].claim, "Một nội dung khác không chứa tuyên bố đã duyệt.");
+    const result = await assessArticleEvidenceReadiness({
+      draft: missing,
+      ledger,
+      reviewRecord,
+      authenticatedReviewer: { authenticated: true, reviewer_ref: reviewRecord.reviewer_ref },
+      now
+    });
+    expect(result).toMatchObject({
+      ok: false,
+      status: "article_claim_evidence_not_ready",
+      publication_authorized: false
+    });
+    expect(result.issues).toContainEqual({
+      code: "reviewed_claim_missing_from_article_body",
+      claim_id: "claim-1"
+    });
+  });
+
+  it("does not count reviewed claim wording found only inside fenced code", async () => {
+    const reviewRecord = await makeReview();
+    const codeOnly = makeDraft();
+    codeOnly.body_markdown = codeOnly.body_markdown.replace(
+      ledger.claims[0].claim,
+      "```text\n" + ledger.claims[0].claim + "\n```"
+    );
+    const result = await assessArticleEvidenceReadiness({
+      draft: codeOnly,
+      ledger,
+      reviewRecord,
+      authenticatedReviewer: { authenticated: true, reviewer_ref: reviewRecord.reviewer_ref },
+      now
+    });
+    expect(result.status).toBe("article_claim_evidence_not_ready");
+    expect(result.issues).toContainEqual({
+      code: "reviewed_claim_missing_from_article_body",
+      claim_id: "claim-1"
+    });
   });
 
   it("rejects absent or duplicate claim citation indices", async () => {
