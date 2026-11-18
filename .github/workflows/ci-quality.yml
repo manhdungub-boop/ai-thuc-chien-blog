@@ -46,6 +46,11 @@ jobs:
           node --check scripts/agent-task-store.mjs
           node --test tests/agent-task-store.test.mjs
 
+      - name: Run offline AI agent coordinator dry-run
+        run: |
+          node --check scripts/agent-coordinator-dry-run.mjs
+          node scripts/agent-coordinator-dry-run.mjs agents/examples/read-only-ai-bank-review.tasks.json
+
       - name: Check JavaScript syntax
         run: |
           node --check script.js
