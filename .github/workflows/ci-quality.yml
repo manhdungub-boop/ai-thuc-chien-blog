@@ -41,6 +41,11 @@ jobs:
           node --check scripts/plan-agent-tasks.mjs
           node --test tests/agent-task-contract.test.mjs
 
+      - name: Test AI agent task queue and state transitions
+        run: |
+          node --check scripts/agent-task-store.mjs
+          node --test tests/agent-task-store.test.mjs
+
       - name: Check JavaScript syntax
         run: |
           node --check script.js
