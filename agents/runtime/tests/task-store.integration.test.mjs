@@ -200,6 +200,37 @@ describe("AgentTaskStore Durable Object", () => {
     expect(await store.stats()).toEqual({});
   });
 
+  it("leaves expired budget rows for the bounded retention pass", async () => {
+    const now = Date.parse("2026-11-18T12:00:00.000Z");
+    const day = "2026-11-18";
+    await runInDurableObject(store, async (_instance, state) => {
+      for (let index = 0; index < 105; index += 1) {
+        const budgetDay = new Date(Date.UTC(2025, 0, index + 1)).toISOString().slice(0, 10);
+        state.storage.sql.exec(
+          "INSERT INTO external_request_budgets (budget_day, scope, used, updated_at) VALUES (?, ?, ?, ?)",
+          budgetDay,
+          "ai_bank_discovery",
+          1,
+          now
+        );
+      }
+    });
+
+    expect(await store.consumeExternalRequestBudget(day, "ai_bank_discovery"))
+      .toMatchObject({ allowed: true, used: 1, limit: 10 });
+    const beforePrune = await runInDurableObject(store, async (_instance, state) =>
+      state.storage.sql.exec("SELECT COUNT(*) AS count FROM external_request_budgets").one().count
+    );
+    expect(beforePrune).toBe(105);
+
+    const result = await store.pruneTerminalTasks(now);
+    expect(result.budget_days_deleted).toBe(100);
+    const afterPrune = await runInDurableObject(store, async (_instance, state) =>
+      state.storage.sql.exec("SELECT COUNT(*) AS count FROM external_request_budgets").one().count
+    );
+    expect(afterPrune).toBe(6);
+  });
+
   it("prunes only completed tasks older than one day and dead tasks older than seven days", async () => {
     const now = Date.parse("2026-11-18T12:00:00.000Z");
     await store.enqueue(task("retention-completed-old"));
