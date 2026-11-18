@@ -4,7 +4,7 @@
   "main": "src/index.mjs",
   "compatibility_date": "2026-10-03",
   "workers_dev": true,
-  "vars": { "AGENT_ENABLED": "false", "AGENT_PAUSED": "false" },
+  "vars": { "AGENT_ENABLED": "false", "AGENT_PAUSED": "false", "AGENT_SCHEDULE_MODE": "every_15_minutes" },
   "preview_urls": true,
   "observability": { "enabled": true },
   "durable_objects": {
