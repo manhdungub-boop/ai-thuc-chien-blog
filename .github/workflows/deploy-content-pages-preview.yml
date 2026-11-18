@@ -7,6 +7,8 @@ on:
     paths:
       - "articles/**"
       - "index.html"
+      - "agent-dashboard.html"
+      - "scripts/build_static_site.cjs"
       - "thu-vien.html"
       - "ngan-hang-ai.html"
       - "sitemap.xml"
