@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { currentUtcBudgetDay } from "../src/utc-budget-day.mjs";
 
 const config = JSON.parse(await readFile(new URL("../wrangler.jsonc", import.meta.url), "utf8"));
 const previewConfig = JSON.parse(await readFile(new URL("../wrangler.preview.jsonc", import.meta.url), "utf8"));
@@ -11,6 +12,7 @@ const evidence = await readFile(new URL("../src/research-evidence.mjs", import.m
 const evidenceAssessment = await readFile(new URL("../src/research-evidence-assessment.mjs", import.meta.url), "utf8");
 const articleGate = await readFile(new URL("../src/article-quality-gate.mjs", import.meta.url), "utf8");
 const candidateStore = await readFile(new URL("../src/ai-bank-candidate-store.mjs", import.meta.url), "utf8");
+const budgetDay = await readFile(new URL("../src/utc-budget-day.mjs", import.meta.url), "utf8");
 const previewDeployWorkflow = await readFile(new URL("../../../.github/workflows/deploy-agent-runtime-preview.yml", import.meta.url), "utf8");
 
 test("Preview deployment workflow is manual, explicitly confirmed, token-isolated, and health-gated", () => {
@@ -181,7 +183,9 @@ test("outbound requests are counted atomically against persistent per-day source
   assert.match(store, /ON CONFLICT \(budget_day, scope\) DO UPDATE/);
   assert.match(store, /daily_external_request_budget_exhausted/);
   assert.match(source, /createBudgetedFetch/);
-  assert.match(source, /const budgetDay = scheduledAt\.slice\(0, 10\)/);
+  assert.match(source, /const budgetDay = currentUtcBudgetDay\(\)/);
+  assert.doesNotMatch(source, /scheduledAt\.slice\(0, 10\)/);
+  assert.match(budgetDay, /new Date\(now\)\.toISOString\(\)\.slice\(0, 10\)/);
   assert.match(source, /createBudgetedFetch\(store, budgetDay, "ai_bank_discovery"\)/);
   assert.match(source, /createBudgetedFetch\(store, budgetDay, "content_research"\)/);
   assert.match(source, /consumeExternalRequestBudget\(day, scope\)/);
@@ -302,4 +306,11 @@ test("reviewer evidence endpoint is Google-session-bound and non-publishing", as
   assert.match(verifier, /reviewer_identity_authenticated: reviewerIdentityAuthenticated/);
   assert.match(runtime, /publication_authorized: false/);
   assert.match(runtime, /social_post_published: false/);
+});
+
+test("daily quota date is derived from the UTC execution time and rejects invalid values", () => {
+  assert.equal(currentUtcBudgetDay(Date.parse("2026-11-19T23:59:59.000Z")), "2026-11-19");
+  assert.equal(currentUtcBudgetDay(Date.parse("2026-11-20T00:00:00.000Z")), "2026-11-20");
+  assert.throws(() => currentUtcBudgetDay(-1), /invalid_budget_timestamp/);
+  assert.throws(() => currentUtcBudgetDay(Number.NaN), /invalid_budget_timestamp/);
 });

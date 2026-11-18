@@ -1,4 +1,5 @@
 import { WorkflowEntrypoint } from "cloudflare:workers";
+import { currentUtcBudgetDay } from "./utc-budget-day.mjs";
 import { discoverAiBankReleaseSignals } from "./ai-bank-discovery.mjs";
 import { discoverResearchSignals } from "./research-discovery.mjs";
 import { retrieveResearchEvidence } from "./research-evidence.mjs";
@@ -115,7 +116,7 @@ export class AgentSupervisorWorkflow extends WorkflowEntrypoint {
         })
       );
 
-      const budgetDay = scheduledAt.slice(0, 10);
+      const budgetDay = currentUtcBudgetDay();
       const scanDate = budgetDay.replace(/-/g, "");
       const scanTaskId = "ai-bank-scan-" + scanDate;
       const aiBankBudget = createBudgetedFetch(store, budgetDay, "ai_bank_discovery");
