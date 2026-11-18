@@ -273,6 +273,7 @@ test("AI Bank candidate storage is allowlisted, bounded, persistent, and review-
   assert.match(candidateStore, /MAX_EVIDENCE_PER_CHECK = 5/);
   assert.match(candidateStore, /verification_authorized: false/);
   assert.match(candidateStore, /public_publication_authorized: false/);
+});
 
 test("reviewer evidence endpoint is Google-session-bound and non-publishing", async () => {
   const runtime = await readFile(new URL("../src/index.mjs", import.meta.url), "utf8");
@@ -289,6 +290,4 @@ test("reviewer evidence endpoint is Google-session-bound and non-publishing", as
   assert.match(verifier, /reviewer_identity_authenticated: reviewerIdentityAuthenticated/);
   assert.match(runtime, /publication_authorized: false/);
   assert.match(runtime, /social_post_published: false/);
-});
-
 });
