@@ -160,6 +160,66 @@ describe("AgentTaskStore Durable Object", () => {
       .toMatchObject({ allowed: true, used: 1, limit: 10 });
   });
 
+  it("prunes only completed tasks older than one day and dead tasks older than seven days", async () => {
+    const now = Date.parse("2026-11-18T12:00:00.000Z");
+    await store.enqueue(task("retention-completed-old"));
+    const completedClaim = await store.claim(["ai_bank_discovery"], "retention-completed-old");
+    await store.complete("retention-completed-old", completedClaim.lease_token, { ok: true });
+
+    await store.enqueue(task("retention-dead-old"));
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const claim = await store.claim(["ai_bank_discovery"], "retention-dead-old");
+      await store.retry("retention-dead-old", claim.lease_token, "test_failure");
+    }
+
+    await store.enqueue(task("retention-pending-old"));
+    await store.enqueue(task("retention-leased-old"));
+    await store.claim(["ai_bank_discovery"], "retention-leased-old");
+
+    await runInDurableObject(store, async (_instance, state) => {
+      state.storage.sql.exec(
+        "UPDATE tasks SET updated_at = ? WHERE id IN (?, ?)",
+        now - 8 * 24 * 60 * 60 * 1000,
+        "retention-completed-old",
+        "retention-dead-old"
+      );
+      state.storage.sql.exec(
+        "UPDATE tasks SET updated_at = ? WHERE id IN (?, ?)",
+        now - 40 * 24 * 60 * 60 * 1000,
+        "retention-pending-old",
+        "retention-leased-old"
+      );
+      state.storage.sql.exec(
+        "INSERT INTO external_request_budgets (budget_day, scope, used, updated_at) VALUES (?, ?, ?, ?)",
+        "2026-10-01",
+        "ai_bank_discovery",
+        1,
+        now
+      );
+    });
+
+    const result = await store.pruneTerminalTasks(now);
+    expect(result).toEqual({ completed_deleted: 1, dead_deleted: 1, budget_days_deleted: 1 });
+    expect(await store.stats()).toEqual({ leased: 1, pending: 1 });
+  });
+
+  it("retains recently completed and recently dead tasks", async () => {
+    const now = Date.parse("2026-11-18T12:00:00.000Z");
+    await store.enqueue(task("retention-completed-new"));
+    const completedClaim = await store.claim(["ai_bank_discovery"], "retention-completed-new");
+    await store.complete("retention-completed-new", completedClaim.lease_token, { ok: true });
+
+    await store.enqueue(task("retention-dead-new"));
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const claim = await store.claim(["ai_bank_discovery"], "retention-dead-new");
+      await store.retry("retention-dead-new", claim.lease_token, "test_failure");
+    }
+
+    const result = await store.pruneTerminalTasks(now);
+    expect(result).toEqual({ completed_deleted: 0, dead_deleted: 0, budget_days_deleted: 0 });
+    expect(await store.stats()).toEqual({ completed: 1, dead: 1 });
+  });
+
   it("enforces the active queue capacity without accepting the 501st task", async () => {
     for (let index = 0; index < 500; index += 1) {
       const result = await store.enqueue(task(`task-capacity-${String(index).padStart(4, "0")}`));
