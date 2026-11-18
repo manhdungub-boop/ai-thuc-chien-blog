@@ -1,0 +1,35 @@
+{
+  "$schema": "https://developers.cloudflare.com/workers/wrangler/config-schema.json",
+  "name": "ai-thuc-chien-agent-runtime-preview",
+  "main": "src/index.mjs",
+  "compatibility_date": "2026-10-03",
+  "workers_dev": true,
+  "preview_urls": true,
+  "observability": { "enabled": true },
+  "vars": {
+    "AGENT_ENABLED": "false",
+    "AGENT_PAUSED": "true",
+    "AGENT_SCHEDULE_MODE": "manual_only_no_cron"
+  },
+  "durable_objects": {
+    "bindings": [
+      { "name": "AGENT_TASK_STORE", "class_name": "AgentTaskStore" },
+      { "name": "AGENT_DRAFT_STORE", "class_name": "AgentDraftStore" },
+      { "name": "AGENT_AI_BANK_CANDIDATE_STORE", "class_name": "AgentAIBankCandidateStore" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1-agent-task-store", "new_sqlite_classes": ["AgentTaskStore"] },
+    { "tag": "v2-agent-draft-store", "new_sqlite_classes": ["AgentDraftStore"] },
+    { "tag": "v3-ai-bank-candidate-store", "new_sqlite_classes": ["AgentAIBankCandidateStore"] }
+  ],
+  "workflows": [
+    {
+      "name": "ai-thuc-chien-agent-supervisor-preview",
+      "binding": "AGENT_SUPERVISOR",
+      "class_name": "AgentSupervisorWorkflow",
+      "concurrency": { "limit": 1 },
+      "default_retention": { "success_retention": "1 day", "error_retention": "7 days" }
+    }
+  ]
+}
