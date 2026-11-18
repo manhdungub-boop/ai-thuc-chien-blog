@@ -1,7 +1,8 @@
 import { WorkflowEntrypoint } from "cloudflare:workers";
+export { AgentTaskStore } from "./task-store.mjs";
 
 const SERVICE = "ai-thuc-chien-agent-runtime-preview";
-const VERSION = "0.1.0";
+const VERSION = "0.2.0";
 const json = (value, status = 200) => new Response(JSON.stringify(value), {
   status,
   headers: {
@@ -22,20 +23,14 @@ export class AgentSupervisorWorkflow extends WorkflowEntrypoint {
       mode: "safe_idle",
       tasks_dispatched: 0,
       external_calls: 0,
-      reason: "task_store_and_authorized_execution_adapters_not_yet_enabled"
+      reason: "specialist_execution_and_external_adapters_not_yet_enabled"
     }));
-
-    return {
-      service: SERVICE,
-      version: VERSION,
-      status: "healthy_idle",
-      cycle
-    };
+    return { service: SERVICE, version: VERSION, status: "healthy_idle", cycle };
   }
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request) {
     const url = new URL(request.url);
     if (request.method !== "GET") return json({ error: "method_not_allowed" }, 405);
     if (url.pathname === "/health") {
@@ -46,6 +41,7 @@ export default {
         mode: "preview_foundation",
         scheduler: "workflow_every_15_minutes",
         task_execution_enabled: false,
+        task_enqueue_endpoint_enabled: false,
         production_access: false
       });
     }
@@ -53,7 +49,7 @@ export default {
       return json({
         service: SERVICE,
         status: "preview_foundation",
-        message: "Agent runtime is isolated. Specialist execution is not enabled."
+        message: "Agent runtime is isolated. Task storage is provisioned in code; execution remains disabled."
       });
     }
     return json({ error: "not_found" }, 404);
