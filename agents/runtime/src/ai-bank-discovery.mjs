@@ -35,7 +35,6 @@ function parseEntries(xml, source, cutoff) {
       const title = sanitizeTitle(body.match(/<title(?:\s[^>]*)?>([\s\S]*?)<\/title>/i)?.[1]?.trim() || "");
       const link = body.match(/<link\b[^>]*href="([^"]+)"/i)?.[1] || "";
       const updated = body.match(/<updated>([^<]+)<\/updated>/i)?.[1] || "";
-      const sourceId = body.match(/<id>([^<]+)<\/id>/i)?.[1] || link;
       const date = new Date(updated);
       if (!title || !link || !Number.isFinite(date.getTime()) || date.getTime() < cutoff) return null;
       let parsed;
