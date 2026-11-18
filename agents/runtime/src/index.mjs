@@ -5,6 +5,7 @@ import { retrieveResearchEvidence } from "./research-evidence.mjs";
 import { assessResearchEvidence } from "./research-evidence-assessment.mjs";
 export { AgentTaskStore } from "./task-store.mjs";
 export { AgentDraftStore } from "./draft-artifact-store.mjs";
+export { AgentAIBankCandidateStore } from "./ai-bank-candidate-store.mjs";
 
 const SERVICE = "ai-thuc-chien-agent-runtime-preview";
 const VERSION = "0.3.0";
@@ -131,6 +132,28 @@ export class AgentSupervisorWorkflow extends WorkflowEntrypoint {
         aiBankBudget.count
       );
 
+      let candidateStore = {
+        accepted: false,
+        reason: "discovery_result_unavailable",
+        total: null,
+        catalog_write_authorized: false
+      };
+      if (discovery.result && Array.isArray(discovery.result.catalog_candidates)) {
+        try {
+          const candidateStoreBinding = this.env.AGENT_AI_BANK_CANDIDATE_STORE.getByName("primary");
+          candidateStore = await candidateStoreBinding.upsertCandidates(
+            discovery.result.catalog_candidates
+          );
+        } catch {
+          candidateStore = {
+            accepted: false,
+            reason: "candidate_store_unavailable",
+            total: null,
+            catalog_write_authorized: false
+          };
+        }
+      }
+
       const researchTaskId = "research-scan-" + scanDate;
       const researchBudget = createBudgetedFetch(store, budgetDay, "content_research");
       const research = await executeTask(
@@ -169,6 +192,7 @@ export class AgentSupervisorWorkflow extends WorkflowEntrypoint {
         queue: await store.stats(),
         retention,
         tasks: { health, ai_bank_discovery: discovery, content_research: research },
+        ai_bank_candidate_store: candidateStore,
         tasks_considered: 3,
         tasks_completed: [health, discovery, research].filter(item =>
           item.status === "completed"

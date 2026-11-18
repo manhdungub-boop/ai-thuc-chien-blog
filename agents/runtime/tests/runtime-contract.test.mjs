@@ -9,6 +9,7 @@ const research = await readFile(new URL("../src/research-discovery.mjs", import.
 const evidence = await readFile(new URL("../src/research-evidence.mjs", import.meta.url), "utf8");
 const evidenceAssessment = await readFile(new URL("../src/research-evidence-assessment.mjs", import.meta.url), "utf8");
 const articleGate = await readFile(new URL("../src/article-quality-gate.mjs", import.meta.url), "utf8");
+const candidateStore = await readFile(new URL("../src/ai-bank-candidate-store.mjs", import.meta.url), "utf8");
 
 test("runtime uses a recurring Workflow schedule with single-instance concurrency", () => {
   assert.equal(config.workflows.length, 1);
@@ -25,11 +26,13 @@ test("runtime has isolated SQLite storage and no website Production bindings", (
   assert.match(config.name, /preview$/);
   assert.deepEqual(config.durable_objects.bindings, [
     { name: "AGENT_TASK_STORE", class_name: "AgentTaskStore" },
-    { name: "AGENT_DRAFT_STORE", class_name: "AgentDraftStore" }
+    { name: "AGENT_DRAFT_STORE", class_name: "AgentDraftStore" },
+    { name: "AGENT_AI_BANK_CANDIDATE_STORE", class_name: "AgentAIBankCandidateStore" }
   ]);
   assert.deepEqual(config.migrations, [
     { tag: "v1-agent-task-store", new_sqlite_classes: ["AgentTaskStore"] },
-    { tag: "v2-agent-draft-store", new_sqlite_classes: ["AgentDraftStore"] }
+    { tag: "v2-agent-draft-store", new_sqlite_classes: ["AgentDraftStore"] },
+    { tag: "v3-ai-bank-candidate-store", new_sqlite_classes: ["AgentAIBankCandidateStore"] }
   ]);
 });
 
@@ -58,6 +61,9 @@ test("supervisor executes bounded health and daily read-only discovery tasks", (
   assert.match(source, /ai-bank-scan-/);
   assert.match(source, /ai_bank_discovery/);
   assert.match(source, /catalog_modified: false/);
+  assert.match(source, /AGENT_AI_BANK_CANDIDATE_STORE/);
+  assert.match(source, /upsertCandidates/);
+  assert.match(source, /ai_bank_candidate_store: candidateStore/);
   assert.match(source, /tasks_considered: 3/);
   assert.match(source, /external_calls: externalCalls/);
   assert.match(source, /production_access: false/);
@@ -193,4 +199,17 @@ test("research evidence readiness requires fresh distinct publishers and never a
   assert.match(evidenceAssessment, /publication_authorized: false/);
   assert.match(source, /assessResearchEvidence/);
   assert.match(source, /evidence_assessment: evidenceAssessment/);
+});
+
+test("AI Bank candidate storage is allowlisted, bounded, persistent, and review-only", () => {
+  assert.match(candidateStore, /ALLOWED_REPOSITORIES/);
+  assert.match(candidateStore, /MAX_CANDIDATES_PER_BATCH = 10/);
+  assert.match(candidateStore, /MAX_CANDIDATE_BYTES = 8192/);
+  assert.match(candidateStore, /needs_official_source_review/);
+  assert.match(candidateStore, /pricing_status !== "unverified"/);
+  assert.match(candidateStore, /catalog_write_authorized !== false/);
+  assert.match(candidateStore, /public_publication_authorized !== false/);
+  assert.match(candidateStore, /listCandidates\(limit = 20\)/);
+  assert.match(candidateStore, /LIMIT \?/);
+  assert.match(candidateStore, /catalog_write_authorized: false/);
 });
