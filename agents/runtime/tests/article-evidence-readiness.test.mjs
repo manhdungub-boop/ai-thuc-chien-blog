@@ -141,4 +141,24 @@ describe("article evidence readiness", () => {
     expect(result.status).toBe("article_quality_gate_failed");
     expect(result.publication_authorized).toBe(false);
   });
+
+  it("marks evidence review eligible for owner review only when the verified Google principal matches", async () => {
+    const reviewRecord = await makeReview();
+    const result = await assessArticleEvidenceReadiness({
+      draft: makeDraft(),
+      ledger,
+      reviewRecord,
+      authenticatedReviewer: { authenticated: true, reviewer_ref: reviewRecord.reviewer_ref },
+      now
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      status: "eligible_for_owner_release_review",
+      review_status: "human_review_record_verified",
+      publication_authorized: false,
+      content_published: false,
+      social_post_published: false
+    });
+  });
+
 });
