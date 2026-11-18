@@ -49,15 +49,16 @@ test("manual preview config is paused, has no recurring schedule, and uses isola
   assert.deepEqual(previewConfig.vars, {
     AGENT_ENABLED: "false",
     AGENT_PAUSED: "true",
-    AGENT_SCHEDULE_MODE: "manual_only_no_cron"
+    AGENT_SCHEDULE_MODE: "manual_only_no_cron",
+    AGENT_REVIEWER_AUTH_ENABLED: "false"
   });
   assert.equal(previewConfig.workflows.length, 1);
   assert.equal(previewConfig.workflows[0].schedules, undefined);
   assert.equal(previewConfig.routes, undefined);
   assert.equal(previewConfig.d1_databases, undefined);
   assert.equal(previewConfig.ai, undefined);
-  assert.deepEqual(previewConfig.durable_objects.bindings, config.durable_objects.bindings);
-  assert.deepEqual(previewConfig.migrations, config.migrations);
+  assert.deepEqual(previewConfig.durable_objects.bindings, [...config.durable_objects.bindings, { name: "AGENT_REVIEWER_AUTH_STORE", class_name: "AgentReviewerAuthStore" }]);
+  assert.deepEqual(previewConfig.migrations, [...config.migrations, { tag: "v4-reviewer-auth-store", new_sqlite_classes: ["AgentReviewerAuthStore"] }]);
 });
 
 test("runtime has isolated SQLite storage and no website Production bindings", () => {
@@ -89,6 +90,7 @@ test("health endpoint is read-only and does not expose task enqueue", () => {
   assert.match(source, /quality_review_executor_enabled: false/);
   assert.match(source, /website_publication_enabled: false/);
   assert.match(source, /facebook_publication_enabled: false/);
+  assert.match(source, /reviewer_auth_enabled: env\.AGENT_REVIEWER_AUTH_ENABLED === "true"/);
   assert.match(source, /production_access: false/);
   assert.match(source, /AGENT_PAUSED/);
   assert.match(source, /AGENT_ENABLED !== "true"/);
