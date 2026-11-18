@@ -3,8 +3,8 @@ import { recordHumanClaimReview } from "../src/human-claim-review.mjs";
 import { verifyHumanClaimReviewRecord } from "../src/human-review-record-verifier.mjs";
 
 const sources = [
-  { source: "OpenAI", title: "A", url: "https://openai.com/index/a", host: "openai.com", excerpt: "A sufficiently long excerpt about the research topic, methods, limitations and reported observations. ".repeat(2).slice(0, 180) },
-  { source: "DeepMind", title: "B", url: "https://deepmind.google/blog/b", host: "deepmind.google", excerpt: "A second sufficiently long excerpt about the research topic, methods, limitations and reported observations. ".repeat(2).slice(0, 180) }
+  { source: "OpenAI News", title: "A", url: "https://openai.com/index/a", host: "openai.com", excerpt: "A sufficiently long excerpt about the research topic, methods, limitations and reported observations. ".repeat(2).slice(0, 180) },
+  { source: "Google DeepMind", title: "B", url: "https://deepmind.google/blog/b", host: "deepmind.google", excerpt: "A second sufficiently long excerpt about the research topic, methods, limitations and reported observations. ".repeat(2).slice(0, 180) }
 ];
 const ledger = {
   status: "all_claims_traceable_pending_human_review",
@@ -15,9 +15,13 @@ const ledger = {
   ]
 };
 const reviewer = { reviewer_ref: "editor.dung", reviewed_at: "2026-11-18T12:00:00.000Z" };
+const evidenceReviews = [
+  { source_url: sources[0].url, decision: "supports", reviewer_note: "This passage directly supports the exact claim statement." },
+  { source_url: sources[1].url, decision: "supports", reviewer_note: "This second passage independently supports the exact claim statement." }
+];
 const decisions = [
-  { claim_id: "claim-1", decision: "supported", reviewer_note: "Both excerpts directly address the exact claim wording." },
-  { claim_id: "claim-2", decision: "needs_revision", reviewer_note: "The second source is relevant but does not support this wording." }
+  { claim_id: "claim-1", decision: "supported", reviewer_note: "Both excerpts directly address the exact claim wording.", evidence_reviews },
+  { claim_id: "claim-2", decision: "needs_revision", reviewer_note: "The second source is relevant but does not support this wording.", evidence_reviews: [evidenceReviews[0], { ...evidenceReviews[1], decision: "insufficient", reviewer_note: "This passage does not provide sufficient support for the exact claim wording." }] }
 ];
 const now = Date.parse("2026-11-18T12:01:00.000Z");
 
