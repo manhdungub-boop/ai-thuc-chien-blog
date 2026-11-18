@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { handleGoogleReviewerAuth, verifyGoogleReviewerSessionToken } from "../src/google-reviewer-oauth.mjs";
 
 const now = Date.parse("2026-11-19T12:00:00.000Z");
-const origin = "https://preview-agent.example.workers.dev";
+const origin = "https://ai-thuc-chien-agent-runtime-preview.test-account.workers.dev";
 const env = {
   AGENT_REVIEWER_AUTH_ENABLED: "true",
   GOOGLE_REVIEWER_CLIENT_ID: "preview-test-client-id-abcdefghijklmnopqrstuvwxyz.apps.googleusercontent.com",
