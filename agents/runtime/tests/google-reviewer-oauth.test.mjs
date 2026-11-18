@@ -139,7 +139,7 @@ describe("Google reviewer OAuth session flow", () => {
     const encode = bytes => {
       let binary = "";
       for (const byte of bytes) binary += String.fromCharCode(byte);
-      return btoa(binary).replace(/=/g, "").replace(/\\+/g, "-").replace(/\\//g, "_");
+      return btoa(binary).replace(/=/g, "").replaceAll("+", "-").replaceAll("/", "_");
     };
     const makeToken = async payload => {
       const encoded = encode(new TextEncoder().encode(JSON.stringify(payload)));
