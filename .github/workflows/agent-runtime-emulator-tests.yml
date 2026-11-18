@@ -22,13 +22,17 @@ jobs:
       run:
         working-directory: agents/runtime
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
-          cache: npm
-          cache-dependency-path: agents/runtime/package.json
-      - name: Install pinned test dependencies
+      - name: Install exact direct test dependencies
         run: npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+      - name: Verify direct dependency pins
+        run: npm run verify-direct-dependencies
       - name: Run local Durable Object emulator tests
         run: npm test
+      - name: Run runtime configuration and security contract tests
+        run: node --test tests/runtime-contract.test.mjs
