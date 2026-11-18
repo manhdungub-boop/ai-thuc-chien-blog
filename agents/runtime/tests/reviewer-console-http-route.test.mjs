@@ -27,6 +27,8 @@ describe("read-only reviewer console HTTP routes", () => {
     expect(script).toContain('credentials: "same-origin"');
     expect(script).not.toContain("innerHTML");
     expect(script).not.toContain("insertAdjacentHTML");
+    expect(script).toContain("!url.username && !url.password");
+    expect(script).toContain('link.referrerPolicy = "no-referrer"');
   });
 
   it("rejects unsupported methods for console resources", async () => {
