@@ -48,7 +48,7 @@ export class AgentSupervisorWorkflow extends WorkflowEntrypoint {
         result
       };
     });
-    return { service: SERVICE, version: VERSION, status: "healthy_idle", cycle };
+    return { service: SERVICE, version: VERSION, status: "healthy", cycle };
   }
 }
 
@@ -72,7 +72,7 @@ export default {
       return json({
         service: SERVICE,
         status: "preview_foundation",
-        message: "Agent runtime is isolated. Task storage is provisioned in code; execution remains disabled."
+        message: "Agent runtime is isolated. Only the deterministic local health-check task is enabled."
       });
     }
     return json({ error: "not_found" }, 404);
