@@ -18,27 +18,21 @@ const SOURCES = [
   { vendor: "Haystack", product: "Haystack", repo: "deepset-ai/haystack", feed: "https://github.com/deepset-ai/haystack/releases.atom" }
 ];
 
-function decodeXml(value) {
-  return value.replace(/&(#x[0-9a-fA-F]+|#\\d+|amp|lt|gt|quot|apos);/g, (entity, token) => {
-    if (token === "amp") return "&";
-    if (token === "lt") return "<";
-    if (token === "gt") return ">";
-    if (token === "quot") return '"';
-    if (token === "apos") return "'";
-    const codePoint = token.startsWith("#x")
-      ? Number.parseInt(token.slice(2), 16)
-      : Number(token.slice(1));
-    if (!Number.isInteger(codePoint) || codePoint < 0 || codePoint > 0x10ffff ||
-        (codePoint >= 0xd800 && codePoint <= 0xdfff)) return "\\uFFFD";
-    return String.fromCodePoint(codePoint);
-  });
+function sanitizeFeedTitle(value) {
+  // Keep XML entities encoded. Decoding &amp; here could create a second entity
+  // that a downstream renderer might decode again.
+  return value
+    .replace(/<!\[CDATA\[|\]\]>/g, "")
+    .replaceAll("<", "")
+    .replaceAll(">", "")
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .trim();
 }
 function entries(xml, source) {
   return [...xml.matchAll(/<entry(?:\s[^>]*)?>([\s\S]*?)<\/entry>/gi)].map(match => {
     const body = match[1];
-    const rawTitle = body.match(/<title(?:\\s[^>]*)?>([\\s\\S]*?)<\\/title>/i)?.[1]?.trim() || "";
-    const title = decodeXml(rawTitle.replace(/<!\\[CDATA\\[|\\]\\]>/g, ""))
-      .replace(/[<>]/g, "").replace(/[\\u0000-\\u001f\\u007f]/g, " ").trim();
+    const rawTitle = body.match(/<title(?:\s[^>]*)?>([\s\S]*?)<\/title>/i)?.[1]?.trim() || "";
+    const title = sanitizeFeedTitle(rawTitle);
     const link = body.match(/<link\b[^>]*href="([^"]+)"/i)?.[1] || "";
     const updated = body.match(/<updated>([^<]+)<\/updated>/i)?.[1] || "";
     const id = body.match(/<id>([^<]+)<\/id>/i)?.[1] || link;
