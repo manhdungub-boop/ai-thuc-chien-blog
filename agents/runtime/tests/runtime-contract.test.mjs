@@ -42,6 +42,9 @@ test("task store enforces an allowlist, bounded payloads, and idempotent IDs", (
   assert.match(store, /TASK_TYPES\.has\(task\.task_type\)/);
   assert.match(store, /MAX_PAYLOAD_BYTES = 8192/);
   assert.match(store, /INSERT OR IGNORE INTO tasks/);
+  assert.match(store, /inserted\.rowsWritten === 0/);
+  assert.match(store, /MAX_ACTIVE_TASKS = 500/);
+  assert.match(store, /queue_capacity_reached/);
   assert.match(store, /id TEXT PRIMARY KEY/);
 });
 
