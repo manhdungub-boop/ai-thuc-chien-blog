@@ -11,10 +11,12 @@ A provider is eligible for automated runtime execution only when all conditions 
 1. It is callable from the isolated Agent Runtime, not merely connected as a ChatGPT app.
 2. It is healthy and supports the requested task type.
 3. Its cost is verified as zero for the current account and operation.
-4. A quota observation no older than 15 minutes exists and reports positive remaining capacity.
+4. An external inference provider has a quota observation no older than 15 minutes and reports positive remaining capacity.
 5. The task type is explicitly allowlisted.
 
-Deterministic local operations may declare `no_external_execution`; they do not require provider quota evidence. Unknown, stale, paid, exhausted, or non-runtime provider records must defer.
+The only currently allowlisted `no_external_execution` implementation is the repository's deterministic `article-quality-gate`, and only for `quality_review`. A provider cannot bypass quota checks merely by self-declaring that it performs no external execution. Adding another local implementation requires a code change and tests to the local-provider allowlist.
+
+Unknown, stale, paid, exhausted, or non-runtime provider records must defer.
 
 ## Failover behavior
 
