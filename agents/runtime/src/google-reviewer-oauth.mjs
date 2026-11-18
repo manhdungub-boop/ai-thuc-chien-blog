@@ -188,7 +188,7 @@ export async function handleGoogleReviewerAuth(request, env, { fetchImpl = fetch
     return new Response(null, { status: 302, headers: {
       location: cfg.redirectOrigin + "/",
       "cache-control": "no-store",
-      "set-cookie": cookie(SESSION_COOKIE, session, SESSION_TTL_SECONDS) + ", " + clearCookie(TX_COOKIE),
+      "set-cookie": cookie(SESSION_COOKIE, session, SESSION_TTL_SECONDS) + "\n" + clearCookie(TX_COOKIE),
       "referrer-policy": "no-referrer"
     } });
   }
@@ -203,5 +203,5 @@ export async function handleGoogleReviewerAuth(request, env, { fetchImpl = fetch
     return json({ authenticated: true, reviewer: { provider: "google", subject: session.sub, email: session.email, reviewer_ref: session.reviewer_ref }, expires_at: new Date(session.exp * 1000).toISOString(), publication_authorized: false });
   }
 
-  return new Response(null, { status: 204, headers: { "cache-control": "no-store", "set-cookie": clearCookie(SESSION_COOKIE) + ", " + clearCookie(TX_COOKIE) } });
+  return new Response(null, { status: 204, headers: { "cache-control": "no-store", "set-cookie": clearCookie(SESSION_COOKIE) + "\n" + clearCookie(TX_COOKIE) } });
 }
