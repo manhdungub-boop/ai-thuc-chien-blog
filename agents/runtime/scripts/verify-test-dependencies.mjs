@@ -16,7 +16,7 @@ for (const [name, version] of Object.entries(dependencies)) {
   }
 }
 
-for (const required of ["@cloudflare/vitest-plugin", "vitest"]) {
+for (const required of ["@cloudflare/vitest-plugin", "vitest", "wrangler"]) {
   if (!(required in dependencies)) errors.push("Missing required test dependency: " + required);
 }
 
