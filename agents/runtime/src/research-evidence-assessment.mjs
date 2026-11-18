@@ -1,3 +1,5 @@
+import { classifyResearchPublisher } from "./research-publisher-policy.mjs";
+
 const MIN_INDEPENDENT_SOURCES = 2;
 const MAX_AGE_DAYS = 45;
 const MAX_FUTURE_SKEW_MS = 24 * 60 * 60 * 1000;
@@ -34,6 +36,8 @@ export function assessResearchEvidence(evidence, {
     if (!reason && (typeof item.source !== "string" || !item.source.trim() || typeof item.title !== "string" || !item.title.trim())) {
       reason = "missing_source_metadata";
     }
+    const publisherIdentity = !reason ? classifyResearchPublisher(item.source, item.url) : null;
+    if (!reason && !publisherIdentity?.accepted) reason = publisherIdentity?.reason || "publisher_identity_not_allowlisted";
     if (!reason && (typeof item.excerpt !== "string" || item.excerpt.trim().length < 80 || item.excerpt.length > 600)) {
       reason = "invalid_excerpt";
     }
@@ -53,6 +57,7 @@ export function assessResearchEvidence(evidence, {
     seenHosts.add(url.hostname);
     accepted.push({
       source: item.source.slice(0, 80),
+      publisher: publisherIdentity.publisher,
       host: url.hostname,
       title: item.title.slice(0, 120),
       url: normalizedUrl,
@@ -71,7 +76,8 @@ export function assessResearchEvidence(evidence, {
     accepted_sources: accepted,
     rejected_sources: rejected,
     limitations: [
-      "Distinct publisher domains and freshness do not prove that sources independently support the same claim.",
+      "Publisher identity is matched against a small exact host/path/label allowlist; this is provenance classification, not a source-authority endorsement.",
+      "Distinct publisher domains and freshness do not prove independent ownership or that sources independently support the same claim.",
       "No claim extraction, factual corroboration, source-authority assessment, originality check, or copyright review is performed."
     ],
     safety: {
