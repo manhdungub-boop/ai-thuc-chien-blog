@@ -345,14 +345,15 @@ describe("authorized AI Bank reviewer reads", () => {
         }
       }
     };
-    const expiredResponse = await worker.fetch(new Request(collection, {
+    const expiredResponse = await worker.fetch(new Request(origin + "/api/reviewer/ai-bank/candidates?limit=10", {
       headers: { cookie: "__Host-ai_reviewer_session=" + expired.token }
     }), env);
-    const tamperedToken = valid.token.slice(0, -1) + (valid.token.endsWith("A") ? "B" : "A");
-    const tamperedResponse = await worker.fetch(new Request(collection, {
+    const [payloadPart, signaturePart] = valid.token.split(".");
+    const tamperedToken = payloadPart + "." + (signaturePart[0] === "A" ? "B" : "A") + signaturePart.slice(1);
+    const tamperedResponse = await worker.fetch(new Request(origin + "/api/reviewer/ai-bank/candidates?limit=10", {
       headers: { cookie: "__Host-ai_reviewer_session=" + tamperedToken }
     }), env);
-    const wrongAllowlistResponse = await worker.fetch(new Request(collection, {
+    const wrongAllowlistResponse = await worker.fetch(new Request(origin + "/api/reviewer/ai-bank/candidates?limit=10", {
       headers: { cookie: "__Host-ai_reviewer_session=" + valid.token }
     }), { ...env, GOOGLE_REVIEWER_ALLOWED_EMAILS: "another-reviewer@example.com" });
     expect(expiredResponse.status).toBe(401);
