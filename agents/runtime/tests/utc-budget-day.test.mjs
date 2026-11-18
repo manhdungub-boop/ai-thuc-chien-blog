@@ -7,11 +7,9 @@ describe("execution-day UTC budget key", () => {
     expect(currentUtcBudgetDay(Date.parse("2026-11-20T00:00:00.000Z"))).toBe("2026-11-20");
   });
 
-  it("does not depend on the scheduled event timestamp supplied by the caller", () => {
+  it("supports explicit UTC timestamps for deterministic boundary tests", () => {
     const delayedEventTimestamp = Date.parse("2026-11-01T08:00:00.000Z");
     expect(currentUtcBudgetDay(delayedEventTimestamp)).toBe("2026-11-01");
-    // The runtime must call currentUtcBudgetDay() without passing event.timestamp.
-    // This contract is enforced in runtime-contract.test.mjs.
   });
 
   it("rejects invalid timestamps rather than creating an unbounded quota bucket", () => {
