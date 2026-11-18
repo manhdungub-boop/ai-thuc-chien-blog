@@ -17,6 +17,7 @@ const boundedJson = await readFile(new URL("../src/bounded-json-response.mjs", i
 const googleOAuth = await readFile(new URL("../src/google-reviewer-oauth.mjs", import.meta.url), "utf8");
 const googleOidc = await readFile(new URL("../src/google-oidc-reviewer-verifier.mjs", import.meta.url), "utf8");
 const previewDeployWorkflow = await readFile(new URL("../../../.github/workflows/deploy-agent-runtime-preview.yml", import.meta.url), "utf8");
+const runtimeReadme = await readFile(new URL("../README.md", import.meta.url), "utf8");
 
 test("Google OAuth and OIDC upstream JSON responses are byte-bounded", () => {
   assert.match(boundedJson, /getReader\(\)/);
@@ -45,6 +46,14 @@ test("Preview deployment workflow is manual, explicitly confirmed, token-isolate
   assert.match(previewDeployWorkflow, /production_access == false/);
   assert.match(previewDeployWorkflow, /content_draft_executor_enabled == true/);
   assert.doesNotMatch(previewDeployWorkflow, /content_draft_executor_enabled == false/);
+  assert.match(source, /handleGoogleReviewerAuth\(request, env\)/);
+  assert.match(previewConfig.durable_objects.bindings.map(binding => binding.name), /AGENT_REVIEWER_AUTH_STORE/);
+  assert.match(previewConfig.migrations.map(migration => migration.tag), /v4-reviewer-auth-store/);
+  assert.match(previewConfig.vars.AGENT_REVIEWER_AUTH_ENABLED, /^false$/);
+  assert.match(runtimeReadme, /implements the Google authorization-code callback flow/);
+  assert.match(runtimeReadme, /no Google OAuth client, real Preview redirect registration/);
+  assert.doesNotMatch(runtimeReadme, /The module is not yet connected to a login callback/);
+
   assert.ok(
     previewDeployWorkflow.indexOf("wrangler deploy --dry-run") <
     previewDeployWorkflow.indexOf("wrangler deploy --config wrangler.preview.jsonc"),
