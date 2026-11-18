@@ -23,16 +23,9 @@ describe("AgentReviewerAuthStore Durable Object", () => {
 
   it("persists a browser-bound transaction and consumes it exactly once", async () => {
     const tx = transaction("one");
-    const created = await store.createTransaction(
+    expect(await store.createTransaction(
       tx.stateHash, tx.browserHash, tx.nonce, tx.codeVerifier, tx.nowSeconds
-    );
-    console.log("reviewer_auth_create_debug", JSON.stringify({
-      created,
-      lengths: [tx.stateHash.length, tx.browserHash.length, tx.nonce.length, tx.codeVerifier.length],
-      nowSeconds: tx.nowSeconds,
-      integer: Number.isInteger(tx.nowSeconds)
-    }));
-    expect(created).toEqual({ created: true });
+    )).toEqual({ created: true });
 
     const secondStub = env.AGENT_REVIEWER_AUTH_STORE.getByName(storeName);
     expect(await secondStub.consumeTransaction(
