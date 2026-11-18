@@ -20,6 +20,7 @@ const googleOAuth = await readFile(new URL("../src/google-reviewer-oauth.mjs", i
 const googleOidc = await readFile(new URL("../src/google-oidc-reviewer-verifier.mjs", import.meta.url), "utf8");
 const previewDeployWorkflow = await readFile(new URL("../../../.github/workflows/deploy-agent-runtime-preview.yml", import.meta.url), "utf8");
 const runtimeReadme = await readFile(new URL("../README.md", import.meta.url), "utf8");
+const reviewerConsole = await readFile(new URL("../src/reviewer-console.mjs", import.meta.url), "utf8");
 
 test("Google OAuth and OIDC upstream JSON responses are byte-bounded", () => {
   assert.match(boundedJson, /getReader\(\)/);
@@ -418,4 +419,18 @@ test("draft artifact persistence runs deterministic quality review only after pr
   assert.ok(gate > admission, "quality review must run only after provider admission");
   assert.equal((draftStoreSource.match(/runPolicyGatedQualityReview\(draft\)/g) || []).length, 3,
     "create and revision paths must both use the same policy gate, plus helper declaration");
+});
+
+
+test("AI Bank reviewer console renders untrusted candidate data as text and stays read-only", () => {
+  assert.match(reviewerConsole, /api\/reviewer\/ai-bank\/candidates\?limit=20/);
+  assert.match(reviewerConsole, /api\/reviewer\/ai-bank\/candidates\//);
+  assert.match(reviewerConsole, /candidate\?\.candidate_id/);
+  assert.match(reviewerConsole, /document\.createElement\(tag\)/);
+  assert.match(reviewerConsole, /element\.textContent = String\(value\)/);
+  assert.doesNotMatch(reviewerConsole, /\.innerHTML\s*=/);
+  assert.doesNotMatch(reviewerConsole, /insertAdjacentHTML\s*\(/);
+  assert.doesNotMatch(reviewerConsole, /api\/reviewer\/ai-bank\/.*(?:POST|PUT|PATCH|DELETE)/i);
+  assert.match(reviewerConsole, /Chỉ đọc; không xác minh, chỉnh sửa hoặc xuất bản/);
+  assert.match(reviewerConsole, /Xem hồ sơ không đồng nghĩa với xác nhận công cụ/);
 });
