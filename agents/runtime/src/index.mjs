@@ -194,7 +194,7 @@ export class AgentSupervisorWorkflow extends WorkflowEntrypoint {
         external_calls: 0,
         publication_authorized: false
       };
-      if (research.status === "completed" && Array.isArray(research.result?.evidence_retrieval?.evidence)) {
+      if (["completed", "already_completed"].includes(research.status) && Array.isArray(research.result?.evidence_retrieval?.evidence)) {
         const draftTaskId = "article-brief-" + scanDate;
         contentDraft = await executeTask(
           store,
