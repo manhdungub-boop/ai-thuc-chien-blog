@@ -5,6 +5,7 @@ import { discoverResearchSignals } from "./research-discovery.mjs";
 import { retrieveResearchEvidence } from "./research-evidence.mjs";
 import { assessResearchEvidence } from "./research-evidence-assessment.mjs";
 import { handleGoogleReviewerAuth, readGoogleReviewerSessionCookie, AgentReviewerAuthStore } from "./google-reviewer-oauth.mjs";
+import { REVIEWER_CONSOLE_HTML, REVIEWER_CONSOLE_JS } from "./reviewer-console.mjs";
 export { AgentTaskStore } from "./task-store.mjs";
 export { AgentDraftStore } from "./draft-artifact-store.mjs";
 export { AgentAIBankCandidateStore } from "./ai-bank-candidate-store.mjs";
@@ -221,6 +222,29 @@ export default {
     const reviewerAuthResponse = await handleGoogleReviewerAuth(request, env);
     if (reviewerAuthResponse) return reviewerAuthResponse;
     const url = new URL(request.url);
+    if (url.pathname === "/reviewer-console" || url.pathname === "/reviewer-console.js") {
+      if (request.method !== "GET") return json({ error: "method_not_allowed" }, 405);
+      if (url.pathname === "/reviewer-console") {
+        return new Response(REVIEWER_CONSOLE_HTML, {
+          headers: {
+            "content-type": "text/html; charset=utf-8",
+            "cache-control": "no-store",
+            "x-content-type-options": "nosniff",
+            "x-frame-options": "DENY",
+            "referrer-policy": "no-referrer",
+            "content-security-policy": "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+          }
+        });
+      }
+      return new Response(REVIEWER_CONSOLE_JS, {
+        headers: {
+          "content-type": "text/javascript; charset=utf-8",
+          "cache-control": "no-store",
+          "x-content-type-options": "nosniff",
+          "referrer-policy": "no-referrer"
+        }
+      });
+    }
     const reviewerDraftCollection = url.pathname === "/api/reviewer/drafts";
     const reviewerDraftDetail = url.pathname.match(/^\/api\/reviewer\/drafts\/([a-zA-Z0-9._:-]{8,128})$/);
     if (reviewerDraftCollection || reviewerDraftDetail) {
