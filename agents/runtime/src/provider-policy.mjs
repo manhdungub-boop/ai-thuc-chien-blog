@@ -26,7 +26,6 @@ function eligible(provider, taskType, now) {
   // Runtime inference providers must carry a fresh, positive quota observation.
   // Deterministic local providers may explicitly declare no_external_execution.
   if (provider.cost_class === "no_external_execution") return true;
-  if (provider.cost_class === "no_external_execution") return true;
   const quota = provider.quota;
   return Boolean(
     quota &&
