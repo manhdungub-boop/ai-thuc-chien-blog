@@ -7,6 +7,13 @@ const TASK_TYPES = new Set([
   "quality_review",
   "runtime_health_check"
 ]);
+// Contracts may be declared before their implementation exists. Only these
+// task types have registered supervisor executors and may enter or leave the queue.
+const EXECUTABLE_TASK_TYPES = new Set([
+  "ai_bank_discovery",
+  "content_research",
+  "runtime_health_check"
+]);
 const MAX_PAYLOAD_BYTES = 8192;
 const MAX_ACTIVE_TASKS = 500;
 const MAX_ATTEMPTS = 5;
@@ -93,7 +100,9 @@ export class AgentTaskStore extends DurableObject {
     if (!task || typeof task !== "object" || Array.isArray(task)) {
       throw new TypeError("invalid_task");
     }
-    if (!TASK_TYPES.has(task.task_type)) throw new TypeError("task_type_not_allowed");
+    if (!TASK_TYPES.has(task.task_type) || !EXECUTABLE_TASK_TYPES.has(task.task_type)) {
+      throw new TypeError("task_type_not_allowed");
+    }
     if (typeof task.id !== "string" || !/^[a-zA-Z0-9._:-]{8,128}$/.test(task.id)) {
       throw new TypeError("invalid_task_id");
     }
@@ -148,17 +157,20 @@ export class AgentTaskStore extends DurableObject {
       "UPDATE tasks SET status = CASE WHEN attempts >= ? THEN 'dead' ELSE 'pending' END, lease_until = NULL, lease_token = NULL, updated_at = ? WHERE status = 'leased' AND lease_until <= ?",
       MAX_ATTEMPTS, now, now
     );
-    if (allowedTaskTypes !== null && (!Array.isArray(allowedTaskTypes) || allowedTaskTypes.length === 0 || allowedTaskTypes.some(type => !TASK_TYPES.has(type)))) {
+    if (allowedTaskTypes !== null && (!Array.isArray(allowedTaskTypes) || allowedTaskTypes.length === 0 || allowedTaskTypes.some(type => !EXECUTABLE_TASK_TYPES.has(type)))) {
       throw new TypeError("invalid_claim_task_types");
     }
     if (taskId !== null && (typeof taskId !== "string" || !/^[a-zA-Z0-9._:-]{8,128}$/.test(taskId))) {
       throw new TypeError("invalid_claim_task_id");
     }
-    const typeFilter = allowedTaskTypes === null ? "" : " AND task_type IN (" + allowedTaskTypes.map(() => "?").join(",") + ")";
+    // Default and explicit claims share the same code-registered executor allowlist.
+    // This also prevents legacy pending rows for unimplemented tasks from leasing.
+    const claimableTypes = allowedTaskTypes ?? [...EXECUTABLE_TASK_TYPES];
+    const typeFilter = " AND task_type IN (" + claimableTypes.map(() => "?").join(",") + ")";
     const idFilter = taskId === null ? "" : " AND id = ?";
     const row = this.ctx.storage.sql.exec(
       "SELECT * FROM tasks WHERE status = 'pending' AND attempts < ?" + typeFilter + idFilter + " ORDER BY created_at ASC LIMIT 1",
-      MAX_ATTEMPTS, ...(allowedTaskTypes ?? []), ...(taskId === null ? [] : [taskId])
+      MAX_ATTEMPTS, ...claimableTypes, ...(taskId === null ? [] : [taskId])
     ).toArray()[0];
     if (!row) return { task: null };
     const leaseUntil = now + LEASE_MS;
