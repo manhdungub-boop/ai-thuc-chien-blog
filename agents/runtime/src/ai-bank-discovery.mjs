@@ -1,6 +1,6 @@
 const MAX_BYTES = 1_000_000;
 const TIMEOUT_MS = 10_000;
-const MAX_SIGNALS = 10;
+const MAX_SIGNALS = 5;
 
 export const AI_BANK_RELEASE_SOURCES = [
   { vendor: "Ollama", product: "Ollama", repo: "ollama/ollama" },
@@ -55,7 +55,6 @@ function parseEntries(xml, source, cutoff) {
         repository: source.repo,
         title,
         source_url: link,
-        source_id: link,
         published_at: date.toISOString()
       };
     })
