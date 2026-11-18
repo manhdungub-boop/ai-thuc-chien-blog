@@ -20,22 +20,22 @@ export const AI_BANK_RELEASE_SOURCES = [
 
 function sanitizeTitle(value) {
   return value
-    .replace(/<!\\[CDATA\\[|\\]\\]>/g, "")
-    .replace(/&[^;\\s]+;/g, " ")
-    .replace(/[^\\p{L}\\p{N}\\p{M}\\s.,:;!?'"()\\[\\]{}+/_@#%=-]/gu, " ")
-    .replace(/\\s+/g, " ")
+    .replace(/<!\[CDATA\[|\]\]>/g, "")
+    .replace(/&[^;\s]+;/g, " ")
+    .replace(/[^\p{L}\p{N}\p{M}\s.,:;!?'"()\[\]{}+/_@#%=-]/gu, " ")
+    .replace(/\s+/g, " ")
     .trim()
     .slice(0, 240);
 }
 
 function parseEntries(xml, source, cutoff) {
-  return [...xml.matchAll(/<entry(?:\\s[^>]*)?>([\\s\\S]*?)<\\/entry>/gi)]
+  return [...xml.matchAll(/<entry(?:\s[^>]*)?>([\s\S]*?)<\/entry>/gi)]
     .map(match => {
       const body = match[1];
-      const title = sanitizeTitle(body.match(/<title(?:\\s[^>]*)?>([\\s\\S]*?)<\\/title>/i)?.[1]?.trim() || "");
-      const link = body.match(/<link\\b[^>]*href="([^"]+)"/i)?.[1] || "";
-      const updated = body.match(/<updated>([^<]+)<\\/updated>/i)?.[1] || "";
-      const sourceId = body.match(/<id>([^<]+)<\\/id>/i)?.[1] || link;
+      const title = sanitizeTitle(body.match(/<title(?:\s[^>]*)?>([\s\S]*?)<\/title>/i)?.[1]?.trim() || "");
+      const link = body.match(/<link\b[^>]*href="([^"]+)"/i)?.[1] || "";
+      const updated = body.match(/<updated>([^<]+)<\/updated>/i)?.[1] || "";
+      const sourceId = body.match(/<id>([^<]+)<\/id>/i)?.[1] || link;
       const date = new Date(updated);
       if (!title || !link || !Number.isFinite(date.getTime()) || date.getTime() < cutoff) return null;
       let parsed;
