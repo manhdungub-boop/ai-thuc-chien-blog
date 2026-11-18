@@ -11,6 +11,28 @@ const evidence = await readFile(new URL("../src/research-evidence.mjs", import.m
 const evidenceAssessment = await readFile(new URL("../src/research-evidence-assessment.mjs", import.meta.url), "utf8");
 const articleGate = await readFile(new URL("../src/article-quality-gate.mjs", import.meta.url), "utf8");
 const candidateStore = await readFile(new URL("../src/ai-bank-candidate-store.mjs", import.meta.url), "utf8");
+const previewDeployWorkflow = await readFile(new URL("../../../.github/workflows/deploy-agent-runtime-preview.yml", import.meta.url), "utf8");
+
+test("Preview deployment workflow is manual, explicitly confirmed, token-isolated, and health-gated", () => {
+  assert.match(previewDeployWorkflow, /workflow_dispatch:/);
+  assert.match(previewDeployWorkflow, /confirm_preview_only:[\s\S]*default: false/);
+  assert.match(previewDeployWorkflow, /inputs\.confirm_preview_only == true/);
+  assert.match(previewDeployWorkflow, /secrets\.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN/);
+  assert.doesNotMatch(previewDeployWorkflow, /secrets\.CLOUDFLARE_API_TOKEN/);
+  assert.match(previewDeployWorkflow, /wrangler\.preview\.jsonc/);
+  assert.doesNotMatch(previewDeployWorkflow, /wrangler\.jsonc/);
+  assert.doesNotMatch(previewDeployWorkflow, /deploy-cloudflare-workers/);
+  assert.match(previewDeployWorkflow, /wrangler deploy --dry-run/);
+  assert.match(previewDeployWorkflow, /wrangler deploy --config wrangler\.preview\.jsonc/);
+  assert.match(previewDeployWorkflow, /AGENT_PAUSED/);
+  assert.match(previewDeployWorkflow, /manual_only_no_cron/);
+  assert.match(previewDeployWorkflow, /production_access == false/);
+  assert.ok(
+    previewDeployWorkflow.indexOf("wrangler deploy --dry-run") <
+    previewDeployWorkflow.indexOf("wrangler deploy --config wrangler.preview.jsonc"),
+    "Preview dry-run must precede deployment"
+  );
+});
 
 test("runtime uses a recurring Workflow schedule with single-instance concurrency", () => {
   assert.equal(config.workflows.length, 1);
