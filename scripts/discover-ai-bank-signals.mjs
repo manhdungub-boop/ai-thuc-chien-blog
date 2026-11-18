@@ -47,8 +47,22 @@ async function fetchFeed(source) {
     if (!response.ok) throw new Error("HTTP " + response.status);
     const declared = Number(response.headers.get("content-length") || 0);
     if (declared > MAX_BYTES) throw new Error("Feed exceeds size limit");
-    const body = await response.text();
-    if (Buffer.byteLength(body, "utf8") > MAX_BYTES) throw new Error("Feed exceeds size limit");
+    if (!response.body) throw new Error("Feed has no response body");
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let bytes = 0;
+    let body = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > MAX_BYTES) {
+        await reader.cancel();
+        throw new Error("Feed exceeds size limit");
+      }
+      body += decoder.decode(value, { stream: true });
+    }
+    body += decoder.decode();
     return { source, records: entries(body, source), error: null };
   } catch (error) {
     return { source, records: [], error: String(error?.message || error).slice(0, 240) };
