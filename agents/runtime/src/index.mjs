@@ -214,7 +214,7 @@ export default {
     const reviewerAuthResponse = await handleGoogleReviewerAuth(request, env);
     if (reviewerAuthResponse) return reviewerAuthResponse;
     const url = new URL(request.url);
-    const reviewerEvidenceMatch = url.pathname.match(/^\\/api\\/reviewer\\/drafts\\/([a-zA-Z0-9._:-]{8,128})\\/evidence-review$/);
+    const reviewerEvidenceMatch = url.pathname.match(new RegExp("^/api/reviewer/drafts/([a-zA-Z0-9._:-]{8,128})/evidence-review$"));
     if (reviewerEvidenceMatch) {
       if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
       if (request.headers.get("origin") !== url.origin ||
