@@ -86,14 +86,14 @@ describe("AgentDraftStore Durable Object", () => {
         sources: ledgerSources
       }]
     };
-    const now = Date.parse("2026-11-18T12:01:00.000Z");
+    const now = Date.now();
     const reviewRecord = await recordHumanClaimReview(
       ledger,
       [{ claim_id: "claim-store-1", decision: "supported", reviewer_note: "Both cited excerpts address the stated storage behavior." }],
-      { reviewer_ref: "editor.dung", reviewed_at: "2026-11-18T12:00:00.000Z" },
+      { reviewer_ref: "editor.dung", reviewed_at: new Date(now - 60_000).toISOString() },
       { now }
     );
-    const recorded = await store.recordEvidenceReview("draft-review-0009", created.artifact.version, ledger, reviewRecord, now);
+    const recorded = await store.recordEvidenceReview("draft-review-0009", created.artifact.version, ledger, reviewRecord);
     expect(recorded.recorded).toBe(true);
     expect(recorded.owner_release_review_eligible).toBe(true);
     expect(recorded.readiness.status).toBe("eligible_for_owner_release_review");
@@ -128,16 +128,16 @@ describe("AgentDraftStore Durable Object", () => {
     const reviewRecord = await recordHumanClaimReview(
       ledger,
       [{ claim_id: "claim-store-2", decision: "supported", reviewer_note: "Both cited excerpts address the stated storage behavior." }],
-      { reviewer_ref: "editor.dung", reviewed_at: "2026-11-18T12:00:00.000Z" },
+      { reviewer_ref: "editor.dung", reviewed_at: new Date(now - 60_000).toISOString() },
       { now }
     );
     const tampered = {
       ...reviewRecord,
       claims: reviewRecord.claims.map(item => ({ ...item, reviewer_note: "Changed reviewer note after fingerprinting." }))
     };
-    const rejected = await store.recordEvidenceReview("draft-review-0010", created.artifact.version, ledger, tampered, now);
+    const rejected = await store.recordEvidenceReview("draft-review-0010", created.artifact.version, ledger, tampered);
     expect(rejected).toMatchObject({ recorded: false, reason: "review_record_not_verified" });
-    const recorded = await store.recordEvidenceReview("draft-review-0010", created.artifact.version, ledger, reviewRecord, now);
+    const recorded = await store.recordEvidenceReview("draft-review-0010", created.artifact.version, ledger, reviewRecord);
     expect(recorded.recorded).toBe(true);
     const revised = validDraft();
     revised.title = "Xây dựng hệ thống AI agent an toàn và hiệu quả hơn";
