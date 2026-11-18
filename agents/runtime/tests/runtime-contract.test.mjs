@@ -131,6 +131,10 @@ test("supervisor executes bounded health and daily read-only discovery tasks", (
   assert.match(source, /ai_bank_candidate_store: candidateStore/);
   assert.match(source, /tasks_considered: 3/);
   assert.match(source, /external_calls: externalCalls/);
+  assert.match(source, /daily_budgets: dailyBudgets/);
+  assert.match(source, /getExternalRequestBudget\(budgetDay, "ai_bank_discovery"\)/);
+  assert.match(source, /getExternalRequestBudget\(budgetDay, "content_research"\)/);
+  assert.match(store, /getExternalRequestBudget\(day, scope\)/);
   assert.match(source, /production_access: false/);
 });
 
