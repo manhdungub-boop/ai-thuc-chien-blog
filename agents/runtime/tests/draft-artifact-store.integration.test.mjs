@@ -9,7 +9,9 @@ const sources = [
 ];
 function validDraft() {
   const p = "Trí tuệ nhân tạo đang thay đổi cách tổ chức nghiên cứu, phát triển phần mềm và tự động hóa quy trình. Các nhóm triển khai cần xác định mục tiêu, giới hạn dữ liệu, đánh giá kết quả và giám sát rủi ro trước khi đưa hệ thống vào sử dụng. ";
-  const body = ["## Tổng quan",p.repeat(8)+"[1]","## Kiến trúc hệ thống",p.repeat(8)+"[2]","## Quy trình triển khai",p.repeat(8)+"[3]","## An toàn và quản trị",p.repeat(8),"## Kết luận",p.repeat(4)].join("\n\n");
+  const body = ["## Tổng quan",p.repeat(8)+"[1]","## Kiến trúc hệ thống",p.repeat(8)+"[2]","## Quy trình triển khai",p.repeat(8)+"[3]","## An toàn và quản trị",p.repeat(8),"## Kết luận",p.repeat(4)].join("
+
+");
   return {
     title: "Xây dựng hệ thống AI agent an toàn và hiệu quả",
     slug: "xay-dung-he-thong-ai-agent-an-toan",
@@ -172,7 +174,15 @@ describe("AgentDraftStore Durable Object", () => {
     expect((await store.getDraft("draft-review-oversize")).evidence_review).toBeNull();
   });
 
-  it("requires a cryptographically verified reviewer session for queue metadata and full draft reads", async () => {\n    await store.createDraft("draft-review-auth-01", validDraft());\n    const queue = await store.listPendingReviewsForReviewer(20, "forged-session");\n    const detail = await store.getDraftForReviewer("draft-review-auth-01", "forged-session");\n    expect(queue).toMatchObject({ authorized: false, reason: "reviewer_auth_not_configured" });\n    expect(detail).toMatchObject({ authorized: false, reason: "reviewer_auth_not_configured" });\n  });\n\n  it("returns bounded queue metadata and retrieves full content by ID", async () => {
+  it("requires a cryptographically verified reviewer session for queue metadata and full draft reads", async () => {
+    await store.createDraft("draft-review-auth-01", validDraft());
+    const queue = await store.listPendingReviewsForReviewer(20, "forged-session");
+    const detail = await store.getDraftForReviewer("draft-review-auth-01", "forged-session");
+    expect(queue).toMatchObject({ authorized: false, reason: "reviewer_auth_not_configured" });
+    expect(detail).toMatchObject({ authorized: false, reason: "reviewer_auth_not_configured" });
+  });
+
+  it("returns bounded queue metadata and retrieves full content by ID", async () => {
     const draft = validDraft(); await store.createDraft("draft-review-0008", draft);
     const [item] = await store.listPendingReviews(1000);
     expect(item.id).toBe("draft-review-0008");
