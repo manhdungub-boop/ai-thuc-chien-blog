@@ -296,10 +296,21 @@ describe("Google reviewer OAuth session flow", () => {
     const expired = await verifyGoogleReviewerSessionToken(await makeToken({ ...base, exp: Math.floor(now / 1000) - 1 }), env, now);
     const mismatched = await verifyGoogleReviewerSessionToken(await makeToken({ ...base, reviewer_ref: "google:forged" }), env, now);
     const unlisted = await verifyGoogleReviewerSessionToken(await makeToken({ ...base, email: "attacker@example.com" }), env, now);
+    const futureIssued = await verifyGoogleReviewerSessionToken(await makeToken({ ...base, iat: Math.floor(now / 1000) + 61 }), env, now);
+    const excessiveLifetime = await verifyGoogleReviewerSessionToken(await makeToken({
+      ...base, iat: Math.floor(now / 1000) - 1, exp: Math.floor(now / 1000) + 1801
+    }), env, now);
+    const invalidProvider = await verifyGoogleReviewerSessionToken(await makeToken({ ...base, provider: "other" }), env, now);
+    const tampered = (await makeToken(base)).replace(/.$/, char => char === "A" ? "B" : "A");
+    const badSignature = await verifyGoogleReviewerSessionToken(tampered, env, now);
     expect(valid).toMatchObject({ authenticated: true, reviewer: { reviewer_ref: base.reviewer_ref, email: base.email } });
     expect(expired.authenticated).toBe(false);
     expect(mismatched.authenticated).toBe(false);
     expect(unlisted.authenticated).toBe(false);
+    expect(futureIssued.authenticated).toBe(false);
+    expect(excessiveLifetime.authenticated).toBe(false);
+    expect(invalidProvider.authenticated).toBe(false);
+    expect(badSignature.authenticated).toBe(false);
   });
 
 
