@@ -29,6 +29,6 @@ jobs:
           cache: npm
           cache-dependency-path: agents/runtime/package.json
       - name: Install pinned test dependencies
-        run: npm install --ignore-scripts --no-audit --no-fund
+        run: npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund
       - name: Run local Durable Object emulator tests
         run: npm test
