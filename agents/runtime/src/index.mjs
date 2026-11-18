@@ -221,6 +221,31 @@ export default {
     const reviewerAuthResponse = await handleGoogleReviewerAuth(request, env);
     if (reviewerAuthResponse) return reviewerAuthResponse;
     const url = new URL(request.url);
+    const reviewerDraftCollection = url.pathname === "/api/reviewer/drafts";
+    const reviewerDraftDetail = url.pathname.match(/^\/api\/reviewer\/drafts\/([a-zA-Z0-9._:-]{8,128})$/);
+    if (reviewerDraftCollection || reviewerDraftDetail) {
+      if (request.method !== "GET") return json({ error: "method_not_allowed" }, 405);
+      const origin = request.headers.get("origin");
+      if (origin && origin !== url.origin) return json({ error: "review_request_origin_or_content_type_rejected" }, 403);
+      const sessionToken = readGoogleReviewerSessionCookie(request);
+      if (!sessionToken) return json({ error: "reviewer_session_required" }, 401);
+      const draftStore = env.AGENT_DRAFT_STORE?.getByName("primary");
+      if (!draftStore) return json({ error: "draft_store_unavailable" }, 503);
+      if (reviewerDraftCollection) {
+        const values = url.searchParams.getAll("limit");
+        if (values.length > 1 || (values.length === 1 && !/^(?:[1-9]|1[0-9]|20)$/.test(values[0]))) {
+          return json({ error: "invalid_review_queue_limit" }, 400);
+        }
+        const limit = values.length ? Number(values[0]) : 20;
+        const result = await draftStore.listPendingReviewsForReviewer(limit, sessionToken);
+        if (!result.authorized) return json({ error: result.reason || "reviewer_session_invalid" }, 401);
+        return json({ items: result.items, count: result.items.length, publication_authorized: false });
+      }
+      const result = await draftStore.getDraftForReviewer(reviewerDraftDetail[1], sessionToken);
+      if (!result.authorized) return json({ error: result.reason || "reviewer_session_invalid" }, 401);
+      if (!result.artifact) return json({ error: "draft_not_found" }, 404);
+      return json({ artifact: result.artifact, publication_authorized: false });
+    }
     const reviewerEvidenceMatch = url.pathname.match(new RegExp("^/api/reviewer/drafts/([a-zA-Z0-9._:-]{8,128})/evidence-review$"));
     if (reviewerEvidenceMatch) {
       if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
