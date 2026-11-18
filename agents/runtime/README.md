@@ -138,3 +138,12 @@ The reviewer console deliberately does not offer a decision form based only on a
 - The builder does not generate claims, infer semantic support, or create review decisions. Every claim remains `traceable_evidence_pending_human_review`, and the ledger explicitly requires human review.
 - This module is a deterministic building block only. It is not yet connected to durable draft storage or the reviewer console; do not treat a generated ledger as attached to a draft until that persistence path is implemented and tested.
 - Publication, catalog mutation, draft creation, and social posting remain unauthorized.
+
+
+### Version-bound evidence ledger persistence
+
+- The Durable Object exposes an internal `storeEvidenceLedger(id, expectedVersion, retrievedEvidence)` method for the trusted Worker research path; it is not exposed as a public HTTP route.
+- It derives the ledger only from the stored draft's exact claim manifest and the bounded retrieved-excerpt objects, then stores the ledger with the draft version it was built from.
+- A ledger is visible to the authenticated reviewer as a pending evidence packet; it is not a review decision and cannot authorize release.
+- A draft revision clears the ledger, review record, and readiness result. The final evidence-review write must match the previously stored ledger snapshot and its version.
+- The current runtime still has no content-draft executor that connects Research Agent output to this store method. This PR adds the durable, version-checked persistence boundary; it does not claim an end-to-end autonomous writing pipeline.
