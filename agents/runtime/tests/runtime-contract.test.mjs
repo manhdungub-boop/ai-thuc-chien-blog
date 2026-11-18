@@ -62,4 +62,7 @@ test("task store has bounded leases, retry ceiling, and dead-letter state", () =
   assert.match(store, /attempts >= \?/);
   assert.match(store, /lease_until > \?/);
   assert.match(store, /row\.lease_until <= now/);
+  assert.match(store, /crypto\.randomUUID\(\)/);
+  assert.match(store, /lease_token = \?/);
+  assert.match(store, /row\.lease_token !== leaseToken/);
 });
