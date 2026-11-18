@@ -71,10 +71,9 @@ export class AgentTaskStore extends DurableObject {
         result_json TEXT
       )
     `);
-    try {
+    const columns = this.ctx.storage.sql.exec("PRAGMA table_info(tasks)").toArray();
+    if (!columns.some(column => column.name === "result_json")) {
       this.ctx.storage.sql.exec("ALTER TABLE tasks ADD COLUMN result_json TEXT");
-    } catch (error) {
-      if (!String(error).toLowerCase().includes("duplicate column")) throw error;
     }
     this.ctx.storage.sql.exec(
       "CREATE INDEX IF NOT EXISTS tasks_status_created ON tasks(status, created_at)"
