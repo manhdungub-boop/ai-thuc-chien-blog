@@ -56,6 +56,7 @@ export function reviewArticleDraft(draft) {
   const sources = Array.isArray(draft.sources) ? draft.sources : [];
   const uniqueUrls = new Set();
   const validSources = [];
+  const validSourceIndexes = new Set();
 
   if (title.length < 35 || title.length > 70) add("title_length", "Title must contain 35–70 characters.");
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || slug.length > 80) add("slug_format", "Slug must be lowercase ASCII words separated by hyphens.");
@@ -67,7 +68,7 @@ export function reviewArticleDraft(draft) {
   if (!/©|bản quyền|quyền tác giả/i.test(copyrightNotice)) add("copyright_notice", "A clear copyright/attribution notice is required.");
   if (/<\s*script\b|javascript:|data:text\/html/i.test(body)) add("unsafe_markup", "Potentially unsafe active markup or URL scheme detected.");
 
-  for (const source of sources) {
+  for (const [index, source] of sources.entries()) {
     if (!validSource(source)) {
       add("invalid_source", "Every source needs a title, publisher, valid access date, and HTTPS URL.");
       continue;
@@ -79,6 +80,7 @@ export function reviewArticleDraft(draft) {
     }
     uniqueUrls.add(normalized);
     validSources.push(source);
+    validSourceIndexes.add(index);
   }
 
   if (validSources.length < MIN_SOURCES) add("source_count", "At least three distinct, valid HTTPS sources are required.");
@@ -86,7 +88,7 @@ export function reviewArticleDraft(draft) {
   const citationNumbers = [...body.matchAll(/\[(\d{1,2})\]/g)].map(match => Number(match[1]));
   if (!citationNumbers.length) {
     add("missing_inline_citations", "Add inline numeric citations such as [1] that correspond to the source list.");
-  } else if (citationNumbers.some(number => number < 1 || number > validSources.length)) {
+  } else if (citationNumbers.some(number => number < 1 || number > sources.length || !validSourceIndexes.has(number - 1))) {
     add("citation_reference_mismatch", "Every inline citation must refer to a valid source-list position.");
   }
 
