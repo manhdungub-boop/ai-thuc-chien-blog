@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { handleGoogleReviewerAuth } from "../src/google-reviewer-oauth.mjs";
+import { handleGoogleReviewerAuth, verifyGoogleReviewerSessionToken } from "../src/google-reviewer-oauth.mjs";
 
 const now = Date.parse("2026-11-19T12:00:00.000Z");
 const origin = "https://preview-agent.example.workers.dev";
@@ -134,4 +134,41 @@ describe("Google reviewer OAuth session flow", () => {
     expect(response.status).toBe(401);
     expect(await response.json()).toMatchObject({ authenticated: false });
   });
+
+  it("accepts only an unexpired HMAC session bound to the allowlisted Google subject and reviewer reference", async () => {
+    const encode = bytes => {
+      let binary = "";
+      for (const byte of bytes) binary += String.fromCharCode(byte);
+      return btoa(binary).replace(/=/g, "").replace(/\\+/g, "-").replace(/\\//g, "_");
+    };
+    const makeToken = async payload => {
+      const encoded = encode(new TextEncoder().encode(JSON.stringify(payload)));
+      const key = await crypto.subtle.importKey(
+        "raw",
+        new TextEncoder().encode(env.GOOGLE_REVIEWER_SESSION_SECRET),
+        { name: "HMAC", hash: "SHA-256" },
+        false,
+        ["sign"]
+      );
+      const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(encoded));
+      return encoded + "." + encode(new Uint8Array(signature));
+    };
+    const base = {
+      provider: "google",
+      sub: "google-subject-immutable-123",
+      email: "reviewer@example.com",
+      reviewer_ref: "google:google-subject-immutable-123",
+      iat: Math.floor(now / 1000) - 10,
+      exp: Math.floor(now / 1000) + 600
+    };
+    const valid = await verifyGoogleReviewerSessionToken(await makeToken(base), env, now);
+    const expired = await verifyGoogleReviewerSessionToken(await makeToken({ ...base, exp: Math.floor(now / 1000) - 1 }), env, now);
+    const mismatched = await verifyGoogleReviewerSessionToken(await makeToken({ ...base, reviewer_ref: "google:forged" }), env, now);
+    const unlisted = await verifyGoogleReviewerSessionToken(await makeToken({ ...base, email: "attacker@example.com" }), env, now);
+    expect(valid).toMatchObject({ authenticated: true, reviewer: { reviewer_ref: base.reviewer_ref, email: base.email } });
+    expect(expired.authenticated).toBe(false);
+    expect(mismatched.authenticated).toBe(false);
+    expect(unlisted.authenticated).toBe(false);
+  });
+
 });
