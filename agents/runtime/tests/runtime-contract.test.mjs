@@ -7,6 +7,7 @@ const config = JSON.parse(await readFile(new URL("../wrangler.jsonc", import.met
 const previewConfig = JSON.parse(await readFile(new URL("../wrangler.preview.jsonc", import.meta.url), "utf8"));
 const source = await readFile(new URL("../src/index.mjs", import.meta.url), "utf8");
 const providerPolicySource = await readFile(new URL("../src/provider-policy.mjs", import.meta.url), "utf8");
+const draftStoreSource = await readFile(new URL("../src/draft-artifact-store.mjs", import.meta.url), "utf8");
 const store = await readFile(new URL("../src/task-store.mjs", import.meta.url), "utf8");
 const research = await readFile(new URL("../src/research-discovery.mjs", import.meta.url), "utf8");
 const evidence = await readFile(new URL("../src/research-evidence.mjs", import.meta.url), "utf8");
@@ -392,4 +393,17 @@ test("content authoring checks the fail-closed provider policy before building o
   assert.ok(persistence > briefBuilder, "draft persistence must happen after the brief is built");
   assert.match(source, /status: "authoring_provider_deferred"/);
   assert.match(source, /publication_authorized: false/);
+});
+test("draft artifact persistence runs deterministic quality review only after provider-policy admission", () => {
+  assert.match(draftStoreSource, /import \{ selectProvider \} from "\.\/provider-policy\.mjs"/);
+  assert.match(draftStoreSource, /selectProvider\("quality_review"/);
+  assert.match(draftStoreSource, /"article-quality-gate"/);
+  assert.match(draftStoreSource, /quality_review_deferred/);
+  assert.match(draftStoreSource, /provider_id: admission\.provider/);
+  const admission = draftStoreSource.indexOf('selectProvider("quality_review"');
+  const gate = draftStoreSource.indexOf("reviewArticleDraft(draft)", admission);
+  assert.ok(admission >= 0);
+  assert.ok(gate > admission, "quality review must run only after provider admission");
+  assert.equal((draftStoreSource.match(/runPolicyGatedQualityReview\(draft\)/g) || []).length, 3,
+    "create and revision paths must both use the same policy gate, plus helper declaration");
 });
