@@ -258,7 +258,9 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     const packet = await store.getReviewPacket("github:ollama/ollama");
     expect(packet.total_evidence).toBe(0);
     expect(packet.checks_missing_evidence).toBe(6);
-    expect(await store.listReviewEvidence("github:ollama/ollama")).toHaveLength(1);
+    const history = await store.listReviewEvidence("github:ollama/ollama");
+    expect(history).toHaveLength(1);
+    expect(history[0].candidate_release_url).toBe("https://github.com/ollama/ollama/releases/tag/v1.2.3");
     expect(packet.verification_status).toBe("not_verified");
   });
 
