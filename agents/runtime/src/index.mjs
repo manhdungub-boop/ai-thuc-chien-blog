@@ -211,7 +211,46 @@ export class AgentSupervisorWorkflow extends WorkflowEntrypoint {
 
 export default {
   async fetch(request, env) {
+    const reviewerAuthResponse = await handleGoogleReviewerAuth(request, env);
+    if (reviewerAuthResponse) return reviewerAuthResponse;
     const url = new URL(request.url);
+    const reviewerEvidenceMatch = url.pathname.match(/^\\/api\\/reviewer\\/drafts\\/([a-zA-Z0-9._:-]{8,128})\\/evidence-review$/);
+    if (reviewerEvidenceMatch) {
+      if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
+      if (request.headers.get("origin") !== url.origin ||
+          !(request.headers.get("content-type") || "").toLowerCase().startsWith("application/json")) {
+        return json({ error: "review_request_origin_or_content_type_rejected" }, 403);
+      }
+      const contentLength = Number(request.headers.get("content-length") || 0);
+      if (contentLength > 96 * 1024) return json({ error: "review_request_too_large" }, 413);
+      const sessionToken = readGoogleReviewerSessionCookie(request);
+      if (!sessionToken) return json({ error: "reviewer_session_required" }, 401);
+      let body;
+      try {
+        const raw = await request.text();
+        if (new TextEncoder().encode(raw).byteLength > 96 * 1024) return json({ error: "review_request_too_large" }, 413);
+        body = JSON.parse(raw);
+      } catch { return json({ error: "invalid_review_request_json" }, 400); }
+      if (!body || typeof body !== "object" || Array.isArray(body) ||
+          Object.keys(body).some(key => !["expected_version", "ledger", "review_record"].includes(key)) ||
+          !Number.isInteger(body.expected_version) || !body.ledger || !body.review_record) {
+        return json({ error: "invalid_review_request_shape" }, 400);
+      }
+      const draftStore = env.AGENT_DRAFT_STORE?.getByName("primary");
+      if (!draftStore) return json({ error: "draft_store_unavailable" }, 503);
+      const result = await draftStore.recordEvidenceReview(
+        reviewerEvidenceMatch[1], body.expected_version, body.ledger, body.review_record, sessionToken
+      );
+      if (!result.recorded) return json({ error: result.reason, readiness: result.readiness || null }, 400);
+      return json({
+        recorded: true,
+        owner_release_review_eligible: result.owner_release_review_eligible,
+        readiness: result.readiness,
+        publication_authorized: false,
+        content_published: false,
+        social_post_published: false
+      });
+    }
     if (request.method !== "GET") return json({ error: "method_not_allowed" }, 405);
     if (url.pathname === "/health") {
       return json({
