@@ -1,17 +1,21 @@
 # AI Thực Chiến — 24/7 Agent Runtime (Preview only)
 
-This directory is a separate Cloudflare Worker service. It is not imported by the public website Worker and has no Production route, D1 binding, AI binding, secrets, social integrations, or deploy workflow.
+This directory is a separate Cloudflare Worker service. It is not imported by the public website Worker and has no Production route, website D1 binding, AI binding, secrets, social integrations, or deploy workflow.
 
-## Runtime model
+## Runtime foundation
 
-- Cloudflare Workflows provides durable, retryable execution.
-- A Workflow schedule creates a recurring supervisor run every 15 minutes (UTC).
-- The current supervisor is intentionally a safe heartbeat/planning shell: it records the scheduled cycle in Workflow state and returns an explicit idle result. It does not claim to run specialist models or process real tasks yet.
-- `GET /health` is public and returns only service metadata.
-- No HTTP endpoint can enqueue arbitrary work in this phase.
-- No task payloads, personal data, credentials, or website data are stored or transmitted.
+- Cloudflare Workflows creates a recurring supervisor run every 15 minutes (UTC), with concurrency limited to one.
+- A separate SQLite-backed Durable Object provides a durable task queue. It is not the website's D1 database.
+- Queue contracts include an allowlist of task types, an 8 KiB payload ceiling, idempotent task IDs, five-minute leases, a five-attempt ceiling, and a dead-letter state.
+- Queue operations are internal Durable Object RPC methods only. There is no public task-enqueue endpoint.
+- The scheduled supervisor remains deliberately idle. It does not yet claim or execute tasks, call models, access GitHub, or publish content.
+- `GET /health` exposes service metadata only. No personal data, credentials, or website data are stored or transmitted by the current code.
 
-## Local validation
+## Free-tier guardrails
+
+Cloudflare's published Workers Free limits currently include 3,000 Workflow steps/day and 1 GB-month Workflow state. SQLite-backed Durable Objects include 100,000 row writes/day and 5 million row reads/day. These are account-level limits, not a guarantee that other account usage leaves the full quota available. The runtime must remain within free limits and fail closed; no paid plan or billing change is authorized.
+
+## Validation and deployment
 
 Run from this directory with a current Wrangler 4 release:
 
@@ -20,15 +24,16 @@ npx wrangler types --config wrangler.jsonc
 npx wrangler deploy --dry-run --config wrangler.jsonc
 ```
 
-Do not deploy from this branch until the separate Preview account/resource boundary, free-tier quota, and workflow schedule are verified. There is deliberately no CI deploy job.
+Do not deploy from this branch until the separate Preview account/resource boundary, free-tier quota, and Workflow schedule are verified. There is deliberately no CI deploy job. A Durable Object migration is a resource change and must be reviewed before any Preview deployment.
 
 ## Next gated phases
 
-1. Add a durable task store isolated from website D1 and test idempotency, lease expiry, retry and dead-letter behavior.
-2. Add read-only GitHub/public-source adapters with bounded timeouts and rate limits.
-3. Add model execution only after verifying a genuinely no-cost quota; otherwise remain in deterministic planning mode.
-4. Add staging-only AI Bank/content/QA specialists with evidence contracts.
-5. Add an authenticated operator control plane, alerting and a pause switch.
-6. Consider public actions only through the existing owner approval gates.
+1. Exercise queue behavior against a local Durable Object emulator: idempotency, concurrent claims, lease expiry, retry and dead-letter behavior.
+2. Connect the supervisor to the queue while retaining a strict task-type allowlist.
+3. Add read-only GitHub/public-source adapters with bounded timeouts and rate limits.
+4. Add model execution only after verifying a genuinely no-cost quota; otherwise remain in deterministic planning mode.
+5. Add staging-only AI Bank/content/QA specialists with evidence contracts.
+6. Add an authenticated operator control plane, monitoring, alerting and a pause switch.
+7. Consider public actions only through the existing owner approval gates.
 
 A scheduled Workflow is a recurring background service, not a guarantee of uninterrupted model inference. Account limits, platform incidents, and quota exhaustion can pause work; the runtime must fail closed rather than enable billing.
