@@ -14,6 +14,7 @@ test("runtime uses a recurring Workflow schedule with single-instance concurrenc
 
 test("runtime has isolated SQLite storage and no website Production bindings", () => {
   assert.equal(config.workers_dev, true);
+  assert.deepEqual(config.vars, { AGENT_PAUSED: "false" });
   assert.equal(config.routes, undefined);
   assert.equal(config.d1_databases, undefined);
   assert.equal(config.ai, undefined);
@@ -29,6 +30,8 @@ test("health endpoint is read-only and does not expose task enqueue", () => {
   assert.match(source, /task_execution_enabled: true/);
   assert.match(source, /task_enqueue_endpoint_enabled: false/);
   assert.match(source, /production_access: false/);
+  assert.match(source, /AGENT_PAUSED/);
+  assert.match(source, /queue_accessed: false/);
   assert.doesNotMatch(source, /fetch\(["']https?:/);
 });
 
