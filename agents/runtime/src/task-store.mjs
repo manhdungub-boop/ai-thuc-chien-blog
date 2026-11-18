@@ -143,8 +143,10 @@ export class AgentTaskStore extends DurableObject {
     );
     // A competing caller may have claimed the selected row first. Never
     // return a lease token unless this invocation actually acquired it.
-    if (updated.rowsWritten !== 1) return { task: null };
     const claimed = this.ctx.storage.sql.exec("SELECT * FROM tasks WHERE id = ?", row.id).one();
+    if (claimed.status !== "leased" || claimed.lease_token !== leaseToken) {
+      return { task: null };
+    }
     return { task: safeTask(claimed), lease_token: leaseToken };
   }
 
