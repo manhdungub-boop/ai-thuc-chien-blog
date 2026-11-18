@@ -227,8 +227,8 @@ export class AgentAIBankCandidateStore extends DurableObject {
     ).toArray()[0];
     if (existing) return { accepted: false, reason: "duplicate_evidence" };
     const count = this.ctx.storage.sql.exec(
-      "SELECT COUNT(*) AS count FROM ai_bank_review_evidence WHERE candidate_id = ? AND check_type = ?",
-      candidateId, checkType
+      "SELECT COUNT(*) AS count FROM ai_bank_review_evidence WHERE candidate_id = ? AND check_type = ? AND candidate_release_url = ?",
+      candidateId, checkType, candidate.candidate.latest_release.source_url
     ).one().count;
     if (count >= MAX_EVIDENCE_PER_CHECK) {
       return { accepted: false, reason: "evidence_limit_reached" };
