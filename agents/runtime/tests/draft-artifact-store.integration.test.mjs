@@ -9,9 +9,7 @@ const sources = [
 ];
 function validDraft() {
   const p = "Trí tuệ nhân tạo đang thay đổi cách tổ chức nghiên cứu, phát triển phần mềm và tự động hóa quy trình. Các nhóm triển khai cần xác định mục tiêu, giới hạn dữ liệu, đánh giá kết quả và giám sát rủi ro trước khi đưa hệ thống vào sử dụng. ";
-  const body = ["## Tổng quan",p.repeat(8)+"[1]","## Kiến trúc hệ thống",p.repeat(8)+"[2]","## Quy trình triển khai",p.repeat(8)+"[3]","## An toàn và quản trị",p.repeat(8),"## Kết luận",p.repeat(4)].join("
-
-");
+  const body = ["## Tổng quan",p.repeat(8)+"[1]","## Kiến trúc hệ thống",p.repeat(8)+"[2]","## Quy trình triển khai",p.repeat(8)+"[3]","## An toàn và quản trị",p.repeat(8),"## Kết luận",p.repeat(4)].join("\n\n");
   return {
     title: "Xây dựng hệ thống AI agent an toàn và hiệu quả",
     slug: "xay-dung-he-thong-ai-agent-an-toan",
