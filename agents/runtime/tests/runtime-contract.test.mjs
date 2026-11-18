@@ -37,7 +37,7 @@ test("manual preview config is paused, has no recurring schedule, and uses isola
 
 test("runtime has isolated SQLite storage and no website Production bindings", () => {
   assert.equal(config.workers_dev, true);
-  assert.deepEqual(config.vars, { AGENT_ENABLED: "false", AGENT_PAUSED: "false" });
+  assert.deepEqual(config.vars, { AGENT_ENABLED: "false", AGENT_PAUSED: "false", AGENT_SCHEDULE_MODE: "every_15_minutes" });
   assert.equal(config.routes, undefined);
   assert.equal(config.d1_databases, undefined);
   assert.equal(config.ai, undefined);
