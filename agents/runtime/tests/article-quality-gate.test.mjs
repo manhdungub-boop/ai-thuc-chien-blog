@@ -103,7 +103,7 @@ describe("deterministic article quality gate", () => {
 
   it("does not treat script examples inside fenced code as executable article markup", () => {
     const draft = validDraft();
-    draft.body_markdown += "\\n\\n```html\\n<script>alert(1)</script>\\n```";
+    draft.body_markdown += "\n\n```html\n<script>alert(1)</script>\n```";
     const result = reviewArticleDraft(draft);
     expect(result.issues.map(issue => issue.code)).not.toContain("unsafe_markup");
   });
