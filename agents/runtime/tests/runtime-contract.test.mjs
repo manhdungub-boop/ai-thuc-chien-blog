@@ -32,8 +32,8 @@ test("health endpoint is read-only and does not expose task enqueue", () => {
   assert.doesNotMatch(source, /fetch\(["']https?:/);
 });
 
-test("supervisor executes only one deterministic local health task per cycle", () => {
-  assert.match(source, /task_type: "runtime_health_check"/);
+test("supervisor executes bounded health and daily read-only discovery tasks", () => {
+  assert.match(source, /"runtime_health_check"/);
   assert.match(source, /store\.claim\(\[taskType\], taskId\)/);
   assert.match(source, /await store\.complete\(taskId, claimed\.lease_token, result\)/);
   assert.match(source, /discoverAiBankReleaseSignals/);
