@@ -112,6 +112,7 @@ export async function verifyGoogleReviewerIdToken(token, {
   try {
     const response = await fetchImpl(GOOGLE_JWKS_URL, {
       method: "GET",
+      signal: AbortSignal.timeout(8000),
       redirect: "error",
       headers: { accept: "application/json" }
     });
