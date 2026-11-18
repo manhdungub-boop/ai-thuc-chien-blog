@@ -27,15 +27,16 @@ describe("claim evidence provenance ledger", () => {
     expect(result.limitations.join(" ")).toContain("No semantic entailment");
   });
 
-  it("rejects one-publisher mappings and URLs absent from the accepted assessment", () => {
+  it("rejects any reference absent from the accepted evidence packet", () => {
     const result = buildClaimEvidenceLedger([
       { id: "claim-1", text: "Claim.", evidence_urls: [evidence[0].url, "https://unknown.example/source"] }
     ], evidence, assessment);
     expect(result.claims[0].status).toBe("needs_evidence_or_revision");
-    expect(result.claims[0].reason).toBe("insufficient_distinct_publishers");
+    expect(result.claims[0].reason).toBe("unaccepted_evidence_reference");
+    expect(result.claims[0].sources).toHaveLength(1);
   });
 
-  it("rejects evidence that was not retrieved or has a short excerpt", () => {
+  it("rejects evidence that was not retrieved or has an invalid excerpt length", () => {
     const altered = [
       evidence[0],
       { ...evidence[1], status: "http_403" },
@@ -45,7 +46,7 @@ describe("claim evidence provenance ledger", () => {
       { id: "claim-1", text: "Claim.", evidence_urls: altered.map(item => item.url) }
     ], altered, { accepted_sources: altered.map(({ url }) => ({ url })) });
     expect(result.claims[0].traceable_source_count).toBe(1);
-    expect(result.claims[0].reason).toBe("insufficient_distinct_publishers");
+    expect(result.claims[0].reason).toBe("unaccepted_evidence_reference");
   });
 
   it("flags missing mappings, malformed text, and duplicate IDs", () => {
@@ -62,6 +63,28 @@ describe("claim evidence provenance ledger", () => {
       "missing_evidence_mapping"
     ]);
     expect(result.status).toBe("claim_evidence_review_incomplete");
+  });
+
+  it("rejects oversized claim text and identifiers instead of silently truncating them", () => {
+    const result = buildClaimEvidenceLedger([
+      { id: "claim-long", text: "x".repeat(501), evidence_urls: [evidence[0].url, evidence[1].url] },
+      { id: "i".repeat(65), text: "Valid text.", evidence_urls: [evidence[0].url, evidence[1].url] }
+    ], evidence, assessment);
+    expect(result.claims[0].reason).toBe("claim_text_too_long");
+    expect(result.claims[0].claim).toBe("");
+    expect(result.claims[1].reason).toBe("invalid_or_duplicate_claim_id");
+    expect(result.status).toBe("claim_evidence_review_incomplete");
+  });
+
+  it("rejects malformed or insecure evidence mappings even when other references are valid", () => {
+    const result = buildClaimEvidenceLedger([
+      { id: "claim-1", text: "Claim.", evidence_urls: [evidence[0].url, evidence[1].url, "http://openai.com/source"] },
+      { id: "claim-2", text: "Claim.", evidence_urls: [evidence[0].url, null] }
+    ], evidence, assessment);
+    expect(result.claims.map(item => item.reason)).toEqual([
+      "too_many_evidence_references",
+      "invalid_evidence_reference"
+    ]);
   });
 
   it("bounds claims and source mappings", () => {
