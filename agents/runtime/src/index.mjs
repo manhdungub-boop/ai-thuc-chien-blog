@@ -6,7 +6,7 @@ import { retrieveResearchEvidence } from "./research-evidence.mjs";
 import { assessResearchEvidence } from "./research-evidence-assessment.mjs";
 import { buildArticleAuthoringBrief } from "./article-authoring-brief.mjs";
 import { selectProvider } from "./provider-policy.mjs";
-import { handleGoogleReviewerAuth, readGoogleReviewerSessionCookie, AgentReviewerAuthStore } from "./google-reviewer-oauth.mjs";
+import { handleGoogleReviewerAuth, readGoogleReviewerSessionCookie, verifyGoogleReviewerSessionToken, AgentReviewerAuthStore } from "./google-reviewer-oauth.mjs";
 import { REVIEWER_CONSOLE_HTML, REVIEWER_CONSOLE_JS } from "./reviewer-console.mjs";
 export { AgentTaskStore } from "./task-store.mjs";
 export { AgentDraftStore } from "./draft-artifact-store.mjs";
@@ -320,6 +320,45 @@ export default {
           "x-content-type-options": "nosniff",
           "referrer-policy": "no-referrer"
         }
+      });
+    }
+    const reviewerAIBankCollection = url.pathname === "/api/reviewer/ai-bank/candidates";
+    const reviewerAIBankDetail = url.pathname.match(/^\\/api\\/reviewer\\/ai-bank\\/candidates\\/([a-zA-Z0-9_.-]{1,160})$/);
+    if (reviewerAIBankCollection || reviewerAIBankDetail) {
+      if (request.method !== "GET") return json({ error: "method_not_allowed" }, 405);
+      const origin = request.headers.get("origin");
+      if (origin && origin !== url.origin) return json({ error: "review_request_origin_or_content_type_rejected" }, 403);
+      const sessionToken = readGoogleReviewerSessionCookie(request);
+      if (!sessionToken) return json({ error: "reviewer_session_required" }, 401);
+      const session = await verifyGoogleReviewerSessionToken(sessionToken, env);
+      if (!session.authenticated) {
+        return json({ error: session.status || "reviewer_session_invalid" }, session.status === "reviewer_auth_not_configured" ? 503 : 401);
+      }
+      const candidateStore = env.AGENT_AI_BANK_CANDIDATE_STORE?.getByName("primary");
+      if (!candidateStore) return json({ error: "ai_bank_candidate_store_unavailable" }, 503);
+      if (reviewerAIBankCollection) {
+        const values = url.searchParams.getAll("limit");
+        if (values.length > 1 || (values.length === 1 && !/^(?:[1-9]|1[0-9]|20)$/.test(values[0]))) {
+          return json({ error: "invalid_ai_bank_candidate_limit" }, 400);
+        }
+        const limit = values.length ? Number(values[0]) : 20;
+        const items = await candidateStore.listCandidates(limit);
+        return json({
+          items,
+          count: items.length,
+          reviewer_ref: session.reviewer.reviewer_ref,
+          catalog_write_authorized: false,
+          public_publication_authorized: false
+        });
+      }
+      const packet = await candidateStore.getReviewPacket("github:" + reviewerAIBankDetail[1]);
+      if (!packet) return json({ error: "ai_bank_candidate_not_found" }, 404);
+      return json({
+        packet,
+        reviewer_ref: session.reviewer.reviewer_ref,
+        verification_authorized: false,
+        catalog_write_authorized: false,
+        public_publication_authorized: false
       });
     }
     const reviewerDraftCollection = url.pathname === "/api/reviewer/drafts";
