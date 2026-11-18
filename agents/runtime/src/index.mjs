@@ -3,9 +3,11 @@ import { discoverAiBankReleaseSignals } from "./ai-bank-discovery.mjs";
 import { discoverResearchSignals } from "./research-discovery.mjs";
 import { retrieveResearchEvidence } from "./research-evidence.mjs";
 import { assessResearchEvidence } from "./research-evidence-assessment.mjs";
+import { handleGoogleReviewerAuth, AgentReviewerAuthStore } from "./google-reviewer-oauth.mjs";
 export { AgentTaskStore } from "./task-store.mjs";
 export { AgentDraftStore } from "./draft-artifact-store.mjs";
 export { AgentAIBankCandidateStore } from "./ai-bank-candidate-store.mjs";
+export { AgentReviewerAuthStore };
 
 const SERVICE = "ai-thuc-chien-agent-runtime-preview";
 const VERSION = "0.3.1";
