@@ -34,6 +34,11 @@ jobs:
       - name: Build static site and SEO feeds
         run: npm run build
 
+      - name: Test isolated 24/7 agent runtime contract
+        run: |
+          node --check agents/runtime/src/index.mjs
+          node --test agents/runtime/tests/runtime-contract.test.mjs
+
       - name: Check JavaScript syntax
         run: |
           node --check script.js
