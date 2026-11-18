@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { currentUtcBudgetDay } from "../src/utc-budget-day.mjs";
 
 const config = JSON.parse(await readFile(new URL("../wrangler.jsonc", import.meta.url), "utf8"));
 const previewConfig = JSON.parse(await readFile(new URL("../wrangler.preview.jsonc", import.meta.url), "utf8"));
@@ -305,4 +306,11 @@ test("reviewer evidence endpoint is Google-session-bound and non-publishing", as
   assert.match(verifier, /reviewer_identity_authenticated: reviewerIdentityAuthenticated/);
   assert.match(runtime, /publication_authorized: false/);
   assert.match(runtime, /social_post_published: false/);
+});
+
+test("daily quota date is derived from the UTC execution time and rejects invalid values", () => {
+  assert.equal(currentUtcBudgetDay(Date.parse("2026-11-19T23:59:59.000Z")), "2026-11-19");
+  assert.equal(currentUtcBudgetDay(Date.parse("2026-11-20T00:00:00.000Z")), "2026-11-20");
+  assert.throws(() => currentUtcBudgetDay(-1), /invalid_budget_timestamp/);
+  assert.throws(() => currentUtcBudgetDay(Number.NaN), /invalid_budget_timestamp/);
 });
