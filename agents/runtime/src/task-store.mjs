@@ -199,7 +199,7 @@ export class AgentTaskStore extends DurableObject {
 
   consumeExternalRequestBudget(day, scope) {
     const limits = { ai_bank_discovery: 10, content_research: 8 };
-    if (typeof day !== "string" || !/^\\d{4}-\\d{2}-\\d{2}$/.test(day) ||
+    if (typeof day !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(day) ||
         new Date(day + "T00:00:00.000Z").toISOString().slice(0, 10) !== day ||
         !Object.hasOwn(limits, scope)) {
       throw new TypeError("invalid_external_request_budget");
