@@ -186,6 +186,20 @@ describe("AgentTaskStore Durable Object", () => {
     )).toEqual({ updated: false });
   });
 
+  it("rejects invalid retention timestamps and unbounded cleanup limits", async () => {
+    for (const [now, limit] of [
+      [-1, 100],
+      [Number.MAX_SAFE_INTEGER, 100],
+      [Date.now(), 0],
+      [Date.now(), 101],
+      [Date.now(), 1.5]
+    ]) {
+      await expect(Promise.resolve().then(() => store.pruneTerminalTasks(now, limit)))
+        .rejects.toThrow("invalid_retention_options");
+    }
+    expect(await store.stats()).toEqual({});
+  });
+
   it("prunes only completed tasks older than one day and dead tasks older than seven days", async () => {
     const now = Date.parse("2026-11-18T12:00:00.000Z");
     await store.enqueue(task("retention-completed-old"));
