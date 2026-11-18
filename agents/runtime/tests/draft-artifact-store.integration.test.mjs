@@ -159,6 +159,26 @@ describe("AgentDraftStore Durable Object", () => {
     expect(await store.createDraft("draft-review-0011", draft))
       .toEqual({ accepted: false, reason: "invalid_claim_evidence_url" });
   });
+  it("rejects oversized evidence-review payloads before fingerprint verification or storage", async () => {
+    const draft = validDraft();
+    draft.claims = [{
+      claim_id: "claim-store-oversize",
+      claim: "The draft store rejects oversized evidence review payloads.",
+      evidence_urls: [sources[0].url, sources[1].url],
+      citation_indices: [1, 2]
+    }];
+    const created = await store.createDraft("draft-review-oversize", draft);
+    const oversizedLedger = { padding: "x".repeat(50 * 1024) };
+    const result = await store.recordEvidenceReview(
+      "draft-review-oversize",
+      created.artifact.version,
+      oversizedLedger,
+      {}
+    );
+    expect(result).toEqual({ recorded: false, reason: "evidence_review_too_large" });
+    expect((await store.getDraft("draft-review-oversize")).evidence_review).toBeNull();
+  });
+
   it("returns bounded queue metadata and retrieves full content by ID", async () => {
     const draft = validDraft(); await store.createDraft("draft-review-0008", draft);
     const [item] = await store.listPendingReviews(1000);
