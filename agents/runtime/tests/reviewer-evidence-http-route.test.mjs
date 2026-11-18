@@ -273,7 +273,7 @@ function reviewerAuthEnv(sessionSecret) {
 describe("authorized AI Bank reviewer reads", () => {
   it("returns bounded candidate metadata only after verifying an allowlisted reviewer session", async () => {
     const { token, secret } = await makeReviewerSessionToken();
-    const item = { candidate_id: "github:ollama/ollama", status: "pending_human_review" };
+    const item = { candidate: { candidate_id: "github:ollama/ollama" }, first_seen_at: "2026-11-19T00:00:00.000Z", last_seen_at: "2026-11-19T00:00:00.000Z", stored_release_at: 1795046400000 };
     let requestedLimit;
     const env = {
       ...reviewerAuthEnv(secret),
