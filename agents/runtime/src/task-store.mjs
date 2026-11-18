@@ -158,17 +158,20 @@ export class AgentTaskStore extends DurableObject {
       "UPDATE tasks SET status = CASE WHEN attempts >= ? THEN 'dead' ELSE 'pending' END, lease_until = NULL, lease_token = NULL, updated_at = ? WHERE status = 'leased' AND lease_until <= ?",
       MAX_ATTEMPTS, now, now
     );
-    if (allowedTaskTypes !== null && (!Array.isArray(allowedTaskTypes) || allowedTaskTypes.length === 0 || allowedTaskTypes.some(type => !TASK_TYPES.has(type)))) {
+    if (allowedTaskTypes !== null && (!Array.isArray(allowedTaskTypes) || allowedTaskTypes.length === 0 || allowedTaskTypes.some(type => !EXECUTABLE_TASK_TYPES.has(type)))) {
       throw new TypeError("invalid_claim_task_types");
     }
     if (taskId !== null && (typeof taskId !== "string" || !/^[a-zA-Z0-9._:-]{8,128}$/.test(taskId))) {
       throw new TypeError("invalid_claim_task_id");
     }
-    const typeFilter = allowedTaskTypes === null ? "" : " AND task_type IN (" + allowedTaskTypes.map(() => "?").join(",") + ")";
+    // Default claims are restricted to task types with registered executors.
+    // Explicit filters are validated against the same allowlist above.
+    const claimableTypes = allowedTaskTypes ?? [...EXECUTABLE_TASK_TYPES];
+    const typeFilter = " AND task_type IN (" + claimableTypes.map(() => "?").join(",") + ")";
     const idFilter = taskId === null ? "" : " AND id = ?";
     const row = this.ctx.storage.sql.exec(
       "SELECT * FROM tasks WHERE status = 'pending' AND attempts < ?" + typeFilter + idFilter + " ORDER BY created_at ASC LIMIT 1",
-      MAX_ATTEMPTS, ...(allowedTaskTypes ?? []), ...(taskId === null ? [] : [taskId])
+      MAX_ATTEMPTS, ...claimableTypes, ...(taskId === null ? [] : [taskId])
     ).toArray()[0];
     if (!row) return { task: null };
     const leaseUntil = now + LEASE_MS;
