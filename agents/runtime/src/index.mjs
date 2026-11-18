@@ -1,6 +1,7 @@
 import { WorkflowEntrypoint } from "cloudflare:workers";
 import { discoverAiBankReleaseSignals } from "./ai-bank-discovery.mjs";
 import { discoverResearchSignals } from "./research-discovery.mjs";
+import { retrieveResearchEvidence } from "./research-evidence.mjs";
 export { AgentTaskStore } from "./task-store.mjs";
 export { AgentDraftStore } from "./draft-artifact-store.mjs";
 
@@ -104,7 +105,16 @@ export class AgentSupervisorWorkflow extends WorkflowEntrypoint {
         "content_research",
         researchTaskId,
         { topic: "AI agents, automation, and open-source AI tools", language: "vi" },
-        () => discoverResearchSignals({ lookbackDays: 14 })
+        async () => {
+          const discovered = await discoverResearchSignals({ lookbackDays: 14 });
+          const evidence = await retrieveResearchEvidence(discovered.latest_signals, { now: Date.now() });
+          return {
+            ...discovered,
+            sources_checked: discovered.sources_checked + evidence.attempts,
+            evidence_retrieval: evidence,
+            research_notice: "Retrieved excerpts are provenance-bound research evidence, not fact-checked claims or a publishable article."
+          };
+        }
       );
 
       const externalCalls = discovery.external_calls + research.external_calls;
@@ -143,7 +153,7 @@ export default {
         scheduler: "workflow_every_15_minutes",
         task_execution_enabled: true,
         ai_bank_discovery: "read_only_daily_allowlisted_github_releases",
-        content_research: "read_only_daily_official_ai_and_arxiv_feeds",
+        content_research: "read_only_daily_official_feeds_and_bounded_source_evidence_retrieval",
         task_enqueue_endpoint_enabled: false,
         production_access: false
       });
@@ -152,7 +162,7 @@ export default {
       return json({
         service: SERVICE,
         status: "preview_foundation",
-        message: "Agent runtime is isolated. It runs bounded local health checks, AI Bank release discovery, and AI research-source discovery."
+        message: "Agent runtime is isolated. It runs bounded local health checks, AI Bank release discovery, and AI research-source discovery with limited source excerpts."
       });
     }
     return json({ error: "not_found" }, 404);
