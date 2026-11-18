@@ -28,11 +28,13 @@ This directory is a separate Cloudflare Worker service. It is not imported by th
 - Completed task results are stored in the isolated queue database with an 8 KiB ceiling; completed/dead retention cleanup is not yet scheduled.
 - `GET /health` exposes service metadata only. No personal data, credentials, or website data are stored or transmitted by the current code.
 
-## Emergency pause
+## Explicit enable gate and emergency pause
 
-- `AGENT_PAUSED=true` stops the supervisor before it accesses the Durable Object queue or makes any outbound request.
-- The Preview default is `false`; operators can set it to `true` in the isolated Preview configuration to stop scheduled processing. This switch is not connected to the public website Worker.
-- Keep the service paused until Preview resource boundaries, current free-tier usage, and the deployment plan have been reviewed. No Production configuration is changed by this PR.
+- `AGENT_ENABLED` must be exactly `true` before the supervisor can access the Durable Object queue or make any outbound request. Missing, empty, or any other value leaves the runtime disabled.
+- The committed Preview default is `AGENT_ENABLED=false`; the recurring Workflow may be scheduled after deployment, but each run returns `disabled` before queue access and before outbound requests.
+- `AGENT_PAUSED=true` is an independent emergency stop and takes precedence even when `AGENT_ENABLED=true`.
+- `GET /health` reports the explicit enable state and reports task execution disabled unless the enable flag is exactly true and the pause flag is not true.
+- Do not enable the service until Preview resource boundaries, current free-tier usage, provider quotas, monitoring, and the deployment plan have been reviewed. Neither switch is connected to the public website Worker. No Production configuration is changed by this PR.
 
 ## Free-tier guardrails
 
