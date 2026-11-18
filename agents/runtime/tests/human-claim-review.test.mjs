@@ -79,7 +79,7 @@ describe("human claim review record", () => {
       decisions[1]
     ], reviewer);
     const mismatched = await recordHumanClaimReview(ledger, [
-      { ...decisions[0], evidence_reviews: [{ ...evidenceReviews[0], source_url: "https://forged.example/source" }, evidenceReviews[1] },
+      { ...decisions[0], evidence_reviews: [{ ...evidenceReviews[0], source_url: "https://forged.example/source" }, evidenceReviews[1]] },
       decisions[1]
     ], reviewer);
     const falselySupported = await recordHumanClaimReview(ledger, [
