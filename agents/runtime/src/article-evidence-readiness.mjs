@@ -1,6 +1,17 @@
 import { reviewArticleDraft } from "./article-quality-gate.mjs";
 import { verifyHumanClaimReviewRecord } from "./human-review-record-verifier.mjs";
 
+function normalizeClaimText(value) {
+  return String(value ?? "")
+    .replace(/\[[^\]]+\]\([^)]*\)/g, "$1")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/https?:\/\/\S+/g, " ")
+    .replace(/[\p{P}\p{S}_]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLocaleLowerCase("vi");
+}
+
 /**
  * Evaluate whether an article draft is traceable to claims explicitly reviewed
  * as supported. This is a release-readiness pre-check only; it never publishes.
@@ -102,7 +113,16 @@ export async function assessArticleEvidenceReadiness({
   }
 
   const body = typeof draft.body_markdown === "string" ? draft.body_markdown : "";
+  const normalizedBody = normalizeClaimText(body);
   for (const item of draft.claims) {
+    const normalizedClaim = normalizeClaimText(item.claim);
+    if (!normalizedClaim || !normalizedBody.includes(normalizedClaim)) {
+      claimIssues.push({
+        code: "reviewed_claim_missing_from_article_body",
+        claim_id: item.claim_id
+      });
+      continue;
+    }
     const expectedCitationIndices = item.evidence_urls.map(url => {
       try {
         return articleSourceIndexByUrl.get(new URL(url).href) ?? null;
