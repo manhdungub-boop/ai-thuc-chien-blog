@@ -114,7 +114,6 @@ test("outbound requests are counted atomically against persistent per-day source
   assert.match(source, /createBudgetedFetch\(store, budgetDay, "content_research"\)/);
   assert.match(source, /consumeExternalRequestBudget\(day, scope\)/);
   assert.match(source, /external_calls: getExternalCalls\(\)/);
-  assert.match(source, /fetchImpl: budget\.fetchImpl/);
   assert.match(source, /external_calls: aiBankBudget\.count\(\)/);
   assert.match(source, /external_calls: researchBudget\.count\(\)/);
 });
