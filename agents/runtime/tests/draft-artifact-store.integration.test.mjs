@@ -62,6 +62,90 @@ describe("AgentDraftStore Durable Object", () => {
       .toEqual({ accepted: false, reason: "invalid_body_markdown" });
   });
 
+  it("persists retrieved source excerpts as a pending ledger bound to the exact draft version", async () => {
+    const draft = validDraft();
+    draft.claims = [{
+      claim_id: "claim-ledger-01",
+      claim: "The draft store binds evidence to a specific article version.",
+      evidence_urls: [sources[0].url, sources[1].url],
+      citation_indices: [1, 2]
+    }];
+    const created = await store.createDraft("draft-ledger-0001", draft);
+    const retrievedEvidence = [
+      {
+        source: "OpenAI News", title: "Evidence storage", url: sources[0].url,
+        status: "source_retrieved_not_fact_checked",
+        excerpt: "This retrieved excerpt describes evidence storage, version binding, review snapshots, and the separation between human review and publication."
+      },
+      {
+        source: "Google DeepMind", title: "Review workflow", url: sources[1].url,
+        status: "source_retrieved_not_fact_checked",
+        excerpt: "This second retrieved excerpt describes review workflow controls, evidence traceability, versioned records, and independent human assessment."
+      }
+    ];
+    const result = await store.storeEvidenceLedger("draft-ledger-0001", created.artifact.version, retrievedEvidence);
+    expect(result.stored).toBe(true);
+    expect(result.artifact.version).toBe(2);
+    expect(result.artifact.evidence_review).toMatchObject({
+      ledger: {
+        status: "all_claims_traceable_pending_human_review",
+        draft_version: 1,
+        claims: [{
+          claim_id: "claim-ledger-01",
+          status: "traceable_evidence_pending_human_review"
+        }]
+      },
+      review_record: null,
+      readiness: null
+    });
+    expect(result.publication_authorized).toBe(false);
+  });
+
+  it("rejects stale, duplicate, unverified, or incomplete evidence-ledger writes", async () => {
+    const draft = validDraft();
+    draft.claims = [{
+      claim_id: "claim-ledger-02",
+      claim: "The draft store rejects incomplete evidence ledgers.",
+      evidence_urls: [sources[0].url, sources[1].url],
+      citation_indices: [1, 2]
+    }];
+    const created = await store.createDraft("draft-ledger-0002", draft);
+    const evidence = [
+      { source: "OpenAI News", title: "A", url: sources[0].url, status: "source_retrieved_not_fact_checked", excerpt: "A sufficiently long retrieved source excerpt describing the evidence process, its constraints, and the exact technical behavior for a reviewer." },
+      { source: "Google DeepMind", title: "B", url: sources[1].url, status: "source_retrieved_not_fact_checked", excerpt: "A second sufficiently long retrieved source excerpt describing the evidence process, its constraints, and the exact technical behavior for a reviewer." }
+    ];
+    expect(await store.storeEvidenceLedger("draft-ledger-0002", 2, evidence))
+      .toMatchObject({ stored: false, reason: "version_conflict", current_version: 1 });
+    expect(await store.storeEvidenceLedger("draft-ledger-0002", 1, [evidence[0]]))
+      .toMatchObject({ stored: false, reason: "invalid_retrieved_evidence_batch" });
+    expect((await store.storeEvidenceLedger("draft-ledger-0002", 1, [{ ...evidence[0], status: "http_404" }, evidence[1]])).stored)
+      .toBe(false);
+    expect((await store.storeEvidenceLedger("draft-ledger-0002", 1, evidence)).stored).toBe(true);
+    expect(await store.storeEvidenceLedger("draft-ledger-0002", 2, evidence))
+      .toMatchObject({ stored: false, reason: "evidence_ledger_already_exists" });
+  });
+
+  it("invalidates a persisted evidence ledger when the article draft is revised", async () => {
+    const draft = validDraft();
+    draft.claims = [{
+      claim_id: "claim-ledger-03",
+      claim: "The ledger is invalidated when article content changes.",
+      evidence_urls: [sources[0].url, sources[1].url],
+      citation_indices: [1, 2]
+    }];
+    const created = await store.createDraft("draft-ledger-0003", draft);
+    const evidence = [
+      { source: "OpenAI News", title: "A", url: sources[0].url, status: "source_retrieved_not_fact_checked", excerpt: "A sufficiently long retrieved source excerpt describing versioned article review and evidence invalidation after a content change." },
+      { source: "Google DeepMind", title: "B", url: sources[1].url, status: "source_retrieved_not_fact_checked", excerpt: "A second sufficiently long retrieved source excerpt describing versioned article review and evidence invalidation after a content change." }
+    ];
+    const stored = await store.storeEvidenceLedger("draft-ledger-0003", created.artifact.version, evidence);
+    const revisedDraft = { ...draft, title: "Bản sửa đổi có phiên bản mới" };
+    const revised = await store.reviseDraft("draft-ledger-0003", stored.artifact.version, revisedDraft);
+    expect(revised.updated).toBe(true);
+    expect(revised.artifact.version).toBe(3);
+    expect(revised.artifact.evidence_review).toBeNull();
+  });
+
   it("rejects evidence-review writes without a cryptographically verified Google session", async () => {
     const draft = validDraft();
     const claim = "The draft store keeps article evidence reviews isolated.";
