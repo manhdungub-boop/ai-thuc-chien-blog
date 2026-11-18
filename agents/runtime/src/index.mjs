@@ -1,5 +1,6 @@
 import { WorkflowEntrypoint } from "cloudflare:workers";
 import { discoverAiBankReleaseSignals } from "./ai-bank-discovery.mjs";
+import { discoverResearchSignals } from "./research-discovery.mjs";
 export { AgentTaskStore } from "./task-store.mjs";
 
 const SERVICE = "ai-thuc-chien-agent-runtime-preview";
@@ -18,32 +19,32 @@ async function executeTask(store, taskType, taskId, payload, handler) {
   const enqueued = await store.enqueue({ id: taskId, task_type: taskType, payload });
   if (!enqueued.accepted) throw new Error("task_enqueue_rejected");
   if (enqueued.task.status === "completed") {
-    return { status: "already_completed", result: enqueued.task.result };
+    return { status: "already_completed", result: enqueued.task.result, external_calls: 0 };
   }
   if (enqueued.task.status === "dead") {
-    return { status: "dead_letter", attempts: enqueued.task.attempts };
+    return { status: "dead_letter", attempts: enqueued.task.attempts, external_calls: 0 };
   }
 
   const claimed = await store.claim([taskType], taskId);
   if (!claimed.task) {
-    return { status: enqueued.task.status === "leased" ? "already_leased" : "not_claimed" };
+    return { status: enqueued.task.status === "leased" ? "already_leased" : "not_claimed", external_calls: 0 };
   }
 
   try {
     const result = await handler(claimed.task);
     if (result?.ok === false) {
       const retried = await store.retry(taskId, claimed.lease_token, result.status || "task_not_ready");
-      return { status: retried.status || "retry_not_applied", error_code: result.status || "task_not_ready" };
+      return { status: retried.status || "retry_not_applied", error_code: result.status || "task_not_ready", external_calls: result.sources_checked || 0 };
     }
     const completed = await store.complete(taskId, claimed.lease_token, result);
     if (!completed.updated) throw new Error("task_completion_rejected");
-    return { status: "completed", result };
+    return { status: "completed", result, external_calls: result?.sources_checked || 0 };
   } catch (error) {
     const errorCode = String(error?.message || "task_execution_failed")
       .replace(/[^a-zA-Z0-9_.:-]/g, "_")
       .slice(0, 80);
     const retried = await store.retry(taskId, claimed.lease_token, errorCode);
-    return { status: retried.status || "retry_not_applied", error_code: errorCode };
+    return { status: retried.status || "retry_not_applied", error_code: errorCode, external_calls: 0 };
   }
 }
 
@@ -96,17 +97,25 @@ export class AgentSupervisorWorkflow extends WorkflowEntrypoint {
         () => discoverAiBankReleaseSignals({ lookbackDays: 30 })
       );
 
-      const discoveryResult = discovery.result || null;
-      const externalCalls = discovery.status === "completed" ? (discoveryResult?.sources_checked || 0) : 0;
+      const researchTaskId = "research-scan-" + scanDate;
+      const research = await executeTask(
+        store,
+        "content_research",
+        researchTaskId,
+        { topic: "AI agents, automation, and open-source AI tools", language: "vi" },
+        () => discoverResearchSignals({ lookbackDays: 14 })
+      );
+
+      const externalCalls = discovery.external_calls + research.external_calls;
       return {
         cycle_id: cycleId,
         scheduled_at: scheduledAt,
         observed_at: new Date().toISOString(),
-        mode: "bounded_health_and_readonly_discovery",
+        mode: "bounded_health_ai_bank_and_research_discovery",
         queue: await store.stats(),
-        tasks: { health, ai_bank_discovery: discovery },
-        tasks_considered: 2,
-        tasks_completed: [health, discovery].filter(item =>
+        tasks: { health, ai_bank_discovery: discovery, content_research: research },
+        tasks_considered: 3,
+        tasks_completed: [health, discovery, research].filter(item =>
           item.status === "completed"
         ).length,
         external_calls: externalCalls,
@@ -133,6 +142,7 @@ export default {
         scheduler: "workflow_every_15_minutes",
         task_execution_enabled: true,
         ai_bank_discovery: "read_only_daily_allowlisted_github_releases",
+        content_research: "read_only_daily_official_ai_and_arxiv_feeds",
         task_enqueue_endpoint_enabled: false,
         production_access: false
       });
@@ -141,7 +151,7 @@ export default {
       return json({
         service: SERVICE,
         status: "preview_foundation",
-        message: "Agent runtime is isolated. It runs bounded local health checks and read-only AI Bank release discovery."
+        message: "Agent runtime is isolated. It runs bounded local health checks, AI Bank release discovery, and AI research-source discovery."
       });
     }
     return json({ error: "not_found" }, 404);

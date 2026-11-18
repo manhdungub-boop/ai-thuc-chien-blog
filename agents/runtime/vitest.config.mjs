@@ -8,7 +8,7 @@ export default defineConfig({
     })
   ],
   test: {
-    include: ["tests/**/*.integration.test.mjs"],
+    include: ["tests/**/*.integration.test.mjs", "tests/ai-bank-discovery.test.mjs", "tests/research-discovery.test.mjs"],
     testTimeout: 15000,
     hookTimeout: 15000,
     fileParallelism: false

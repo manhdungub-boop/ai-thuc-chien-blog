@@ -23,7 +23,7 @@ describe("read-only AI Bank release discovery", () => {
     expect(requested.every(item => item.options.method === "GET")).toBe(true);
     expect(requested.every(item => item.options.redirect === "error")).toBe(true);
     expect(result).toMatchObject({ ok: true, sources_checked: 10, sources_succeeded: 10, signal_count: 10 });
-    expect(result.latest_signals).toHaveLength(10);
+    expect(result.latest_signals).toHaveLength(5);
     expect(result.safety).toEqual({
       catalog_modified: false,
       public_content_modified: false,
