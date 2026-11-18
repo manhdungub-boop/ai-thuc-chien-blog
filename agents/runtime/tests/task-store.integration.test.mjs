@@ -103,7 +103,7 @@ describe("AgentTaskStore Durable Object", () => {
     await store.enqueue(request);
     const noMatch = await store.claim(["quality_review"]);
     expect(noMatch).toEqual({ task: null });
-    const claim = await store.claim(["runtime_health_check"]);
+    const claim = await store.claim(["runtime_health_check"], request.id);
     expect(claim.task.task_type).toBe("runtime_health_check");
     const result = { healthy: true, external_calls: 0, production_access: false };
     expect(await store.complete(request.id, claim.lease_token, result)).toEqual({ updated: true });
