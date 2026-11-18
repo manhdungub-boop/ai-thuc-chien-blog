@@ -12,6 +12,7 @@ const TASK_TYPES = new Set([
 const EXECUTABLE_TASK_TYPES = new Set([
   "ai_bank_discovery",
   "content_research",
+  "content_draft",
   "runtime_health_check"
 ]);
 const MAX_PAYLOAD_BYTES = 8192;
