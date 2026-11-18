@@ -9,11 +9,20 @@ const TASK_TYPES = new Set([
   "social_engagement"
 ]);
 
+const LOCAL_PROVIDER_CAPABILITIES = new Map([
+  ["article-quality-gate", new Set(["quality_review"])]
+]);
+
 const MAX_QUOTA_AGE_MS = 15 * 60 * 1000;
 
 function isFreshTimestamp(value, now, maxAgeMs) {
   const timestamp = Date.parse(value);
   return Number.isFinite(timestamp) && timestamp <= now && now - timestamp <= maxAgeMs;
+}
+
+function isAllowlistedLocalProvider(provider, taskType) {
+  return provider?.execution_surface === "agent_runtime" &&
+    LOCAL_PROVIDER_CAPABILITIES.get(provider?.id)?.has(taskType) === true;
 }
 
 function eligible(provider, taskType, now) {
@@ -24,9 +33,11 @@ function eligible(provider, taskType, now) {
   if (!["zero_cost_verified", "no_external_execution"].includes(provider.cost_class)) return false;
   if (!Array.isArray(provider.capabilities) || !provider.capabilities.includes(taskType)) return false;
 
-  // Runtime inference providers require fresh positive quota evidence.
-  // Deterministic local providers explicitly declare no_external_execution.
-  if (provider.cost_class === "no_external_execution") return true;
+  // Only the in-repository deterministic article quality gate may bypass
+  // external quota checks. Provider-supplied labels are not sufficient.
+  if (provider.cost_class === "no_external_execution") {
+    return isAllowlistedLocalProvider(provider, taskType);
+  }
   const quota = provider.quota;
   return Boolean(
     quota &&
@@ -70,6 +81,9 @@ export function selectProvider(taskType, providers, now = Date.now()) {
   if (matching.some(provider => provider?.execution_surface !== "agent_runtime" && provider?.status === "ready")) {
     return { action: "defer", provider: null, reason: "connector_not_callable_from_agent_runtime" };
   }
+  if (matching.some(provider => provider?.cost_class === "no_external_execution" && !isAllowlistedLocalProvider(provider, taskType))) {
+    return { action: "defer", provider: null, reason: "local_provider_not_allowlisted" };
+  }
   if (matching.some(provider => !["zero_cost_verified", "no_external_execution"].includes(provider?.cost_class))) {
     return { action: "defer", provider: null, reason: "free_cost_not_verified" };
   }
@@ -85,6 +99,7 @@ export function selectProvider(taskType, providers, now = Date.now()) {
 export const providerPolicy = Object.freeze({
   taskTypes: Object.freeze([...TASK_TYPES]),
   maxQuotaAgeMs: MAX_QUOTA_AGE_MS,
+  localProviderIds: Object.freeze([...LOCAL_PROVIDER_CAPABILITIES.keys()]),
   failClosed: true,
   paidFallbackAllowed: false,
   unknownCostAllowed: false
