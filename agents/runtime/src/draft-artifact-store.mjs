@@ -1,15 +1,61 @@
 import { DurableObject } from "cloudflare:workers";
 import { reviewArticleDraft } from "./article-quality-gate.mjs";
+import { assessArticleEvidenceReadiness } from "./article-evidence-readiness.mjs";
 
 const MAX_ARTIFACT_BYTES = 48 * 1024;
+const MAX_EVIDENCE_REVIEW_BYTES = 48 * 1024;
 const MAX_SOURCES = 20;
+const MAX_CLAIMS = 40;
 const ID_PATTERN = /^[a-zA-Z0-9._:-]{8,128}$/;
-const DRAFT_KEYS = new Set(["title","slug","meta_description","author","language","body_markdown","sources","copyright_notice"]);
+const CLAIM_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,63}$/;
+const DRAFT_KEYS = new Set(["title","slug","meta_description","author","language","body_markdown","sources","copyright_notice","claims"]);
+const REQUIRED_DRAFT_KEYS = ["title","slug","meta_description","author","language","body_markdown","sources","copyright_notice"];
 const SOURCE_KEYS = new Set(["title","publisher","url","accessed_at"]);
+const CLAIM_KEYS = new Set(["claim_id","claim","evidence_urls","citation_indices"]);
+
+function validateClaimManifest(claims) {
+  if (claims === undefined) return { ok: true };
+  if (!Array.isArray(claims) || claims.length < 1 || claims.length > MAX_CLAIMS) {
+    return { ok: false, reason: "invalid_claim_manifest" };
+  }
+  const seen = new Set();
+  for (const claim of claims) {
+    if (!claim || typeof claim !== "object" || Array.isArray(claim) ||
+        Object.keys(claim).some(key => !CLAIM_KEYS.has(key)) ||
+        Object.keys(claim).length !== CLAIM_KEYS.size ||
+        typeof claim.claim_id !== "string" || !CLAIM_ID_PATTERN.test(claim.claim_id) ||
+        seen.has(claim.claim_id) ||
+        typeof claim.claim !== "string" || !claim.claim.trim() || claim.claim.length > 500 ||
+        !Array.isArray(claim.evidence_urls) || claim.evidence_urls.length < 2 ||
+        claim.evidence_urls.length > 4 ||
+        !Array.isArray(claim.citation_indices) ||
+        claim.citation_indices.length !== claim.evidence_urls.length ||
+        claim.citation_indices.some(index => !Number.isInteger(index) || index < 1) ||
+        new Set(claim.citation_indices).size !== claim.citation_indices.length) {
+      return { ok: false, reason: "invalid_claim_manifest_entry" };
+    }
+    const urls = new Set();
+    for (const value of claim.evidence_urls) {
+      if (typeof value !== "string" || value.length > 2048) return { ok: false, reason: "invalid_claim_evidence_url" };
+      try {
+        const url = new URL(value);
+        if (url.protocol !== "https:" || url.username || url.password || (url.port && url.port !== "443") ||
+            url.hash || url.href !== value || urls.has(url.href)) {
+          return { ok: false, reason: "invalid_claim_evidence_url" };
+        }
+        urls.add(url.href);
+      } catch {
+        return { ok: false, reason: "invalid_claim_evidence_url" };
+      }
+    }
+    seen.add(claim.claim_id);
+  }
+  return { ok: true };
+}
 
 function validateDraft(draft) {
   if (!draft || typeof draft !== "object" || Array.isArray(draft)) return { ok: false, reason: "draft_must_be_object" };
-  if (Object.keys(draft).some(key => !DRAFT_KEYS.has(key)) || [...DRAFT_KEYS].some(key => !(key in draft))) {
+  if (Object.keys(draft).some(key => !DRAFT_KEYS.has(key)) || REQUIRED_DRAFT_KEYS.some(key => !(key in draft))) {
     return { ok: false, reason: "draft_schema_mismatch" };
   }
   const limits = { title: 200, slug: 120, meta_description: 300, author: 80, language: 8, body_markdown: MAX_ARTIFACT_BYTES, copyright_notice: 500 };
@@ -24,15 +70,27 @@ function validateDraft(draft) {
       return { ok: false, reason: "invalid_source_shape" };
     }
   }
+  const manifest = validateClaimManifest(draft.claims);
+  if (!manifest.ok) return manifest;
   const json = JSON.stringify(draft);
   if (new TextEncoder().encode(json).byteLength > MAX_ARTIFACT_BYTES) return { ok: false, reason: "artifact_too_large" };
   return { ok: true, json };
+}
+
+function parseEvidenceReview(row) {
+  if (!row.ledger_json || !row.review_record_json || !row.evidence_readiness_json) return null;
+  return {
+    ledger: JSON.parse(row.ledger_json),
+    review_record: JSON.parse(row.review_record_json),
+    readiness: JSON.parse(row.evidence_readiness_json)
+  };
 }
 
 function safeArtifact(row) {
   return {
     id: row.id, artifact_type: "article", status: row.status, version: row.version,
     draft: JSON.parse(row.draft_json), quality_review: JSON.parse(row.quality_review_json),
+    evidence_review: parseEvidenceReview(row),
     created_at: row.created_at, updated_at: row.updated_at
   };
 }
@@ -40,9 +98,11 @@ function safeArtifact(row) {
 function queueItem(row) {
   const review = JSON.parse(row.quality_review_json);
   const draft = JSON.parse(row.draft_json);
+  const evidenceReview = row.evidence_readiness_json ? JSON.parse(row.evidence_readiness_json) : null;
   return {
     id: row.id, status: row.status, version: row.version, title: draft.title, slug: draft.slug,
     issue_count: review.issues.length, word_count: review.metrics?.word_count ?? 0,
+    release_review_status: evidenceReview?.status ?? null,
     created_at: row.created_at, updated_at: row.updated_at
   };
 }
@@ -54,8 +114,13 @@ export class AgentDraftStore extends DurableObject {
       "CREATE TABLE IF NOT EXISTS draft_artifacts (" +
       "id TEXT PRIMARY KEY, draft_json TEXT NOT NULL, quality_review_json TEXT NOT NULL, " +
       "status TEXT NOT NULL CHECK(status IN ('pending_human_review','needs_revision')), " +
-      "version INTEGER NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)"
+      "version INTEGER NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, " +
+      "ledger_json TEXT, review_record_json TEXT, evidence_readiness_json TEXT)"
     );
+    const columns = this.ctx.storage.sql.exec("PRAGMA table_info(draft_artifacts)").toArray();
+    if (!columns.some(column => column.name === "ledger_json")) this.ctx.storage.sql.exec("ALTER TABLE draft_artifacts ADD COLUMN ledger_json TEXT");
+    if (!columns.some(column => column.name === "review_record_json")) this.ctx.storage.sql.exec("ALTER TABLE draft_artifacts ADD COLUMN review_record_json TEXT");
+    if (!columns.some(column => column.name === "evidence_readiness_json")) this.ctx.storage.sql.exec("ALTER TABLE draft_artifacts ADD COLUMN evidence_readiness_json TEXT");
     this.ctx.storage.sql.exec("CREATE INDEX IF NOT EXISTS draft_artifacts_status_updated ON draft_artifacts(status, updated_at)");
   }
 
@@ -72,8 +137,8 @@ export class AgentDraftStore extends DurableObject {
     const status = review.ok ? "pending_human_review" : "needs_revision";
     const now = new Date().toISOString();
     const inserted = this.ctx.storage.sql.exec(
-      "INSERT OR IGNORE INTO draft_artifacts (id, draft_json, quality_review_json, status, version, created_at, updated_at) " +
-      "VALUES (?, ?, ?, ?, 1, ?, ?) RETURNING *",
+      "INSERT OR IGNORE INTO draft_artifacts (id, draft_json, quality_review_json, status, version, created_at, updated_at, ledger_json, review_record_json, evidence_readiness_json) " +
+      "VALUES (?, ?, ?, ?, 1, ?, ?, NULL, NULL, NULL) RETURNING *",
       id, validated.json, JSON.stringify(review), status, now, now
     ).toArray();
     if (inserted.length !== 1) return { accepted: false, reason: "artifact_create_race" };
@@ -93,12 +158,53 @@ export class AgentDraftStore extends DurableObject {
     const status = review.ok ? "pending_human_review" : "needs_revision";
     const now = new Date().toISOString();
     const updated = this.ctx.storage.sql.exec(
-      "UPDATE draft_artifacts SET draft_json = ?, quality_review_json = ?, status = ?, version = version + 1, updated_at = ? " +
+      "UPDATE draft_artifacts SET draft_json = ?, quality_review_json = ?, status = ?, version = version + 1, updated_at = ?, ledger_json = NULL, review_record_json = NULL, evidence_readiness_json = NULL " +
       "WHERE id = ? AND version = ? RETURNING *",
       validated.json, JSON.stringify(review), status, now, id, expectedVersion
     ).toArray();
     if (updated.length !== 1) return { updated: false, reason: "version_conflict" };
     return { updated: true, artifact: safeArtifact(updated[0]) };
+  }
+
+  async recordEvidenceReview(id, expectedVersion, ledger, reviewRecord) {
+    if (typeof id !== "string" || !ID_PATTERN.test(id) || !Number.isInteger(expectedVersion) || expectedVersion < 1) {
+      return { recorded: false, reason: "invalid_review_request" };
+    }
+    const current = this.ctx.storage.sql.exec("SELECT * FROM draft_artifacts WHERE id = ?", id).toArray()[0];
+    if (!current) return { recorded: false, reason: "artifact_not_found" };
+    if (current.version !== expectedVersion) return { recorded: false, reason: "version_conflict", current_version: current.version };
+    if (current.status !== "pending_human_review") return { recorded: false, reason: "draft_not_quality_eligible" };
+    const draft = JSON.parse(current.draft_json);
+    if (!Array.isArray(draft.claims)) return { recorded: false, reason: "claim_manifest_required" };
+
+    let readiness;
+    try {
+      readiness = await assessArticleEvidenceReadiness({ draft, ledger, reviewRecord, now: Date.now() });
+    } catch {
+      return { recorded: false, reason: "evidence_review_validation_failed" };
+    }
+    if (readiness.status === "human_review_record_not_verified") {
+      return { recorded: false, reason: "review_record_not_verified", readiness };
+    }
+
+    const ledgerJson = JSON.stringify(ledger);
+    const reviewRecordJson = JSON.stringify(reviewRecord);
+    const readinessJson = JSON.stringify(readiness);
+    const reviewBytes = new TextEncoder().encode(ledgerJson + reviewRecordJson + readinessJson).byteLength;
+    if (reviewBytes > MAX_EVIDENCE_REVIEW_BYTES) return { recorded: false, reason: "evidence_review_too_large" };
+
+    const updated = this.ctx.storage.sql.exec(
+      "UPDATE draft_artifacts SET ledger_json = ?, review_record_json = ?, evidence_readiness_json = ?, version = version + 1, updated_at = ? " +
+      "WHERE id = ? AND version = ? AND status = 'pending_human_review' RETURNING *",
+      ledgerJson, reviewRecordJson, readinessJson, new Date().toISOString(), id, expectedVersion
+    ).toArray();
+    if (updated.length !== 1) return { recorded: false, reason: "version_conflict" };
+    return {
+      recorded: true,
+      owner_release_review_eligible: readiness.status === "eligible_for_owner_release_review",
+      artifact: safeArtifact(updated[0]),
+      readiness
+    };
   }
 
   getDraft(id) {
@@ -114,6 +220,15 @@ export class AgentDraftStore extends DurableObject {
       boundedLimit
     ).toArray();
     return rows.map(queueItem);
+  }
+
+  listOwnerReleaseReviews(limit = 20) {
+    const boundedLimit = Number.isInteger(limit) ? Math.min(20, Math.max(1, limit)) : 20;
+    const rows = this.ctx.storage.sql.exec(
+      "SELECT * FROM draft_artifacts WHERE status = 'pending_human_review' AND evidence_readiness_json IS NOT NULL ORDER BY updated_at DESC LIMIT ?",
+      boundedLimit
+    ).toArray();
+    return rows.map(queueItem).filter(item => item.release_review_status === "eligible_for_owner_release_review");
   }
 
   stats() {

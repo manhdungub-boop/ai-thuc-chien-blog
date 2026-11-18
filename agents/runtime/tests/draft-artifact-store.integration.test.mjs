@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
+import { recordHumanClaimReview } from "../src/human-claim-review.mjs";
 
 const sources = [
   { title: "Official source one", publisher: "Research Lab One", url: "https://research-one.example/paper", accessed_at: "2026-11-18T00:00:00.000Z" },
@@ -59,6 +60,104 @@ describe("AgentDraftStore Durable Object", () => {
     const oversized = validDraft(); oversized.body_markdown = "x".repeat(50 * 1024);
     expect(await store.createDraft("draft-review-0007", oversized))
       .toEqual({ accepted: false, reason: "invalid_body_markdown" });
+  });
+
+  it("persists a verified evidence review and exposes only owner-release-review eligibility", async () => {
+    const draft = validDraft();
+    const claim = "The draft store keeps article evidence reviews isolated.";
+    draft.claims = [{
+      claim_id: "claim-store-1",
+      claim,
+      evidence_urls: [sources[0].url, sources[1].url],
+      citation_indices: [1, 2]
+    }];
+    const created = await store.createDraft("draft-review-0009", draft);
+    const ledgerSources = [
+      { source: "Research Lab One", title: "One", url: sources[0].url, host: "research-one.example", excerpt: "This source describes isolated article evidence storage, review snapshots, and the limits of what a persisted record can establish. ".repeat(2).slice(0, 180) },
+      { source: "Research Lab Two", title: "Two", url: sources[1].url, host: "research-two.example", excerpt: "This second source describes controlled review workflows, evidence traceability, and the separation between review and publication. ".repeat(2).slice(0, 180) }
+    ];
+    const ledger = {
+      status: "all_claims_traceable_pending_human_review",
+      safety: { human_review_required: true, publication_authorized: false },
+      claims: [{
+        claim_id: "claim-store-1",
+        claim,
+        status: "traceable_evidence_pending_human_review",
+        sources: ledgerSources
+      }]
+    };
+    const now = Date.now();
+    const reviewRecord = await recordHumanClaimReview(
+      ledger,
+      [{ claim_id: "claim-store-1", decision: "supported", reviewer_note: "Both cited excerpts address the stated storage behavior." }],
+      { reviewer_ref: "editor.dung", reviewed_at: new Date(now - 60_000).toISOString() },
+      { now }
+    );
+    const recorded = await store.recordEvidenceReview("draft-review-0009", created.artifact.version, ledger, reviewRecord);
+    expect(recorded.recorded).toBe(true);
+    expect(recorded.owner_release_review_eligible).toBe(true);
+    expect(recorded.readiness.status).toBe("eligible_for_owner_release_review");
+    expect(recorded.artifact.evidence_review.review_record.status).toBe("human_review_recorded_pending_release_gates");
+    expect((await store.listOwnerReleaseReviews()).map(item => item.id)).toContain("draft-review-0009");
+  });
+
+  it("rejects tampered review records and invalidates persisted review after draft revision", async () => {
+    const draft = validDraft();
+    draft.claims = [{
+      claim_id: "claim-store-2",
+      claim: "The draft store keeps article evidence reviews isolated.",
+      evidence_urls: [sources[0].url, sources[1].url],
+      citation_indices: [1, 2]
+    }];
+    const created = await store.createDraft("draft-review-0010", draft);
+    const ledgerSources = [
+      { source: "Research Lab One", title: "One", url: sources[0].url, host: "research-one.example", excerpt: "This source describes isolated article evidence storage, review snapshots, and the limits of what a persisted record can establish. ".repeat(2).slice(0, 180) },
+      { source: "Research Lab Two", title: "Two", url: sources[1].url, host: "research-two.example", excerpt: "This second source describes controlled review workflows, evidence traceability, and the separation between review and publication. ".repeat(2).slice(0, 180) }
+    ];
+    const ledger = {
+      status: "all_claims_traceable_pending_human_review",
+      safety: { human_review_required: true, publication_authorized: false },
+      claims: [{
+        claim_id: "claim-store-2",
+        claim: draft.claims[0].claim,
+        status: "traceable_evidence_pending_human_review",
+        sources: ledgerSources
+      }]
+    };
+    const now = Date.parse("2026-11-18T12:01:00.000Z");
+    const reviewRecord = await recordHumanClaimReview(
+      ledger,
+      [{ claim_id: "claim-store-2", decision: "supported", reviewer_note: "Both cited excerpts address the stated storage behavior." }],
+      { reviewer_ref: "editor.dung", reviewed_at: new Date(now - 60_000).toISOString() },
+      { now }
+    );
+    const tampered = {
+      ...reviewRecord,
+      claims: reviewRecord.claims.map(item => ({ ...item, reviewer_note: "Changed reviewer note after fingerprinting." }))
+    };
+    const rejected = await store.recordEvidenceReview("draft-review-0010", created.artifact.version, ledger, tampered);
+    expect(rejected).toMatchObject({ recorded: false, reason: "review_record_not_verified" });
+    const recorded = await store.recordEvidenceReview("draft-review-0010", created.artifact.version, ledger, reviewRecord);
+    expect(recorded.recorded).toBe(true);
+    const revised = validDraft();
+    revised.title = "Xây dựng hệ thống AI agent an toàn và hiệu quả hơn";
+    revised.claims = draft.claims;
+    const update = await store.reviseDraft("draft-review-0010", recorded.artifact.version, revised);
+    expect(update.artifact.evidence_review).toBeNull();
+    expect(await store.listOwnerReleaseReviews()).toHaveLength(0);
+    expect((await store.getDraft("draft-review-0010")).evidence_review).toBeNull();
+  });
+
+  it("rejects malformed claim manifests before storing an article", async () => {
+    const draft = validDraft();
+    draft.claims = [{
+      claim_id: "claim-store-3",
+      claim: "A claim",
+      evidence_urls: ["http://insecure.example/source", "https://research-two.example/report"],
+      citation_indices: [1, 2]
+    }];
+    expect(await store.createDraft("draft-review-0011", draft))
+      .toEqual({ accepted: false, reason: "invalid_claim_evidence_url" });
   });
   it("returns bounded queue metadata and retrieves full content by ID", async () => {
     const draft = validDraft(); await store.createDraft("draft-review-0008", draft);
