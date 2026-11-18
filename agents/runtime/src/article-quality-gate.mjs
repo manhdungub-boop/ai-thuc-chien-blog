@@ -7,8 +7,28 @@ function text(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function removeFencedCode(markdown) {
+  const kept = [];
+  let fence = null;
+  for (const line of markdown.split("\\n")) {
+    const marker = line.match(/^ {0,3}(`{3,}|~{3,})/);
+    if (!fence && marker) {
+      fence = { character: marker[1][0], length: marker[1].length };
+      continue;
+    }
+    if (fence) {
+      const closing = new RegExp("^ {0,3}" + fence.character + "{" + fence.length + ",}[ \\t]*$");
+      if (closing.test(line)) fence = null;
+      continue;
+    }
+    kept.push(line);
+  }
+  return kept.join("\\n");
+}
+
 function markdownText(markdown) {
   return markdown
+    .replace(/`+([^`]*?)`+/g, " ")
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
     .replace(/<[^>]*>/g, " ")
