@@ -96,3 +96,11 @@ A scheduled Workflow is a recurring background service, not a guarantee of unint
 - The persisted review record's `reviewer_ref` must exactly match the server-verified session principal. A mismatched or absent identity never passes the identity gate. Evidence review writes are rejected when reviewer authentication is disabled or the session is invalid.
 - A matching authenticated review may become `eligible_for_owner_release_review` only. It does not authorize publication, website deployment, AI Bank catalog writes, or Facebook/social posting. The owner release decision and all publication/deployment gates remain separate.
 - Preview config keeps `AGENT_REVIEWER_AUTH_ENABLED=false`; no credentials or live Google login are configured. The new route and Durable Object binding have not been deployed. Tests use local fixtures/mocks only.
+
+
+### Claim-ledger publisher provenance enforcement
+
+- The claim ledger independently re-checks each supplied evidence item's exact publisher label, HTTPS host, and article path against the fixed research publisher policy. It does not rely solely on an upstream assessment's `accepted_sources` list.
+- Evidence from unknown domains or mismatched publisher labels is excluded before claim-to-source mapping. A claim cannot reach the traceable state by supplying a forged assessment object or by relabeling another publisher's URL.
+- Distinct publisher count is a provenance count only. It does not prove independent ownership, semantic entailment, factual truth, or that the excerpt supports the claim.
+- All claims remain pending human review. No drafting, AI inference, catalog write, public publishing, deployment, or social posting is enabled by this check.
