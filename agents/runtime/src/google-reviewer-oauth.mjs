@@ -93,7 +93,14 @@ export class AgentReviewerAuthStore extends DurableObject {
     this.ctx.storage.sql.exec("CREATE INDEX IF NOT EXISTS reviewer_auth_transactions_expiry ON reviewer_auth_transactions(expires_at)");
   }
   createTransaction(stateHash, browserHash, nonce, codeVerifier, nowSeconds) {
-    if (![stateHash, browserHash, nonce, codeVerifier].every(x => typeof x === "string" && x.length >= 32 && x.length <= 128) || !Number.isInteger(nowSeconds)) return { created: false };
+    const invalid = {
+      state_hash: typeof stateHash !== "string" || stateHash.length < 32 || stateHash.length > 128,
+      browser_hash: typeof browserHash !== "string" || browserHash.length < 32 || browserHash.length > 128,
+      nonce: typeof nonce !== "string" || nonce.length < 32 || nonce.length > 128,
+      code_verifier: typeof codeVerifier !== "string" || codeVerifier.length < 32 || codeVerifier.length > 128,
+      now_seconds: !Number.isInteger(nowSeconds)
+    };
+    if (Object.values(invalid).some(Boolean)) return { created: false, reason: "invalid_login_transaction", invalid };
     this.ctx.storage.sql.exec("DELETE FROM reviewer_auth_transactions WHERE expires_at <= ?", nowSeconds);
     const active = this.ctx.storage.sql.exec("SELECT COUNT(*) AS total FROM reviewer_auth_transactions WHERE expires_at > ?", nowSeconds).toArray()[0]?.total || 0;
     if (active >= 100) return { created: false, reason: "login_transaction_capacity_reached" };
