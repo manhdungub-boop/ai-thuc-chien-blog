@@ -78,7 +78,7 @@ describe("claim evidence provenance ledger", () => {
 
   it("rejects malformed or insecure evidence mappings even when other references are valid", () => {
     const result = buildClaimEvidenceLedger([
-      { id: "claim-1", text: "Claim.", evidence_urls: [evidence[0].url, evidence[1].url, "http://openai.com/source"] },
+      { id: "claim-1", text: "Claim.", evidence_urls: [evidence[0].url, evidence[1].url, evidence[2].url, evidence[0].url, "http://openai.com/source"] },
       { id: "claim-2", text: "Claim.", evidence_urls: [evidence[0].url, null] }
     ], evidence, assessment);
     expect(result.claims.map(item => item.reason)).toEqual([
