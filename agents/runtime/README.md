@@ -8,7 +8,9 @@ This directory is a separate Cloudflare Worker service. It is not imported by th
 - A separate SQLite-backed Durable Object provides a durable task queue. It is not the website's D1 database.
 - Queue contracts include an allowlist of task types, per-agent payload schemas, an 8 KiB payload ceiling, idempotent task IDs, a 500-task active-queue ceiling, five-minute leases with unique fencing tokens, a five-attempt ceiling, a dead-letter state, and rejection of stale worker completion.
 - Queue operations are internal Durable Object RPC methods only. There is no public task-enqueue endpoint.
-- The scheduled supervisor reads queue counts from the isolated Durable Object every 15 minutes. It does not claim or execute tasks, call models, access GitHub, or publish content.
+- The scheduled supervisor runs every 15 minutes, enqueues one idempotent `runtime_health_check`, claims only that task type, executes a deterministic local health check, and persists a bounded result. It processes at most one task per cycle and makes no model, network, GitHub, or publishing calls.
+- Other task types (`ai_bank_discovery`, `content_research`, `content_draft`, `quality_review`) remain accepted by the queue contract but have no registered executor and are not claimed by the supervisor.
+- Completed task results are stored in the isolated queue database with an 8 KiB ceiling; completed/dead retention cleanup is not yet scheduled.
 - `GET /health` exposes service metadata only. No personal data, credentials, or website data are stored or transmitted by the current code.
 
 ## Free-tier guardrails

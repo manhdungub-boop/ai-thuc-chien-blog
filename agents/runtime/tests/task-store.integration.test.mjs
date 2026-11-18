@@ -98,6 +98,20 @@ describe("AgentTaskStore Durable Object", () => {
     expect(await store.stats()).toEqual({ dead: 1 });
   });
 
+  it("executes and persists only allowlisted local health-check results", async () => {
+    const request = { id: "runtime-health-test-01", task_type: "runtime_health_check", payload: {} };
+    await store.enqueue(request);
+    const noMatch = await store.claim(["quality_review"]);
+    expect(noMatch).toEqual({ task: null });
+    const claim = await store.claim(["runtime_health_check"]);
+    expect(claim.task.task_type).toBe("runtime_health_check");
+    const result = { healthy: true, external_calls: 0, production_access: false };
+    expect(await store.complete(request.id, claim.lease_token, result)).toEqual({ updated: true });
+    const duplicate = await store.enqueue(request);
+    expect(duplicate.task.status).toBe("completed");
+    expect(duplicate.task.result).toEqual(result);
+    expect(await store.stats()).toEqual({ completed: 1 });
+  });
   it("enforces the active queue capacity without accepting the 501st task", async () => {
     for (let index = 0; index < 500; index += 1) {
       const result = await store.enqueue(task(`task-capacity-${String(index).padStart(4, "0")}`));

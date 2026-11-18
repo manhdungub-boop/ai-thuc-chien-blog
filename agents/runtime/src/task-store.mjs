@@ -4,7 +4,8 @@ const TASK_TYPES = new Set([
   "ai_bank_discovery",
   "content_research",
   "content_draft",
-  "quality_review"
+  "quality_review",
+  "runtime_health_check"
 ]);
 const MAX_PAYLOAD_BYTES = 8192;
 const MAX_ACTIVE_TASKS = 500;
@@ -20,7 +21,8 @@ function validatePayload(type, payload) {
     ai_bank_discovery: ["query"],
     content_research: ["topic", "language"],
     content_draft: ["topic", "research_task_id"],
-    quality_review: ["artifact_id", "artifact_type"]
+    quality_review: ["artifact_id", "artifact_type"],
+    runtime_health_check: []
   }[type];
   if (keys.some(key => !allowed.includes(key))) return false;
   if (type === "ai_bank_discovery") return text(payload.query, 3, 160);
@@ -32,6 +34,7 @@ function validatePayload(type, payload) {
   if (type === "quality_review") {
     return id(payload.artifact_id) && ["article", "ai_tool"].includes(payload.artifact_type);
   }
+  if (type === "runtime_health_check") return keys.length === 0;
   return false;
 }
 
@@ -45,7 +48,8 @@ function safeTask(row) {
     created_at: row.created_at,
     updated_at: row.updated_at,
     lease_until: row.lease_until,
-    last_error: row.last_error
+    last_error: row.last_error,
+    result: row.result_json ? JSON.parse(row.result_json) : null
   };
 }
 
@@ -63,9 +67,14 @@ export class AgentTaskStore extends DurableObject {
         updated_at INTEGER NOT NULL,
         lease_until INTEGER,
         lease_token TEXT,
-        last_error TEXT
+        last_error TEXT,
+        result_json TEXT
       )
     `);
+    const columns = this.ctx.storage.sql.exec("PRAGMA table_info(tasks)").toArray();
+    if (!columns.some(column => column.name === "result_json")) {
+      this.ctx.storage.sql.exec("ALTER TABLE tasks ADD COLUMN result_json TEXT");
+    }
     this.ctx.storage.sql.exec(
       "CREATE INDEX IF NOT EXISTS tasks_status_created ON tasks(status, created_at)"
     );
@@ -123,16 +132,20 @@ export class AgentTaskStore extends DurableObject {
     };
   }
 
-  claim() {
+  claim(allowedTaskTypes = null) {
     const now = Date.now();
     // Expired leases return to the queue; exhausted tasks move to dead-letter state.
     this.ctx.storage.sql.exec(
       "UPDATE tasks SET status = CASE WHEN attempts >= ? THEN 'dead' ELSE 'pending' END, lease_until = NULL, lease_token = NULL, updated_at = ? WHERE status = 'leased' AND lease_until <= ?",
       MAX_ATTEMPTS, now, now
     );
+    if (allowedTaskTypes !== null && (!Array.isArray(allowedTaskTypes) || allowedTaskTypes.length === 0 || allowedTaskTypes.some(type => !TASK_TYPES.has(type)))) {
+      throw new TypeError("invalid_claim_task_types");
+    }
+    const filter = allowedTaskTypes === null ? "" : " AND task_type IN (" + allowedTaskTypes.map(() => "?").join(",") + ")";
     const row = this.ctx.storage.sql.exec(
-      "SELECT * FROM tasks WHERE status = 'pending' AND attempts < ? ORDER BY created_at ASC LIMIT 1",
-      MAX_ATTEMPTS
+      "SELECT * FROM tasks WHERE status = 'pending' AND attempts < ?" + filter + " ORDER BY created_at ASC LIMIT 1",
+      MAX_ATTEMPTS, ...(allowedTaskTypes ?? [])
     ).toArray()[0];
     if (!row) return { task: null };
     const leaseUntil = now + LEASE_MS;
@@ -147,11 +160,13 @@ export class AgentTaskStore extends DurableObject {
     return { task: safeTask(claimedRows[0]), lease_token: leaseToken };
   }
 
-  complete(taskId, leaseToken) {
+  complete(taskId, leaseToken, result = null) {
     const now = Date.now();
+    const resultJson = result === null ? null : JSON.stringify(result);
+    if (resultJson && new TextEncoder().encode(resultJson).byteLength > MAX_PAYLOAD_BYTES) throw new TypeError("result_too_large");
     const updated = this.ctx.storage.sql.exec(
-      "UPDATE tasks SET status = 'completed', lease_until = NULL, lease_token = NULL, updated_at = ? WHERE id = ? AND status = 'leased' AND lease_until > ? AND lease_token = ? RETURNING id",
-      now, taskId, now, leaseToken
+      "UPDATE tasks SET status = 'completed', lease_until = NULL, lease_token = NULL, updated_at = ?, result_json = ? WHERE id = ? AND status = 'leased' AND lease_until > ? AND lease_token = ? RETURNING id",
+      now, resultJson, taskId, now, leaseToken
     ).toArray();
     return { updated: updated.length === 1 };
   }
