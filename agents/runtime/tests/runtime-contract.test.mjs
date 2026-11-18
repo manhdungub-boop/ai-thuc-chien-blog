@@ -100,7 +100,7 @@ test("health endpoint is read-only and does not expose task enqueue", () => {
   assert.match(source, /task_enqueue_endpoint_enabled: false/);
   assert.match(source, /scheduler: env.AGENT_SCHEDULE_MODE \|\| "not_configured"/);
   assert.match(source, /ai_inference_enabled: false/);
-  assert.match(source, /content_draft_executor_enabled: false/);
+  assert.match(source, /content_draft_executor_enabled: true/);
   assert.match(source, /quality_review_executor_enabled: false/);
   assert.match(source, /website_publication_enabled: false/);
   assert.match(source, /facebook_publication_enabled: false/);
@@ -122,14 +122,14 @@ test("supervisor executes bounded health and daily read-only discovery tasks", (
   assert.match(source, /retrieveResearchEvidence/);
   assert.match(source, /evidence_retrieval/);
   assert.match(source, /research-scan-/);
-  assert.match(source, /content_research/);
+  assert.match(source, /content_research/);\n  assert.match(source, /buildArticleAuthoringBrief/);\n  assert.match(source, /draftStore\.createDraft\(draftTaskId, brief\.draft\)/);\n  assert.match(source, /research\.result\?\.evidence_retrieval\?\.evidence/);\n  assert.match(source, /artifact_status: persisted\.artifact\.status/);\n  assert.match(source, /publication_authorized: false/);\n  assert.match(source, /content_draft: contentDraft/);
   assert.match(source, /ai-bank-scan-/);
   assert.match(source, /ai_bank_discovery/);
   assert.match(source, /catalog_modified: false/);
   assert.match(source, /AGENT_AI_BANK_CANDIDATE_STORE/);
   assert.match(source, /upsertCandidates/);
   assert.match(source, /ai_bank_candidate_store: candidateStore/);
-  assert.match(source, /tasks_considered: 3/);
+  assert.match(source, /tasks_considered: 4/);
   assert.match(source, /external_calls: externalCalls/);
   assert.match(source, /daily_budgets: dailyBudgets/);
   assert.match(source, /getExternalRequestBudget\(budgetDay, "ai_bank_discovery"\)/);
@@ -143,7 +143,7 @@ test("task store enforces an allowlist, bounded payloads, and idempotent IDs", (
   assert.match(store, /function validatePayload\(type, payload\)/);
   assert.match(store, /ai_bank_discovery: \["query"\]/);
   assert.match(store, /content_research: \["topic", "language"\]/);
-  assert.match(store, /content_draft: \["topic", "research_task_id"\]/);
+  assert.match(store, /content_draft: \["topic", "research_task_id"\]/);\n  assert.match(store, /"content_draft",\s*"runtime_health_check"/);
   assert.match(store, /quality_review: \["artifact_id", "artifact_type"\]/);
   assert.match(store, /runtime_health_check: \[\]/);
   assert.match(store, /MAX_PAYLOAD_BYTES = 8192/);
