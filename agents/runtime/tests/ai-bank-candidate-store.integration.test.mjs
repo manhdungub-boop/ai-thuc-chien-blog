@@ -264,6 +264,40 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     expect(packet.verification_status).toBe("not_verified");
   });
 
+  it("reuses the same source as pending evidence for a newer release without losing its history", async () => {
+    await store.upsertCandidates([candidate()], Date.parse("2026-11-19T08:06:00.000Z"));
+    const evidence = {
+      check_type: "license_scope",
+      source_title: "Official license",
+      source_url: "https://github.com/ollama/ollama/blob/main/LICENSE",
+      excerpt: "License source must be reviewed for this release."
+    };
+    const first = await store.submitReviewEvidence(
+      "github:ollama/ollama", evidence, Date.parse("2026-11-19T08:10:00.000Z")
+    );
+    expect(first.accepted).toBe(true);
+
+    const newer = candidate(sources[0], "v1.2.4", "2026-11-19T11:00:00.000Z");
+    newer.discovered_at = "2026-11-19T11:05:00.000Z";
+    await store.upsertCandidates([newer], Date.parse("2026-11-19T11:06:00.000Z"));
+
+    const second = await store.submitReviewEvidence(
+      "github:ollama/ollama", evidence, Date.parse("2026-11-19T11:10:00.000Z")
+    );
+    expect(second).toMatchObject({ accepted: true, evidence_id: first.evidence_id });
+    const packet = await store.getReviewPacket("github:ollama/ollama");
+    expect(packet.total_evidence).toBe(1);
+    const history = await store.listReviewEvidence("github:ollama/ollama");
+    expect(history).toHaveLength(2);
+    expect(new Set(history.map(item => item.candidate_release_url))).toEqual(new Set([
+      "https://github.com/ollama/ollama/releases/tag/v1.2.3",
+      "https://github.com/ollama/ollama/releases/tag/v1.2.4"
+    ]));
+    expect(await store.submitReviewEvidence(
+      "github:ollama/ollama", evidence, Date.parse("2026-11-19T11:11:00.000Z")
+    )).toEqual({ accepted: false, reason: "duplicate_evidence" });
+  });
+
   it("applies the per-check evidence cap independently to each release version", async () => {
     await store.upsertCandidates([candidate()], Date.parse("2026-11-19T08:06:00.000Z"));
     const makeEvidence = (version, index) => ({
