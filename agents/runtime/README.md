@@ -166,3 +166,12 @@ The reviewer console deliberately does not offer a decision form based only on a
 - It does not copy source excerpts into article prose, generate factual claims, or create a stored draft. Every article section remains an explicit human-authoring placeholder.
 - The deterministic article quality gate is run against the scaffold and is expected to return `needs_revision`; this is intentional and is not a publication-ready article.
 - The helper is not registered as a `content_draft` task executor and does not change task queue executability. No automatic article generation is claimed.
+
+
+### Supervisor research-to-authoring handoff
+
+- The bounded supervisor now registers `content_draft` as an executable task, but its scope is deliberately limited to creating a human-authoring scaffold from the completed same-cycle `content_research` result.
+- The task uses only successfully retrieved evidence from the research task, requires three distinct publisher-policy-approved sources, and stores the resulting scaffold in the isolated `AGENT_DRAFT_STORE` under a stable daily artifact ID.
+- The scaffold is expected to remain `needs_revision` and is excluded from the pending human-review queue. It contains no generated factual claims and is not a complete article.
+- The task performs no additional network calls, AI inference, public API writes, publication, or social actions. The runtime remains disabled and paused in both checked-in configs; this executor does not activate the supervisor.
+- `quality_review` remains unregistered and non-executable. No public task-enqueue endpoint is added.
