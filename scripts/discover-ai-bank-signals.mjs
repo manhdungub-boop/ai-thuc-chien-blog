@@ -37,8 +37,17 @@ function entries(xml, source) {
     const id = body.match(/<id>([^<]+)<\/id>/i)?.[1] || link;
     const date = new Date(updated);
     if (!title || !link || !Number.isFinite(date.getTime())) return null;
-    const parsed = new URL(link);
-    if (parsed.hostname !== "github.com" || parsed.pathname.split("/").slice(1, 3).join("/") !== source.repo) return null;
+    let parsed;
+    try { parsed = new URL(link); } catch { return null; }
+    if (
+      parsed.protocol !== "https:" ||
+      parsed.hostname !== "github.com" ||
+      parsed.username ||
+      parsed.password ||
+      (parsed.port && parsed.port !== "443") ||
+      parsed.pathname.split("/").slice(1, 3).join("/") !== source.repo ||
+      !parsed.pathname.startsWith(`/${source.repo}/releases/`)
+    ) return null;
     return { vendor: source.vendor, product: source.product, repository: source.repo, title, source_url: link, source_id: id, published_at: date.toISOString() };
   }).filter(Boolean);
 }
