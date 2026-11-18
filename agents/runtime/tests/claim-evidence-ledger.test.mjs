@@ -71,8 +71,11 @@ describe("claim evidence provenance ledger", () => {
       evidence_urls: [evidence[0].url, evidence[1].url, evidence[2].url, evidence[0].url, "https://extra.example/x"]
     }));
     const result = buildClaimEvidenceLedger(claims, evidence, assessment);
-    expect(result.claims_received).toBe(40);
+    expect(result.claims_received).toBe(45);
     expect(result.claims_assessed).toBe(40);
-    expect(result.claims[0].sources).toHaveLength(3);
+    expect(result.claim_batch_truncated).toBe(true);
+    expect(result.status).toBe("claim_evidence_review_incomplete");
+    expect(result.claims[0].sources).toHaveLength(0);
+    expect(result.claims[0].reason).toBe("too_many_evidence_references");
   });
 });
