@@ -203,4 +203,42 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     )).rejects.toThrow("invalid_evidence_list_limit");
   });
 
+  it("builds an explicit six-part review packet without treating submitted evidence as verified", async () => {
+    await store.upsertCandidates([candidate()]);
+    await store.submitReviewEvidence("github:ollama/ollama", {
+      check_type: "pricing_and_free_limits",
+      source_title: "Pricing reference",
+      source_url: "https://ollama.com/pricing",
+      excerpt: "Pricing excerpt awaiting review."
+    });
+    await store.submitReviewEvidence("github:ollama/ollama", {
+      check_type: "license_scope",
+      source_title: "License reference",
+      source_url: "https://github.com/ollama/ollama/blob/main/LICENSE",
+      excerpt: "License excerpt awaiting review."
+    });
+    const packet = await store.getReviewPacket("github:ollama/ollama");
+    expect(packet).toMatchObject({
+      total_evidence: 2,
+      checks_with_evidence: 2,
+      checks_missing_evidence: 4,
+      verification_status: "not_verified",
+      human_review_required: true,
+      catalog_write_authorized: false,
+      public_publication_authorized: false
+    });
+    expect(packet.checklist).toHaveLength(6);
+    expect(packet.checklist.find(item => item.check_type === "pricing_and_free_limits")).toMatchObject({
+      evidence_count: 1,
+      status: "evidence_pending_human_review",
+      verified: false
+    });
+    expect(packet.checklist.find(item => item.check_type === "privacy_and_data_handling")).toMatchObject({
+      evidence_count: 0,
+      status: "evidence_missing",
+      verified: false
+    });
+    expect(await store.getReviewPacket("github:missing/tool")).toBeNull();
+  });
+
 });
