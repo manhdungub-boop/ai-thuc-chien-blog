@@ -142,9 +142,18 @@ export const REVIEWER_CONSOLE_JS = `"use strict";
       renderSourceList(draft.sources);
       add(detail, "h3", "Kết quả kiểm tra cấu trúc");
       add(detail, "pre", JSON.stringify(artifact.quality_review || {}, null, 2));
-      add(detail, "h3", "Hồ sơ rà soát bằng chứng");
-      add(detail, "pre", JSON.stringify(artifact.evidence_review || null, null, 2));
-      add(detail, "p", "Đây là màn hình chỉ đọc. Đánh giá bằng chứng, duyệt phát hành và xuất bản chưa được thực hiện tại đây.");
+      add(detail, "h3", "Hồ sơ bằng chứng");
+      const evidenceLedger = artifact.evidence_review?.ledger;
+      if (!evidenceLedger || !Array.isArray(evidenceLedger.claims) || evidenceLedger.claims.length === 0) {
+        add(detail, "p", "CHƯA ĐỦ ĐIỀU KIỆN ĐÁNH GIÁ: bản nháp chưa có evidence ledger kèm trích đoạn nguồn đã thu thập. Danh sách URL hoặc claim manifest không thay thế được bằng chứng gốc. Chưa thể ghi nhận quyết định supported / unsupported / needs_revision.");
+        if (Array.isArray(draft.claims) && draft.claims.length > 0) {
+          add(detail, "p", "Bản nháp khai báo " + draft.claims.length + " tuyên bố và liên kết nguồn, nhưng chưa có trích đoạn để người duyệt đối chiếu.");
+        }
+      } else {
+        add(detail, "p", "Đã có " + evidenceLedger.claims.length + " tuyên bố trong hồ sơ bằng chứng đã lưu.");
+        add(detail, "pre", JSON.stringify(artifact.evidence_review, null, 2));
+      }
+      add(detail, "p", "Đây là màn hình chỉ đọc. Chưa có thao tác đánh giá hoặc gửi quyết định; duyệt phát hành và xuất bản vẫn là các cổng riêng.");
     } catch (error) {
       detail.replaceChildren();
       add(detail, "h2", "Không thể mở bài viết");
