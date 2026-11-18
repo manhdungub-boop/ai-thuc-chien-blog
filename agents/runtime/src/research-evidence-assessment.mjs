@@ -33,11 +33,11 @@ export function assessResearchEvidence(evidence, {
       reason = "invalid_source_url";
     }
     if (!reason && item?.status !== "source_retrieved_not_fact_checked") reason = "source_not_retrieved";
-    const publisherIdentity = !reason ? classifyResearchPublisher(item.source, item.url) : null;
-    if (!reason && !publisherIdentity?.accepted) reason = publisherIdentity?.reason || "publisher_identity_not_allowlisted";
     if (!reason && (typeof item.source !== "string" || !item.source.trim() || typeof item.title !== "string" || !item.title.trim())) {
       reason = "missing_source_metadata";
     }
+    const publisherIdentity = !reason ? classifyResearchPublisher(item.source, item.url) : null;
+    if (!reason && !publisherIdentity?.accepted) reason = publisherIdentity?.reason || "publisher_identity_not_allowlisted";
     if (!reason && (typeof item.excerpt !== "string" || item.excerpt.trim().length < 80 || item.excerpt.length > 600)) {
       reason = "invalid_excerpt";
     }
