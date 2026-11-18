@@ -13,6 +13,10 @@ const LOCAL_PROVIDER_CAPABILITIES = new Map([
   ["article-quality-gate", new Set(["quality_review"])]
 ]);
 
+// Intentionally empty: no external provider has a trusted, runtime-owned
+// quota adapter yet. Do not populate this list from provider-supplied data.
+const VERIFIED_EXTERNAL_PROVIDER_ADAPTERS = new Set();
+
 const MAX_QUOTA_AGE_MS = 15 * 60 * 1000;
 
 function isFreshTimestamp(value, now, maxAgeMs) {
@@ -33,11 +37,16 @@ function eligible(provider, taskType, now) {
   if (!["zero_cost_verified", "no_external_execution"].includes(provider.cost_class)) return false;
   if (!Array.isArray(provider.capabilities) || !provider.capabilities.includes(taskType)) return false;
 
-  // Only the in-repository deterministic article quality gate may bypass
+  // Only a code-registered deterministic local implementation may bypass
   // external quota checks. Provider-supplied labels are not sufficient.
   if (provider.cost_class === "no_external_execution") {
     return isAllowlistedLocalProvider(provider, taskType);
   }
+
+  // A provider-supplied quota snapshot is not authoritative. External
+  // inference stays disabled until a trusted adapter is implemented in code.
+  if (!VERIFIED_EXTERNAL_PROVIDER_ADAPTERS.has(provider.id)) return false;
+
   const quota = provider.quota;
   return Boolean(
     quota &&
@@ -49,8 +58,8 @@ function eligible(provider, taskType, now) {
 }
 
 /**
- * Selects a provider only when runtime access, task capability, zero-cost
- * classification, and live quota evidence are verified. Otherwise defer.
+ * Selects only code-registered local work or external providers backed by
+ * a trusted runtime-owned quota adapter. Otherwise defer.
  */
 export function selectProvider(taskType, providers, now = Date.now()) {
   if (!TASK_TYPES.has(taskType)) {
@@ -84,6 +93,9 @@ export function selectProvider(taskType, providers, now = Date.now()) {
   if (matching.some(provider => provider?.cost_class === "no_external_execution" && !isAllowlistedLocalProvider(provider, taskType))) {
     return { action: "defer", provider: null, reason: "local_provider_not_allowlisted" };
   }
+  if (matching.some(provider => provider?.cost_class === "zero_cost_verified" && !VERIFIED_EXTERNAL_PROVIDER_ADAPTERS.has(provider?.id))) {
+    return { action: "defer", provider: null, reason: "external_provider_adapter_not_verified" };
+  }
   if (matching.some(provider => !["zero_cost_verified", "no_external_execution"].includes(provider?.cost_class))) {
     return { action: "defer", provider: null, reason: "free_cost_not_verified" };
   }
@@ -100,6 +112,7 @@ export const providerPolicy = Object.freeze({
   taskTypes: Object.freeze([...TASK_TYPES]),
   maxQuotaAgeMs: MAX_QUOTA_AGE_MS,
   localProviderIds: Object.freeze([...LOCAL_PROVIDER_CAPABILITIES.keys()]),
+  externalProviderIds: Object.freeze([...VERIFIED_EXTERNAL_PROVIDER_ADAPTERS]),
   failClosed: true,
   paidFallbackAllowed: false,
   unknownCostAllowed: false
