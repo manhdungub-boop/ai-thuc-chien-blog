@@ -6,14 +6,14 @@ This directory is a separate Cloudflare Worker service. It is not imported by th
 
 - Cloudflare Workflows creates a recurring supervisor run every 15 minutes (UTC), with concurrency limited to one.
 - A separate SQLite-backed Durable Object provides a durable task queue. It is not the website's D1 database.
-- Queue contracts include an allowlist of task types, an 8 KiB payload ceiling, idempotent task IDs, five-minute leases, a five-attempt ceiling, and a dead-letter state.
+- Queue contracts include an allowlist of task types, an 8 KiB payload ceiling, idempotent task IDs, a 500-task active-queue ceiling, five-minute leases, a five-attempt ceiling, and a dead-letter state.
 - Queue operations are internal Durable Object RPC methods only. There is no public task-enqueue endpoint.
 - The scheduled supervisor remains deliberately idle. It does not yet claim or execute tasks, call models, access GitHub, or publish content.
 - `GET /health` exposes service metadata only. No personal data, credentials, or website data are stored or transmitted by the current code.
 
 ## Free-tier guardrails
 
-Cloudflare's published Workers Free limits currently include 3,000 Workflow steps/day and 1 GB-month Workflow state. SQLite-backed Durable Objects include 100,000 row writes/day and 5 million row reads/day. These are account-level limits, not a guarantee that other account usage leaves the full quota available. The runtime must remain within free limits and fail closed; no paid plan or billing change is authorized.
+Cloudflare publishes plan-specific limits and pricing for Workflows and SQLite-backed Durable Objects. Exact remaining quota depends on the account and its other workloads; this repository does not have verified access to the account's current usage. Do not assume the service is free at any scale. Before Preview deployment, confirm the account's current free-tier limits and usage in the dashboard. The runtime must fail closed at its configured queue ceiling; no paid plan or billing change is authorized.
 
 ## Validation and deployment
 
