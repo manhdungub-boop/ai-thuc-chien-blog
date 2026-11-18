@@ -20,11 +20,12 @@ function eligible(provider, taskType, now) {
   if (!provider || typeof provider !== "object") return false;
   if (provider.status !== "ready") return false;
   if (provider.execution_surface !== "agent_runtime") return false;
-  if (provider.cost_class !== "zero_cost_verified") return false;
+  if (!["zero_cost_verified", "no_external_execution"].includes(provider.cost_class)) return false;
   if (!Array.isArray(provider.capabilities) || !provider.capabilities.includes(taskType)) return false;
 
   // Runtime inference providers must carry a fresh, positive quota observation.
   // Deterministic local providers may explicitly declare no_external_execution.
+  if (provider.cost_class === "no_external_execution") return true;
   if (provider.cost_class === "no_external_execution") return true;
   const quota = provider.quota;
   return Boolean(
