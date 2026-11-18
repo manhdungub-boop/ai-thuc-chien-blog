@@ -4,6 +4,9 @@ import { AI_BANK_RELEASE_SOURCES } from "./ai-bank-discovery.mjs";
 const ALLOWED_REPOSITORIES = new Set(AI_BANK_RELEASE_SOURCES.map(source => source.repo));
 const MAX_CANDIDATES_PER_BATCH = 10;
 const MAX_CANDIDATE_BYTES = 8192;
+const MAX_EVIDENCE_PER_CHECK = 5;
+const MAX_EVIDENCE_TITLE_CHARS = 180;
+const MAX_EVIDENCE_EXCERPT_CHARS = 1000;
 const REQUIRED_CHECKS = [
   "official_product_domain",
   "pricing_and_free_limits",
@@ -95,6 +98,16 @@ export class AgentAIBankCandidateStore extends DurableObject {
     this.ctx.storage.sql.exec(
       "CREATE INDEX IF NOT EXISTS ai_bank_candidates_last_seen ON ai_bank_candidates(last_seen_at)"
     );
+    this.ctx.storage.sql.exec(
+      "CREATE TABLE IF NOT EXISTS ai_bank_review_evidence (" +
+      "evidence_id TEXT PRIMARY KEY, candidate_id TEXT NOT NULL, check_type TEXT NOT NULL, " +
+      "source_title TEXT NOT NULL, source_url TEXT NOT NULL, excerpt TEXT NOT NULL, " +
+      "source_status TEXT NOT NULL, review_status TEXT NOT NULL, submitted_at TEXT NOT NULL, " +
+      "UNIQUE(candidate_id, check_type, source_url))"
+    );
+    this.ctx.storage.sql.exec(
+      "CREATE INDEX IF NOT EXISTS ai_bank_review_evidence_candidate ON ai_bank_review_evidence(candidate_id, submitted_at)"
+    );
   }
 
   upsertCandidates(candidates, now = Date.now()) {
@@ -162,6 +175,84 @@ export class AgentAIBankCandidateStore extends DurableObject {
       candidateId
     ).toArray()[0];
     return row ? safeCandidate(row) : null;
+  }
+
+  submitReviewEvidence(candidateId, evidence, now = Date.now()) {
+    const candidate = this.getCandidate(candidateId);
+    if (!candidate) return { accepted: false, reason: "candidate_not_found" };
+    if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) {
+      return { accepted: false, reason: "invalid_evidence" };
+    }
+    const checkType = evidence.check_type;
+    if (!REQUIRED_CHECKS.includes(checkType)) {
+      return { accepted: false, reason: "unsupported_check_type" };
+    }
+    if (typeof evidence.source_title !== "string" ||
+        evidence.source_title.trim().length < 1 ||
+        evidence.source_title.length > MAX_EVIDENCE_TITLE_CHARS ||
+        typeof evidence.excerpt !== "string" ||
+        evidence.excerpt.trim().length < 1 ||
+        evidence.excerpt.length > MAX_EVIDENCE_EXCERPT_CHARS) {
+      return { accepted: false, reason: "invalid_evidence_text" };
+    }
+    let sourceUrl;
+    try {
+      sourceUrl = new URL(evidence.source_url);
+    } catch {
+      return { accepted: false, reason: "invalid_evidence_url" };
+    }
+    const host = sourceUrl.hostname.toLowerCase();
+    if (sourceUrl.protocol !== "https:" || !host || sourceUrl.username ||
+        sourceUrl.password || sourceUrl.search || sourceUrl.hash ||
+        (sourceUrl.port && sourceUrl.port !== "443") ||
+        host === "localhost" || host.endsWith(".localhost") ||
+        host.endsWith(".local") || /^\d{1,3}(\.\d{1,3}){3}$/.test(host) ||
+        host.includes(":") || sourceUrl.href.length > 1000) {
+      return { accepted: false, reason: "invalid_evidence_url" };
+    }
+    if (!Number.isSafeInteger(now) || now < 0 || !Number.isFinite(new Date(now).getTime())) {
+      return { accepted: false, reason: "invalid_evidence_timestamp" };
+    }
+    const existing = this.ctx.storage.sql.exec(
+      "SELECT evidence_id FROM ai_bank_review_evidence WHERE candidate_id = ? AND check_type = ? AND source_url = ?",
+      candidateId, checkType, sourceUrl.href
+    ).toArray()[0];
+    if (existing) return { accepted: false, reason: "duplicate_evidence" };
+    const count = this.ctx.storage.sql.exec(
+      "SELECT COUNT(*) AS count FROM ai_bank_review_evidence WHERE candidate_id = ? AND check_type = ?",
+      candidateId, checkType
+    ).one().count;
+    if (count >= MAX_EVIDENCE_PER_CHECK) {
+      return { accepted: false, reason: "evidence_limit_reached" };
+    }
+    const evidenceId = crypto.randomUUID();
+    const submittedAt = new Date(now).toISOString();
+    this.ctx.storage.sql.exec(
+      "INSERT INTO ai_bank_review_evidence (evidence_id, candidate_id, check_type, source_title, source_url, excerpt, source_status, review_status, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      evidenceId, candidateId, checkType, evidence.source_title.trim(),
+      sourceUrl.href, evidence.excerpt.trim(),
+      "submitted_source_not_verified", "pending_human_review", submittedAt
+    );
+    return {
+      accepted: true,
+      evidence_id: evidenceId,
+      source_status: "submitted_source_not_verified",
+      review_status: "pending_human_review",
+      verification_authorized: false,
+      catalog_write_authorized: false,
+      public_publication_authorized: false
+    };
+  }
+
+  listReviewEvidence(candidateId, limit = 30) {
+    if (!this.getCandidate(candidateId)) return [];
+    if (!Number.isInteger(limit) || limit < 1 || limit > 30) {
+      throw new TypeError("invalid_evidence_list_limit");
+    }
+    return this.ctx.storage.sql.exec(
+      "SELECT evidence_id, candidate_id, check_type, source_title, source_url, excerpt, source_status, review_status, submitted_at FROM ai_bank_review_evidence WHERE candidate_id = ? ORDER BY submitted_at ASC, evidence_id ASC LIMIT ?",
+      candidateId, limit
+    ).toArray().map(row => ({ ...row }));
   }
 
   stats() {
