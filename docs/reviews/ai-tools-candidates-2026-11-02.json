@@ -284,7 +284,7 @@
         "macos"
       ],
       "description": "Apple-device image creation and editing app with local text-to-image, image-to-image, inpainting/outpainting, ControlNet, local LoRA training and selected local image-to-video workflows. Local generation is distinct from optional Cloud Compute; supported workflows depend on the selected model and device resources.",
-      "free_tier_summary": "Free Edition: download models and generate locally on the device; after download, local generation can run offline. Community: the official pricing page says a free account can use managed Cloud Compute, but current usage limits/eligibility are not fully specified. Cloud Compute is a separate network service, not private on-device inference: the privacy policy says it requires optional Apple Sign-in and uploaded LoRAs are stored on cloud servers. Draw Things+ is USD 8.99/month on the official site; the Vietnam App Store lists VND 399,000 and paid Boost Bundles, with no billing period shown beside that localized IAP amount. The App Store privacy disclosure also lists purchase history, user content and a user ID not linked to identity, with Apple's note that the disclosure has not been verified by Apple. iOS 15.4+ is only a minimum OS requirement, not proof every model fits a given device's memory/thermal budget. Keep needs_review until a specific model, device performance, and per-model license are checked.",
+      "free_tier_summary": "App Store niêm yết miễn phí kèm mua trong ứng dụng. Free Edition hỗ trợ tải model và tạo ảnh cục bộ trên thiết bị; Community account mở thêm Cloud Compute miễn phí (xử lý trên máy chủ, cần tài khoản/mạng); Draw Things+ là gói trả phí, không dùng. Tạo ảnh local không cần subscription và nhà phát triển tuyên bố prompt/ảnh ở trên thiết bị. App Store yêu cầu iOS 15.4+; listing US ghi 18+ và dữ liệu có thể thu thập gồm Purchases, User Content, Identifiers (không liên kết danh tính). Không bật Cloud Compute/remote API trong luồng bảo mật. Model tải về chiếm dung lượng lớn: tài liệu cộng đồng ghi khoảng 800MB cho model 8-bit, 1.8GB cho SD 1.5, gần 10GB cho SDXL; tài liệu kỹ thuật lưu ý CoreML trên điện thoại có thể chậm hoặc crash. Chưa có benchmark chính thức cho iPhone 11 Pro Max/A13; không kết luận máy chạy ổn chỉ từ yêu cầu iOS.",
       "official_sources": [
         "https://drawthings.ai/",
         "https://apps.apple.com/vn/app/draw-things-offline-ai-art/id6444050820",
@@ -294,7 +294,7 @@
         "https://github.com/drawthingsai/community-docs/blob/main/Documentation.docc/2.Models.md",
         "https://drawthings.ai/pricing/"
       ],
-      "last_verified": "2026-11-17",
+      "last_verified": "2026-11-18",
       "verification_status": "needs_review",
       "status": "active",
       "tags": [
@@ -303,9 +303,13 @@
         "on-device-image-generation",
         "offline-ai",
         "image-to-video",
-        "model-license-review"
+        "model-license-review",
+        "local-image-generation",
+        "large-model-download",
+        "iphone-performance-unverified",
+        "cloud-compute-excluded"
       ],
-      "project_fit": "iOS/iPadOS app with a free local-generation edition, but do not recommend as the default production image tool on this project's older 4-GB-class iPhone. Model loading and image generation are memory intensive; App Store device compatibility alone does not guarantee a model will run reliably. Prefer generating/validating site artwork through free isolated CI or other verified no-cost workflow; keep Draw Things as an optional small-model experiment only if a real device test passes. Do not use Cloud Compute for private content or buy Draw Things+ / Boosts."
+      "project_fit": "Phù hợp về chức năng để tạo ảnh minh họa cục bộ miễn phí, không cần token hoặc subscription khi chỉ dùng local compute. Tuy nhiên chưa xếp vào nhóm ưu tiên thử trên iPhone 11 Pro Max: model có thể chiếm 0.8–10GB; tài liệu cộng đồng cảnh báo xử lý CoreML trên điện thoại có thể chậm/crash; chưa có benchmark A13. Chỉ cân nhắc thử sau khi kiểm tra dung lượng trống và chọn model nhỏ, không tải model lớn hoặc video. Giữ Cloud Compute, remote API và Draw Things+ ngoài quy trình 0 đồng/bảo mật. App Store listing US có nhãn 18+ và privacy disclosure có thể gồm Purchases, User Content, Identifiers; cần kiểm tra listing VN trực tiếp trước khi cài. Model bên thứ ba phải rà license riêng."
     },
     {
       "id": "pocketpal-ai",
