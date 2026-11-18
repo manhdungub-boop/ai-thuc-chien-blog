@@ -112,3 +112,15 @@ No recurring Workflow schedule is configured while the runtime lacks a verified 
 - A claim cannot be marked `supported` unless every mapped source has an explicit `supports` decision. Missing, reordered, mismatched, or contradictory source assessments cannot pass as supported.
 - The review fingerprint covers the per-source decisions and notes; the verifier rechecks them against the exact ledger source order and revalidates publisher label/host/path provenance.
 - This makes the review auditable but does not independently prove that the reviewer's judgment is correct. Authenticated reviewer identity, owner release approval, copyright/originality checks, and publication authorization remain separate gates.
+
+
+
+### Read-only reviewer console (Preview candidate)
+
+- `GET /reviewer-console` serves a static same-origin interface for Google reviewer sign-in, bounded queue browsing, and opening a selected draft.
+- `GET /reviewer-console.js` serves the console client as a separate same-origin script so the HTML can enforce a restrictive Content Security Policy without inline JavaScript.
+- The console reads only `/auth/google/me`, `GET /api/reviewer/drafts?limit=20`, and `GET /api/reviewer/drafts/:id`. It does not submit evidence decisions, edit drafts, approve owner release, publish content, or post to social networks.
+- Draft Markdown, review metadata, and evidence packets are inserted into the page as text using DOM `textContent`; no Markdown/HTML rendering or `innerHTML` sink is used. Source links are accepted only for HTTPS and open with `noopener noreferrer`.
+- The HTML response sets a restrictive CSP (`default-src 'none'`, same-origin script/connect, no framing, no base URI, same-origin form actions), plus no-store, nosniff, frame denial, and no-referrer headers. The JavaScript response is also no-store and nosniff.
+- This is a Preview-only candidate. The reviewer OAuth allowlist and secrets are not configured, `AGENT_REVIEWER_AUTH_ENABLED=false`, and the console has not been deployed. It cannot display private drafts until the authenticated Preview path is separately configured and tested.
+- The console is intentionally read-only. Evidence decisions, owner release review, publication, and deployment remain separate gated workflows.
