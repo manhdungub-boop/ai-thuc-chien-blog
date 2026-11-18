@@ -2,6 +2,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 import { discoverAiBankReleaseSignals } from "./ai-bank-discovery.mjs";
 import { discoverResearchSignals } from "./research-discovery.mjs";
 import { retrieveResearchEvidence } from "./research-evidence.mjs";
+import { assessResearchEvidence } from "./research-evidence-assessment.mjs";
 export { AgentTaskStore } from "./task-store.mjs";
 export { AgentDraftStore } from "./draft-artifact-store.mjs";
 
@@ -108,10 +109,12 @@ export class AgentSupervisorWorkflow extends WorkflowEntrypoint {
         async () => {
           const discovered = await discoverResearchSignals({ lookbackDays: 14 });
           const evidence = await retrieveResearchEvidence(discovered.latest_signals, { now: Date.now() });
+          const evidenceAssessment = assessResearchEvidence(evidence.evidence, { now: Date.now() });
           return {
             ...discovered,
             sources_checked: discovered.sources_checked + evidence.attempts,
             evidence_retrieval: evidence,
+            evidence_assessment: evidenceAssessment,
             research_notice: "Retrieved excerpts are provenance-bound research evidence, not fact-checked claims or a publishable article."
           };
         }
