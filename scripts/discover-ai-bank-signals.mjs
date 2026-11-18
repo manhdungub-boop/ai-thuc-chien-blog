@@ -19,13 +19,12 @@ const SOURCES = [
 ];
 
 function sanitizeFeedTitle(value) {
-  // Keep XML entities encoded. Decoding &amp; here could create a second entity
-  // that a downstream renderer might decode again.
+  // Preserve only plain-text title characters. This removes markup delimiters,
+  // entity introducers and control characters without decoding XML entities.
   return value
     .replace(/<!\[CDATA\[|\]\]>/g, "")
-    .replaceAll("<", "")
-    .replaceAll(">", "")
-    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .replace(/[^\p{L}\p{N}\p{M}\s.,:;!?'"()\[\]{}+/_@#%=-]/gu, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 function entries(xml, source) {
