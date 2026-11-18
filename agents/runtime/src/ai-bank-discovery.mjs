@@ -46,6 +46,8 @@ function parseEntries(xml, source, cutoff) {
         parsed.username ||
         parsed.password ||
         (parsed.port && parsed.port !== "443") ||
+        parsed.search ||
+        parsed.hash ||
         !parsed.pathname.startsWith("/" + source.repo + "/releases/")
       ) return null;
       return {
@@ -54,7 +56,7 @@ function parseEntries(xml, source, cutoff) {
         repository: source.repo,
         title,
         source_url: link,
-        source_id: sourceId.slice(0, 300),
+        source_id: link,
         published_at: date.toISOString()
       };
     })
