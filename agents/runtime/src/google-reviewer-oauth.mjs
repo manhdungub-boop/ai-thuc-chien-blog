@@ -1,3 +1,4 @@
+import { readBoundedJsonResponse } from "./bounded-json-response.mjs";
 import { DurableObject } from "cloudflare:workers";
 import { verifyGoogleReviewerIdToken } from "./google-oidc-reviewer-verifier.mjs";
 
@@ -203,7 +204,7 @@ export async function handleGoogleReviewerAuth(request, env, { fetchImpl = fetch
     } catch { return json({ error: "google_code_exchange_unavailable" }, 502); }
     if (!tokenResponse.ok) return json({ error: "google_code_exchange_failed" }, 401);
     let tokenBody;
-    try { tokenBody = await tokenResponse.json(); } catch { return json({ error: "google_token_response_invalid" }, 502); }
+    try { tokenBody = await readBoundedJsonResponse(tokenResponse, 32 * 1024); } catch { return json({ error: "google_token_response_invalid_or_too_large" }, 502); }
     const identity = await verifyGoogleReviewerIdToken(tokenBody?.id_token, {
       audience: env.GOOGLE_REVIEWER_CLIENT_ID,
       nonce: transaction.nonce,
