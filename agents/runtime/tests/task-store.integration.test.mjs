@@ -112,6 +112,54 @@ describe("AgentTaskStore Durable Object", () => {
     expect(duplicate.task.result).toEqual(result);
     expect(await store.stats()).toEqual({ completed: 1 });
   });
+  it("enforces persistent daily outbound budgets independently for each discovery scope", async () => {
+    const day = "2026-11-18";
+    for (let index = 0; index < 10; index += 1) {
+      const result = await store.consumeExternalRequestBudget(day, "ai_bank_discovery");
+      expect(result).toMatchObject({ allowed: true, used: index + 1, limit: 10 });
+    }
+    expect(await store.consumeExternalRequestBudget(day, "ai_bank_discovery")).toMatchObject({
+      allowed: false,
+      used: 10,
+      limit: 10,
+      remaining: 0,
+      reason: "daily_external_request_budget_exhausted"
+    });
+
+    for (let index = 0; index < 8; index += 1) {
+      const result = await store.consumeExternalRequestBudget(day, "content_research");
+      expect(result).toMatchObject({ allowed: true, used: index + 1, limit: 8 });
+    }
+    expect(await store.consumeExternalRequestBudget(day, "content_research")).toMatchObject({
+      allowed: false,
+      used: 8,
+      limit: 8,
+      remaining: 0
+    });
+  });
+
+  it("atomically enforces the daily budget under concurrent outbound attempts", async () => {
+    const day = "2026-11-18";
+    const results = await Promise.all(
+      Array.from({ length: 16 }, () => store.consumeExternalRequestBudget(day, "ai_bank_discovery"))
+    );
+    expect(results.filter(result => result.allowed)).toHaveLength(10);
+    expect(results.filter(result => !result.allowed)).toHaveLength(6);
+    expect(results.filter(result => result.allowed).map(result => result.used).sort((a, b) => a - b))
+      .toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  });
+
+  it("rejects invalid budget dates and scopes without consuming quota", async () => {
+    await expect(Promise.resolve().then(() =>
+      store.consumeExternalRequestBudget("2026-02-30", "ai_bank_discovery")
+    )).rejects.toThrow("invalid_external_request_budget");
+    await expect(Promise.resolve().then(() =>
+      store.consumeExternalRequestBudget("2026-11-18", "untrusted_scope")
+    )).rejects.toThrow("invalid_external_request_budget");
+    expect(await store.consumeExternalRequestBudget("2026-11-18", "ai_bank_discovery"))
+      .toMatchObject({ allowed: true, used: 1, limit: 10 });
+  });
+
   it("enforces the active queue capacity without accepting the 501st task", async () => {
     for (let index = 0; index < 500; index += 1) {
       const result = await store.enqueue(task(`task-capacity-${String(index).padStart(4, "0")}`));
