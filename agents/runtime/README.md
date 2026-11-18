@@ -29,6 +29,18 @@ This directory is a separate Cloudflare Worker service. It is not imported by th
 - Completed task results are stored in the isolated queue database with an 8 KiB ceiling. Every enabled supervisor cycle prunes at most 100 eligible terminal tasks total (completed tasks older than 24 hours and dead-letter tasks older than seven days) and at most 100 request-budget counters older than 30 UTC days. Additional expired rows are retained for a later cycle. Pending and leased tasks are never removed by this retention pass.
 - `GET /health` exposes service metadata only. No personal data, credentials, or website data are stored or transmitted by the current code.
 
+
+### Google OpenID Connect reviewer identity adapter (Preview foundation only)
+
+- `src/google-oidc-reviewer-verifier.mjs` implements a fail-closed verifier for Google ID tokens. It accepts the OAuth client ID, one-time expected nonce, and reviewer email allowlist only as server-side configuration arguments; these values must never be read from the request body.
+- The verifier permits RS256 only, requires a known Google signing-key ID, imports the matching RSA JWK from the fixed Google JWKS endpoint, and verifies the signature with Web Crypto. It checks the accepted Google issuer, exact audience/authorized party, token expiry and issue time, optional not-before time, exact nonce, `email_verified === true`, and the normalized email allowlist.
+- Configure exactly one explicitly authorized reviewer email in private runtime configuration; do not commit personal allowlists, OAuth client secrets, ID tokens, private keys, or session cookies to the repository. OAuth client ID is not a secret, but must still be configured for the exact application.
+- The verifier returns a stable reviewer reference derived from Google's immutable `sub`, not from a caller-supplied email or reviewer reference. It returns no publication permission.
+- The module is not yet connected to a login callback, nonce/session store, review-record creation, or HTTP approval endpoint. No Google OAuth client, redirect URI, client secret, or runtime configuration has been created or verified. Therefore this is a tested identity-verification building block, not an operational login service.
+- Before enabling it, implement a server-generated cryptographically random nonce bound to a short-lived single-use login transaction; validate OAuth state and PKCE; exchange the authorization code server-side; validate the ID token with this module; consume the nonce once; and bind the verified `sub` and allowlisted email to the review record on the server. Do not accept an ID token or identity fields supplied independently of that transaction.
+- Keep identity authentication separate from owner release approval, publication authorization, deployment permissions, and Facebook publishing. The existing release-readiness gate remains fail-closed until the verified identity is carried into the review record through a trusted server-side flow.
+- The test suite uses locally generated ephemeral RSA keys and mocked Google JWKS responses. It never uses real Google credentials or contacts Google during tests.
+
 ## Explicit enable gate and emergency pause
 
 - `AGENT_ENABLED` must be exactly `true` before the supervisor can access the Durable Object queue or make any outbound request. Missing, empty, or any other value leaves the runtime disabled.
