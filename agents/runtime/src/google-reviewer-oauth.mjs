@@ -107,6 +107,30 @@ export class AgentReviewerAuthStore extends DurableObject {
   }
 }
 
+
+export function readGoogleReviewerSessionCookie(request) {
+  return cookieValue(request, SESSION_COOKIE);
+}
+
+export async function verifyGoogleReviewerSessionToken(token, env, now = Date.now()) {
+  const cfg = config(env);
+  if (!cfg || typeof token !== "string" || !token) return { authenticated: false, status: "reviewer_auth_not_configured" };
+  const session = await verifyPayload(env.GOOGLE_REVIEWER_SESSION_SECRET, token);
+  const nowSeconds = Math.floor(now / 1000);
+  if (!session || session.provider !== "google" || typeof session.sub !== "string" ||
+      !cfg.allowedEmails.includes(session.email) || session.reviewer_ref !== "google:" + session.sub ||
+      !Number.isInteger(session.exp) || session.exp <= nowSeconds ||
+      !Number.isInteger(session.iat) || session.iat > nowSeconds + 60 ||
+      session.exp - session.iat > SESSION_TTL_SECONDS) {
+    return { authenticated: false, status: "reviewer_session_invalid" };
+  }
+  return {
+    authenticated: true,
+    reviewer: { provider: "google", subject: session.sub, email: session.email, reviewer_ref: session.reviewer_ref },
+    expires_at: session.exp
+  };
+}
+
 export async function handleGoogleReviewerAuth(request, env, { fetchImpl = fetch, now = Date.now() } = {}) {
   const url = new URL(request.url);
   const path = url.pathname;
@@ -202,13 +226,9 @@ export async function handleGoogleReviewerAuth(request, env, { fetchImpl = fetch
   }
 
   if (path === "/auth/google/me") {
-    const session = await verifyPayload(env.GOOGLE_REVIEWER_SESSION_SECRET, cookieValue(request, SESSION_COOKIE));
-    if (!session || session.provider !== "google" || typeof session.sub !== "string" ||
-        !cfg.allowedEmails.includes(session.email) || session.reviewer_ref !== "google:" + session.sub || !Number.isInteger(session.exp) || session.exp <= nowSeconds ||
-        !Number.isInteger(session.iat) || session.iat > nowSeconds + 60 || session.exp - session.iat > SESSION_TTL_SECONDS) {
-      return json({ authenticated: false }, 401);
-    }
-    return json({ authenticated: true, reviewer: { provider: "google", subject: session.sub, email: session.email, reviewer_ref: session.reviewer_ref }, expires_at: new Date(session.exp * 1000).toISOString(), publication_authorized: false });
+    const verified = await verifyGoogleReviewerSessionToken(cookieValue(request, SESSION_COOKIE), env, now);
+    if (!verified.authenticated) return json({ authenticated: false }, 401);
+    return json({ authenticated: true, reviewer: verified.reviewer, expires_at: new Date(verified.expires_at * 1000).toISOString(), publication_authorized: false });
   }
 
   return new Response(null, { status: 204, headers: [["cache-control", "no-store"], ["set-cookie", clearCookie(SESSION_COOKIE)], ["set-cookie", clearCookie(TX_COOKIE)]] });
