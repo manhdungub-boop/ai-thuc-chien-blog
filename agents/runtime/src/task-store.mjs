@@ -253,7 +253,7 @@ export class AgentTaskStore extends DurableObject {
   }
 
   pruneTerminalTasks(now = Date.now(), limit = 100) {
-    if (!Number.isSafeInteger(now) || now < 0 ||
+    if (!Number.isSafeInteger(now) || now < 0 || !Number.isFinite(new Date(now).getTime()) ||
         !Number.isInteger(limit) || limit < 1 || limit > 100) {
       throw new TypeError("invalid_retention_options");
     }
