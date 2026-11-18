@@ -1,6 +1,6 @@
 const MAX_BYTES = 750_000;
 const TIMEOUT_MS = 8_000;
-const MAX_RESULTS = 5;
+const MAX_RESULTS = 4;
 
 export const RESEARCH_FEED_SOURCES = [
   { name: "OpenAI News", host: "openai.com", pathPrefix: "/index/", feed: "https://openai.com/news/rss.xml" },
@@ -24,12 +24,12 @@ function elementText(xml, name) {
 function parseItems(xml, source, cutoff) {
   return [...xml.matchAll(/<(item|entry)(?:\s[^>]*)?>([\s\S]*?)<\/\1>/gi)].map(match => {
     const body = match[2];
-    const title = cleanText(elementText(body, "title"), 220);
-    const summary = cleanText(elementText(body, "description") || elementText(body, "summary") || elementText(body, "content:encoded"), 420);
-    const rawLink = body.match(/<link\b[^>]*href="([^"]+)"/i)?.[1] || cleanText(elementText(body, "link"), 500);
+    const title = cleanText(elementText(body, "title"), 120);
+    const summary = cleanText(elementText(body, "description") || elementText(body, "summary") || elementText(body, "content:encoded"), 160);
+    const rawLink = body.match(/<link\b[^>]*href="([^"]+)"/i)?.[1] || cleanText(elementText(body, "link"), 300);
     const rawDate = elementText(body, "published") || elementText(body, "updated") || elementText(body, "pubDate") || elementText(body, "dc:date");
     const date = new Date(cleanText(rawDate, 100));
-    if (!title || !rawLink || !Number.isFinite(date.getTime()) || date.getTime() < cutoff) return null;
+    if (!title || !rawLink || rawLink.length > 300 || !Number.isFinite(date.getTime()) || date.getTime() < cutoff) return null;
     let link;
     try { link = new URL(rawLink); } catch { return null; }
     if (link.protocol !== "https:" || link.hostname !== source.host || link.username || link.password ||
