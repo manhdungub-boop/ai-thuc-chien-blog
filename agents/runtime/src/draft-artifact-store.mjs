@@ -181,7 +181,7 @@ export class AgentDraftStore extends DurableObject {
    * Persist source excerpts retrieved by the trusted Worker research path.
    * This Durable Object method is intentionally not exposed as a public HTTP route.
    */
-  storeEvidenceLedger(id, expectedVersion, retrievedEvidence) {
+  async storeEvidenceLedger(id, expectedVersion, retrievedEvidence) {
     if (typeof id !== "string" || !ID_PATTERN.test(id) || !Number.isInteger(expectedVersion) || expectedVersion < 1) {
       return { stored: false, reason: "invalid_evidence_ledger_request" };
     }
