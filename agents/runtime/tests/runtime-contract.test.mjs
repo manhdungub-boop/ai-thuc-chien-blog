@@ -22,9 +22,13 @@ test("runtime has isolated SQLite storage and no website Production bindings", (
   assert.equal(config.ai, undefined);
   assert.match(config.name, /preview$/);
   assert.deepEqual(config.durable_objects.bindings, [
-    { name: "AGENT_TASK_STORE", class_name: "AgentTaskStore" }
+    { name: "AGENT_TASK_STORE", class_name: "AgentTaskStore" },
+    { name: "AGENT_DRAFT_STORE", class_name: "AgentDraftStore" }
   ]);
-  assert.deepEqual(config.migrations[0].new_sqlite_classes, ["AgentTaskStore"]);
+  assert.deepEqual(config.migrations, [
+    { tag: "v1-agent-task-store", new_sqlite_classes: ["AgentTaskStore"] },
+    { tag: "v2-agent-draft-store", new_sqlite_classes: ["AgentDraftStore"] }
+  ]);
 });
 
 test("health endpoint is read-only and does not expose task enqueue", () => {
@@ -115,4 +119,15 @@ test("article quality gate is deterministic and never authorizes publication", (
   assert.match(articleGate, /missing_inline_citations/);
   assert.match(articleGate, /publication_authorized: false/);
   assert.match(articleGate, /eligible_for_human_review/);
+});
+
+test("draft artifact storage is bounded, versioned, and non-publishing", async () => {
+  const draftStore = await readFile(new URL("../src/draft-artifact-store.mjs", import.meta.url), "utf8");
+  assert.match(draftStore, /MAX_ARTIFACT_BYTES = 48 \* 1024/);
+  assert.match(draftStore, /MAX_SOURCES = 20/);
+  assert.match(draftStore, /pending_human_review/);
+  assert.match(draftStore, /needs_revision/);
+  assert.match(draftStore, /version = version \+ 1/);
+  assert.match(draftStore, /WHERE id = \? AND version = \?/);
+  assert.doesNotMatch(draftStore, /published|publish\(/i);
 });
