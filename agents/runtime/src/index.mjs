@@ -59,6 +59,14 @@ async function executeTask(store, taskType, taskId, payload, handler, getExterna
     const errorCode = String(error?.message || "task_execution_failed")
       .replace(/[^a-zA-Z0-9_.:-]/g, "_")
       .slice(0, 80);
+    if (errorCode === "daily_external_request_budget_exhausted") {
+      const terminal = await store.abandon(taskId, claimed.lease_token, errorCode);
+      return {
+        status: terminal.status || "terminal_failure_not_applied",
+        error_code: errorCode,
+        external_calls: getExternalCalls()
+      };
+    }
     const retried = await store.retry(taskId, claimed.lease_token, errorCode);
     return { status: retried.status || "retry_not_applied", error_code: errorCode, external_calls: getExternalCalls() };
   }
