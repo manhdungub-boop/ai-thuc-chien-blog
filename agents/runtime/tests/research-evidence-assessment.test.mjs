@@ -59,15 +59,18 @@ describe("research evidence readiness assessment", () => {
     const result = assessResearchEvidence([
       { ...item("Bad URL", "bad.example"), url: "http://bad.example/article" },
       { ...item("", "empty.example"), title: "" },
-      { ...item("Short", "short.example"), excerpt: "too short" },
       first,
       duplicate
     ], { now });
     expect(result.ready_for_claim_review).toBe(false);
     expect(result.rejected_sources.map(source => source.reason)).toContain("invalid_source_url");
     expect(result.rejected_sources.map(source => source.reason)).toContain("missing_source_metadata");
-    expect(result.rejected_sources.map(source => source.reason)).toContain("invalid_excerpt");
     expect(result.rejected_sources.map(source => source.reason)).toContain("duplicate_source_url");
+
+    const shortExcerpt = assessResearchEvidence([
+      { ...item("Short", "short.example"), excerpt: "too short" }
+    ], { now });
+    expect(shortExcerpt.rejected_sources[0].reason).toBe("invalid_excerpt");
   });
 
   it("caps assessment at four items and clamps thresholds", () => {
