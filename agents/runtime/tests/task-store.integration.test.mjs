@@ -160,6 +160,32 @@ describe("AgentTaskStore Durable Object", () => {
       .toMatchObject({ allowed: true, used: 1, limit: 10 });
   });
 
+  it("moves a daily budget-exhausted task to dead-letter immediately without burning retry attempts", async () => {
+    await store.enqueue(task("budget-exhausted-task-01"));
+    const claim = await store.claim(["ai_bank_discovery"], "budget-exhausted-task-01");
+    expect(claim.task.attempts).toBe(1);
+
+    const result = await store.abandon(
+      "budget-exhausted-task-01",
+      claim.lease_token,
+      "daily_external_request_budget_exhausted"
+    );
+    expect(result).toEqual({ updated: true, status: "dead" });
+
+    const duplicate = await store.enqueue(task("budget-exhausted-task-01"));
+    expect(duplicate.task.status).toBe("dead");
+    expect(duplicate.task.attempts).toBe(1);
+    expect(duplicate.task.last_error).toBe("daily_external_request_budget_exhausted");
+    expect(await store.claim(["ai_bank_discovery"], "budget-exhausted-task-01"))
+      .toEqual({ task: null });
+
+    expect(await store.abandon(
+      "budget-exhausted-task-01",
+      claim.lease_token,
+      "stale_attempt"
+    )).toEqual({ updated: false });
+  });
+
   it("prunes only completed tasks older than one day and dead tasks older than seven days", async () => {
     const now = Date.parse("2026-11-18T12:00:00.000Z");
     await store.enqueue(task("retention-completed-old"));
