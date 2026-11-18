@@ -83,15 +83,29 @@ test("policy never permits paid or unknown-cost fallback", () => {
   assert.equal(providerPolicy.unknownCostAllowed, false);
 });
 
-test("allows deterministic local tasks without external quota", () => {
+test("allows only the registered deterministic article quality gate without external quota", () => {
   const result = selectProvider("quality_review", [
     provider({
-      id: "local-validator",
+      id: "article-quality-gate",
       cost_class: "no_external_execution",
       capabilities: ["quality_review"],
       quota: undefined
     })
   ], NOW);
   assert.equal(result.action, "execute");
-  assert.equal(result.provider, "local-validator");
+  assert.equal(result.provider, "article-quality-gate");
+});
+
+test("rejects arbitrary providers that self-declare no external execution", () => {
+  const result = selectProvider("quality_review", [
+    provider({
+      id: "unregistered-local-validator",
+      cost_class: "no_external_execution",
+      capabilities: ["quality_review"],
+      quota: undefined
+    })
+  ], NOW);
+  assert.equal(result.action, "defer");
+  assert.equal(result.provider, null);
+  assert.equal(result.reason, "local_provider_not_allowlisted");
 });
