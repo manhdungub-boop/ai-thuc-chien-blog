@@ -1,3 +1,5 @@
+import { classifyResearchPublisher } from "./research-publisher-policy.mjs";
+
 const MAX_CLAIMS = 40;
 const MAX_CLAIM_CHARS = 500;
 const MAX_EVIDENCE_PER_CLAIM = 4;
@@ -31,11 +33,13 @@ export function buildClaimEvidenceLedger(claims, evidence, assessment) {
     try {
       const url = new URL(item.url);
       const excerpt = trimmedString(item.excerpt);
-      if (url.protocol !== "https:" || !excerpt ||
+      const publisherIdentity = classifyResearchPublisher(item.source, url.href);
+      if (url.protocol !== "https:" || !publisherIdentity.accepted || !excerpt ||
           excerpt.length < MIN_EXCERPT_CHARS || excerpt.length > MAX_EXCERPT_CHARS) continue;
       evidenceByUrl.set(url.href, {
         url: url.href,
         host: url.hostname,
+        publisher: publisherIdentity.publisher,
         source: trimmedString(item.source).slice(0, 80) || "unknown",
         title: trimmedString(item.title).slice(0, 120),
         excerpt
@@ -124,7 +128,7 @@ export function buildClaimEvidenceLedger(claims, evidence, assessment) {
     claims: claimResults,
     limitations: [
       ...(claimBatchTruncated ? ["Input exceeded the claim limit; the batch is incomplete and must be split before review."] : []),
-      "Traceability confirms only that a claim is linked to retrieved excerpts from distinct publisher domains.",
+      "Traceability confirms only that a claim is linked to retrieved excerpts from distinct publisher domains whose publisher labels, hosts, and paths match the fixed provenance allowlist.",
       "No semantic entailment, factual accuracy, contradiction, source authority, independence of ownership, or claim-level corroboration is assessed.",
       "Every claim remains pending human review; a reviewer must verify that each cited passage actually supports the exact claim."
     ],
