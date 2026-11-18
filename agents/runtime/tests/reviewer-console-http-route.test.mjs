@@ -29,6 +29,9 @@ describe("read-only reviewer console HTTP routes", () => {
     expect(script).not.toContain("insertAdjacentHTML");
     expect(script).toContain("!url.username && !url.password");
     expect(script).toContain('link.referrerPolicy = "no-referrer"');
+    expect(script).toContain("CHƯA ĐỦ ĐIỀU KIỆN ĐÁNH GIÁ");
+    expect(script).toContain("Danh sách URL hoặc claim manifest không thay thế được bằng chứng gốc");
+    expect(script).toContain("Chưa có thao tác đánh giá hoặc gửi quyết định");
   });
 
   it("rejects unsupported methods for console resources", async () => {
