@@ -215,13 +215,9 @@ export class AgentTaskStore extends DurableObject {
       throw new TypeError("invalid_external_request_budget");
     }
 
-    const cutoff = new Date(Date.parse(day + "T00:00:00.000Z") - 30 * 86_400_000)
-      .toISOString().slice(0, 10);
     const now = Date.now();
-    this.ctx.storage.sql.exec(
-      "DELETE FROM external_request_budgets WHERE budget_day < ?", cutoff
-    );
-
+    // Expired budget rows are removed only by the bounded retention pass.
+    // Do not perform an unbounded table sweep on every outbound request.
     const limit = limits[scope];
     const consumed = this.ctx.storage.sql.exec(
       `INSERT INTO external_request_budgets (budget_day, scope, used, updated_at)
