@@ -36,7 +36,7 @@ export function buildHumanClaimReviewLedger(claims, retrievedEvidence, { now = D
     try {
       url = new URL(item.url);
       if (url.protocol !== "https:" || url.username || url.password ||
-          (url.port && url.port !== "443") || url.hash || url.href !== item.url) {
+          (url.port && url.port !== "443") || url.search || url.hash || url.href !== item.url) {
         return failure("retrieved_source_url_invalid");
       }
     } catch {
