@@ -3,9 +3,10 @@ const MAX_CLAIM_CHARS = 500;
 const MAX_EVIDENCE_PER_CLAIM = 4;
 const MIN_SOURCES_PER_CLAIM = 2;
 const MIN_EXCERPT_CHARS = 80;
+const MAX_EXCERPT_CHARS = 600;
 
-function boundedText(value, max) {
-  return typeof value === "string" ? value.trim().slice(0, max) : "";
+function trimmedString(value) {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 /**
@@ -29,13 +30,14 @@ export function buildClaimEvidenceLedger(claims, evidence, assessment) {
         typeof item.url !== "string" || !acceptedUrls.has(item.url)) continue;
     try {
       const url = new URL(item.url);
-      const excerpt = boundedText(item.excerpt, 600);
-      if (url.protocol !== "https:" || !excerpt || excerpt.length < MIN_EXCERPT_CHARS) continue;
+      const excerpt = trimmedString(item.excerpt);
+      if (url.protocol !== "https:" || !excerpt ||
+          excerpt.length < MIN_EXCERPT_CHARS || excerpt.length > MAX_EXCERPT_CHARS) continue;
       evidenceByUrl.set(url.href, {
         url: url.href,
         host: url.hostname,
-        source: boundedText(item.source, 80) || "unknown",
-        title: boundedText(item.title, 120),
+        source: trimmedString(item.source).slice(0, 80) || "unknown",
+        title: trimmedString(item.title).slice(0, 120),
         excerpt
       });
     } catch {
@@ -45,31 +47,55 @@ export function buildClaimEvidenceLedger(claims, evidence, assessment) {
 
   const seenIds = new Set();
   const claimResults = input.map((claim, index) => {
-    const id = boundedText(claim?.id, 64);
-    const text = boundedText(claim?.text, MAX_CLAIM_CHARS);
-    const urls = Array.isArray(claim?.evidence_urls)
-      ? claim.evidence_urls.slice(0, MAX_EVIDENCE_PER_CLAIM)
-      : [];
+    const rawId = trimmedString(claim?.id);
+    const rawText = trimmedString(claim?.text);
+    const id = rawId.length <= 64 ? rawId : "";
+    const text = rawText.length <= MAX_CLAIM_CHARS ? rawText : "";
+    const rawUrls = claim?.evidence_urls;
     let reason = null;
-    if (!/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,63}$/.test(id) || seenIds.has(id)) reason = "invalid_or_duplicate_claim_id";
-    else if (!text) reason = "missing_claim_text";
-    else if (!Array.isArray(claim?.evidence_urls)) reason = "missing_evidence_mapping";
-    else if (claim.evidence_urls.length > MAX_EVIDENCE_PER_CLAIM) reason = "too_many_evidence_references";
+
+    if (!id || !/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,63}$/.test(id) || seenIds.has(id)) {
+      reason = "invalid_or_duplicate_claim_id";
+    } else if (!text) {
+      reason = rawText.length > MAX_CLAIM_CHARS ? "claim_text_too_long" : "missing_claim_text";
+    } else if (!Array.isArray(rawUrls)) {
+      reason = "missing_evidence_mapping";
+    } else if (rawUrls.length > MAX_EVIDENCE_PER_CLAIM) {
+      reason = "too_many_evidence_references";
+    }
     if (id) seenIds.add(id);
 
     const mapped = [];
     const seenClaimUrls = new Set();
     if (!reason) {
-      for (const rawUrl of urls) {
-        if (typeof rawUrl !== "string") continue;
+      for (const rawUrl of rawUrls) {
+        if (typeof rawUrl !== "string") {
+          reason = "invalid_evidence_reference";
+          break;
+        }
         let normalized;
-        try { normalized = new URL(rawUrl).href; } catch { continue; }
+        try {
+          const parsed = new URL(rawUrl);
+          if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.port && parsed.port !== "443") {
+            reason = "invalid_evidence_reference";
+            break;
+          }
+          normalized = parsed.href;
+        } catch {
+          reason = "invalid_evidence_reference";
+          break;
+        }
         if (seenClaimUrls.has(normalized)) continue;
         seenClaimUrls.add(normalized);
         const source = evidenceByUrl.get(normalized);
-        if (source) mapped.push(source);
+        if (!source) {
+          reason = "unaccepted_evidence_reference";
+          break;
+        }
+        mapped.push(source);
       }
     }
+
     const domains = new Set(mapped.map(source => source.host));
     if (!reason && mapped.length === 0) reason = "no_traceable_evidence";
     else if (!reason && domains.size < MIN_SOURCES_PER_CLAIM) reason = "insufficient_distinct_publishers";
