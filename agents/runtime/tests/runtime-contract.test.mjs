@@ -308,6 +308,10 @@ test("reviewer evidence endpoint is Google-session-bound and non-publishing", as
   assert.match(draftStore, /authenticatedReviewer: \{ authenticated: true, reviewer_ref: reviewerSession\.reviewer\.reviewer_ref \}/);
   assert.match(verifier, /authenticatedReviewer\.reviewer_ref === record\.reviewer_ref/);
   assert.match(verifier, /reviewer_identity_authenticated: reviewerIdentityAuthenticated/);
+  assert.match(runtime, /listPendingReviewsForReviewer/);
+  assert.match(runtime, /getDraftForReviewer/);
+  assert.match(draftStore, /async listPendingReviewsForReviewer/);
+  assert.match(draftStore, /async getDraftForReviewer/);
   assert.match(runtime, /publication_authorized: false/);
   assert.match(runtime, /social_post_published: false/);
 });
