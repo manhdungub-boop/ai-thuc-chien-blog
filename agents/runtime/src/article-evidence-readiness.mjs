@@ -163,6 +163,27 @@ export async function assessArticleEvidenceReadiness({
     };
   }
 
+  // SHA-256 fingerprints protect record integrity, but reviewer_ref is self-asserted.
+  // Never treat a syntactically valid review record as an authenticated human approval.
+  if (reviewVerification.safety?.reviewer_identity_authenticated !== true) {
+    return {
+      ok: false,
+      status: "human_reviewer_identity_not_authenticated",
+      claims_assessed: draft.claims.length,
+      article_quality: articleQuality,
+      review_status: reviewVerification.status,
+      reviewer_identity_authenticated: false,
+      limitations: [
+        "The review record matches the supplied ledger, but the reviewer identity is not authenticated.",
+        "A reviewer reference is user-supplied metadata, not proof of account ownership or authorization.",
+        "Configure a trusted identity and authorization mechanism before this gate can mark an article eligible for owner release review."
+      ],
+      publication_authorized: false,
+      content_published: false,
+      social_post_published: false
+    };
+  }
+
   return {
     ok: true,
     status: "eligible_for_owner_release_review",

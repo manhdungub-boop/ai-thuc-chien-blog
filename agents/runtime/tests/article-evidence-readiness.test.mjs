@@ -62,12 +62,14 @@ async function makeReview(decision = "supported") {
 }
 
 describe("article evidence readiness", () => {
-  it("allows an exact article claim mapped to a verified supported review, without authorizing publication", async () => {
+  it("blocks release eligibility when the reviewer identity is not authenticated", async () => {
     const reviewRecord = await makeReview();
     const result = await assessArticleEvidenceReadiness({ draft: makeDraft(), ledger, reviewRecord, now });
     expect(result).toMatchObject({
-      ok: true,
-      status: "eligible_for_owner_release_review",
+      ok: false,
+      status: "human_reviewer_identity_not_authenticated",
+      reviewer_identity_authenticated: false,
+      review_status: "human_review_record_verified",
       publication_authorized: false,
       content_published: false,
       social_post_published: false

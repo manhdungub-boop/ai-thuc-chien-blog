@@ -62,7 +62,7 @@ describe("AgentDraftStore Durable Object", () => {
       .toEqual({ accepted: false, reason: "invalid_body_markdown" });
   });
 
-  it("persists a verified evidence review and exposes only owner-release-review eligibility", async () => {
+  it("persists review-record integrity but blocks owner-release eligibility without authenticated reviewer identity", async () => {
     const draft = validDraft();
     const claim = "The draft store keeps article evidence reviews isolated.";
     draft.claims = [{
@@ -95,10 +95,11 @@ describe("AgentDraftStore Durable Object", () => {
     );
     const recorded = await store.recordEvidenceReview("draft-review-0009", created.artifact.version, ledger, reviewRecord);
     expect(recorded.recorded).toBe(true);
-    expect(recorded.owner_release_review_eligible).toBe(true);
-    expect(recorded.readiness.status).toBe("eligible_for_owner_release_review");
+    expect(recorded.owner_release_review_eligible).toBe(false);
+    expect(recorded.readiness.status).toBe("human_reviewer_identity_not_authenticated");
+    expect(recorded.readiness.reviewer_identity_authenticated).toBe(false);
     expect(recorded.artifact.evidence_review.review_record.status).toBe("human_review_recorded_pending_release_gates");
-    expect((await store.listOwnerReleaseReviews()).map(item => item.id)).toContain("draft-review-0009");
+    expect(await store.listOwnerReleaseReviews()).toHaveLength(0);
   });
 
   it("rejects tampered review records and invalidates persisted review after draft revision", async () => {
