@@ -90,6 +90,14 @@ describe("article evidence readiness", () => {
     expect(evidenceResult.issues[0].code).toBe("claim_evidence_mapping_mismatch");
   });
 
+  it("requires reviewed evidence URLs to appear in the article reference list", async () => {
+    const reviewRecord = await makeReview();
+    const draft = { ...makeDraft(), sources: makeDraft().sources.slice(1) };
+    const result = await assessArticleEvidenceReadiness({ draft, ledger, reviewRecord, now });
+    expect(result.status).toBe("article_claim_evidence_not_ready");
+    expect(result.issues[0].code).toBe("reviewed_evidence_missing_from_article_sources");
+  });
+
   it("rejects invalid review records and incomplete article claim manifests", async () => {
     const reviewRecord = await makeReview();
     const alteredRecord = { ...reviewRecord, claims: reviewRecord.claims.map(claim => ({ ...claim, reviewer_note: "Tampered reviewer note." })) };
