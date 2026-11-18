@@ -124,3 +124,8 @@ No recurring Workflow schedule is configured while the runtime lacks a verified 
 - The HTML response sets a restrictive CSP (`default-src 'none'`, same-origin script/connect, no framing, no base URI, same-origin form actions), plus no-store, nosniff, frame denial, and no-referrer headers. The JavaScript response is also no-store and nosniff.
 - This is a Preview-only candidate. The reviewer OAuth allowlist and secrets are not configured, `AGENT_REVIEWER_AUTH_ENABLED=false`, and the console has not been deployed. It cannot display private drafts until the authenticated Preview path is separately configured and tested.
 - The console is intentionally read-only. Evidence decisions, owner release review, publication, and deployment remain separate gated workflows.
+
+
+#### Evidence review prerequisite
+
+The reviewer console deliberately does not offer a decision form based only on a draft's claim manifest or source URLs. A reviewer must be able to inspect the actual source excerpts captured in a traceable evidence ledger. If `artifact.evidence_review.ledger.claims` is absent, the console displays an explicit blocked state and explains that URLs/claim mappings are not source evidence. The next integration step is to persist and expose the immutable research ledger with the draft before any claim-level decision UI is enabled.
