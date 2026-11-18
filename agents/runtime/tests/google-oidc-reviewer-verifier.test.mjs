@@ -133,7 +133,7 @@ describe("Google OIDC reviewer identity verifier", () => {
     const forged = await verifyGoogleReviewerIdToken(token, options(other));
     expect(forged.status).toBe("google_id_token_signature_invalid");
     const unknownKey = await verifyGoogleReviewerIdToken(token, options(pair, {
-      fetchImpl: async () => new Response(JSON.stringify({ keys: [{ ...pair.jwk, kid: "rotated-key" }] }), { status: 200 })
+      fetchImpl: async () => new Response(JSON.stringify({ keys: [{ ...pair.jwk, kid: "rotated-key" }] }), { status: 200, headers: { "content-type": "application/json" } })
     }));
     expect(unknownKey.status).toBe("google_signing_key_not_found");
   });
