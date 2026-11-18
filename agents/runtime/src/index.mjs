@@ -218,7 +218,7 @@ export default {
     if (reviewerEvidenceMatch) {
       if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
       if (request.headers.get("origin") !== url.origin ||
-          !(request.headers.get("content-type") || "").toLowerCase().startsWith("application/json")) {
+          (request.headers.get("content-type") || "").split(";")[0].trim().toLowerCase() !== "application/json") {
         return json({ error: "review_request_origin_or_content_type_rejected" }, 403);
       }
       const contentLength = Number(request.headers.get("content-length") || 0);
