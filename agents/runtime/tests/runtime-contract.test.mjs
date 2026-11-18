@@ -24,7 +24,7 @@ test("Preview deployment workflow is manual, explicitly confirmed, token-isolate
   assert.doesNotMatch(previewDeployWorkflow, /deploy-cloudflare-workers/);
   assert.match(previewDeployWorkflow, /wrangler deploy --dry-run/);
   assert.match(previewDeployWorkflow, /wrangler deploy --config wrangler\.preview\.jsonc/);
-  assert.match(previewDeployWorkflow, /AGENT_PAUSED/);
+  assert.match(previewDeployWorkflow, /\.paused == true/);
   assert.match(previewDeployWorkflow, /manual_only_no_cron/);
   assert.match(previewDeployWorkflow, /production_access == false/);
   assert.ok(
