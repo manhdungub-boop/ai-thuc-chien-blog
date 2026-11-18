@@ -153,7 +153,7 @@ export async function handleGoogleReviewerAuth(request, env, { fetchImpl = fetch
     return json({ error: "redirect_origin_mismatch" }, 400);
   }
   const requestOrigin = request.headers.get("origin");
-  if (["/auth/google/me", "/auth/google/logout"].includes(path) &&
+  if (["/auth/google/start", "/auth/google/me", "/auth/google/logout"].includes(path) &&
       requestOrigin && requestOrigin !== cfg.redirectOrigin) {
     return json({ error: "origin_mismatch" }, 403);
   }
