@@ -94,6 +94,8 @@ export class AgentReviewerAuthStore extends DurableObject {
   createTransaction(stateHash, browserHash, nonce, codeVerifier, nowSeconds) {
     if (![stateHash, browserHash, nonce, codeVerifier].every(x => typeof x === "string" && x.length >= 32 && x.length <= 128) || !Number.isInteger(nowSeconds)) return { created: false };
     this.ctx.storage.sql.exec("DELETE FROM reviewer_auth_transactions WHERE expires_at <= ?", nowSeconds);
+    const active = this.ctx.storage.sql.exec("SELECT COUNT(*) AS total FROM reviewer_auth_transactions WHERE expires_at > ?", nowSeconds).toArray()[0]?.total || 0;
+    if (active >= 100) return { created: false, reason: "login_transaction_capacity_reached" };
     const result = this.ctx.storage.sql.exec("INSERT OR IGNORE INTO reviewer_auth_transactions (state_hash,browser_hash,nonce,code_verifier,created_at,expires_at) VALUES (?,?,?,?,?,?)", stateHash, browserHash, nonce, codeVerifier, nowSeconds, nowSeconds + TX_TTL_SECONDS);
     return { created: result.rowsWritten === 1 };
   }
@@ -153,13 +155,16 @@ export async function handleGoogleReviewerAuth(request, env, { fetchImpl = fetch
       return json({ error: "oauth_callback_rejected" }, 400);
     }
     const txCookie = await verifyPayload(env.GOOGLE_REVIEWER_STATE_SECRET, cookieValue(request, TX_COOKIE));
-    if (!txCookie || typeof txCookie.binding !== "string" || !Number.isInteger(txCookie.exp) || txCookie.exp <= nowSeconds) {
+    if (!txCookie || typeof txCookie.binding !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(txCookie.binding) || !Number.isInteger(txCookie.exp) || txCookie.exp <= nowSeconds) {
       return json({ error: "login_transaction_cookie_invalid" }, 400, { "set-cookie": clearCookie(TX_COOKIE) });
     }
     const transaction = await store.consumeTransaction(await digest(state), await digest(txCookie.binding), nowSeconds);
     if (!transaction) return json({ error: "login_transaction_missing_or_replayed" }, 400);
-    const tokenResponse = await fetchImpl(GOOGLE_TOKEN_URL, {
+    let tokenResponse;
+    try {
+      tokenResponse = await fetchImpl(GOOGLE_TOKEN_URL, {
       method: "POST",
+      signal: AbortSignal.timeout(8000),
       redirect: "error",
       headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json" },
       body: new URLSearchParams({
@@ -170,9 +175,11 @@ export async function handleGoogleReviewerAuth(request, env, { fetchImpl = fetch
         grant_type: "authorization_code",
         code_verifier: transaction.code_verifier
       })
-    });
+      });
+    } catch { return json({ error: "google_code_exchange_unavailable" }, 502); }
     if (!tokenResponse.ok) return json({ error: "google_code_exchange_failed" }, 401);
-    const tokenBody = await tokenResponse.json();
+    let tokenBody;
+    try { tokenBody = await tokenResponse.json(); } catch { return json({ error: "google_token_response_invalid" }, 502); }
     const identity = await verifyGoogleReviewerIdToken(tokenBody?.id_token, {
       audience: env.GOOGLE_REVIEWER_CLIENT_ID,
       nonce: transaction.nonce,
@@ -197,7 +204,7 @@ export async function handleGoogleReviewerAuth(request, env, { fetchImpl = fetch
   if (path === "/auth/google/me") {
     const session = await verifyPayload(env.GOOGLE_REVIEWER_SESSION_SECRET, cookieValue(request, SESSION_COOKIE));
     if (!session || session.provider !== "google" || typeof session.sub !== "string" ||
-        !cfg.allowedEmails.includes(session.email) || !Number.isInteger(session.exp) || session.exp <= nowSeconds ||
+        !cfg.allowedEmails.includes(session.email) || session.reviewer_ref !== "google:" + session.sub || !Number.isInteger(session.exp) || session.exp <= nowSeconds ||
         !Number.isInteger(session.iat) || session.iat > nowSeconds + 60 || session.exp - session.iat > SESSION_TTL_SECONDS) {
       return json({ authenticated: false }, 401);
     }
