@@ -62,4 +62,44 @@ describe("read-only AI Bank release discovery", () => {
     expect(result.signal_count).toBe(0);
     expect(result.latest_signals).toEqual([]);
   });
+  it("normalizes release activity into deduplicated review-only catalog candidates", async () => {
+    const result = await discoverAiBankReleaseSignals({
+      now: NOW,
+      fetchImpl: async url => {
+        const source = AI_BANK_RELEASE_SOURCES.find(item => item.feed === url);
+        const duplicateReleases = source.repo === AI_BANK_RELEASE_SOURCES[0].repo
+          ? `<entry><title>Older release</title><link href="https://github.com/${source.repo}/releases/tag/v1.2.2"/><updated>2026-11-17T10:00:00Z</updated></entry>`
+          : "";
+        return new Response(feedFor(source).replace("</feed>", duplicateReleases + "</feed>"), { status: 200 });
+      }
+    });
+
+    const candidates = result.catalog_candidates;
+    expect(candidates).toHaveLength(5);
+    expect(new Set(candidates.map(item => item.candidate_id)).size).toBe(candidates.length);
+    const first = candidates.find(item => item.repository === AI_BANK_RELEASE_SOURCES[0].repo);
+    expect(first).toMatchObject({
+      candidate_id: "github:" + AI_BANK_RELEASE_SOURCES[0].repo,
+      name: "Ollama",
+      provider: "Ollama",
+      review_status: "needs_official_source_review",
+      pricing_status: "unverified",
+      free_limits_status: "unverified",
+      license_status: "unverified",
+      privacy_status: "unverified",
+      catalog_write_authorized: false,
+      public_publication_authorized: false
+    });
+    expect(first.latest_release.title).toContain("Release v1.2.3");
+    expect(first.required_checks).toContain("privacy_and_data_handling");
+  });
+
+  it("returns no catalog candidates when all discovery sources fail", async () => {
+    const result = await discoverAiBankReleaseSignals({
+      now: NOW,
+      fetchImpl: async () => { throw new Error("offline"); }
+    });
+    expect(result.catalog_candidates).toEqual([]);
+  });
+
 });
