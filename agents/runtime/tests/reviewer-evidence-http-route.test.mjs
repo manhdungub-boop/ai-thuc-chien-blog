@@ -332,6 +332,35 @@ describe("authorized AI Bank reviewer reads", () => {
     });
   });
 
+  it("rejects expired, tampered, and non-allowlisted sessions before candidate-store access", async () => {
+    const expired = await makeReviewerSessionToken(Date.now() - 60 * 60 * 1000);
+    const valid = await makeReviewerSessionToken();
+    let storeAccesses = 0;
+    const env = {
+      ...reviewerAuthEnv(valid.secret),
+      AGENT_AI_BANK_CANDIDATE_STORE: {
+        getByName: () => {
+          storeAccesses += 1;
+          return { async listCandidates() { return []; } };
+        }
+      }
+    };
+    const expiredResponse = await worker.fetch(new Request(collection, {
+      headers: { cookie: "__Host-ai_reviewer_session=" + expired.token }
+    }), env);
+    const tamperedToken = valid.token.slice(0, -1) + (valid.token.endsWith("A") ? "B" : "A");
+    const tamperedResponse = await worker.fetch(new Request(collection, {
+      headers: { cookie: "__Host-ai_reviewer_session=" + tamperedToken }
+    }), env);
+    const wrongAllowlistResponse = await worker.fetch(new Request(collection, {
+      headers: { cookie: "__Host-ai_reviewer_session=" + valid.token }
+    }), { ...env, GOOGLE_REVIEWER_ALLOWED_EMAILS: "another-reviewer@example.com" });
+    expect(expiredResponse.status).toBe(401);
+    expect(tamperedResponse.status).toBe(401);
+    expect(wrongAllowlistResponse.status).toBe(401);
+    expect(storeAccesses).toBe(0);
+  });
+
   it("rejects invalid list limits before reading candidate data", async () => {
     const { token, secret } = await makeReviewerSessionToken();
     let storeAccessed = false;
