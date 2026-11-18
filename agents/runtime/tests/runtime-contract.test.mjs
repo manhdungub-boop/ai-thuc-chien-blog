@@ -122,7 +122,7 @@ test("supervisor executes bounded health and daily read-only discovery tasks", (
   assert.match(source, /retrieveResearchEvidence/);
   assert.match(source, /evidence_retrieval/);
   assert.match(source, /research-scan-/);
-  assert.match(source, /content_research/);\n  assert.match(source, /buildArticleAuthoringBrief/);\n  assert.match(source, /draftStore\.createDraft\(draftTaskId, brief\.draft\)/);\n  assert.match(source, /research\.result\?\.evidence_retrieval\?\.evidence/);\n  assert.match(source, /artifact_status: persisted\.artifact\.status/);\n  assert.match(source, /publication_authorized: false/);\n  assert.match(source, /content_draft: contentDraft/);
+  assert.match(source, /content_research/);\n  assert.match(source, /buildArticleAuthoringBrief/);\n  assert.match(source, /draftStore\.createDraft\(draftTaskId, brief\.draft\)/);\n  assert.match(source, /research\.result\?\.evidence_retrieval\?\.evidence/);\n  assert.match(source, /\["completed", "already_completed"\]\.includes\(research\.status\)/);\n  assert.match(source, /artifact_status: persisted\.artifact\.status/);\n  assert.match(source, /publication_authorized: false/);\n  assert.match(source, /content_draft: contentDraft/);
   assert.match(source, /ai-bank-scan-/);
   assert.match(source, /ai_bank_discovery/);
   assert.match(source, /catalog_modified: false/);
