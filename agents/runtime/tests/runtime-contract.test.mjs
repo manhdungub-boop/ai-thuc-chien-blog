@@ -116,7 +116,7 @@ test("research discovery uses fixed official feeds and read-only bounded fetches
 
 test("research evidence retrieval is HTTPS allowlisted, bounded, and never publication-authorizing", () => {
   assert.match(evidence, /MAX_BODY_BYTES = 120_000/);
-  assert.match(evidence, /MAX_EXCERPT_CHARS = 1_100/);
+  assert.match(evidence, /MAX_EXCERPT_CHARS = 600/);
   assert.match(evidence, /MAX_EVIDENCE_ITEMS = 4/);
   assert.match(evidence, /TIMEOUT_MS = 6_000/);
   assert.match(evidence, /redirect: "error"/);
