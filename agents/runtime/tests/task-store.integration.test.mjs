@@ -221,7 +221,7 @@ describe("AgentTaskStore Durable Object", () => {
     const beforePrune = await runInDurableObject(store, async (_instance, state) =>
       state.storage.sql.exec("SELECT COUNT(*) AS count FROM external_request_budgets").one().count
     );
-    expect(beforePrune).toBe(105);
+    expect(beforePrune).toBe(106);
 
     const result = await store.pruneTerminalTasks(now);
     expect(result.budget_days_deleted).toBe(100);
