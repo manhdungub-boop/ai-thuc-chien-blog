@@ -14,8 +14,8 @@ const item = (source, host, publishedAt = "2026-11-17T09:00:00.000Z") => ({
 describe("research evidence readiness assessment", () => {
   it("marks two fresh distinct publisher domains ready only for claim review", () => {
     const result = assessResearchEvidence([
-      item("OpenAI", "openai.com"),
-      item("DeepMind", "deepmind.google")
+      item("OpenAI News", "openai.com"),
+      item("Google DeepMind", "deepmind.google")
     ], { now });
     expect(result.status).toBe("evidence_packet_ready_for_claim_review");
     expect(result.ready_for_claim_review).toBe(true);
@@ -30,7 +30,7 @@ describe("research evidence readiness assessment", () => {
 
   it("rejects repeated publisher domains even when article URLs differ", () => {
     const first = item("OpenAI", "openai.com");
-    const second = { ...item("OpenAI Blog", "openai.com"), url: "https://openai.com/index/another-update" };
+    const second = { ...item("OpenAI News", "openai.com"), url: "https://openai.com/index/another-update" };
     const result = assessResearchEvidence([first, second], { now });
     expect(result.ready_for_claim_review).toBe(false);
     expect(result.rejected_sources).toHaveLength(1);
@@ -39,10 +39,10 @@ describe("research evidence readiness assessment", () => {
 
   it("rejects stale, future-dated, malformed, and un-retrieved evidence", () => {
     const result = assessResearchEvidence([
-      item("Old source", "old.example", "2026-09-01T00:00:00.000Z"),
-      item("Future source", "future.example", "2026-12-01T00:00:00.000Z"),
-      { ...item("Bad source", "bad.example"), published_at: "not-a-date" },
-      { ...item("Failed source", "failed.example"), status: "http_403" }
+      item("OpenAI News", "openai.com", "2026-09-01T00:00:00.000Z"),
+      item("Google DeepMind", "deepmind.google", "2026-12-01T00:00:00.000Z"),
+      { ...item("Hugging Face", "huggingface.co"), published_at: "not-a-date" },
+      { ...item("arXiv cs.AI", "arxiv.org"), status: "http_403" }
     ], { now });
     expect(result.ready_for_claim_review).toBe(false);
     expect(result.rejected_sources.map(source => source.reason)).toEqual([
@@ -55,10 +55,10 @@ describe("research evidence readiness assessment", () => {
 
   it("rejects invalid URL, missing metadata, short excerpts, and duplicate URLs", () => {
     const first = item("OpenAI", "openai.com");
-    const duplicate = { ...first, source: "Different label" };
+    const duplicate = { ...first };
     const result = assessResearchEvidence([
-      { ...item("Bad URL", "bad.example"), url: "http://bad.example/article" },
-      { ...item("", "empty.example"), title: "" },
+      { ...item("OpenAI News", "openai.com"), url: "http://openai.com/index/article" },
+      { ...item("Google DeepMind", "deepmind.google"), source: "", title: "" },
       first,
       duplicate
     ], { now });
@@ -68,18 +68,32 @@ describe("research evidence readiness assessment", () => {
     expect(result.rejected_sources.map(source => source.reason)).toContain("duplicate_source_url");
 
     const shortExcerpt = assessResearchEvidence([
-      { ...item("Short", "short.example"), excerpt: "too short" }
+      { ...item("arXiv cs.AI", "arxiv.org"), excerpt: "too short" }
     ], { now });
     expect(shortExcerpt.rejected_sources[0].reason).toBe("invalid_excerpt");
   });
 
   it("caps assessment at four items and clamps thresholds", () => {
     const result = assessResearchEvidence([
-      item("A", "a.example"), item("B", "b.example"), item("C", "c.example"),
-      item("D", "d.example"), item("E", "e.example")
+      item("OpenAI News", "openai.com"), item("Google DeepMind", "deepmind.google"), item("Hugging Face", "huggingface.co"),
+      item("arXiv cs.AI", "arxiv.org"), item("OpenAI News", "openai.com")
     ], { now, minIndependentSources: 99, maxAgeDays: 999 });
     expect(result.accepted_sources).toHaveLength(4);
     expect(result.required_independent_sources).toBe(4);
     expect(result.max_source_age_days).toBe(90);
   });
-});
+});\n
+  it("rejects unrecognized publisher domains and mismatched publisher labels", () => {
+    const unknown = assessResearchEvidence([
+      item("OpenAI News", "openai.com"),
+      item("Unknown Publisher", "unknown.example")
+    ], { now });
+    expect(unknown.rejected_sources.map(source => source.reason)).toContain("publisher_identity_not_allowlisted");
+
+    const spoofed = assessResearchEvidence([
+      { ...item("OpenAI News", "openai.com"), url: "https://deepmind.google/blog/not-openai" }
+    ], { now });
+    expect(spoofed.rejected_sources[0].reason).toBe("publisher_identity_not_allowlisted");
+  });
+
+
