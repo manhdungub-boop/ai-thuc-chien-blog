@@ -124,4 +124,83 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     expect(await store.getCandidate("github:ollama/ollama")).toBeNull();
     expect(await store.listCandidates()).toEqual([]);
   });
+  it("stores submitted evidence as unverified and pending human review", async () => {
+    await store.upsertCandidates([candidate()], Date.parse("2026-11-19T08:06:00.000Z"));
+    const result = await store.submitReviewEvidence("github:ollama/ollama", {
+      check_type: "pricing_and_free_limits",
+      source_title: "Official pricing page",
+      source_url: "https://ollama.com/pricing",
+      excerpt: "Pricing details require human confirmation."
+    }, Date.parse("2026-11-19T10:00:00.000Z"));
+    expect(result).toMatchObject({
+      accepted: true,
+      source_status: "submitted_source_not_verified",
+      review_status: "pending_human_review",
+      verification_authorized: false,
+      catalog_write_authorized: false,
+      public_publication_authorized: false
+    });
+    const [evidence] = await store.listReviewEvidence("github:ollama/ollama");
+    expect(evidence).toMatchObject({
+      check_type: "pricing_and_free_limits",
+      source_url: "https://ollama.com/pricing",
+      source_status: "submitted_source_not_verified",
+      review_status: "pending_human_review"
+    });
+  });
+
+  it("rejects evidence for unknown candidates, unsupported checks, and unsafe URLs", async () => {
+    const evidence = {
+      check_type: "pricing_and_free_limits",
+      source_title: "Pricing",
+      source_url: "https://example.com/pricing",
+      excerpt: "Evidence excerpt."
+    };
+    expect(await store.submitReviewEvidence("github:missing/tool", evidence)).toEqual({
+      accepted: false, reason: "candidate_not_found"
+    });
+    await store.upsertCandidates([candidate()]);
+    expect(await store.submitReviewEvidence("github:ollama/ollama", {
+      ...evidence, check_type: "make_it_free"
+    })).toEqual({ accepted: false, reason: "unsupported_check_type" });
+    for (const source_url of [
+      "http://example.com/pricing",
+      "https://user:pass@example.com/pricing",
+      "https://localhost/pricing",
+      "https://127.0.0.1/pricing",
+      "https://example.com/pricing?tracking=1",
+      "https://example.com/pricing#fragment"
+    ]) {
+      expect(await store.submitReviewEvidence("github:ollama/ollama", {
+        ...evidence, source_url
+      })).toEqual({ accepted: false, reason: "invalid_evidence_url" });
+    }
+    expect(await store.listReviewEvidence("github:ollama/ollama")).toEqual([]);
+  });
+
+  it("deduplicates evidence URLs and enforces a bounded per-check evidence limit", async () => {
+    await store.upsertCandidates([candidate()]);
+    const makeEvidence = index => ({
+      check_type: "license_scope",
+      source_title: "License reference " + index,
+      source_url: "https://example.com/license/" + index,
+      excerpt: "License scope needs human review."
+    });
+    for (let index = 0; index < 5; index += 1) {
+      expect((await store.submitReviewEvidence(
+        "github:ollama/ollama", makeEvidence(index)
+      )).accepted).toBe(true);
+    }
+    expect(await store.submitReviewEvidence(
+      "github:ollama/ollama", makeEvidence(0)
+    )).toEqual({ accepted: false, reason: "duplicate_evidence" });
+    expect(await store.submitReviewEvidence(
+      "github:ollama/ollama", makeEvidence(5)
+    )).toEqual({ accepted: false, reason: "evidence_limit_reached" });
+    expect(await store.listReviewEvidence("github:ollama/ollama", 30)).toHaveLength(5);
+    await expect(Promise.resolve().then(() =>
+      store.listReviewEvidence("github:ollama/ollama", 31)
+    )).rejects.toThrow("invalid_evidence_list_limit");
+  });
+
 });
