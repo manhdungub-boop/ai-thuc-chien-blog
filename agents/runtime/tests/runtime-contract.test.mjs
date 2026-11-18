@@ -6,6 +6,7 @@ const config = JSON.parse(await readFile(new URL("../wrangler.jsonc", import.met
 const source = await readFile(new URL("../src/index.mjs", import.meta.url), "utf8");
 const store = await readFile(new URL("../src/task-store.mjs", import.meta.url), "utf8");
 const research = await readFile(new URL("../src/research-discovery.mjs", import.meta.url), "utf8");
+const evidence = await readFile(new URL("../src/research-evidence.mjs", import.meta.url), "utf8");
 const articleGate = await readFile(new URL("../src/article-quality-gate.mjs", import.meta.url), "utf8");
 
 test("runtime uses a recurring Workflow schedule with single-instance concurrency", () => {
@@ -47,6 +48,8 @@ test("supervisor executes bounded health and daily read-only discovery tasks", (
   assert.match(source, /await store\.complete\(taskId, claimed\.lease_token, result\)/);
   assert.match(source, /discoverAiBankReleaseSignals/);
   assert.match(source, /discoverResearchSignals/);
+  assert.match(source, /retrieveResearchEvidence/);
+  assert.match(source, /evidence_retrieval/);
   assert.match(source, /research-scan-/);
   assert.match(source, /content_research/);
   assert.match(source, /ai-bank-scan-/);
@@ -109,6 +112,17 @@ test("research discovery uses fixed official feeds and read-only bounded fetches
   assert.match(research, /MAX_BYTES = 750_000/);
   assert.match(research, /TIMEOUT_MS = 8_000/);
   assert.match(research, /content_created: false/);
+});
+
+test("research evidence retrieval is HTTPS allowlisted, bounded, and never publication-authorizing", () => {
+  assert.match(evidence, /MAX_BODY_BYTES = 120_000/);
+  assert.match(evidence, /MAX_EXCERPT_CHARS = 1_100/);
+  assert.match(evidence, /MAX_EVIDENCE_ITEMS = 4/);
+  assert.match(evidence, /TIMEOUT_MS = 6_000/);
+  assert.match(evidence, /redirect: "error"/);
+  assert.match(evidence, /source_retrieved_not_fact_checked/);
+  assert.match(evidence, /raw_html_stored: false/);
+  assert.match(evidence, /content_published: false/);
 });
 
 test("article quality gate is deterministic and never authorizes publication", () => {
