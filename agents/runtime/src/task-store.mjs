@@ -7,6 +7,11 @@ const TASK_TYPES = new Set([
   "quality_review",
   "runtime_health_check"
 ]);
+const EXECUTABLE_TASK_TYPES = new Set([
+  "ai_bank_discovery",
+  "content_research",
+  "runtime_health_check"
+]);
 const MAX_PAYLOAD_BYTES = 8192;
 const MAX_ACTIVE_TASKS = 500;
 const MAX_ATTEMPTS = 5;
@@ -94,6 +99,11 @@ export class AgentTaskStore extends DurableObject {
       throw new TypeError("invalid_task");
     }
     if (!TASK_TYPES.has(task.task_type)) throw new TypeError("task_type_not_allowed");
+    // Do not enqueue task contracts until a real executor is registered.
+    // This prevents unsupported work from occupying queue capacity indefinitely.
+    if (!EXECUTABLE_TASK_TYPES.has(task.task_type)) {
+      throw new TypeError("task_executor_not_registered");
+    }
     if (typeof task.id !== "string" || !/^[a-zA-Z0-9._:-]{8,128}$/.test(task.id)) {
       throw new TypeError("invalid_task_id");
     }
