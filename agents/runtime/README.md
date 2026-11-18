@@ -129,3 +129,12 @@ No recurring Workflow schedule is configured while the runtime lacks a verified 
 #### Evidence review prerequisite
 
 The reviewer console deliberately does not offer a decision form based only on a draft's claim manifest or source URLs. A reviewer must be able to inspect the actual source excerpts captured in a traceable evidence ledger. If `artifact.evidence_review.ledger.claims` is absent, the console displays an explicit blocked state and explains that URLs/claim mappings are not source evidence. The next integration step is to persist and expose the immutable research ledger with the draft before any claim-level decision UI is enabled.
+
+
+### Human claim evidence-ledger builder
+
+- `buildHumanClaimReviewLedger(claims, retrievedEvidence)` binds only explicitly human-authored claim text and claim IDs to exact excerpts already returned by the bounded research retrieval module.
+- Each claim must map to 2–4 retrieved excerpts from distinct allowlisted publisher hosts. URLs must match the retrieved evidence exactly; missing, duplicate, unallowlisted, failed, or too-short evidence is rejected.
+- The builder does not generate claims, infer semantic support, or create review decisions. Every claim remains `traceable_evidence_pending_human_review`, and the ledger explicitly requires human review.
+- This module is a deterministic building block only. It is not yet connected to durable draft storage or the reviewer console; do not treat a generated ledger as attached to a draft until that persistence path is implemented and tested.
+- Publication, catalog mutation, draft creation, and social posting remain unauthorized.
