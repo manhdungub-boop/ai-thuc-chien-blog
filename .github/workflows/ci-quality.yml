@@ -46,6 +46,11 @@ jobs:
           node --check scripts/agent-task-store.mjs
           node --test tests/agent-task-store.test.mjs
 
+      - name: Test isolated 24/7 agent runtime contract
+        run: |
+          node --check agents/runtime/src/index.mjs
+          node --test agents/runtime/tests/runtime-contract.test.mjs
+
       - name: Run offline AI agent coordinator dry-run
         run: |
           node --check scripts/agent-coordinator-dry-run.mjs
