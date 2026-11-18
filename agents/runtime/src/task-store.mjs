@@ -62,6 +62,7 @@ export class AgentTaskStore extends DurableObject {
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL,
         lease_until INTEGER,
+        lease_token TEXT,
         last_error TEXT
       )
     `);
@@ -120,7 +121,7 @@ export class AgentTaskStore extends DurableObject {
     const now = Date.now();
     // Expired leases return to the queue; exhausted tasks move to dead-letter state.
     this.ctx.storage.sql.exec(
-      "UPDATE tasks SET status = CASE WHEN attempts >= ? THEN 'dead' ELSE 'pending' END, lease_until = NULL, updated_at = ? WHERE status = 'leased' AND lease_until <= ?",
+      "UPDATE tasks SET status = CASE WHEN attempts >= ? THEN 'dead' ELSE 'pending' END, lease_until = NULL, lease_token = NULL, updated_at = ? WHERE status = 'leased' AND lease_until <= ?",
       MAX_ATTEMPTS, now, now
     );
     const row = this.ctx.storage.sql.exec(
@@ -129,32 +130,33 @@ export class AgentTaskStore extends DurableObject {
     ).toArray()[0];
     if (!row) return { task: null };
     const leaseUntil = now + LEASE_MS;
+    const leaseToken = crypto.randomUUID();
     this.ctx.storage.sql.exec(
-      "UPDATE tasks SET status = 'leased', attempts = attempts + 1, lease_until = ?, updated_at = ? WHERE id = ? AND status = 'pending'",
-      leaseUntil, now, row.id
+      "UPDATE tasks SET status = 'leased', attempts = attempts + 1, lease_until = ?, lease_token = ?, updated_at = ? WHERE id = ? AND status = 'pending'",
+      leaseUntil, leaseToken, now, row.id
     );
     const claimed = this.ctx.storage.sql.exec("SELECT * FROM tasks WHERE id = ?", row.id).one();
-    return { task: safeTask(claimed) };
+    return { task: safeTask(claimed), lease_token: leaseToken };
   }
 
-  complete(taskId) {
+  complete(taskId, leaseToken) {
     const now = Date.now();
     const result = this.ctx.storage.sql.exec(
-      "UPDATE tasks SET status = 'completed', lease_until = NULL, updated_at = ? WHERE id = ? AND status = 'leased' AND lease_until > ?",
-      now, taskId, now
+      "UPDATE tasks SET status = 'completed', lease_until = NULL, updated_at = ? WHERE id = ? AND status = 'leased' AND lease_until > ? AND lease_token = ?",
+      now, taskId, now, leaseToken
     );
     return { updated: result.rowsWritten === 1 };
   }
 
-  retry(taskId, errorCode = "task_failed") {
+  retry(taskId, leaseToken, errorCode = "task_failed") {
     const now = Date.now();
     const safeError = String(errorCode).replace(/[^a-zA-Z0-9_.:-]/g, "_").slice(0, 80);
     const row = this.ctx.storage.sql.exec("SELECT * FROM tasks WHERE id = ?", taskId).toArray()[0];
-    if (!row || row.status !== "leased" || row.lease_until <= now) return { updated: false };
+    if (!row || row.status !== "leased" || row.lease_until <= now || row.lease_token !== leaseToken) return { updated: false };
     const status = row.attempts >= MAX_ATTEMPTS ? "dead" : "pending";
     this.ctx.storage.sql.exec(
-      "UPDATE tasks SET status = ?, lease_until = NULL, updated_at = ?, last_error = ? WHERE id = ? AND status = 'leased'",
-      status, now, safeError, taskId
+      "UPDATE tasks SET status = ?, lease_until = NULL, lease_token = NULL, updated_at = ?, last_error = ? WHERE id = ? AND status = 'leased' AND lease_token = ?",
+      status, now, safeError, taskId, leaseToken
     );
     return { updated: true, status };
   }
