@@ -43,6 +43,8 @@ test("Preview deployment workflow is manual, explicitly confirmed, token-isolate
   assert.match(previewDeployWorkflow, /\.paused == true/);
   assert.match(previewDeployWorkflow, /manual_only_no_cron/);
   assert.match(previewDeployWorkflow, /production_access == false/);
+  assert.match(previewDeployWorkflow, /content_draft_executor_enabled == true/);
+  assert.doesNotMatch(previewDeployWorkflow, /content_draft_executor_enabled == false/);
   assert.ok(
     previewDeployWorkflow.indexOf("wrangler deploy --dry-run") <
     previewDeployWorkflow.indexOf("wrangler deploy --config wrangler.preview.jsonc"),
