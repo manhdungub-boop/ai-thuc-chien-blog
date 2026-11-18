@@ -27,7 +27,8 @@ const now = Date.parse("2026-11-18T12:01:00.000Z");
 function makeDraft(claims = [{
   claim_id: "claim-1",
   claim: ledger.claims[0].claim,
-  evidence_urls: sources.map(source => source.url)
+  evidence_urls: sources.map(source => source.url),
+  citation_indices: [1, 2]
 }]) {
   const words = Array.from({ length: 620 }, () => "nghiên-cứu").join(" ");
   return {
@@ -73,7 +74,31 @@ describe("article evidence readiness", () => {
     });
   });
 
-  it("rejects claims that were not reviewed as supported", async () => {
+
+  it("binds each reviewed evidence URL to the matching source-list citation index", async () => {
+    const reviewRecord = await makeReview();
+    const wrongIndex = makeDraft([{
+      ...makeDraft().claims[0],
+      citation_indices: [2, 1]
+    }]);
+    const missingMarker = makeDraft();
+    missingMarker.body_markdown = missingMarker.body_markdown.replace("[2]", "[3]");
+    const wrongIndexResult = await assessArticleEvidenceReadiness({ draft: wrongIndex, ledger, reviewRecord, now });
+    const missingMarkerResult = await assessArticleEvidenceReadiness({ draft: missingMarker, ledger, reviewRecord, now });
+    expect(wrongIndexResult.issues[0].code).toBe("claim_citation_source_order_mismatch");
+    expect(missingMarkerResult.issues[0].code).toBe("claim_inline_citation_missing_from_body");
+  });
+
+  it("rejects absent or duplicate claim citation indices", async () => {
+    const reviewRecord = await makeReview();
+    const absent = makeDraft([{ ...makeDraft().claims[0], citation_indices: undefined }]);
+    const duplicate = makeDraft([{ ...makeDraft().claims[0], citation_indices: [1, 1] }]);
+    const absentResult = await assessArticleEvidenceReadiness({ draft: absent, ledger, reviewRecord, now });
+    const duplicateResult = await assessArticleEvidenceReadiness({ draft: duplicate, ledger, reviewRecord, now });
+    expect(absentResult.issues[0].code).toBe("claim_inline_citations_invalid");
+    expect(duplicateResult.issues[0].code).toBe("claim_inline_citations_invalid");
+  });
+\n  it("rejects claims that were not reviewed as supported", async () => {
     const reviewRecord = await makeReview("needs_revision");
     const result = await assessArticleEvidenceReadiness({ draft: makeDraft(), ledger, reviewRecord, now });
     expect(result.status).toBe("article_claim_evidence_not_ready");
