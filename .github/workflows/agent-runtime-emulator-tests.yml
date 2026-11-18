@@ -1,0 +1,34 @@
+name: Agent Runtime Durable Object Emulator Tests
+
+on:
+  pull_request:
+    paths:
+      - "agents/runtime/**"
+      - ".github/workflows/agent-runtime-emulator-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-runtime-emulator-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  durable-object-emulator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: agents/runtime
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: agents/runtime/package.json
+      - name: Install pinned test dependencies
+        run: npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+      - name: Run local Durable Object emulator tests
+        run: npm test

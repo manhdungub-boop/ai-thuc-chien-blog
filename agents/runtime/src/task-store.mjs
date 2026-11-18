@@ -137,21 +137,23 @@ export class AgentTaskStore extends DurableObject {
     if (!row) return { task: null };
     const leaseUntil = now + LEASE_MS;
     const leaseToken = crypto.randomUUID();
-    this.ctx.storage.sql.exec(
-      "UPDATE tasks SET status = 'leased', attempts = attempts + 1, lease_until = ?, lease_token = ?, updated_at = ? WHERE id = ? AND status = 'pending'",
+    // RETURNING makes lease acquisition atomic and gives this invocation
+    // proof that its conditional update actually won the race.
+    const claimedRows = this.ctx.storage.sql.exec(
+      "UPDATE tasks SET status = 'leased', attempts = attempts + 1, lease_until = ?, lease_token = ?, updated_at = ? WHERE id = ? AND status = 'pending' RETURNING *",
       leaseUntil, leaseToken, now, row.id
-    );
-    const claimed = this.ctx.storage.sql.exec("SELECT * FROM tasks WHERE id = ?", row.id).one();
-    return { task: safeTask(claimed), lease_token: leaseToken };
+    ).toArray();
+    if (claimedRows.length !== 1) return { task: null };
+    return { task: safeTask(claimedRows[0]), lease_token: leaseToken };
   }
 
   complete(taskId, leaseToken) {
     const now = Date.now();
-    const result = this.ctx.storage.sql.exec(
-      "UPDATE tasks SET status = 'completed', lease_until = NULL, lease_token = NULL, updated_at = ? WHERE id = ? AND status = 'leased' AND lease_until > ? AND lease_token = ?",
+    const updated = this.ctx.storage.sql.exec(
+      "UPDATE tasks SET status = 'completed', lease_until = NULL, lease_token = NULL, updated_at = ? WHERE id = ? AND status = 'leased' AND lease_until > ? AND lease_token = ? RETURNING id",
       now, taskId, now, leaseToken
-    );
-    return { updated: result.rowsWritten === 1 };
+    ).toArray();
+    return { updated: updated.length === 1 };
   }
 
   retry(taskId, leaseToken, errorCode = "task_failed") {
@@ -160,11 +162,11 @@ export class AgentTaskStore extends DurableObject {
     const row = this.ctx.storage.sql.exec("SELECT * FROM tasks WHERE id = ?", taskId).toArray()[0];
     if (!row || row.status !== "leased" || row.lease_until <= now || row.lease_token !== leaseToken) return { updated: false };
     const status = row.attempts >= MAX_ATTEMPTS ? "dead" : "pending";
-    const result = this.ctx.storage.sql.exec(
-      "UPDATE tasks SET status = ?, lease_until = NULL, lease_token = NULL, updated_at = ?, last_error = ? WHERE id = ? AND status = 'leased' AND lease_until > ? AND lease_token = ?",
+    const updated = this.ctx.storage.sql.exec(
+      "UPDATE tasks SET status = ?, lease_until = NULL, lease_token = NULL, updated_at = ?, last_error = ? WHERE id = ? AND status = 'leased' AND lease_until > ? AND lease_token = ? RETURNING id",
       status, now, safeError, taskId, now, leaseToken
-    );
-    return { updated: result.rowsWritten === 1, status: result.rowsWritten === 1 ? status : undefined };
+    ).toArray();
+    return { updated: updated.length === 1, status: updated.length === 1 ? status : undefined };
   }
 
   stats() {
