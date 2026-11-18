@@ -230,6 +230,7 @@ export default {
         quality_review_executor_enabled: false,
         website_publication_enabled: false,
         facebook_publication_enabled: false,
+        reviewer_auth_enabled: env.AGENT_REVIEWER_AUTH_ENABLED === "true",
         task_enqueue_endpoint_enabled: false,
         production_access: false
       });
