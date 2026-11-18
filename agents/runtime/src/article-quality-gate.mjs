@@ -70,8 +70,9 @@ export function reviewArticleDraft(draft) {
   const body = text(draft.body_markdown);
   const author = text(draft.author);
   const copyrightNotice = text(draft.copyright_notice);
-  const sections = [...body.matchAll(/^#{2,3}\s+\S.+$/gm)];
-  const plainBody = markdownText(body);
+  const proseBody = removeFencedCode(body);
+  const sections = [...proseBody.matchAll(/^#{2,3}\s+\S.+$/gm)];
+  const plainBody = markdownText(proseBody);
   const words = plainBody ? plainBody.split(/\s+/).filter(Boolean).length : 0;
   const sources = Array.isArray(draft.sources) ? draft.sources : [];
   const uniqueUrls = new Set();
@@ -105,7 +106,7 @@ export function reviewArticleDraft(draft) {
 
   if (validSources.length < MIN_SOURCES) add("source_count", "At least three distinct, valid HTTPS sources are required.");
 
-  const citationNumbers = [...body.matchAll(/\[(\d{1,2})\]/g)].map(match => Number(match[1]));
+  const citationNumbers = [...proseBody.matchAll(/\[(\d{1,2})\]/g)].map(match => Number(match[1]));
   if (!citationNumbers.length) {
     add("missing_inline_citations", "Add inline numeric citations such as [1] that correspond to the source list.");
   } else if (citationNumbers.some(number => number < 1 || number > sources.length || !validSourceIndexes.has(number - 1))) {
