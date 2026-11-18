@@ -28,7 +28,7 @@ export async function assessArticleEvidenceReadiness({
     return {
       ok: false,
       status: "article_claim_manifest_invalid",
-      issues: [{ code: "claim_manifest_required", detail: "Provide 1–40 explicit factual claims with exact reviewed claim IDs, text, and evidence URLs." }],
+      issues: [{ code: "claim_manifest_required", detail: "Provide 1–40 explicit factual claims with exact reviewed claim IDs, text, evidence URLs, and inline citation indices." }],
       publication_authorized: false,
       content_published: false
     };
@@ -66,6 +66,12 @@ export async function assessArticleEvidenceReadiness({
         item.evidence_urls.some((url, index) => url !== expectedUrls[index])) {
       claimIssues.push({ code: "claim_evidence_mapping_mismatch", claim_id: id });
     }
+    if (!Array.isArray(item.citation_indices) ||
+        item.citation_indices.length !== expectedUrls.length ||
+        item.citation_indices.some(index => !Number.isInteger(index) || index < 1) ||
+        new Set(item.citation_indices).size !== item.citation_indices.length) {
+      claimIssues.push({ code: "claim_inline_citations_invalid", claim_id: id });
+    }
   }
 
   if (claimIssues.length) {
@@ -80,23 +86,58 @@ export async function assessArticleEvidenceReadiness({
     };
   }
 
-  const articleSourceUrls = new Set();
+  const articleSourceIndexByUrl = new Map();
   if (Array.isArray(draft.sources)) {
-    for (const source of draft.sources) {
+    for (const [index, source] of draft.sources.entries()) {
       try {
-        articleSourceUrls.add(new URL(source?.url).href);
+        const normalizedUrl = new URL(source?.url).href;
+        if (!articleSourceIndexByUrl.has(normalizedUrl)) {
+          articleSourceIndexByUrl.set(normalizedUrl, index + 1);
+        }
       } catch {
         // The structural article gate reports malformed source records.
       }
     }
   }
+
+  const body = typeof draft.body_markdown === "string" ? draft.body_markdown : "";
   for (const item of draft.claims) {
-    for (const evidenceUrl of item.evidence_urls) {
-      if (!articleSourceUrls.has(evidenceUrl)) {
-        claimIssues.push({ code: "reviewed_evidence_missing_from_article_sources", claim_id: item.claim_id, evidence_url: evidenceUrl });
+    const expectedCitationIndices = item.evidence_urls.map(url => {
+      try {
+        return articleSourceIndexByUrl.get(new URL(url).href) ?? null;
+      } catch {
+        return null;
+      }
+    });
+    if (expectedCitationIndices.some(index => index === null)) {
+      claimIssues.push({
+        code: "reviewed_evidence_missing_from_article_sources",
+        claim_id: item.claim_id,
+        evidence_urls: item.evidence_urls.filter(url => {
+          try { return !articleSourceIndexByUrl.has(new URL(url).href); } catch { return true; }
+        })
+      });
+      continue;
+    }
+    if (item.citation_indices.some((index, position) => index !== expectedCitationIndices[position])) {
+      claimIssues.push({
+        code: "claim_citation_source_order_mismatch",
+        claim_id: item.claim_id,
+        expected_citation_indices: expectedCitationIndices
+      });
+      continue;
+    }
+    for (const citationIndex of expectedCitationIndices) {
+      if (!body.includes(`[${citationIndex}]`)) {
+        claimIssues.push({
+          code: "claim_inline_citation_missing_from_body",
+          claim_id: item.claim_id,
+          citation_index: citationIndex
+        });
       }
     }
   }
+
   if (claimIssues.length) {
     return {
       ok: false,
@@ -130,6 +171,7 @@ export async function assessArticleEvidenceReadiness({
     review_status: reviewVerification.status,
     limitations: [
       "Only the explicitly supplied claim manifest is checked; this does not discover omitted factual claims in the article body.",
+      "Inline citation indices are bound to the exact reviewed evidence URLs and source-list positions, but this does not prove semantic support.",
       "A supported decision is a recorded human judgment, not an independent fact-check or proof of truth.",
       "This gate does not assess originality, source authority, licensing, copyright clearance, or legal compliance.",
       "Owner release approval and separate deployment/publication gates remain mandatory."
