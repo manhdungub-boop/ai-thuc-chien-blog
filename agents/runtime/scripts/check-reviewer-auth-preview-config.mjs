@@ -59,6 +59,6 @@ export function inspectReviewerAuthPreviewConfig(env = {}) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   const report = inspectReviewerAuthPreviewConfig(process.env);
-  process.stdout.write(JSON.stringify(report, null, 2) + "\\n");
+  process.stdout.write(JSON.stringify(report, null, 2) + "\n");
   if (!report.ready_for_manual_review) process.exitCode = 1;
 }
