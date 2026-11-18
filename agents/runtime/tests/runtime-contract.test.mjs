@@ -11,6 +11,7 @@ const evidence = await readFile(new URL("../src/research-evidence.mjs", import.m
 const evidenceAssessment = await readFile(new URL("../src/research-evidence-assessment.mjs", import.meta.url), "utf8");
 const articleGate = await readFile(new URL("../src/article-quality-gate.mjs", import.meta.url), "utf8");
 const candidateStore = await readFile(new URL("../src/ai-bank-candidate-store.mjs", import.meta.url), "utf8");
+const budgetDay = await readFile(new URL("../src/utc-budget-day.mjs", import.meta.url), "utf8");
 const previewDeployWorkflow = await readFile(new URL("../../../.github/workflows/deploy-agent-runtime-preview.yml", import.meta.url), "utf8");
 
 test("Preview deployment workflow is manual, explicitly confirmed, token-isolated, and health-gated", () => {
