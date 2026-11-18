@@ -10,12 +10,14 @@
   "durable_objects": {
     "bindings": [
       { "name": "AGENT_TASK_STORE", "class_name": "AgentTaskStore" },
-      { "name": "AGENT_DRAFT_STORE", "class_name": "AgentDraftStore" }
+      { "name": "AGENT_DRAFT_STORE", "class_name": "AgentDraftStore" },
+      { "name": "AGENT_AI_BANK_CANDIDATE_STORE", "class_name": "AgentAIBankCandidateStore" }
     ]
   },
   "migrations": [
     { "tag": "v1-agent-task-store", "new_sqlite_classes": ["AgentTaskStore"] },
-    { "tag": "v2-agent-draft-store", "new_sqlite_classes": ["AgentDraftStore"] }
+    { "tag": "v2-agent-draft-store", "new_sqlite_classes": ["AgentDraftStore"] },
+    { "tag": "v3-ai-bank-candidate-store", "new_sqlite_classes": ["AgentAIBankCandidateStore"] }
   ],
   "workflows": [
     {
