@@ -18,6 +18,19 @@ const json = (value, status = 200) => new Response(JSON.stringify(value), {
   }
 });
 
+function createBudgetedFetch(store, day, scope) {
+  let calls = 0;
+  return {
+    count: () => calls,
+    fetchImpl: async (input, init) => {
+      const permit = await store.consumeExternalRequestBudget(day, scope);
+      if (!permit.allowed) throw new Error("daily_external_request_budget_exhausted");
+      calls += 1;
+      return fetch(input, init);
+    }
+  };
+}
+
 async function executeTask(store, taskType, taskId, payload, handler) {
   const enqueued = await store.enqueue({ id: taskId, task_type: taskType, payload });
   if (!enqueued.accepted) throw new Error("task_enqueue_rejected");
@@ -37,11 +50,11 @@ async function executeTask(store, taskType, taskId, payload, handler) {
     const result = await handler(claimed.task);
     if (result?.ok === false) {
       const retried = await store.retry(taskId, claimed.lease_token, result.status || "task_not_ready");
-      return { status: retried.status || "retry_not_applied", error_code: result.status || "task_not_ready", external_calls: result.sources_checked || 0 };
+      return { status: retried.status || "retry_not_applied", error_code: result.status || "task_not_ready", external_calls: result.external_calls || 0 };
     }
     const completed = await store.complete(taskId, claimed.lease_token, result);
     if (!completed.updated) throw new Error("task_completion_rejected");
-    return { status: "completed", result, external_calls: result?.sources_checked || 0 };
+    return { status: "completed", result, external_calls: result?.external_calls || 0 };
   } catch (error) {
     const errorCode = String(error?.message || "task_execution_failed")
       .replace(/[^a-zA-Z0-9_.:-]/g, "_")
@@ -97,7 +110,14 @@ export class AgentSupervisorWorkflow extends WorkflowEntrypoint {
         "ai_bank_discovery",
         scanTaskId,
         { query: "daily_allowlisted_release_scan" },
-        () => discoverAiBankReleaseSignals({ lookbackDays: 30 })
+        async () => {
+          const budget = createBudgetedFetch(store, scanDate, "ai_bank_discovery");
+          const result = await discoverAiBankReleaseSignals({
+            lookbackDays: 30,
+            fetchImpl: budget.fetchImpl
+          });
+          return { ...result, external_calls: budget.count() };
+        }
       );
 
       const researchTaskId = "research-scan-" + scanDate;
@@ -107,14 +127,22 @@ export class AgentSupervisorWorkflow extends WorkflowEntrypoint {
         researchTaskId,
         { topic: "AI agents, automation, and open-source AI tools", language: "vi" },
         async () => {
-          const discovered = await discoverResearchSignals({ lookbackDays: 14 });
-          const evidence = await retrieveResearchEvidence(discovered.latest_signals, { now: Date.now() });
+          const budget = createBudgetedFetch(store, scanDate, "content_research");
+          const discovered = await discoverResearchSignals({
+            lookbackDays: 14,
+            fetchImpl: budget.fetchImpl
+          });
+          const evidence = await retrieveResearchEvidence(discovered.latest_signals, {
+            now: Date.now(),
+            fetchImpl: budget.fetchImpl
+          });
           const evidenceAssessment = assessResearchEvidence(evidence.evidence, { now: Date.now() });
           return {
             ...discovered,
             sources_checked: discovered.sources_checked + evidence.attempts,
             evidence_retrieval: evidence,
             evidence_assessment: evidenceAssessment,
+            external_calls: budget.count(),
             research_notice: "Retrieved excerpts are provenance-bound research evidence, not fact-checked claims or a publishable article."
           };
         }
