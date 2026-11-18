@@ -18,6 +18,7 @@ function isFreshTimestamp(value, now, maxAgeMs) {
 
 function eligible(provider, taskType, now) {
   if (!provider || typeof provider !== "object") return false;
+  if (typeof provider.id !== "string" || provider.id.trim() === "") return false;
   if (provider.status !== "ready") return false;
   if (provider.execution_surface !== "agent_runtime") return false;
   if (!["zero_cost_verified", "no_external_execution"].includes(provider.cost_class)) return false;
@@ -70,7 +71,7 @@ export function selectProvider(taskType, providers, now = Date.now()) {
   if (matching.some(provider => provider?.execution_surface !== "agent_runtime" && provider?.status === "ready")) {
     return { action: "defer", provider: null, reason: "connector_not_callable_from_agent_runtime" };
   }
-  if (matching.some(provider => provider?.cost_class !== "zero_cost_verified")) {
+  if (matching.some(provider => !["zero_cost_verified", "no_external_execution"].includes(provider?.cost_class))) {
     return { action: "defer", provider: null, reason: "free_cost_not_verified" };
   }
   if (matching.some(provider => provider?.status === "quota_exhausted" || provider?.quota?.available === false)) {
