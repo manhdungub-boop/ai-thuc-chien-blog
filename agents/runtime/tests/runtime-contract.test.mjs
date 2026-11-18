@@ -49,15 +49,16 @@ test("manual preview config is paused, has no recurring schedule, and uses isola
   assert.deepEqual(previewConfig.vars, {
     AGENT_ENABLED: "false",
     AGENT_PAUSED: "true",
-    AGENT_SCHEDULE_MODE: "manual_only_no_cron"
+    AGENT_SCHEDULE_MODE: "manual_only_no_cron",
+    AGENT_REVIEWER_AUTH_ENABLED: "false"
   });
   assert.equal(previewConfig.workflows.length, 1);
   assert.equal(previewConfig.workflows[0].schedules, undefined);
   assert.equal(previewConfig.routes, undefined);
   assert.equal(previewConfig.d1_databases, undefined);
   assert.equal(previewConfig.ai, undefined);
-  assert.deepEqual(previewConfig.durable_objects.bindings, config.durable_objects.bindings);
-  assert.deepEqual(previewConfig.migrations, config.migrations);
+  assert.deepEqual(previewConfig.durable_objects.bindings, [...config.durable_objects.bindings, { name: "AGENT_REVIEWER_AUTH_STORE", class_name: "AgentReviewerAuthStore" }]);
+  assert.deepEqual(previewConfig.migrations, [...config.migrations, { tag: "v4-reviewer-auth-store", new_sqlite_classes: ["AgentReviewerAuthStore"] }]);
 });
 
 test("runtime has isolated SQLite storage and no website Production bindings", () => {
@@ -89,6 +90,7 @@ test("health endpoint is read-only and does not expose task enqueue", () => {
   assert.match(source, /quality_review_executor_enabled: false/);
   assert.match(source, /website_publication_enabled: false/);
   assert.match(source, /facebook_publication_enabled: false/);
+  assert.match(source, /reviewer_auth_enabled: env\.AGENT_REVIEWER_AUTH_ENABLED === "true"/);
   assert.match(source, /production_access: false/);
   assert.match(source, /AGENT_PAUSED/);
   assert.match(source, /AGENT_ENABLED !== "true"/);
@@ -271,4 +273,21 @@ test("AI Bank candidate storage is allowlisted, bounded, persistent, and review-
   assert.match(candidateStore, /MAX_EVIDENCE_PER_CHECK = 5/);
   assert.match(candidateStore, /verification_authorized: false/);
   assert.match(candidateStore, /public_publication_authorized: false/);
+});
+
+test("reviewer evidence endpoint is Google-session-bound and non-publishing", async () => {
+  const runtime = await readFile(new URL("../src/index.mjs", import.meta.url), "utf8");
+  const draftStore = await readFile(new URL("../src/draft-artifact-store.mjs", import.meta.url), "utf8");
+  const verifier = await readFile(new URL("../src/human-review-record-verifier.mjs", import.meta.url), "utf8");
+  assert.match(runtime, /handleGoogleReviewerAuth\(request, env\)/);
+  assert.match(runtime, /api\/reviewer\/drafts/);
+  assert.match(runtime, /request\.headers\.get\("origin"\) !== url\.origin/);
+  assert.match(runtime, /readGoogleReviewerSessionCookie\(request\)/);
+  assert.match(runtime, /recordEvidenceReview\([\s\S]*sessionToken/);
+  assert.match(draftStore, /verifyGoogleReviewerSessionToken\(reviewerSessionToken, this\.env/);
+  assert.match(draftStore, /authenticatedReviewer: \{ authenticated: true, reviewer_ref: reviewerSession\.reviewer\.reviewer_ref \}/);
+  assert.match(verifier, /authenticatedReviewer\.reviewer_ref === record\.reviewer_ref/);
+  assert.match(verifier, /reviewer_identity_authenticated: reviewerIdentityAuthenticated/);
+  assert.match(runtime, /publication_authorized: false/);
+  assert.match(runtime, /social_post_published: false/);
 });

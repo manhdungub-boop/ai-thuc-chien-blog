@@ -62,7 +62,7 @@ describe("AgentDraftStore Durable Object", () => {
       .toEqual({ accepted: false, reason: "invalid_body_markdown" });
   });
 
-  it("persists review-record integrity but blocks owner-release eligibility without authenticated reviewer identity", async () => {
+  it("rejects evidence-review writes without a cryptographically verified Google session", async () => {
     const draft = validDraft();
     const claim = "The draft store keeps article evidence reviews isolated.";
     draft.claims = [{
@@ -94,15 +94,12 @@ describe("AgentDraftStore Durable Object", () => {
       { now }
     );
     const recorded = await store.recordEvidenceReview("draft-review-0009", created.artifact.version, ledger, reviewRecord);
-    expect(recorded.recorded).toBe(true);
-    expect(recorded.owner_release_review_eligible).toBe(false);
-    expect(recorded.readiness.status).toBe("human_reviewer_identity_not_authenticated");
-    expect(recorded.readiness.reviewer_identity_authenticated).toBe(false);
-    expect(recorded.artifact.evidence_review.review_record.status).toBe("human_review_recorded_pending_release_gates");
+    expect(recorded).toMatchObject({ recorded: false, reason: "reviewer_auth_not_configured" });
+    expect((await store.getDraft("draft-review-0009")).evidence_review).toBeNull();
     expect(await store.listOwnerReleaseReviews()).toHaveLength(0);
   });
 
-  it("rejects tampered review records and invalidates persisted review after draft revision", async () => {
+  it("rejects tampered and valid evidence-review writes when no signed reviewer session is supplied", async () => {
     const draft = validDraft();
     draft.claims = [{
       claim_id: "claim-store-2",
@@ -137,16 +134,11 @@ describe("AgentDraftStore Durable Object", () => {
       claims: reviewRecord.claims.map(item => ({ ...item, reviewer_note: "Changed reviewer note after fingerprinting." }))
     };
     const rejected = await store.recordEvidenceReview("draft-review-0010", created.artifact.version, ledger, tampered);
-    expect(rejected).toMatchObject({ recorded: false, reason: "review_record_not_verified" });
+    expect(rejected).toMatchObject({ recorded: false, reason: "reviewer_auth_not_configured" });
     const recorded = await store.recordEvidenceReview("draft-review-0010", created.artifact.version, ledger, reviewRecord);
-    expect(recorded.recorded).toBe(true);
-    const revised = validDraft();
-    revised.title = "Xây dựng hệ thống AI agent an toàn và hiệu quả hơn";
-    revised.claims = draft.claims;
-    const update = await store.reviseDraft("draft-review-0010", recorded.artifact.version, revised);
-    expect(update.artifact.evidence_review).toBeNull();
-    expect(await store.listOwnerReleaseReviews()).toHaveLength(0);
+    expect(recorded).toMatchObject({ recorded: false, reason: "reviewer_auth_not_configured" });
     expect((await store.getDraft("draft-review-0010")).evidence_review).toBeNull();
+    expect(await store.listOwnerReleaseReviews()).toHaveLength(0);
   });
 
   it("rejects malformed claim manifests before storing an article", async () => {

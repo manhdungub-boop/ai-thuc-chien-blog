@@ -75,3 +75,24 @@ Do not deploy from this branch until the separate Preview account/resource bound
 7. Consider public actions only through the existing owner approval gates.
 
 A scheduled Workflow is a recurring background service, not a guarantee of uninterrupted model inference. Account limits, platform incidents, and quota exhaustion can pause work; the runtime must fail closed rather than enable billing.
+
+
+### Google reviewer OAuth and session flow (Preview foundation only)
+
+- The Preview config binds a dedicated SQLite Durable Object transaction store. Each login transaction records only a SHA-256 state hash, browser-binding hash, nonce, PKCE verifier, and five-minute expiry. The store consumes a transaction once; a missing, expired, mismatched, or replayed transaction is rejected.
+- `GET /auth/google/start` is available only when `AGENT_REVIEWER_AUTH_ENABLED=true` and all private runtime configuration is present. It generates cryptographically random state, nonce, browser binding, and PKCE verifier; stores the transaction server-side; and redirects to Google's authorization-code endpoint using S256 PKCE. The browser binding is carried in a signed Secure, HttpOnly, SameSite=Lax, host-only cookie.
+- `GET /auth/google/callback` requires the exact configured HTTPS callback origin and path, verifies the signed browser cookie, consumes the transaction before exchanging the code, sends the PKCE verifier and client secret only from the server, then verifies the returned Google ID token with the separate OIDC verifier. OAuth errors, invalid tokens, and replayed transactions fail closed.
+- A successful identity check creates a separate 30-minute HMAC-signed Secure, HttpOnly, SameSite=Lax, host-only session cookie. `GET /auth/google/me` reports the authenticated Google subject and allowlisted email; `GET /auth/google/logout` clears both cookies. Session identity is derived from Google's immutable `sub`, never from request parameters.
+- Private Preview configuration required before a real login: `GOOGLE_REVIEWER_CLIENT_ID`, `GOOGLE_REVIEWER_CLIENT_SECRET`, `GOOGLE_REVIEWER_REDIRECT_URI`, `GOOGLE_REVIEWER_ALLOWED_EMAILS`, `GOOGLE_REVIEWER_STATE_SECRET`, and `GOOGLE_REVIEWER_SESSION_SECRET`. Secrets must be configured through the Cloudflare Preview secret interface; never commit or paste them into source control or chat. Both HMAC secrets must be independently generated random values of at least 32 characters. The callback URI must exactly match the Preview Worker hostname and `/auth/google/callback`.
+- `AGENT_REVIEWER_AUTH_ENABLED` is explicitly `false` in the Preview config. No OAuth client, credentials, allowlist, HMAC secrets, or live Google login have been configured or tested. The code is not deployed. This is a tested Preview-only implementation candidate, not an active login service.
+- Authentication does not approve articles, prove factual accuracy, authorize publication, permit Production deployment, or enable Facebook posting. The owner-release and publication gates remain separate and fail-closed. No Production configuration, website Worker, DNS, D1, or social account is changed.
+
+
+### Authenticated reviewer evidence-review boundary
+
+- The Worker routes `GET /auth/google/start`, `GET /auth/google/callback`, `GET /auth/google/me`, and `GET /auth/google/logout` through the Preview-only Google OAuth handler.
+- The authenticated review write route is `POST /api/reviewer/drafts/:id/evidence-review`. It requires a same-origin `Origin` header, JSON content type, bounded request body, and the signed HttpOnly Google reviewer session cookie. Cross-origin form submissions and requests without a session are rejected.
+- The Durable Object independently validates the HMAC session token against private runtime configuration, checks expiry, the single-email allowlist, and the immutable Google subject-derived reviewer reference. The request cannot submit an `authenticatedReviewer` flag or replace the verified principal.
+- The persisted review record's `reviewer_ref` must exactly match the server-verified session principal. A mismatched or absent identity never passes the identity gate. Evidence review writes are rejected when reviewer authentication is disabled or the session is invalid.
+- A matching authenticated review may become `eligible_for_owner_release_review` only. It does not authorize publication, website deployment, AI Bank catalog writes, or Facebook/social posting. The owner release decision and all publication/deployment gates remain separate.
+- Preview config keeps `AGENT_REVIEWER_AUTH_ENABLED=false`; no credentials or live Google login are configured. The new route and Durable Object binding have not been deployed. Tests use local fixtures/mocks only.

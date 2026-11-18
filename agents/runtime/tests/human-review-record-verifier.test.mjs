@@ -84,4 +84,19 @@ describe("human review record verifier", () => {
     expect(invalid.status).toBe("invalid_review_record");
     expect(badReviewer.status).toBe("invalid_review_metadata");
   });
+
+  it("authenticates reviewer identity only when a server-verified session matches the record reference", async () => {
+    const record = await makeRecord();
+    const matching = await verifyHumanClaimReviewRecord(record, ledger, {
+      now,
+      authenticatedReviewer: { authenticated: true, reviewer_ref: record.reviewer_ref }
+    });
+    const mismatched = await verifyHumanClaimReviewRecord(record, ledger, {
+      now,
+      authenticatedReviewer: { authenticated: true, reviewer_ref: "google:another-subject" }
+    });
+    expect(matching.safety.reviewer_identity_authenticated).toBe(true);
+    expect(mismatched.safety.reviewer_identity_authenticated).toBe(false);
+  });
+
 });

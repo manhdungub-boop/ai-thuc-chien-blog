@@ -9,9 +9,10 @@ export async function assessArticleEvidenceReadiness({
   draft,
   ledger,
   reviewRecord,
+  authenticatedReviewer = null,
   now = Date.now()
 } = {}) {
-  const reviewVerification = await verifyHumanClaimReviewRecord(reviewRecord, ledger, { now });
+  const reviewVerification = await verifyHumanClaimReviewRecord(reviewRecord, ledger, { now, authenticatedReviewer });
   if (!reviewVerification.ok) {
     return {
       ok: false,
