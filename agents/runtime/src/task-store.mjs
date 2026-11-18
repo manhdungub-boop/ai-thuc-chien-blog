@@ -188,6 +188,20 @@ export class AgentTaskStore extends DurableObject {
     return { updated: updated.length === 1, status: updated.length === 1 ? status : undefined };
   }
 
+  pruneTerminalTasks({ now = Date.now(), retentionMs = 30 * 24 * 60 * 60 * 1000, limit = 100 } = {}) {
+    if (!Number.isFinite(now) || !Number.isFinite(retentionMs) || retentionMs < 0 ||
+        !Number.isInteger(limit) || limit < 1 || limit > 100) {
+      throw new TypeError("invalid_retention_options");
+    }
+    const cutoff = now - retentionMs;
+    const deleted = this.ctx.storage.sql.exec(
+      "DELETE FROM tasks WHERE id IN (SELECT id FROM tasks WHERE status IN ('completed','dead') AND updated_at < ? ORDER BY updated_at ASC LIMIT ?) RETURNING id",
+      cutoff,
+      limit
+    ).toArray();
+    return { deleted: deleted.length, retention_days: Math.floor(retentionMs / 86_400_000), limit };
+  }
+
   stats() {
     const rows = this.ctx.storage.sql.exec(
       "SELECT status, COUNT(*) AS count FROM tasks GROUP BY status"
