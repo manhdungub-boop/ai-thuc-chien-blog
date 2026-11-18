@@ -82,3 +82,16 @@ test("policy never permits paid or unknown-cost fallback", () => {
   assert.equal(providerPolicy.paidFallbackAllowed, false);
   assert.equal(providerPolicy.unknownCostAllowed, false);
 });
+
+test("allows deterministic local tasks without external quota", () => {
+  const result = selectProvider("quality_review", [
+    provider({
+      id: "local-validator",
+      cost_class: "no_external_execution",
+      capabilities: ["quality_review"],
+      quota: undefined
+    })
+  ], NOW);
+  assert.equal(result.action, "execute");
+  assert.equal(result.provider, "local-validator");
+});
