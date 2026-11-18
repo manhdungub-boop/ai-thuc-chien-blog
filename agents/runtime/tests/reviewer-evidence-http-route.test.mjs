@@ -233,7 +233,7 @@ async function makeReviewerSessionToken(now = Date.now()) {
   const b64url = bytes => {
     let binary = "";
     for (const byte of bytes) binary += String.fromCharCode(byte);
-    return btoa(binary).replace(/=/g, "").replace(/\\+/g, "-").replace(/\\//g, "_");
+    return btoa(binary).replace(/=/g, "").replaceAll("+", "-").replaceAll("/", "_");
   };
   const secret = "reviewer-session-secret-for-tests-32chars";
   const nowSeconds = Math.floor(now / 1000);
