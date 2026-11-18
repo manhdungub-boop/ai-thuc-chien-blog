@@ -54,11 +54,11 @@ async function executeTask(store, taskType, taskId, payload, handler) {
 export class AgentSupervisorWorkflow extends WorkflowEntrypoint {
   async run(event, step) {
     const startedAt = new Date().toISOString();
-    if (this.env.AGENT_PAUSED === "true") {
+    if (this.env.AGENT_ENABLED !== "true" || this.env.AGENT_PAUSED === "true") {
       return {
         service: SERVICE,
         version: VERSION,
-        status: "paused",
+        status: this.env.AGENT_PAUSED === "true" ? "paused" : "disabled",
         cycle: {
           scheduled_at: event.timestamp ? new Date(event.timestamp).toISOString() : startedAt,
           observed_at: startedAt,
@@ -152,9 +152,10 @@ export default {
         service: SERVICE,
         version: VERSION,
         mode: "preview_foundation",
+        enabled: env.AGENT_ENABLED === "true",
         paused: env.AGENT_PAUSED === "true",
         scheduler: "workflow_every_15_minutes",
-        task_execution_enabled: true,
+        task_execution_enabled: env.AGENT_ENABLED === "true" && env.AGENT_PAUSED !== "true",
         ai_bank_discovery: "read_only_daily_allowlisted_github_releases",
         content_research: "read_only_daily_official_feeds_and_bounded_source_evidence_retrieval",
         task_enqueue_endpoint_enabled: false,
