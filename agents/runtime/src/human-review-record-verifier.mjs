@@ -61,7 +61,8 @@ async function fingerprintReviewDecision(reviewedClaim) {
  * reviewer or establish the truth of a review decision.
  */
 export async function verifyHumanClaimReviewRecord(record, ledger, {
-  now = Date.now()
+  now = Date.now(),
+  authenticatedReviewer = null
 } = {}) {
   if (record?.ok !== true ||
       record?.status !== "human_review_recorded_pending_release_gates" ||
@@ -131,6 +132,10 @@ export async function verifyHumanClaimReviewRecord(record, ledger, {
     }
   }
 
+  const reviewerIdentityAuthenticated = authenticatedReviewer?.authenticated === true &&
+    typeof authenticatedReviewer.reviewer_ref === "string" &&
+    authenticatedReviewer.reviewer_ref === record.reviewer_ref;
+
   return {
     ok: true,
     status: "human_review_record_verified",
@@ -138,13 +143,13 @@ export async function verifyHumanClaimReviewRecord(record, ledger, {
     reviewer_ref: record.reviewer_ref,
     reviewed_at: record.reviewed_at,
     limitations: [
-      "Verification confirms that the record matches the supplied ledger snapshot; it does not authenticate the reviewer.",
+      "Verification confirms that the record matches the supplied ledger snapshot. Reviewer identity is authenticated only when a server-verified Google session matches the record reviewer reference.",
       "Verification does not establish factual truth, source authority, semantic support, originality, licensing, or copyright clearance.",
       "A verified review record does not authorize drafting, catalog writes, public publication, or social posting."
     ],
     safety: {
       record_integrity_verified: true,
-      reviewer_identity_authenticated: false,
+      reviewer_identity_authenticated: reviewerIdentityAuthenticated,
       publication_authorized: false,
       content_published: false,
       social_post_published: false
