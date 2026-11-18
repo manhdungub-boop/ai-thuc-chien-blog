@@ -147,3 +147,14 @@ The reviewer console deliberately does not offer a decision form based only on a
 - A ledger is visible to the authenticated reviewer as a pending evidence packet; it is not a review decision and cannot authorize release.
 - A draft revision clears the ledger, review record, and readiness result. The final evidence-review write must match the previously stored ledger snapshot and its version.
 - The current runtime still has no content-draft executor that connects Research Agent output to this store method. This PR adds the durable, version-checked persistence boundary; it does not claim an end-to-end autonomous writing pipeline.
+
+
+### Research-to-draft evidence preparation
+
+- `prepareDraftEvidenceLedger({ draftStore, artifactId, fetchImpl, now })` is a bounded orchestration helper for an existing draft with an explicit human-authored claim manifest.
+- It reads the stored draft, resolves only exact URLs already present in that draft's source manifest, and retrieves at most four unique source pages through the supplied fetch implementation.
+- The caller must provide the runtime's budget-enforcing `fetchImpl`; the helper has no unbudgeted network fallback.
+- If any source fails retrieval, a claim references a URL outside the draft manifest, the draft is not eligible, or the ledger already exists, no ledger write is attempted.
+- A complete retrieval is persisted through the version-checked Durable Object method using the draft version read at the start. Stale writes remain blocked.
+- This helper is not yet called by the supervisor because there is still no content-draft executor or approved draft-creation workflow. It is a tested Research → evidence-persistence building block, not proof of autonomous article production.
+- All excerpts remain `source_retrieved_not_fact_checked`; the helper does not create claims, assess semantic support, authorize release, publish content, or post to social networks.
