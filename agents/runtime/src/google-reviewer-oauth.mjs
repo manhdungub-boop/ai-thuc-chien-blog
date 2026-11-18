@@ -175,7 +175,7 @@ export async function handleGoogleReviewerAuth(request, env, { fetchImpl = fetch
   if (path === "/auth/google/callback") {
     const state = url.searchParams.get("state") || "";
     const code = url.searchParams.get("code") || "";
-    if (!/^[A-Za-z0-9_-]{40,64}$/.test(state) || !/^[^\\u0000-\\u0020\\u007f]{1,2048}$/.test(code) || url.searchParams.has("error")) {
+    if (!/^[A-Za-z0-9_-]{40,64}$/.test(state) || !/^[^\x00-\x20\x7f]{1,2048}$/.test(code) || url.searchParams.has("error")) {
       return json({ error: "oauth_callback_rejected" }, 400);
     }
     const txCookie = await verifyPayload(env.GOOGLE_REVIEWER_STATE_SECRET, cookieValue(request, TX_COOKIE));
