@@ -77,7 +77,7 @@ function config(env) {
       allowedEmails.length !== 1 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(allowedEmails[0]) || allowedEmails[0].length > 254 || env.GOOGLE_REVIEWER_STATE_SECRET === env.GOOGLE_REVIEWER_SESSION_SECRET) return null;
   try {
     const uri = new URL(env.GOOGLE_REVIEWER_REDIRECT_URI);
-    if (uri.protocol !== "https:" || uri.pathname !== "/auth/google/callback" || uri.search || uri.hash || uri.username || uri.password) return null;
+    if (uri.protocol !== "https:" || !uri.hostname.startsWith("ai-thuc-chien-agent-runtime-preview.") || !uri.hostname.endsWith(".workers.dev") || uri.pathname !== "/auth/google/callback" || uri.search || uri.hash || uri.username || uri.password) return null;
     return { allowedEmails, redirectUri: uri.href, redirectOrigin: uri.origin };
   } catch { return null; }
 }
