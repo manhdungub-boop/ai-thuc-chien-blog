@@ -5,7 +5,7 @@ const now = Date.parse("2026-11-18T12:00:00.000Z");
 const item = (source, host, publishedAt = "2026-11-17T09:00:00.000Z") => ({
   source,
   title: source + " research update",
-  url: "https://" + host + "/article/research-update",
+  url: "https://" + host + (host === "openai.com" ? "/index/" : host === "arxiv.org" ? "/abs/" : "/blog/") + "research-update",
   published_at: publishedAt,
   status: "source_retrieved_not_fact_checked",
   excerpt: "A bounded source excerpt describing research methods, results, limitations, and context. ".repeat(2).slice(0, 160)
