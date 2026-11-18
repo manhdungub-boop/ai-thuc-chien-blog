@@ -19,7 +19,7 @@ const evidenceReviews = [
   { source_url: sources[1].url, decision: "supports", reviewer_note: "This second passage independently supports the exact claim statement." }
 ];
 const decisions = [
-  { claim_id: "claim-1", decision: "supported", reviewer_note: "Both excerpts directly address the exact claim wording.", evidence_reviews },
+  { claim_id: "claim-1", decision: "supported", reviewer_note: "Both excerpts directly address the exact claim wording.", evidence_reviews: evidenceReviews },
   { claim_id: "claim-2", decision: "needs_revision", reviewer_note: "The second source is relevant but does not support this wording.", evidence_reviews: [evidenceReviews[0], { ...evidenceReviews[1], decision: "insufficient", reviewer_note: "This passage does not provide sufficient support for the exact claim wording." }] }
 ];
 
