@@ -13,7 +13,18 @@ const evidenceAssessment = await readFile(new URL("../src/research-evidence-asse
 const articleGate = await readFile(new URL("../src/article-quality-gate.mjs", import.meta.url), "utf8");
 const candidateStore = await readFile(new URL("../src/ai-bank-candidate-store.mjs", import.meta.url), "utf8");
 const budgetDay = await readFile(new URL("../src/utc-budget-day.mjs", import.meta.url), "utf8");
+const boundedJson = await readFile(new URL("../src/bounded-json-response.mjs", import.meta.url), "utf8");
+const googleOAuth = await readFile(new URL("../src/google-reviewer-oauth.mjs", import.meta.url), "utf8");
+const googleOidc = await readFile(new URL("../src/google-oidc-reviewer-verifier.mjs", import.meta.url), "utf8");
 const previewDeployWorkflow = await readFile(new URL("../../../.github/workflows/deploy-agent-runtime-preview.yml", import.meta.url), "utf8");
+
+test("Google OAuth and OIDC upstream JSON responses are byte-bounded", () => {
+  assert.match(boundedJson, /getReader\(\)/);
+  assert.match(boundedJson, /total > maxBytes/);
+  assert.match(boundedJson, /TextDecoder\("utf-8", \{ fatal: true \}\)/);
+  assert.match(googleOAuth, /readBoundedJsonResponse\(tokenResponse, 32 \* 1024\)/);
+  assert.match(googleOidc, /readBoundedJsonResponse\(response, 64 \* 1024\)/);
+});
 
 test("Preview deployment workflow is manual, explicitly confirmed, token-isolated, and health-gated", () => {
   assert.match(previewDeployWorkflow, /workflow_dispatch:/);
