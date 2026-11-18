@@ -40,7 +40,7 @@ test("supervisor executes bounded health and daily read-only discovery tasks", (
   assert.match(source, /ai-bank-scan-/);
   assert.match(source, /ai_bank_discovery/);
   assert.match(source, /catalog_modified: false/);
-  assert.match(source, /tasks_dispatched: 2/);
+  assert.match(source, /tasks_considered: 2/);
   assert.match(source, /external_calls: 0/);
   assert.match(source, /production_access: false/);
 });
