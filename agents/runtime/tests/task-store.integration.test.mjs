@@ -40,11 +40,13 @@ describe("AgentTaskStore Durable Object", () => {
       payload: { query: "valid query", url: "https://example.com" }
     }))).rejects.toThrow("invalid_payload");
 
-    await expect(Promise.resolve().then(() => store.enqueue({
-      id: "task-unimplemented-01",
+    const draftTask = await store.enqueue({
+      id: "task-content-draft-01",
       task_type: "content_draft",
       payload: { topic: "AI automation", research_task_id: "research-task-01" }
-    }))).rejects.toThrow("task_type_not_allowed");
+    });
+    expect(draftTask.accepted).toBe(true);
+    expect(draftTask.task.status).toBe("pending");
 
     await expect(Promise.resolve().then(() => store.enqueue({
       id: "task-unimplemented-02",
@@ -74,12 +76,15 @@ describe("AgentTaskStore Durable Object", () => {
       );
     });
 
-    expect(await store.claim()).toEqual({ task: null });
-    await expect(Promise.resolve().then(() => store.claim(["content_draft"])))
-      .rejects.toThrow("invalid_claim_task_types");
+    const draftClaim = await store.claim(["content_draft"]);
+    expect(draftClaim.task.id).toBe("legacy-content-draft");
+    expect(await store.complete("legacy-content-draft", draftClaim.lease_token, {
+      status: "human_authoring_required",
+      publication_authorized: false
+    })).toEqual({ updated: true });
     await expect(Promise.resolve().then(() => store.claim(["quality_review"])))
       .rejects.toThrow("invalid_claim_task_types");
-    expect(await store.stats()).toEqual({ pending: 2 });
+    expect(await store.stats()).toEqual({ completed: 1, pending: 1 });
   });
 
   it("treats identical idempotency requests as duplicates and rejects conflicts", async () => {
