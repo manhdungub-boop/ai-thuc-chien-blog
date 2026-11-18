@@ -187,6 +187,11 @@ export class AgentSupervisorWorkflow extends WorkflowEntrypoint {
       );
 
       const externalCalls = discovery.external_calls + research.external_calls;
+      const dailyBudgets = {
+        day: budgetDay,
+        ai_bank_discovery: await store.getExternalRequestBudget(budgetDay, "ai_bank_discovery"),
+        content_research: await store.getExternalRequestBudget(budgetDay, "content_research")
+      };
       return {
         cycle_id: cycleId,
         scheduled_at: scheduledAt,
@@ -201,6 +206,7 @@ export class AgentSupervisorWorkflow extends WorkflowEntrypoint {
           item.status === "completed"
         ).length,
         external_calls: externalCalls,
+        daily_budgets: dailyBudgets,
         catalog_modified: false,
         public_content_modified: false,
         production_access: false

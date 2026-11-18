@@ -18,6 +18,7 @@ const MAX_PAYLOAD_BYTES = 8192;
 const MAX_ACTIVE_TASKS = 500;
 const MAX_ATTEMPTS = 5;
 const LEASE_MS = 5 * 60 * 1000;
+const EXTERNAL_REQUEST_LIMITS = Object.freeze({ ai_bank_discovery: 10, content_research: 8 });
 
 function validatePayload(type, payload) {
   const keys = Object.keys(payload);
@@ -220,7 +221,7 @@ export class AgentTaskStore extends DurableObject {
   }
 
   consumeExternalRequestBudget(day, scope) {
-    const limits = { ai_bank_discovery: 10, content_research: 8 };
+    const limits = EXTERNAL_REQUEST_LIMITS;
     if (typeof day !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(day) ||
         new Date(day + "T00:00:00.000Z").toISOString().slice(0, 10) !== day ||
         !Object.hasOwn(limits, scope)) {
@@ -258,6 +259,23 @@ export class AgentTaskStore extends DurableObject {
       remaining: 0,
       reason: "daily_external_request_budget_exhausted"
     };
+  }
+
+
+  getExternalRequestBudget(day, scope) {
+    const limits = EXTERNAL_REQUEST_LIMITS;
+    if (typeof day !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(day) ||
+        new Date(day + "T00:00:00.000Z").toISOString().slice(0, 10) !== day ||
+        !Object.hasOwn(limits, scope)) {
+      throw new TypeError("invalid_external_request_budget");
+    }
+    const row = this.ctx.storage.sql.exec(
+      "SELECT used FROM external_request_budgets WHERE budget_day = ? AND scope = ?",
+      day, scope
+    ).toArray()[0];
+    const used = row?.used ?? 0;
+    const limit = limits[scope];
+    return { day, scope, used, limit, remaining: Math.max(0, limit - used) };
   }
 
   pruneTerminalTasks(now = Date.now(), limit = 100) {

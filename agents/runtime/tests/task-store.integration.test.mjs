@@ -179,6 +179,35 @@ describe("AgentTaskStore Durable Object", () => {
     });
   });
 
+  it("reads daily budget usage without consuming or mutating quota", async () => {
+    const day = "2026-11-18";
+    expect(await store.getExternalRequestBudget(day, "ai_bank_discovery")).toEqual({
+      day, scope: "ai_bank_discovery", used: 0, limit: 10, remaining: 10
+    });
+    await store.consumeExternalRequestBudget(day, "ai_bank_discovery");
+    await store.consumeExternalRequestBudget(day, "ai_bank_discovery");
+    expect(await store.getExternalRequestBudget(day, "ai_bank_discovery")).toEqual({
+      day, scope: "ai_bank_discovery", used: 2, limit: 10, remaining: 8
+    });
+    expect(await store.getExternalRequestBudget(day, "content_research")).toEqual({
+      day, scope: "content_research", used: 0, limit: 8, remaining: 8
+    });
+    expect(await store.getExternalRequestBudget(day, "ai_bank_discovery")).toMatchObject({
+      used: 2, remaining: 8
+    });
+  });
+
+  it("rejects invalid dates and unknown scopes in read-only budget snapshots", async () => {
+    await expect(Promise.resolve().then(() =>
+      store.getExternalRequestBudget("2026-02-30", "ai_bank_discovery")
+    )).rejects.toThrow("invalid_external_request_budget");
+    await expect(Promise.resolve().then(() =>
+      store.getExternalRequestBudget("2026-11-18", "other_scope")
+    )).rejects.toThrow("invalid_external_request_budget");
+    expect(await store.getExternalRequestBudget("2026-11-18", "ai_bank_discovery"))
+      .toMatchObject({ used: 0, remaining: 10 });
+  });
+
   it("atomically enforces the daily budget under concurrent outbound attempts", async () => {
     const day = "2026-11-18";
     const results = await Promise.all(
