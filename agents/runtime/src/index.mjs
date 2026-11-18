@@ -18,7 +18,20 @@ const json = (value, status = 200) => new Response(JSON.stringify(value), {
   }
 });
 
-async function executeTask(store, taskType, taskId, payload, handler) {
+function createBudgetedFetch(store, day, scope) {
+  let calls = 0;
+  return {
+    count: () => calls,
+    fetchImpl: async (input, init) => {
+      const permit = await store.consumeExternalRequestBudget(day, scope);
+      if (!permit.allowed) throw new Error("daily_external_request_budget_exhausted");
+      calls += 1;
+      return fetch(input, init);
+    }
+  };
+}
+
+async function executeTask(store, taskType, taskId, payload, handler, getExternalCalls = () => 0) {
   const enqueued = await store.enqueue({ id: taskId, task_type: taskType, payload });
   if (!enqueued.accepted) throw new Error("task_enqueue_rejected");
   if (enqueued.task.status === "completed") {
@@ -37,17 +50,17 @@ async function executeTask(store, taskType, taskId, payload, handler) {
     const result = await handler(claimed.task);
     if (result?.ok === false) {
       const retried = await store.retry(taskId, claimed.lease_token, result.status || "task_not_ready");
-      return { status: retried.status || "retry_not_applied", error_code: result.status || "task_not_ready", external_calls: result.sources_checked || 0 };
+      return { status: retried.status || "retry_not_applied", error_code: result.status || "task_not_ready", external_calls: result.external_calls || 0 };
     }
     const completed = await store.complete(taskId, claimed.lease_token, result);
     if (!completed.updated) throw new Error("task_completion_rejected");
-    return { status: "completed", result, external_calls: result?.sources_checked || 0 };
+    return { status: "completed", result, external_calls: result?.external_calls || 0 };
   } catch (error) {
     const errorCode = String(error?.message || "task_execution_failed")
       .replace(/[^a-zA-Z0-9_.:-]/g, "_")
       .slice(0, 80);
     const retried = await store.retry(taskId, claimed.lease_token, errorCode);
-    return { status: retried.status || "retry_not_applied", error_code: errorCode, external_calls: 0 };
+    return { status: retried.status || "retry_not_applied", error_code: errorCode, external_calls: getExternalCalls() };
   }
 }
 
@@ -90,34 +103,52 @@ export class AgentSupervisorWorkflow extends WorkflowEntrypoint {
         })
       );
 
-      const scanDate = scheduledAt.slice(0, 10).replace(/-/g, "");
+      const budgetDay = scheduledAt.slice(0, 10);
+      const scanDate = budgetDay.replace(/-/g, "");
       const scanTaskId = "ai-bank-scan-" + scanDate;
+      const aiBankBudget = createBudgetedFetch(store, budgetDay, "ai_bank_discovery");
       const discovery = await executeTask(
         store,
         "ai_bank_discovery",
         scanTaskId,
         { query: "daily_allowlisted_release_scan" },
-        () => discoverAiBankReleaseSignals({ lookbackDays: 30 })
+        async () => {
+          const result = await discoverAiBankReleaseSignals({
+            lookbackDays: 30,
+            fetchImpl: aiBankBudget.fetchImpl
+          });
+          return { ...result, external_calls: aiBankBudget.count() };
+        },
+        aiBankBudget.count
       );
 
       const researchTaskId = "research-scan-" + scanDate;
+      const researchBudget = createBudgetedFetch(store, budgetDay, "content_research");
       const research = await executeTask(
         store,
         "content_research",
         researchTaskId,
         { topic: "AI agents, automation, and open-source AI tools", language: "vi" },
         async () => {
-          const discovered = await discoverResearchSignals({ lookbackDays: 14 });
-          const evidence = await retrieveResearchEvidence(discovered.latest_signals, { now: Date.now() });
+          const discovered = await discoverResearchSignals({
+            lookbackDays: 14,
+            fetchImpl: researchBudget.fetchImpl
+          });
+          const evidence = await retrieveResearchEvidence(discovered.latest_signals, {
+            now: Date.now(),
+            fetchImpl: researchBudget.fetchImpl
+          });
           const evidenceAssessment = assessResearchEvidence(evidence.evidence, { now: Date.now() });
           return {
             ...discovered,
             sources_checked: discovered.sources_checked + evidence.attempts,
             evidence_retrieval: evidence,
             evidence_assessment: evidenceAssessment,
+            external_calls: researchBudget.count(),
             research_notice: "Retrieved excerpts are provenance-bound research evidence, not fact-checked claims or a publishable article."
           };
-        }
+        },
+        researchBudget.count
       );
 
       const externalCalls = discovery.external_calls + research.external_calls;
