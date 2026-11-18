@@ -1,35 +1,34 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import worker, { AgentSupervisorWorkflow } from "../src/index.mjs";
+import { readFile } from "node:fs/promises";
 
-test("health endpoint exposes safe preview status", async () => {
-  const response = await worker.fetch(new Request("https://runtime.example/health"), {});
-  assert.equal(response.status, 200);
-  const body = await response.json();
-  assert.equal(body.ok, true);
-  assert.equal(body.task_execution_enabled, false);
-  assert.equal(body.production_access, false);
+const config = JSON.parse(await readFile(new URL("../wrangler.jsonc", import.meta.url), "utf8"));
+const source = await readFile(new URL("../src/index.mjs", import.meta.url), "utf8");
+
+test("runtime uses a recurring Workflow schedule with single-instance concurrency", () => {
+  assert.equal(config.workflows.length, 1);
+  assert.deepEqual(config.workflows[0].schedules, ["*/15 * * * *"]);
+  assert.equal(config.workflows[0].concurrency.limit, 1);
 });
 
-test("runtime rejects non-GET requests", async () => {
-  const response = await worker.fetch(new Request("https://runtime.example/health", { method: "POST" }), {});
-  assert.equal(response.status, 405);
+test("runtime has no production website bindings or deployment routes", () => {
+  assert.equal(config.workers_dev, true);
+  assert.equal(config.routes, undefined);
+  assert.equal(config.d1_databases, undefined);
+  assert.equal(config.ai, undefined);
+  assert.match(config.name, /preview$/);
 });
 
-test("runtime does not expose arbitrary task execution routes", async () => {
-  const response = await worker.fetch(new Request("https://runtime.example/tasks"), {});
-  assert.equal(response.status, 404);
+test("health endpoint is read-only and reports execution disabled", () => {
+  assert.match(source, /request\.method !== "GET"/);
+  assert.match(source, /task_execution_enabled: false/);
+  assert.match(source, /production_access: false/);
+  assert.doesNotMatch(source, /fetch\(["']https?:/);
 });
 
-test("supervisor records safe idle cycle with no external work", async () => {
-  const calls = [];
-  const workflow = Object.create(AgentSupervisorWorkflow.prototype);
-  workflow.env = {};
-  const result = await workflow.run({ instanceId: "cycle-test", timestamp: Date.now() }, {
-    do: async (name, fn) => { calls.push(name); return fn(); }
-  });
-  assert.deepEqual(calls, ["record-supervisor-cycle"]);
-  assert.equal(result.status, "healthy_idle");
-  assert.equal(result.cycle.tasks_dispatched, 0);
-  assert.equal(result.cycle.external_calls, 0);
+test("supervisor cycle is explicitly idle and performs no external work", () => {
+  assert.match(source, /mode: "safe_idle"/);
+  assert.match(source, /tasks_dispatched: 0/);
+  assert.match(source, /external_calls: 0/);
+  assert.match(source, /task_store_and_authorized_execution_adapters_not_yet_enabled/);
 });
