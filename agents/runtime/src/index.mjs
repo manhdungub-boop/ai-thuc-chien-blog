@@ -50,6 +50,20 @@ async function executeTask(store, taskType, taskId, payload, handler) {
 export class AgentSupervisorWorkflow extends WorkflowEntrypoint {
   async run(event, step) {
     const startedAt = new Date().toISOString();
+    if (this.env.AGENT_PAUSED === "true") {
+      return {
+        service: SERVICE,
+        version: VERSION,
+        status: "paused",
+        cycle: {
+          scheduled_at: event.timestamp ? new Date(event.timestamp).toISOString() : startedAt,
+          observed_at: startedAt,
+          tasks_considered: 0,
+          external_calls: 0,
+          queue_accessed: false
+        }
+      };
+    }
     const cycle = await step.do("execute-bounded-health-and-readonly-discovery", async () => {
       const store = this.env.AGENT_TASK_STORE.getByName("primary");
       const cycleId = String(event.instanceId || event.payload?.cycle_id || startedAt);
@@ -106,7 +120,7 @@ export class AgentSupervisorWorkflow extends WorkflowEntrypoint {
 }
 
 export default {
-  async fetch(request) {
+  async fetch(request, env) {
     const url = new URL(request.url);
     if (request.method !== "GET") return json({ error: "method_not_allowed" }, 405);
     if (url.pathname === "/health") {
@@ -115,6 +129,7 @@ export default {
         service: SERVICE,
         version: VERSION,
         mode: "preview_foundation",
+        paused: env.AGENT_PAUSED === "true",
         scheduler: "workflow_every_15_minutes",
         task_execution_enabled: true,
         ai_bank_discovery: "read_only_daily_allowlisted_github_releases",
