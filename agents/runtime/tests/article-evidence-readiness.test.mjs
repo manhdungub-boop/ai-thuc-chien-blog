@@ -91,6 +91,28 @@ describe("article evidence readiness", () => {
     expect(missingMarkerResult.issues[0].code).toBe("claim_inline_citation_missing_from_body");
   });
 
+  it("requires every reviewed claim to appear in the article body", async () => {
+    const reviewRecord = await makeReview();
+    const missing = makeDraft();
+    missing.body_markdown = missing.body_markdown.replace(ledger.claims[0].claim, "Một nội dung khác không chứa tuyên bố đã duyệt.");
+    const result = await assessArticleEvidenceReadiness({
+      draft: missing,
+      ledger,
+      reviewRecord,
+      authenticatedReviewer: { authenticated: true, reviewer_ref: reviewRecord.reviewer_ref },
+      now
+    });
+    expect(result).toMatchObject({
+      ok: false,
+      status: "article_claim_evidence_not_ready",
+      publication_authorized: false
+    });
+    expect(result.issues).toContainEqual({
+      code: "reviewed_claim_missing_from_article_body",
+      claim_id: "claim-1"
+    });
+  });
+
   it("rejects absent or duplicate claim citation indices", async () => {
     const reviewRecord = await makeReview();
     const absent = makeDraft([{ ...makeDraft().claims[0], citation_indices: undefined }]);
