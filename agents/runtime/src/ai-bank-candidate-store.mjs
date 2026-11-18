@@ -108,6 +108,14 @@ export class AgentAIBankCandidateStore extends DurableObject {
     this.ctx.storage.sql.exec(
       "CREATE INDEX IF NOT EXISTS ai_bank_review_evidence_candidate ON ai_bank_review_evidence(candidate_id, submitted_at)"
     );
+    const evidenceColumns = this.ctx.storage.sql.exec(
+      "PRAGMA table_info(ai_bank_review_evidence)"
+    ).toArray();
+    if (!evidenceColumns.some(column => column.name === "candidate_release_url")) {
+      this.ctx.storage.sql.exec(
+        "ALTER TABLE ai_bank_review_evidence ADD COLUMN candidate_release_url TEXT NOT NULL DEFAULT ''"
+      );
+    }
   }
 
   upsertCandidates(candidates, now = Date.now()) {
@@ -228,10 +236,11 @@ export class AgentAIBankCandidateStore extends DurableObject {
     const evidenceId = crypto.randomUUID();
     const submittedAt = new Date(now).toISOString();
     this.ctx.storage.sql.exec(
-      "INSERT INTO ai_bank_review_evidence (evidence_id, candidate_id, check_type, source_title, source_url, excerpt, source_status, review_status, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO ai_bank_review_evidence (evidence_id, candidate_id, check_type, source_title, source_url, excerpt, source_status, review_status, submitted_at, candidate_release_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       evidenceId, candidateId, checkType, evidence.source_title.trim(),
       sourceUrl.href, evidence.excerpt.trim(),
-      "submitted_source_not_verified", "pending_human_review", submittedAt
+      "submitted_source_not_verified", "pending_human_review", submittedAt,
+      candidate.candidate.latest_release.source_url
     );
     return {
       accepted: true,
@@ -259,8 +268,8 @@ export class AgentAIBankCandidateStore extends DurableObject {
     const stored = this.getCandidate(candidateId);
     if (!stored) return null;
     const rows = this.ctx.storage.sql.exec(
-      "SELECT check_type, COUNT(*) AS evidence_count FROM ai_bank_review_evidence WHERE candidate_id = ? GROUP BY check_type",
-      candidateId
+      "SELECT check_type, COUNT(*) AS evidence_count FROM ai_bank_review_evidence WHERE candidate_id = ? AND candidate_release_url = ? GROUP BY check_type",
+      candidateId, stored.candidate.latest_release.source_url
     ).toArray();
     const counts = new Map(rows.map(row => [row.check_type, row.evidence_count]));
     const checklist = REQUIRED_CHECKS.map(checkType => ({

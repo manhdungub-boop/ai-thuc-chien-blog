@@ -241,4 +241,25 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     expect(await store.getReviewPacket("github:missing/tool")).toBeNull();
   });
 
+
+  it("does not carry evidence from an older release into a newer release review packet", async () => {
+    await store.upsertCandidates([candidate()], Date.parse("2026-11-19T08:06:00.000Z"));
+    await store.submitReviewEvidence("github:ollama/ollama", {
+      check_type: "license_scope",
+      source_title: "License for prior release",
+      source_url: "https://github.com/ollama/ollama/blob/v1.2.3/LICENSE",
+      excerpt: "This evidence belongs to release v1.2.3."
+    }, Date.parse("2026-11-19T08:10:00.000Z"));
+
+    const newer = candidate(sources[0], "v1.2.4", "2026-11-19T11:00:00.000Z");
+    newer.discovered_at = "2026-11-19T11:05:00.000Z";
+    await store.upsertCandidates([newer], Date.parse("2026-11-19T11:06:00.000Z"));
+
+    const packet = await store.getReviewPacket("github:ollama/ollama");
+    expect(packet.total_evidence).toBe(0);
+    expect(packet.checks_missing_evidence).toBe(6);
+    expect(await store.listReviewEvidence("github:ollama/ollama")).toHaveLength(1);
+    expect(packet.verification_status).toBe("not_verified");
+  });
+
 });
