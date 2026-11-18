@@ -118,6 +118,13 @@ test("outbound requests are counted atomically against persistent per-day source
   assert.match(source, /external_calls: researchBudget\.count\(\)/);
 });
 
+test("daily request-budget exhaustion terminalizes the current daily task without repeated retries", () => {
+  assert.match(source, /errorCode === "daily_external_request_budget_exhausted"/);
+  assert.match(source, /store\.abandon\(taskId, claimed\.lease_token, errorCode\)/);
+  assert.match(store, /abandon\(taskId, leaseToken, errorCode = "non_retryable_task_failure"\)/);
+  assert.match(store, /status = 'dead', lease_until = NULL, lease_token = NULL/);
+});
+
 test("completed and retried tasks release lease credentials and recheck expiry", () => {
   assert.match(store, /status = 'completed', lease_until = NULL, lease_token = NULL/);
   assert.match(store, /lease_until > \? AND lease_token = \?/);
