@@ -70,6 +70,7 @@ export class AgentSupervisorWorkflow extends WorkflowEntrypoint {
       const cycleId = String(event.instanceId || event.payload?.cycle_id || startedAt);
       const scheduledAt = event.timestamp ? new Date(event.timestamp).toISOString() : startedAt;
       const safeCycleId = cycleId.replace(/[^a-zA-Z0-9._:-]/g, "-");
+      const retention = await store.pruneTerminalTasks({ retentionMs: 30 * 24 * 60 * 60 * 1000, limit: 100 });
       const healthTaskId = "runtime-health-" + safeCycleId;
       const health = await executeTask(
         store,
@@ -113,6 +114,7 @@ export class AgentSupervisorWorkflow extends WorkflowEntrypoint {
         observed_at: new Date().toISOString(),
         mode: "bounded_health_ai_bank_and_research_discovery",
         queue: await store.stats(),
+        retention,
         tasks: { health, ai_bank_discovery: discovery, content_research: research },
         tasks_considered: 3,
         tasks_completed: [health, discovery, research].filter(item =>
