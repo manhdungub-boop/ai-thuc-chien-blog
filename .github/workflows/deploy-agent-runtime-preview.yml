@@ -90,7 +90,7 @@ jobs:
             .scheduler == "manual_only_no_cron" and
             .task_execution_enabled == false and
             .ai_inference_enabled == false and
-            .content_draft_executor_enabled == false and
+            .content_draft_executor_enabled == true and
             .quality_review_executor_enabled == false and
             .website_publication_enabled == false and
             .facebook_publication_enabled == false and
@@ -104,6 +104,7 @@ jobs:
             echo "- Health: PASS"
             echo "- Agent execution: disabled and paused"
             echo "- Recurring schedule: none"
-            echo "- AI inference/content generation/publication: disabled"
+            echo "- AI inference and autonomous article generation/publication: disabled"
+            echo "- Human-only authoring scaffold code: available but runtime execution remains paused"
             echo "- Production Worker/D1/DNS access: none"
           } >> "$GITHUB_STEP_SUMMARY"
