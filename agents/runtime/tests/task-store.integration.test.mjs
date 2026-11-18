@@ -146,8 +146,8 @@ describe("AgentTaskStore Durable Object", () => {
   it("executes and persists only allowlisted local health-check results", async () => {
     const request = { id: "runtime-health-test-01", task_type: "runtime_health_check", payload: {} };
     await store.enqueue(request);
-    const noMatch = await store.claim(["quality_review"]);
-    expect(noMatch).toEqual({ task: null });
+    await expect(Promise.resolve().then(() => store.claim(["quality_review"])))
+      .rejects.toThrow("invalid_claim_task_types");
     const claim = await store.claim(["runtime_health_check"], request.id);
     expect(claim.task.task_type).toBe("runtime_health_check");
     const result = { healthy: true, external_calls: 0, production_access: false };
