@@ -231,6 +231,24 @@ export class AgentDraftStore extends DurableObject {
     };
   }
 
+  async listPendingReviewsForReviewer(limit = 20, reviewerSessionToken) {
+    const session = await verifyGoogleReviewerSessionToken(reviewerSessionToken, this.env, Date.now());
+    if (!session.authenticated) return { authorized: false, reason: session.status || "reviewer_session_invalid" };
+    return {
+      authorized: true,
+      reviewer_ref: session.reviewer.reviewer_ref,
+      items: this.listPendingReviews(limit)
+    };
+  }
+
+  async getDraftForReviewer(id, reviewerSessionToken) {
+    const session = await verifyGoogleReviewerSessionToken(reviewerSessionToken, this.env, Date.now());
+    if (!session.authenticated) return { authorized: false, reason: session.status || "reviewer_session_invalid" };
+    const artifact = this.getDraft(id);
+    if (!artifact) return { authorized: true, artifact: null };
+    return { authorized: true, reviewer_ref: session.reviewer.reviewer_ref, artifact };
+  }
+
   getDraft(id) {
     if (typeof id !== "string" || !ID_PATTERN.test(id)) return null;
     const row = this.ctx.storage.sql.exec("SELECT * FROM draft_artifacts WHERE id = ?", id).toArray()[0];
