@@ -198,3 +198,11 @@ The reviewer console deliberately does not offer a decision form based only on a
 - The routes remain unavailable while `AGENT_REVIEWER_AUTH_ENABLED=false` or reviewer credentials/session secrets are not configured. No OAuth secrets are included in source control.
 - These endpoints are an API boundary only. They do not create a browser reviewer console, configure Google OAuth, deploy the Preview Worker, or grant any reviewer permission to change AI Bank records.
 - Evidence returned in review packets remains pending human review and marked unverified; viewing it does not make it authoritative.
+
+
+### AI Bank reviewer console view
+
+- The Preview-only `/reviewer-console` now includes a separate AI Bank candidate queue and a detail panel backed by the authenticated read-only endpoints above.
+- Candidate IDs are rendered as text and parsed only when they match the exact `github:owner/repository` form; all packet content is inserted through text nodes, not HTML.
+- The view displays evidence packets as pending material. It has no controls to verify evidence, change catalog records, approve publication, or publish to the website or social networks.
+- The console still depends on a valid Google reviewer session. Since Preview reviewer authentication remains disabled until secrets and the allowlist are configured, the new section is not yet accessible to a signed-in reviewer in a live Preview deployment.
