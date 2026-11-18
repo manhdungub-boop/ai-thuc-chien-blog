@@ -15,10 +15,13 @@ const previewDeployWorkflow = await readFile(new URL("../../../.github/workflows
 
 test("Preview deployment workflow is manual, explicitly confirmed, token-isolated, and health-gated", () => {
   assert.match(previewDeployWorkflow, /workflow_dispatch:/);
+  assert.doesNotMatch(previewDeployWorkflow, /^\s*(push|pull_request|schedule):/m);
+  assert.match(previewDeployWorkflow, /permissions:\s*\n\s*contents:\s*read/);
   assert.match(previewDeployWorkflow, /confirm_preview_only:[\s\S]*default: false/);
   assert.match(previewDeployWorkflow, /inputs\.confirm_preview_only == true/);
   assert.match(previewDeployWorkflow, /secrets\.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN/);
   assert.doesNotMatch(previewDeployWorkflow, /secrets\.CLOUDFLARE_API_TOKEN/);
+  assert.match(previewDeployWorkflow, /timeout-minutes:\s*15/);
   assert.match(previewDeployWorkflow, /wrangler\.preview\.jsonc/);
   assert.doesNotMatch(previewDeployWorkflow, /wrangler\.jsonc/);
   assert.doesNotMatch(previewDeployWorkflow, /deploy-cloudflare-workers/);
