@@ -6,6 +6,7 @@ import { currentUtcBudgetDay } from "../src/utc-budget-day.mjs";
 const config = JSON.parse(await readFile(new URL("../wrangler.jsonc", import.meta.url), "utf8"));
 const previewConfig = JSON.parse(await readFile(new URL("../wrangler.preview.jsonc", import.meta.url), "utf8"));
 const source = await readFile(new URL("../src/index.mjs", import.meta.url), "utf8");
+const providerPolicySource = await readFile(new URL("../src/provider-policy.mjs", import.meta.url), "utf8");
 const store = await readFile(new URL("../src/task-store.mjs", import.meta.url), "utf8");
 const research = await readFile(new URL("../src/research-discovery.mjs", import.meta.url), "utf8");
 const evidence = await readFile(new URL("../src/research-evidence.mjs", import.meta.url), "utf8");
@@ -377,4 +378,18 @@ test("daily quota date is derived from the UTC execution time and rejects invali
   assert.equal(currentUtcBudgetDay(Date.parse("2026-11-20T00:00:00.000Z")), "2026-11-20");
   assert.throws(() => currentUtcBudgetDay(-1), /invalid_budget_timestamp/);
   assert.throws(() => currentUtcBudgetDay(Number.NaN), /invalid_budget_timestamp/);
+});
+test("content authoring checks the fail-closed provider policy before building or persisting a brief", () => {
+  assert.match(source, /import \{ selectProvider \} from "\.\/provider-policy\.mjs"/);
+  assert.match(providerPolicySource, /"article-authoring-brief", new Set\(\["content_draft"\]\)/);
+  const policyCall = source.indexOf('selectProvider("content_draft"');
+  const policyBlock = source.indexOf('authoringPolicy.action !== "execute"', policyCall);
+  const briefBuilder = source.indexOf("buildArticleAuthoringBrief({", policyCall);
+  const persistence = source.indexOf("draftStore.createDraft(draftTaskId, brief.draft)", policyCall);
+  assert.ok(policyCall >= 0, "runtime must invoke provider policy for content_draft");
+  assert.ok(policyBlock > policyCall, "non-execute policy outcomes must stop the handler");
+  assert.ok(briefBuilder > policyBlock, "authoring brief must be built only after policy approval");
+  assert.ok(persistence > briefBuilder, "draft persistence must happen after the brief is built");
+  assert.match(source, /status: "authoring_provider_deferred"/);
+  assert.match(source, /publication_authorized: false/);
 });
