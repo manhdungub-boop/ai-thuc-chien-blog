@@ -28,7 +28,7 @@ describe("read-only AI research discovery", () => {
 
     expect(requested).toHaveLength(4);
     expect(requested.every(item => item.options.method === "GET")).toBe(true);
-    expect(requested.every(item => item.options.redirect === "error").toBe(true);
+    expect(requested.every(item => item.options.redirect === "error")).toBe(true);
     expect(result).toMatchObject({
       ok: true,
       status: "read_only_research_discovery_complete",
