@@ -175,3 +175,10 @@ The reviewer console deliberately does not offer a decision form based only on a
 - The scaffold is expected to remain `needs_revision` and is excluded from the pending human-review queue. It contains no generated factual claims and is not a complete article.
 - The task performs no additional network calls, AI inference, public API writes, publication, or social actions. The runtime remains disabled and paused in both checked-in configs; this executor does not activate the supervisor.
 - `quality_review` remains unregistered and non-executable. No public task-enqueue endpoint is added.
+
+
+### Google reviewer identity upstream response limits
+
+- The Google OAuth token exchange response is parsed as JSON with a strict 32 KiB streamed-byte ceiling; the Google OIDC JWKS response has a 64 KiB ceiling.
+- Both limits are enforced while reading the response stream, not only from the untrusted `Content-Length` header. Non-JSON content types, missing bodies, invalid UTF-8, malformed JSON, and oversized bodies fail closed.
+- This does not enable reviewer OAuth, configure credentials, create a Google client, or make any live Google request during tests. The reviewer authentication feature remains disabled until an isolated Preview deployment and explicit secret configuration are separately approved.
