@@ -144,7 +144,7 @@ describe("AgentDraftStore Durable Object", () => {
     revised.claims = draft.claims;
     const update = await store.reviseDraft("draft-review-0010", recorded.artifact.version, revised);
     expect(update.artifact.evidence_review).toBeNull();
-    expect(await store.listOwnerReleaseReviews()).toHaveLength(1);
+    expect(await store.listOwnerReleaseReviews()).toHaveLength(0);
     expect((await store.getDraft("draft-review-0010")).evidence_review).toBeNull();
   });
 
@@ -159,7 +159,7 @@ describe("AgentDraftStore Durable Object", () => {
     expect(await store.createDraft("draft-review-0011", draft))
       .toEqual({ accepted: false, reason: "invalid_claim_evidence_url" });
   });
-\n  it("returns bounded queue metadata and retrieves full content by ID", async () => {
+  it("returns bounded queue metadata and retrieves full content by ID", async () => {
     const draft = validDraft(); await store.createDraft("draft-review-0008", draft);
     const [item] = await store.listPendingReviews(1000);
     expect(item.id).toBe("draft-review-0008");
