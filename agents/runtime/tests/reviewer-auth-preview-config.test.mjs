@@ -3,6 +3,9 @@ import { inspectReviewerAuthPreviewConfig } from "../scripts/check-reviewer-auth
 
 const valid = {
   AGENT_REVIEWER_AUTH_ENABLED: "false",
+  AGENT_ENABLED: "false",
+  AGENT_PAUSED: "true",
+  AGENT_SCHEDULE_MODE: "manual_only_no_cron",
   GOOGLE_REVIEWER_CLIENT_ID: "x".repeat(72),
   GOOGLE_REVIEWER_CLIENT_SECRET: "s".repeat(40),
   GOOGLE_REVIEWER_STATE_SECRET: "a".repeat(48),
@@ -20,7 +23,8 @@ describe("reviewer OAuth Preview configuration preflight", () => {
         state_and_session_secrets_distinct: true,
         preview_callback_uri_valid: true,
         exactly_one_reviewer_allowlisted: true,
-        reviewer_auth_remains_disabled: true
+        reviewer_auth_remains_disabled: true,
+        agent_runtime_remains_paused: true
       },
       publication_authorized: false,
       runtime_activation_authorized: false
@@ -62,6 +66,19 @@ describe("reviewer OAuth Preview configuration preflight", () => {
       ...valid,
       GOOGLE_REVIEWER_ALLOWED_EMAILS: "reviewer@example.com,other@example.com"
     }).checks.exactly_one_reviewer_allowlisted).toBe(false);
+  });
+
+  it("fails closed if the Agent runtime is enabled, unpaused, or scheduled", () => {
+    for (const override of [
+      { AGENT_ENABLED: "true" },
+      { AGENT_PAUSED: "false" },
+      { AGENT_SCHEDULE_MODE: "cron" }
+    ]) {
+      const report = inspectReviewerAuthPreviewConfig({ ...valid, ...override });
+      expect(report.ready_for_manual_review).toBe(false);
+      expect(report.checks.agent_runtime_remains_paused).toBe(false);
+      expect(report.runtime_activation_authorized).toBe(false);
+    }
   });
 
   it("fails if the auth feature flag is enabled during preflight", () => {
