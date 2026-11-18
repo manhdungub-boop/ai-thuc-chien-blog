@@ -19,15 +19,15 @@ async function executeTask(store, taskType, taskId, payload, handler) {
   const enqueued = await store.enqueue({ id: taskId, task_type: taskType, payload });
   if (!enqueued.accepted) throw new Error("task_enqueue_rejected");
   if (enqueued.task.status === "completed") {
-    return { status: "already_completed", result: enqueued.task.result };
+    return { status: "already_completed", result: enqueued.task.result, external_calls: 0 };
   }
   if (enqueued.task.status === "dead") {
-    return { status: "dead_letter", attempts: enqueued.task.attempts };
+    return { status: "dead_letter", attempts: enqueued.task.attempts, external_calls: 0 };
   }
 
   const claimed = await store.claim([taskType], taskId);
   if (!claimed.task) {
-    return { status: enqueued.task.status === "leased" ? "already_leased" : "not_claimed" };
+    return { status: enqueued.task.status === "leased" ? "already_leased" : "not_claimed", external_calls: 0 };
   }
 
   try {
