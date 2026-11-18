@@ -112,6 +112,43 @@ describe("AgentTaskStore Durable Object", () => {
     expect(duplicate.task.result).toEqual(result);
     expect(await store.stats()).toEqual({ completed: 1 });
   });
+  it("prunes only old completed and dead tasks with a strict per-call limit", async () => {
+    const completeTask = async id => {
+      const request = { id, task_type: "runtime_health_check", payload: {} };
+      await store.enqueue(request);
+      const claim = await store.claim(["runtime_health_check"], id);
+      await store.complete(id, claim.lease_token, { healthy: true });
+    };
+    await completeTask("retention-complete-old");
+    await store.enqueue(task("retention-dead-old"));
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const claim = await store.claim(["ai_bank_discovery"], "retention-dead-old");
+      await store.retry("retention-dead-old", claim.lease_token, "test_failure");
+    }
+    await completeTask("retention-complete-new");
+    await store.enqueue(task("retention-pending-new"));
+
+    const old = Date.now() - 31 * 24 * 60 * 60 * 1000;
+    await runInDurableObject(store, async (_instance, state) => {
+      state.storage.sql.exec("UPDATE tasks SET updated_at = ? WHERE id IN (?, ?)", old, "retention-complete-old", "retention-dead-old");
+    });
+
+    expect(await store.pruneTerminalTasks({ retentionMs: 30 * 24 * 60 * 60 * 1000, limit: 1 }))
+      .toMatchObject({ deleted: 1, retention_days: 30, limit: 1 });
+    expect(await store.pruneTerminalTasks({ retentionMs: 30 * 24 * 60 * 60 * 1000, limit: 100 }))
+      .toMatchObject({ deleted: 1 });
+    expect(await store.stats()).toEqual({ completed: 1, pending: 1 });
+    expect(await store.enqueue({ id: "retention-complete-new", task_type: "runtime_health_check", payload: {} }))
+      .toMatchObject({ duplicate: true, task: { status: "completed" } });
+  });
+
+  it("rejects invalid task retention bounds", async () => {
+    await expect(Promise.resolve().then(() => store.pruneTerminalTasks({ limit: 101 })))
+      .rejects.toThrow("invalid_retention_options");
+    await expect(Promise.resolve().then(() => store.pruneTerminalTasks({ retentionMs: -1 })))
+      .rejects.toThrow("invalid_retention_options");
+  });
+
   it("enforces the active queue capacity without accepting the 501st task", async () => {
     for (let index = 0; index < 500; index += 1) {
       const result = await store.enqueue(task(`task-capacity-${String(index).padStart(4, "0")}`));
