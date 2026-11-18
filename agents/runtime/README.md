@@ -104,3 +104,11 @@ A scheduled Workflow is a recurring background service, not a guarantee of unint
 - Evidence from unknown domains or mismatched publisher labels is excluded before claim-to-source mapping. A claim cannot reach the traceable state by supplying a forged assessment object or by relabeling another publisher's URL.
 - Distinct publisher count is a provenance count only. It does not prove independent ownership, semantic entailment, factual truth, or that the excerpt supports the claim.
 - All claims remain pending human review. No drafting, AI inference, catalog write, public publishing, deployment, or social posting is enabled by this check.
+
+
+### Source-by-source human evidence review
+
+- A reviewer must now record a separate decision for every cited source attached to every claim: `supports`, `contradicts`, or `insufficient`, with a meaningful note and an exact source URL match.
+- A claim cannot be marked `supported` unless every mapped source has an explicit `supports` decision. Missing, reordered, mismatched, or contradictory source assessments cannot pass as supported.
+- The review fingerprint covers the per-source decisions and notes; the verifier rechecks them against the exact ledger source order and revalidates publisher label/host/path provenance.
+- This makes the review auditable but does not independently prove that the reviewer's judgment is correct. Authenticated reviewer identity, owner release approval, copyright/originality checks, and publication authorization remain separate gates.
