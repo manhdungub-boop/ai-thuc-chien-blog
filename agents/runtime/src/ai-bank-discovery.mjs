@@ -105,6 +105,51 @@ async function fetchSource(source, fetchImpl, cutoff) {
   }
 }
 
+function buildCatalogCandidates(signals, discoveredAt) {
+  const latestByRepository = new Map();
+  for (const signal of signals) {
+    const repository = String(signal.repository || "").trim().toLowerCase();
+    if (!/^[a-z0-9_.-]+\/[a-z0-9_.-]+$/.test(repository)) continue;
+    const existing = latestByRepository.get(repository);
+    if (!existing || signal.published_at > existing.published_at) {
+      latestByRepository.set(repository, signal);
+    }
+  }
+  return [...latestByRepository.entries()]
+    .sort((a, b) => b[1].published_at.localeCompare(a[1].published_at))
+    .slice(0, MAX_SIGNALS)
+    .map(([repository, signal]) => ({
+      candidate_id: "github:" + repository,
+      name: signal.product,
+      provider: signal.vendor,
+      repository,
+      latest_release: {
+        title: signal.title,
+        source_url: signal.source_url,
+        published_at: signal.published_at
+      },
+      discovered_at: new Date(discoveredAt).toISOString(),
+      evidence_type: "github_release_activity_only",
+      review_status: "needs_official_source_review",
+      pricing_status: "unverified",
+      free_limits_status: "unverified",
+      license_status: "unverified",
+      privacy_status: "unverified",
+      platform_support_status: "unverified",
+      regional_availability_status: "unverified",
+      required_checks: [
+        "official_product_domain",
+        "pricing_and_free_limits",
+        "license_scope",
+        "privacy_and_data_handling",
+        "platform_support",
+        "regional_availability"
+      ],
+      catalog_write_authorized: false,
+      public_publication_authorized: false
+    }));
+}
+
 export async function discoverAiBankReleaseSignals({
   fetchImpl = fetch,
   now = Date.now(),
@@ -137,6 +182,7 @@ export async function discoverAiBankReleaseSignals({
     })),
     signal_count: signals.length,
     latest_signals: signals.slice(0, MAX_SIGNALS),
+    catalog_candidates: buildCatalogCandidates(signals, now),
     review_notice: "Release activity is a discovery signal only. It does not verify current pricing, free-tier limits, license scope, privacy, regional access, or suitability. Independent official-source review is required before catalog changes or publication.",
     safety: {
       catalog_modified: false,
