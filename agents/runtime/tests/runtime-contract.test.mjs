@@ -182,7 +182,9 @@ test("outbound requests are counted atomically against persistent per-day source
   assert.match(store, /ON CONFLICT \(budget_day, scope\) DO UPDATE/);
   assert.match(store, /daily_external_request_budget_exhausted/);
   assert.match(source, /createBudgetedFetch/);
-  assert.match(source, /const budgetDay = scheduledAt\.slice\(0, 10\)/);
+  assert.match(source, /const budgetDay = currentUtcBudgetDay\(\)/);
+  assert.doesNotMatch(source, /scheduledAt\.slice\(0, 10\)/);
+  assert.match(budgetDay, /new Date\(now\)\.toISOString\(\)\.slice\(0, 10\)/);
   assert.match(source, /createBudgetedFetch\(store, budgetDay, "ai_bank_discovery"\)/);
   assert.match(source, /createBudgetedFetch\(store, budgetDay, "content_research"\)/);
   assert.match(source, /consumeExternalRequestBudget\(day, scope\)/);
