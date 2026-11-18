@@ -2,7 +2,7 @@
   "$schema": "https://developers.cloudflare.com/workers/wrangler/config-schema.json",
   "name": "ai-thuc-chien-agent-runtime-preview",
   "main": "src/index.mjs",
-  "compatibility_date": "2026-11-18",
+  "compatibility_date": "2026-10-03",
   "workers_dev": true,
   "preview_urls": true,
   "observability": { "enabled": true },
