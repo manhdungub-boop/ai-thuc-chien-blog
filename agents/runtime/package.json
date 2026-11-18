@@ -6,7 +6,7 @@
     "test": "vitest run --config vitest.config.mjs"
   },
   "devDependencies": {
-    "@cloudflare/vitest-plugin": "1.8.2",
-    "vitest": "4.1.11"
+    "@cloudflare/vitest-plugin": "^1.0.0",
+    "vitest": "^4.1.0"
   }
 }
