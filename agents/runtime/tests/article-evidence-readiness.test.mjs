@@ -98,7 +98,7 @@ describe("article evidence readiness", () => {
     expect(absentResult.issues[0].code).toBe("claim_inline_citations_invalid");
     expect(duplicateResult.issues[0].code).toBe("claim_inline_citations_invalid");
   });
-\n  it("rejects claims that were not reviewed as supported", async () => {
+  it("rejects claims that were not reviewed as supported", async () => {
     const reviewRecord = await makeReview("needs_revision");
     const result = await assessArticleEvidenceReadiness({ draft: makeDraft(), ledger, reviewRecord, now });
     expect(result.status).toBe("article_claim_evidence_not_ready");
