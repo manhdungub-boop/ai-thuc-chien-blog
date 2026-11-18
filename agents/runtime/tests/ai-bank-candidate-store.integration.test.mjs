@@ -228,6 +228,24 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
       public_publication_authorized: false
     });
     expect(packet.checklist).toHaveLength(6);
+    expect(packet.evidence).toHaveLength(2);
+    expect(packet.evidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        check_type: "pricing_and_free_limits",
+        source_title: "Pricing reference",
+        source_url: "https://ollama.com/pricing",
+        source_status: "submitted_source_not_verified",
+        review_status: "pending_human_review",
+        verified: false,
+        verification_authorized: false
+      }),
+      expect.objectContaining({
+        check_type: "license_scope",
+        source_title: "License reference",
+        verified: false,
+        verification_authorized: false
+      })
+    ]));
     expect(packet.checklist.find(item => item.check_type === "pricing_and_free_limits")).toMatchObject({
       evidence_count: 1,
       status: "evidence_pending_human_review",
@@ -257,6 +275,7 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
 
     const packet = await store.getReviewPacket("github:ollama/ollama");
     expect(packet.total_evidence).toBe(0);
+    expect(packet.evidence).toEqual([]);
     expect(packet.checks_missing_evidence).toBe(6);
     const history = await store.listReviewEvidence("github:ollama/ollama");
     expect(history).toHaveLength(1);
