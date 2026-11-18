@@ -252,24 +252,40 @@ export class AgentTaskStore extends DurableObject {
     };
   }
 
-  pruneTerminalTasks(now = Date.now()) {
-    if (!Number.isSafeInteger(now) || now < 0) throw new TypeError("invalid_retention_timestamp");
+  pruneTerminalTasks(now = Date.now(), limit = 100) {
+    if (!Number.isSafeInteger(now) || now < 0 || !Number.isFinite(new Date(now).getTime()) ||
+        !Number.isInteger(limit) || limit < 1 || limit > 100) {
+      throw new TypeError("invalid_retention_options");
+    }
     const completedBefore = now - 24 * 60 * 60 * 1000;
     const deadBefore = now - 7 * 24 * 60 * 60 * 1000;
-    const completed = this.ctx.storage.sql.exec(
-      "DELETE FROM tasks WHERE status = 'completed' AND updated_at < ? RETURNING id",
-      completedBefore
-    ).toArray().length;
-    const dead = this.ctx.storage.sql.exec(
-      "DELETE FROM tasks WHERE status = 'dead' AND updated_at < ? RETURNING id",
-      deadBefore
-    ).toArray().length;
+    const terminal = this.ctx.storage.sql.exec(
+      `DELETE FROM tasks
+       WHERE id IN (
+         SELECT id FROM tasks
+         WHERE (status = 'completed' AND updated_at < ?)
+            OR (status = 'dead' AND updated_at < ?)
+         ORDER BY updated_at ASC
+         LIMIT ?
+       )
+       RETURNING status`,
+      completedBefore, deadBefore, limit
+    ).toArray();
+    const completed = terminal.filter(row => row.status === "completed").length;
+    const dead = terminal.filter(row => row.status === "dead").length;
     const budgetCutoff = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const budgets = this.ctx.storage.sql.exec(
-      "DELETE FROM external_request_budgets WHERE budget_day < ? RETURNING budget_day",
-      budgetCutoff
+      `DELETE FROM external_request_budgets
+       WHERE (budget_day, scope) IN (
+         SELECT budget_day, scope FROM external_request_budgets
+         WHERE budget_day < ?
+         ORDER BY budget_day ASC
+         LIMIT ?
+       )
+       RETURNING budget_day`,
+      budgetCutoff, limit
     ).toArray().length;
-    return { completed_deleted: completed, dead_deleted: dead, budget_days_deleted: budgets };
+    return { completed_deleted: completed, dead_deleted: dead, budget_days_deleted: budgets, limit };
   }
 
   stats() {

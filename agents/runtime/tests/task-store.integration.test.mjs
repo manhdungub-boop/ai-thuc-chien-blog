@@ -186,6 +186,20 @@ describe("AgentTaskStore Durable Object", () => {
     )).toEqual({ updated: false });
   });
 
+  it("rejects invalid retention timestamps and unbounded cleanup limits", async () => {
+    for (const [now, limit] of [
+      [-1, 100],
+      [Number.MAX_SAFE_INTEGER, 100],
+      [Date.now(), 0],
+      [Date.now(), 101],
+      [Date.now(), 1.5]
+    ]) {
+      await expect(Promise.resolve().then(() => store.pruneTerminalTasks(now, limit)))
+        .rejects.toThrow("invalid_retention_options");
+    }
+    expect(await store.stats()).toEqual({});
+  });
+
   it("prunes only completed tasks older than one day and dead tasks older than seven days", async () => {
     const now = Date.parse("2026-11-18T12:00:00.000Z");
     await store.enqueue(task("retention-completed-old"));
@@ -225,8 +239,43 @@ describe("AgentTaskStore Durable Object", () => {
     });
 
     const result = await store.pruneTerminalTasks(now);
-    expect(result).toEqual({ completed_deleted: 1, dead_deleted: 1, budget_days_deleted: 1 });
+    expect(result).toEqual({ completed_deleted: 1, dead_deleted: 1, budget_days_deleted: 1, limit: 100 });
     expect(await store.stats()).toEqual({ leased: 1, pending: 1 });
+  });
+
+  it("bounds terminal-task and budget-counter cleanup to 100 rows per cycle", async () => {
+    const now = Date.parse("2026-11-18T12:00:00.000Z");
+    await runInDurableObject(store, async (_instance, state) => {
+      for (let index = 0; index < 105; index += 1) {
+        const id = `retention-bounded-${String(index).padStart(4, "0")}`;
+        const status = index % 2 === 0 ? "completed" : "dead";
+        state.storage.sql.exec(
+          "INSERT INTO tasks (id, task_type, payload_json, status, attempts, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+          id,
+          "ai_bank_discovery",
+          JSON.stringify({ query: "bounded cleanup test" }),
+          status,
+          status === "dead" ? 5 : 1,
+          now - 40 * 86_400_000,
+          now - 40 * 86_400_000
+        );
+        const budgetDay = new Date(Date.UTC(2025, 0, index + 1)).toISOString().slice(0, 10);
+        state.storage.sql.exec(
+          "INSERT INTO external_request_budgets (budget_day, scope, used, updated_at) VALUES (?, ?, ?, ?)",
+          budgetDay,
+          "ai_bank_discovery",
+          1,
+          now
+        );
+      }
+    });
+
+    const result = await store.pruneTerminalTasks(now);
+    expect(result.completed_deleted + result.dead_deleted).toBe(100);
+    expect(result.budget_days_deleted).toBe(100);
+    expect(result.limit).toBe(100);
+    const remaining = await store.stats();
+    expect((remaining.completed || 0) + (remaining.dead || 0)).toBe(5);
   });
 
   it("retains recently completed and recently dead tasks", async () => {
@@ -242,7 +291,7 @@ describe("AgentTaskStore Durable Object", () => {
     }
 
     const result = await store.pruneTerminalTasks(now);
-    expect(result).toEqual({ completed_deleted: 0, dead_deleted: 0, budget_days_deleted: 0 });
+    expect(result).toEqual({ completed_deleted: 0, dead_deleted: 0, budget_days_deleted: 0, limit: 100 });
     expect(await store.stats()).toEqual({ completed: 1, dead: 1 });
   });
 

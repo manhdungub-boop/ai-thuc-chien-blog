@@ -94,9 +94,12 @@ test("task store has bounded leases, retry ceiling, and dead-letter state", () =
 });
 
 test("supervisor prunes terminal queue records with bounded retention on every cycle", () => {
-  assert.match(store, /pruneTerminalTasks\(now = Date\.now\(\)\)/);
+  assert.match(store, /pruneTerminalTasks\(now = Date\.now\(\), limit = 100\)/);
   assert.match(store, /status = 'completed' AND updated_at < \?/);
   assert.match(store, /status = 'dead' AND updated_at < \?/);
+  assert.match(store, /ORDER BY updated_at ASC/);
+  assert.match(store, /LIMIT \?/);
+  assert.match(store, /limit > 100/);
   assert.match(store, /24 \* 60 \* 60 \* 1000/);
   assert.match(store, /7 \* 24 \* 60 \* 60 \* 1000/);
   assert.match(source, /await store\.pruneTerminalTasks\(\)/);
