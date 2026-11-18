@@ -1,18 +1,18 @@
 # AI Thực Chiến — 24/7 Agent Runtime (Preview only)
 
-This directory is a separate Cloudflare Worker service. It is not imported by the public website Worker and has no Production route, website D1 binding, AI binding, secrets, social integrations, or deploy workflow.
+This directory is a separate Cloudflare Worker service. It is not imported by the public website Worker and has no Production route, website D1 binding, AI binding, secrets, or social integrations. The only deploy workflow is a separate manually confirmed Preview-only workflow using `wrangler.preview.jsonc`; there is no automatic deploy.
 
 ## Runtime foundation
 
-- Cloudflare Workflows creates a recurring supervisor run every 15 minutes (UTC), with concurrency limited to one.
+- A Cloudflare Workflow binding is present for future orchestration, but neither committed Wrangler config defines a recurring schedule. The runtime remains disabled and paused until provider, quota, draft-executor, and release gates are complete.
 - A separate SQLite-backed Durable Object provides a durable task queue. It is not the website's D1 database.
 - Queue contracts include an allowlist of task types, per-agent payload schemas, an 8 KiB payload ceiling, idempotent task IDs, a 500-task active-queue ceiling, five-minute leases with unique fencing tokens, a five-attempt ceiling, a dead-letter state, and rejection of stale worker completion.
 - Queue operations are internal Durable Object RPC methods only. There is no public task-enqueue endpoint.
-- The scheduled supervisor runs every 15 minutes, enqueues an idempotent `runtime_health_check`, claims only that task type and task ID, executes a deterministic local health check, and persists a bounded result.
+- When explicitly invoked in an enabled isolated Preview environment, the supervisor can enqueue an idempotent `runtime_health_check`, claim only that task type and task ID, execute a deterministic local health check, and persist a bounded result. No scheduled invocation is configured.
 - Once per UTC day, the supervisor enqueues an idempotent `ai_bank_discovery` task. Its only handler fetches ten hard-coded public GitHub Atom release feeds over HTTPS using GET, rejects redirects, applies a 10-second per-source timeout and a 1 MB response ceiling, validates release URLs against the exact repository, and stores at most five sanitized recent signals in the task result.
 - The same daily cycle enqueues one idempotent `content_research` task for the fixed topic `AI agents, automation, and open-source AI tools`. Its discovery handler reads four fixed public feeds: OpenAI News, Google DeepMind, Hugging Face, and arXiv cs.AI. It uses GET only, rejects redirects, applies an 8-second timeout and a 750 KB response ceiling per feed, validates HTTPS host and path, and stores at most four recent source signals. 
 - After discovery, the runtime retrieves at most four original source pages from the exact HTTPS host/path allowlist. It rejects redirects, non-HTML content, off-domain/final URLs, applies a six-second timeout and 120 KB streaming body ceiling per page, strips active/noisy markup, and stores only a text excerpt of at most 600 characters with source URL, source name, publication timestamp, and retrieval timestamp. Raw HTML is never stored.
-- Every outbound GET passes through a persistent SQLite Durable Object budget before the network call. The UTC-day budget is limited to ten attempts for the ten AI Bank feeds and eight attempts for the four research feeds plus at most four evidence pages. Attempts are counted before calling fetch, including requests that later fail or time out; retries share the same daily counters, and exhausted budgets reject further requests before network access. When a task reaches the daily budget ceiling, that daily task is moved directly to dead-letter rather than being retried every 15 minutes; the next UTC day receives a new idempotent daily task. Budget counters are isolated by task scope and UTC day, with only the most recent 30 days retained. This caps the current runtime's intended daily outbound attempts at 18 across retries; it is a code-level ceiling, not a statement about Cloudflare account billing or quota.
+- Every outbound GET passes through a persistent SQLite Durable Object budget before the network call. The UTC-day budget is limited to ten attempts for the ten AI Bank feeds and eight attempts for the four research feeds plus at most four evidence pages. Attempts are counted before calling fetch, including requests that later fail or time out; retries share the same daily counters, and exhausted budgets reject further requests before network access. When a task reaches the daily budget ceiling, that daily task is moved directly to dead-letter rather than being retried repeatedly during the same UTC day; the next UTC day receives a new idempotent daily task. Budget counters are isolated by task scope and UTC day, with only the most recent 30 days retained. This caps the current runtime's intended daily outbound attempts at 18 across retries; it is a code-level ceiling, not a statement about Cloudflare account billing or quota.
 - Retrieved excerpts are labeled `source_retrieved_not_fact_checked`. A deterministic evidence-readiness assessment accepts at most four excerpts and requires at least two distinct publisher domains with valid publication dates no older than 45 days. It additionally requires an exact publisher-label, host, and path match against the four fixed discovery sources (OpenAI News, Google DeepMind, Hugging Face, and arXiv cs.AI). Duplicate URLs/domains, unknown or mismatched publisher identities, missing metadata, stale/future dates, and failed retrievals are excluded. This allowlist establishes provenance consistency only; it does not endorse source authority or verify independent ownership.
 - `evidence_packet_ready_for_claim_review` means only that the packet has enough recent, distinct-domain source records to enter claim review. It does not prove that sources independently support the same claim, assess source authority, extract claims, or fact-check/corroborate anything. No article drafting or publication is authorized by this status.
 - A claim-evidence provenance ledger accepts explicitly supplied factual claims and links each one only to retrieved excerpts already accepted by the readiness assessment. It requires two distinct publisher domains per claim, caps the batch at 40 claims and four evidence references per claim, and flags missing or untraceable mappings.
@@ -44,7 +44,7 @@ This directory is a separate Cloudflare Worker service. It is not imported by th
 ## Explicit enable gate and emergency pause
 
 - `AGENT_ENABLED` must be exactly `true` before the supervisor can access the Durable Object queue or make any outbound request. Missing, empty, or any other value leaves the runtime disabled.
-- The committed Preview default is `AGENT_ENABLED=false`; the recurring Workflow may be scheduled after deployment, but each run returns `disabled` before queue access and before outbound requests.
+- Both committed Wrangler configs set `AGENT_ENABLED=false`, `AGENT_PAUSED=true`, and `AGENT_SCHEDULE_MODE=manual_only_no_cron`; neither config defines a recurring Workflow schedule. The supervisor returns `paused` before queue access and before outbound requests.
 - `AGENT_PAUSED=true` is an independent emergency stop and takes precedence even when `AGENT_ENABLED=true`.
 - `GET /health` reports the explicit enable state and reports task execution disabled unless the enable flag is exactly true and the pause flag is not true.
 - Do not enable the service until Preview resource boundaries, current free-tier usage, provider quotas, monitoring, and the deployment plan have been reviewed. Neither switch is connected to the public website Worker. No Production configuration is changed by this PR.
@@ -62,7 +62,7 @@ npx wrangler types --config wrangler.jsonc
 npx wrangler deploy --dry-run --config wrangler.jsonc
 ```
 
-Do not deploy from this branch until the separate Preview account/resource boundary, free-tier quota, and Workflow schedule are verified. There is deliberately no CI deploy job. A Durable Object migration is a resource change and must be reviewed before any Preview deployment.
+Do not deploy from this branch until the separate Preview account/resource boundary, free-tier quota, and Workflow schedule are verified. There is no automatic CI deploy job; the separate Preview deploy workflow requires an explicit manual confirmation. A Durable Object migration is a resource change and must be reviewed before any Preview deployment.
 
 ## Next gated phases
 
@@ -74,7 +74,7 @@ Do not deploy from this branch until the separate Preview account/resource bound
 6. Add an authenticated operator control plane, monitoring, alerting and a pause switch.
 7. Consider public actions only through the existing owner approval gates.
 
-A scheduled Workflow is a recurring background service, not a guarantee of uninterrupted model inference. Account limits, platform incidents, and quota exhaustion can pause work; the runtime must fail closed rather than enable billing.
+No recurring Workflow schedule is configured while the runtime lacks a verified no-cost model provider and complete content executors. When a schedule is proposed later, it must be introduced as a separate reviewed change with verified free-tier limits, monitoring, and an emergency pause; quota exhaustion must fail closed rather than enable billing.
 
 
 ### Google reviewer OAuth and session flow (Preview foundation only)
