@@ -227,3 +227,127 @@ describe("authenticated read-only AI Bank reviewer routes", () => {
     expect(await response.json()).toMatchObject({ error: "method_not_allowed" });
   });
 });
+
+
+async function makeReviewerSessionToken(now = Date.now()) {
+  const b64url = bytes => {
+    let binary = "";
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    return btoa(binary).replace(/=/g, "").replace(/\\+/g, "-").replace(/\\//g, "_");
+  };
+  const secret = "reviewer-session-secret-for-tests-32chars";
+  const nowSeconds = Math.floor(now / 1000);
+  const payload = {
+    provider: "google",
+    sub: "reviewer-subject-123",
+    email: "reviewer@example.com",
+    reviewer_ref: "google:reviewer-subject-123",
+    iat: nowSeconds,
+    exp: nowSeconds + 900
+  };
+  const encoded = b64url(new TextEncoder().encode(JSON.stringify(payload)));
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const signature = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(encoded)));
+  return { token: encoded + "." + b64url(signature), secret };
+}
+
+function reviewerAuthEnv(sessionSecret) {
+  return {
+    AGENT_REVIEWER_AUTH_ENABLED: "true",
+    GOOGLE_REVIEWER_CLIENT_ID: "reviewer-client-id-for-test-32-characters",
+    GOOGLE_REVIEWER_CLIENT_SECRET: "reviewer-client-secret-for-test-32-characters",
+    GOOGLE_REVIEWER_REDIRECT_URI: "https://ai-thuc-chien-agent-runtime-preview.test-account.workers.dev/auth/google/callback",
+    GOOGLE_REVIEWER_STATE_SECRET: "reviewer-state-secret-for-tests-32-characters",
+    GOOGLE_REVIEWER_SESSION_SECRET: sessionSecret,
+    GOOGLE_REVIEWER_ALLOWED_EMAILS: "reviewer@example.com"
+  };
+}
+
+
+describe("authorized AI Bank reviewer reads", () => {
+  it("returns bounded candidate metadata only after verifying an allowlisted reviewer session", async () => {
+    const { token, secret } = await makeReviewerSessionToken();
+    const item = { candidate_id: "github:ollama/ollama", status: "pending_human_review" };
+    let requestedLimit;
+    const env = {
+      ...reviewerAuthEnv(secret),
+      AGENT_AI_BANK_CANDIDATE_STORE: {
+        getByName(name) {
+          expect(name).toBe("primary");
+          return {
+            async listCandidates(limit) {
+              requestedLimit = limit;
+              return [item];
+            }
+          };
+        }
+      }
+    };
+    const response = await worker.fetch(new Request(origin + "/api/reviewer/ai-bank/candidates?limit=7", {
+      headers: { cookie: "__Host-ai_reviewer_session=" + token }
+    }), env);
+    expect(response.status).toBe(200);
+    expect(requestedLimit).toBe(7);
+    expect(await response.json()).toEqual({
+      items: [item],
+      count: 1,
+      reviewer_ref: "google:reviewer-subject-123",
+      catalog_write_authorized: false,
+      public_publication_authorized: false
+    });
+  });
+
+  it("returns only the exact owner/repository review packet and keeps verification disabled", async () => {
+    const { token, secret } = await makeReviewerSessionToken();
+    let requestedCandidate;
+    const packet = { candidate: { candidate_id: "github:ollama/ollama" }, evidence: [{ verified: false }] };
+    const env = {
+      ...reviewerAuthEnv(secret),
+      AGENT_AI_BANK_CANDIDATE_STORE: {
+        getByName: () => ({
+          async getReviewPacket(candidateId) {
+            requestedCandidate = candidateId;
+            return packet;
+          }
+        })
+      }
+    };
+    const response = await worker.fetch(new Request(origin + "/api/reviewer/ai-bank/candidates/ollama/ollama", {
+      headers: { cookie: "__Host-ai_reviewer_session=" + token }
+    }), env);
+    expect(response.status).toBe(200);
+    expect(requestedCandidate).toBe("github:ollama/ollama");
+    expect(await response.json()).toEqual({
+      packet,
+      reviewer_ref: "google:reviewer-subject-123",
+      verification_authorized: false,
+      catalog_write_authorized: false,
+      public_publication_authorized: false
+    });
+  });
+
+  it("rejects invalid list limits before reading candidate data", async () => {
+    const { token, secret } = await makeReviewerSessionToken();
+    let storeAccessed = false;
+    const env = {
+      ...reviewerAuthEnv(secret),
+      AGENT_AI_BANK_CANDIDATE_STORE: {
+        getByName: () => {
+          storeAccessed = true;
+          return { async listCandidates() { return []; } };
+        }
+      }
+    };
+    const response = await worker.fetch(new Request(origin + "/api/reviewer/ai-bank/candidates?limit=21", {
+      headers: { cookie: "__Host-ai_reviewer_session=" + token }
+    }), env);
+    expect(response.status).toBe(400);
+    expect(storeAccessed).toBe(false);
+  });
+});
