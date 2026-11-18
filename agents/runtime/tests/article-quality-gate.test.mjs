@@ -78,6 +78,14 @@ describe("deterministic article quality gate", () => {
     expect(codes).toContain("citation_reference_mismatch");
   });
 
+
+  it("maps citation indexes to the original source-list positions", () => {
+    const draft = validDraft();
+    draft.sources[0] = { title: "Unsafe source", publisher: "Unknown", url: "http://unsafe.example", accessed_at: "2026-11-18T00:00:00.000Z" };
+    const result = reviewArticleDraft(draft);
+    expect(result.issues.map(issue => issue.code)).toContain("citation_reference_mismatch");
+  });
+
   it("fails closed for non-object input", () => {
     const result = reviewArticleDraft(null);
     expect(result.ok).toBe(false);
