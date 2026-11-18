@@ -14,8 +14,20 @@ const validTask = {
   allowed_tools: []
 };
 
-test("routes research work to the Research Agent", () => {
-  assert.deepEqual(routeTask(validTask), { ok: true, assigned_agent: "research", role: "evidence_research" });
+test("routes all eight task types to their registered agents", () => {
+  const expected = {
+    planning: "manager",
+    research: "research",
+    ai_bank: "ai_bank",
+    content: "content",
+    media: "media",
+    social: "social",
+    quality: "qa_security",
+    release_review: "release"
+  };
+  for (const [task_type, agent] of Object.entries(expected)) {
+    assert.equal(routeTask({ task_type }).assigned_agent, agent);
+  }
 });
 
 test("accepts a bounded zero-cost read-only task", () => {
@@ -29,9 +41,11 @@ test("blocks unverified or paid cost classes", () => {
 });
 
 test("blocks secret and sensitive data", () => {
-  const result = validateTask({ ...validTask, data_class: "secret" });
-  assert.equal(result.ok, false);
-  assert.ok(result.errors.includes("data_class_blocked"));
+  for (const data_class of ["secret", "sensitive"]) {
+    const result = validateTask({ ...validTask, data_class });
+    assert.equal(result.ok, false);
+    assert.ok(result.errors.includes("data_class_blocked"));
+  }
 });
 
 test("blocks production changes and unapproved publication", () => {
@@ -44,11 +58,15 @@ test("blocks production changes and unapproved publication", () => {
 test("requires isolated Preview for staging writes", () => {
   const result = validateTask({ ...validTask, permission_scope: "staging_write" });
   assert.ok(result.errors.includes("staging_write_requires_isolated_preview"));
+  const preview = validateTask({ ...validTask, permission_scope: "staging_write", environment: "isolated_preview" });
+  assert.equal(preview.ok, true);
 });
 
 test("requires evidence before a task can be DONE", () => {
   const result = validateTask({ ...validTask, state: "DONE", evidence: [] });
   assert.ok(result.errors.includes("done_requires_evidence"));
+  const evidenced = validateTask({ ...validTask, state: "DONE", evidence: ["https://example.org/evidence"] });
+  assert.equal(evidenced.ok, true);
 });
 
 test("blocks unknown task types", () => {
@@ -58,4 +76,11 @@ test("blocks unknown task types", () => {
 test("requires explicit owner action for account connections", () => {
   const result = validateTask({ ...validTask, requires_account_connection: true });
   assert.ok(result.errors.includes("account_connection_requires_owner_action"));
+});
+
+test("blocks unknown permission scopes and malformed acceptance criteria", () => {
+  const permission = validateTask({ ...validTask, permission_scope: "admin" });
+  const criteria = validateTask({ ...validTask, acceptance_criteria: [] });
+  assert.ok(permission.errors.includes("permission_not_allowed"));
+  assert.ok(criteria.errors.includes("acceptance_criteria_required"));
 });
