@@ -79,6 +79,35 @@ describe("deterministic article quality gate", () => {
   });
 
 
+  it("does not count fenced code examples as article words, sections, or citations", () => {
+    const draft = validDraft();
+    draft.body_markdown = [
+      "```markdown",
+      "## Fake section one",
+      "## Fake section two",
+      "## Fake section three",
+      "## Fake section four",
+      "A long code sample that must not satisfy the article word-count requirement. ".repeat(100),
+      "[1] [2] [3]",
+      "```"
+    ].join("\n");
+    const result = reviewArticleDraft(draft);
+    const codes = result.issues.map(issue => issue.code);
+    expect(result.metrics.word_count).toBe(0);
+    expect(result.metrics.section_count).toBe(0);
+    expect(codes).toContain("body_word_count");
+    expect(codes).toContain("section_count");
+    expect(codes).toContain("missing_inline_citations");
+    expect(result.publication_authorized).toBe(false);
+  });
+
+  it("does not treat script examples inside fenced code as executable article markup", () => {
+    const draft = validDraft();
+    draft.body_markdown += "\n\n```html\n<script>alert(1)</script>\n```";
+    const result = reviewArticleDraft(draft);
+    expect(result.issues.map(issue => issue.code)).not.toContain("unsafe_markup");
+  });
+
   it("maps citation indexes to the original source-list positions", () => {
     const draft = validDraft();
     draft.sources[0] = { title: "Unsafe source", publisher: "Unknown", url: "http://unsafe.example", accessed_at: "2026-11-18T00:00:00.000Z" };
