@@ -39,13 +39,17 @@ export function inspectReviewerAuthPreviewConfig(env = {}) {
     validSecret(env.GOOGLE_REVIEWER_SESSION_SECRET) &&
     env.GOOGLE_REVIEWER_STATE_SECRET !== env.GOOGLE_REVIEWER_SESSION_SECRET;
   const enabledFlagValid = env.AGENT_REVIEWER_AUTH_ENABLED === "false";
+  const runtimeRemainsPaused = env.AGENT_ENABLED === "false" &&
+    env.AGENT_PAUSED === "true" &&
+    env.AGENT_SCHEDULE_MODE === "manual_only_no_cron";
 
   const checks = {
     required_secrets_present: missing.length === 0,
     state_and_session_secrets_distinct: secretsDistinct,
     preview_callback_uri_valid: redirectValid,
     exactly_one_reviewer_allowlisted: allowlistValid,
-    reviewer_auth_remains_disabled: enabledFlagValid
+    reviewer_auth_remains_disabled: enabledFlagValid,
+    agent_runtime_remains_paused: runtimeRemainsPaused
   };
   return {
     ready_for_manual_review: Object.values(checks).every(Boolean),
