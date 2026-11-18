@@ -91,7 +91,13 @@ export class AgentTaskStore extends DurableObject {
     const existing = this.ctx.storage.sql.exec(
       "SELECT * FROM tasks WHERE id = ?", task.id
     ).toArray()[0];
-    if (existing) return { accepted: true, duplicate: true, task: safeTask(existing) };
+    if (existing) {
+      const sameRequest = existing.task_type === task.task_type &&
+        existing.payload_json === payloadJson;
+      return sameRequest
+        ? { accepted: true, duplicate: true, task: safeTask(existing) }
+        : { accepted: false, reason: "idempotency_key_conflict" };
+    }
 
     const active = this.ctx.storage.sql.exec(
       "SELECT COUNT(*) AS count FROM tasks WHERE status IN ('pending','leased')"
