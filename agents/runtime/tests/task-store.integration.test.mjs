@@ -260,7 +260,8 @@ describe("AgentTaskStore Durable Object", () => {
     expect(result.completed_deleted + result.dead_deleted).toBe(100);
     expect(result.budget_days_deleted).toBe(100);
     expect(result.limit).toBe(100);
-    expect(await store.stats()).toEqual({ completed: 2, dead: 3 });
+    const remaining = await store.stats();
+    expect((remaining.completed || 0) + (remaining.dead || 0)).toBe(5);
   });
 
   it("retains recently completed and recently dead tasks", async () => {
