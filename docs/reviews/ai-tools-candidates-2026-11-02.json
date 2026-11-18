@@ -351,7 +351,7 @@
         "whisper",
         "model-license-review"
       ],
-      "project_fit": "Có tiềm năng hỗ trợ đọc tiếng Việt và thử nghiệm TTS cục bộ, nhưng chưa được xác nhận cho pipeline video. iPhone A13/iOS hiện có thể cài theo yêu cầu iOS 15.1, nhưng hiệu năng model/TTS và nhiệt/ RAM chưa benchmark trên thiết bị. PocketPal xác nhận Supertonic 31 ngôn ngữ và source locale có Vietnamese; điều này chưa chứng minh có đúng voice Alex/Male 1 tên hiển thị trong app; chưa xác minh xuất WAV. Không mua Plus (699.000đ), không dùng PalsHub trả phí, API key, remote server hoặc tính năng online. Chỉ đánh giá tiếp nếu user chủ động đồng ý cài và nghe mẫu; video publishing vẫn paused."
+      "project_fit": "Ưu tiên nghiên cứu nếu cần thử chat AI và TTS cục bộ trên iPhone: App Store changelog xác nhận có Supertonic, Kokoro và Kitten TTS; Supertonic có 31 ngôn ngữ, nhưng chưa chứng minh đúng giọng Alex/Male 1 hoặc xuất WAV/MP3. Chat có thể xuất Markdown, nhưng đó không phải xuất audio. Model/voice cần tải qua mạng và chiếm dung lượng; app có các tính năng online như web search hoặc remote server, phải để tắt. App Store VN niêm yết PocketPal Plus 699.000đ; không mua. Chỉ thử nghiệm bằng dữ liệu giả lập và model nhỏ sau khi được cho phép; chưa cài, chưa tải model hoặc gửi dữ liệu dự án."
     },
     {
       "id": "cloudflare-kitesurf",
@@ -435,7 +435,7 @@
         "audio",
         "no-audio-export-evidence"
       ],
-      "project_fit": "Rất phù hợp để nghe thử nhiều giọng tiếng Việt trực tiếp trên iPhone, đặc biệt 14 giọng nam/nữ và các vùng giọng. Tuy nhiên, đây là VieNeu-TTS chứ không phải Supertonic Alex/Male 1; không thay đổi lựa chọn hiện tại của dự án. App Store VN hiện chỉ cho thấy tip 29.000₫, còn Pro voice packs xuất hiện trong một storefront khác nên chưa rõ vùng VN. Không mua IAP. Chưa xác minh xuất WAV/MP3, do đó chỉ đánh giá để nghe thử, chưa dùng cho video. Chưa cài ứng dụng hoặc tải voice pack. Đã bỏ tag pro-lifetime-119000-vnd vì chưa xác minh được giá/khả năng áp dụng của gói PRO trên App Store Việt Nam; không suy diễn giá từ storefront khác."
+      "project_fit": "Ứng viên đọc tiếng Việt offline tốt nhất trong nhóm: App Store VN mô tả 14 giọng (7 nam/7 nữ), 3 vùng, 3 phong cách; không tài khoản, không analytics/quảng cáo, nội dung đọc ở trên máy sau khi tải voice pack. App miễn phí, tip 29.000đ không mở khóa tính năng. iOS 16+, tương thích phiên bản iOS hiện tại. Tuy nhiên không tìm thấy chức năng xuất WAV/MP3/audio file; chỉ có playback trong app. Vì vậy phù hợp đọc/nghe và kiểm tra chất lượng giọng, chưa thể coi là công cụ tạo voice-over cho video. Không mua IAP; chưa cài hoặc tải voice pack."
     },
     {
       "id": "open-minis",
@@ -529,7 +529,7 @@
         "apache-2.0",
         "local-inference"
       ],
-      "project_fit": "Phù hợp để nghiên cứu trên iPhone hơn các công cụ chỉ chạy desktop: yêu cầu A12 Bionic trở lên nên iPhone 11 Pro Max (A13) đáp ứng điều kiện tối thiểu theo tài liệu, nhưng dung lượng RAM/hiệu năng thực tế chưa được kiểm thử. App hiện khoảng 489.4 MB và các model có thể chiếm thêm hàng trăm MB đến nhiều GB; chỉ thử model nhỏ 2B nếu người dùng chủ động cho phép tải. Không có giao diện tiếng Việt trong danh sách 11 ngôn ngữ hiện tại. Có thể hữu ích cho đọc PDF/tài liệu và AI offline; không cần thiết để kết nối vào tài khoản dự án. Chưa cài đặt, chưa tải model, chưa cấp quyền và chưa gửi dữ liệu. Chỉ đánh giá bằng dữ liệu công khai/giả lập, bật Off-grid Mode, tắt remote providers/MCP/iCloud sync, và kiểm tra license của model weights."
+      "project_fit": "Ứng viên AI offline có giá trị nghiên cứu, nhưng yêu cầu iOS 18+ và A12 Bionic trở lên; iPhone A13/iOS 26 đáp ứng ngưỡng nền tảng tối thiểu theo tài liệu, không đảm bảo model lớn chạy mượt. Phiên bản docs 4.2 hỗ trợ chat local, RAG tài liệu đã tải, local Python/Calculator và local Whisper/voice khi cài model. Giao diện không liệt kê tiếng Việt; model/voice có thể chiếm từ hàng trăm MB đến nhiều GB. Off-grid Mode chặn HTTP/HTTPS qua network stack của Noema nhưng không cô lập app khác hoặc dịch vụ hệ điều hành. Không bật web search, remote endpoint, Constellation, iCloud hay MCP; không đưa tài liệu nội bộ vào. Chỉ cân nhắc model nhỏ, thử bằng tài liệu công khai sau khi được cho phép; chưa cài/tải model."
     },
     {
       "id": "loci-local-ai",
@@ -577,7 +577,7 @@
         "privacy-settings",
         "model-license-review"
       ],
-      "project_fit": "Ứng viên đáng nghiên cứu cho iPhone vì có local chat, đọc tài liệu, voice và Shortcuts, không cần tài khoản cho local use. Tuy nhiên app hiện không có tiếng Việt theo App Store; chưa xác minh hiệu năng trên iPhone 11 Pro Max/A13, model nào chạy ổn hoặc model có thể tải miễn phí tại Việt Nam. Privacy Policy nêu diagnostic sharing thường bật mặc định và App Store disclosure có dữ liệu linked-to-user; nếu thử sau này cần tắt diagnostic sharing/ad measurement trước, không bật web search/connected assistants, chỉ dùng dữ liệu giả lập. Chưa cài đặt, chưa tải model, chưa cấp quyền và chưa gửi dữ liệu."
+      "project_fit": "Ứng viên chat offline dễ dùng: App Store VN ghi miễn phí, không cần tài khoản/subscription, tự chọn model và chat sau khi tải model; yêu cầu iOS 18+, nên đáp ứng phiên bản iOS hiện tại. Không có giao diện tiếng Việt trong danh sách ngôn ngữ (English/German/Spanish). App Store VN vẫn khai báo các nhóm dữ liệu linked-to-user gồm vị trí, định danh, tương tác và diagnostics, dù mô tả mới nói diagnostic sharing optional. Nếu thử, tắt diagnostic sharing và ad measurement trong Privacy settings trước, không bật web search/assistant bên ngoài, chỉ dùng dữ liệu giả lập. Hiệu năng/model phù hợp A13 chưa được benchmark; chưa cài/tải model."
     }
   ],
   "excluded_duplicates": [
