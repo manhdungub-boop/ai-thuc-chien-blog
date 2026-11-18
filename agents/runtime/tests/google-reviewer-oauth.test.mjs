@@ -171,4 +171,18 @@ describe("Google reviewer OAuth session flow", () => {
     expect(unlisted.authenticated).toBe(false);
   });
 
+
+  it("rejects a Production Worker callback URL even when all other OAuth settings are valid", async () => {
+    const response = await handleGoogleReviewerAuth(
+      new Request(origin + "/auth/google/start"),
+      {
+        ...env,
+        GOOGLE_REVIEWER_REDIRECT_URI: "https://ai-thuc-chien-blog.manhdungub.workers.dev/auth/google/callback"
+      },
+      { now }
+    );
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ error: "reviewer_auth_not_configured" });
+  });
+
 });
