@@ -1,6 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { reviewArticleDraft } from "./article-quality-gate.mjs";
 import { assessArticleEvidenceReadiness } from "./article-evidence-readiness.mjs";
+import { verifyGoogleReviewerSessionToken } from "./google-reviewer-oauth.mjs";
 
 const MAX_ARTIFACT_BYTES = 48 * 1024;
 const MAX_EVIDENCE_REVIEW_BYTES = 48 * 1024;
@@ -110,6 +111,7 @@ function queueItem(row) {
 export class AgentDraftStore extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
+    this.env = env;
     this.ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS draft_artifacts (" +
       "id TEXT PRIMARY KEY, draft_json TEXT NOT NULL, quality_review_json TEXT NOT NULL, " +
@@ -166,7 +168,7 @@ export class AgentDraftStore extends DurableObject {
     return { updated: true, artifact: safeArtifact(updated[0]) };
   }
 
-  async recordEvidenceReview(id, expectedVersion, ledger, reviewRecord) {
+  async recordEvidenceReview(id, expectedVersion, ledger, reviewRecord, reviewerSessionToken) {
     if (typeof id !== "string" || !ID_PATTERN.test(id) || !Number.isInteger(expectedVersion) || expectedVersion < 1) {
       return { recorded: false, reason: "invalid_review_request" };
     }
@@ -193,9 +195,17 @@ export class AgentDraftStore extends DurableObject {
       return { recorded: false, reason: "evidence_review_too_large" };
     }
 
+    const reviewerSession = await verifyGoogleReviewerSessionToken(reviewerSessionToken, this.env, Date.now());
+    if (!reviewerSession.authenticated) {
+      return { recorded: false, reason: reviewerSession.status || "reviewer_session_required" };
+    }
     let readiness;
     try {
-      readiness = await assessArticleEvidenceReadiness({ draft, ledger, reviewRecord, now: Date.now() });
+      readiness = await assessArticleEvidenceReadiness({
+        draft, ledger, reviewRecord,
+        authenticatedReviewer: { authenticated: true, reviewer_ref: reviewerSession.reviewer.reviewer_ref },
+        now: Date.now()
+      });
     } catch {
       return { recorded: false, reason: "evidence_review_validation_failed" };
     }
