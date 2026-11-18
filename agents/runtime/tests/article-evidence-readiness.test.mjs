@@ -113,6 +113,27 @@ describe("article evidence readiness", () => {
     });
   });
 
+  it("does not count reviewed claim wording found only inside fenced code", async () => {
+    const reviewRecord = await makeReview();
+    const codeOnly = makeDraft();
+    codeOnly.body_markdown = codeOnly.body_markdown.replace(
+      ledger.claims[0].claim,
+      "```text\\n" + ledger.claims[0].claim + "\\n```"
+    );
+    const result = await assessArticleEvidenceReadiness({
+      draft: codeOnly,
+      ledger,
+      reviewRecord,
+      authenticatedReviewer: { authenticated: true, reviewer_ref: reviewRecord.reviewer_ref },
+      now
+    });
+    expect(result.status).toBe("article_claim_evidence_not_ready");
+    expect(result.issues).toContainEqual({
+      code: "reviewed_claim_missing_from_article_body",
+      claim_id: "claim-1"
+    });
+  });
+
   it("rejects absent or duplicate claim citation indices", async () => {
     const reviewRecord = await makeReview();
     const absent = makeDraft([{ ...makeDraft().claims[0], citation_indices: undefined }]);
