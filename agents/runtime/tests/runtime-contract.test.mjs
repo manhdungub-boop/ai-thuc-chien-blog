@@ -7,6 +7,7 @@ const source = await readFile(new URL("../src/index.mjs", import.meta.url), "utf
 const store = await readFile(new URL("../src/task-store.mjs", import.meta.url), "utf8");
 const research = await readFile(new URL("../src/research-discovery.mjs", import.meta.url), "utf8");
 const evidence = await readFile(new URL("../src/research-evidence.mjs", import.meta.url), "utf8");
+const evidenceAssessment = await readFile(new URL("../src/research-evidence-assessment.mjs", import.meta.url), "utf8");
 const articleGate = await readFile(new URL("../src/article-quality-gate.mjs", import.meta.url), "utf8");
 
 test("runtime uses a recurring Workflow schedule with single-instance concurrency", () => {
@@ -144,4 +145,15 @@ test("draft artifact storage is bounded, versioned, and non-publishing", async (
   assert.match(draftStore, /version = version \+ 1/);
   assert.match(draftStore, /WHERE id = \? AND version = \?/);
   assert.doesNotMatch(draftStore, /published|publish\(/i);
+});
+
+test("research evidence readiness requires fresh distinct publishers and never authorizes publication", () => {
+  assert.match(evidenceAssessment, /MIN_INDEPENDENT_SOURCES = 2/);
+  assert.match(evidenceAssessment, /MAX_AGE_DAYS = 45/);
+  assert.match(evidenceAssessment, /duplicate_publisher_domain/);
+  assert.match(evidenceAssessment, /stale_source/);
+  assert.match(evidenceAssessment, /evidence_packet_ready_for_claim_review/);
+  assert.match(evidenceAssessment, /publication_authorized: false/);
+  assert.match(source, /assessResearchEvidence/);
+  assert.match(source, /evidence_assessment: evidenceAssessment/);
 });
