@@ -42,6 +42,11 @@ test("supervisor cycle remains idle and performs no external work", () => {
 
 test("task store enforces an allowlist, bounded payloads, and idempotent IDs", () => {
   assert.match(store, /TASK_TYPES\.has\(task\.task_type\)/);
+  assert.match(store, /function validatePayload\(type, payload\)/);
+  assert.match(store, /ai_bank_discovery: \["query"\]/);
+  assert.match(store, /content_research: \["topic", "language"\]/);
+  assert.match(store, /content_draft: \["topic", "research_task_id"\]/);
+  assert.match(store, /quality_review: \["artifact_id", "artifact_type"\]/);
   assert.match(store, /MAX_PAYLOAD_BYTES = 8192/);
   assert.match(store, /INSERT OR IGNORE INTO tasks/);
   assert.match(store, /inserted\.rowsWritten === 0/);
