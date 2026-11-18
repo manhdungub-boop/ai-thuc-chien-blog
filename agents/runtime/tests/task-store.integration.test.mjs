@@ -39,6 +39,47 @@ describe("AgentTaskStore Durable Object", () => {
       task_type: "ai_bank_discovery",
       payload: { query: "valid query", url: "https://example.com" }
     }))).rejects.toThrow("invalid_payload");
+
+    await expect(Promise.resolve().then(() => store.enqueue({
+      id: "task-unimplemented-01",
+      task_type: "content_draft",
+      payload: { topic: "AI automation", research_task_id: "research-task-01" }
+    }))).rejects.toThrow("task_type_not_allowed");
+
+    await expect(Promise.resolve().then(() => store.enqueue({
+      id: "task-unimplemented-02",
+      task_type: "quality_review",
+      payload: { artifact_id: "article-0001", artifact_type: "article" }
+    }))).rejects.toThrow("task_type_not_allowed");
+  });
+
+  it("never leases legacy pending rows without a registered executor", async () => {
+    const now = Date.now();
+    await runInDurableObject(store, async (_instance, state) => {
+      state.storage.sql.exec(
+        "INSERT INTO tasks (id, task_type, payload_json, status, attempts, created_at, updated_at) VALUES (?, ?, ?, 'pending', 0, ?, ?)",
+        "legacy-content-draft",
+        "content_draft",
+        JSON.stringify({ topic: "AI automation", research_task_id: "research-task-01" }),
+        now,
+        now
+      );
+      state.storage.sql.exec(
+        "INSERT INTO tasks (id, task_type, payload_json, status, attempts, created_at, updated_at) VALUES (?, ?, ?, 'pending', 0, ?, ?)",
+        "legacy-quality-review",
+        "quality_review",
+        JSON.stringify({ artifact_id: "article-0001", artifact_type: "article" }),
+        now,
+        now
+      );
+    });
+
+    expect(await store.claim()).toEqual({ task: null });
+    await expect(Promise.resolve().then(() => store.claim(["content_draft"])))
+      .rejects.toThrow("invalid_claim_task_types");
+    await expect(Promise.resolve().then(() => store.claim(["quality_review"])))
+      .rejects.toThrow("invalid_claim_task_types");
+    expect(await store.stats()).toEqual({ pending: 2 });
   });
 
   it("treats identical idempotency requests as duplicates and rejects conflicts", async () => {
@@ -101,8 +142,8 @@ describe("AgentTaskStore Durable Object", () => {
   it("executes and persists only allowlisted local health-check results", async () => {
     const request = { id: "runtime-health-test-01", task_type: "runtime_health_check", payload: {} };
     await store.enqueue(request);
-    const noMatch = await store.claim(["quality_review"]);
-    expect(noMatch).toEqual({ task: null });
+    await expect(Promise.resolve().then(() => store.claim(["quality_review"])))
+      .rejects.toThrow("invalid_claim_task_types");
     const claim = await store.claim(["runtime_health_check"], request.id);
     expect(claim.task.task_type).toBe("runtime_health_check");
     const result = { healthy: true, external_calls: 0, production_access: false };
