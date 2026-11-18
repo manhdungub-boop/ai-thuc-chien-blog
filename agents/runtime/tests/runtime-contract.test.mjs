@@ -93,6 +93,16 @@ test("task store has bounded leases, retry ceiling, and dead-letter state", () =
   assert.match(store, /row\.lease_token !== leaseToken/);
 });
 
+test("supervisor prunes terminal queue records with bounded retention on every cycle", () => {
+  assert.match(store, /pruneTerminalTasks\(now = Date\.now\(\)\)/);
+  assert.match(store, /status = 'completed' AND updated_at < \?/);
+  assert.match(store, /status = 'dead' AND updated_at < \?/);
+  assert.match(store, /24 \* 60 \* 60 \* 1000/);
+  assert.match(store, /7 \* 24 \* 60 \* 60 \* 1000/);
+  assert.match(source, /await store\.pruneTerminalTasks\(\)/);
+  assert.match(source, /retention,/);
+});
+
 test("outbound requests are counted atomically against persistent per-day source budgets", () => {
   assert.match(store, /external_request_budgets/);
   assert.match(store, /ai_bank_discovery: 10, content_research: 8/);
