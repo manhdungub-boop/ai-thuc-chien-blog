@@ -80,6 +80,35 @@ export async function assessArticleEvidenceReadiness({
     };
   }
 
+  const articleSourceUrls = new Set();
+  if (Array.isArray(draft.sources)) {
+    for (const source of draft.sources) {
+      try {
+        articleSourceUrls.add(new URL(source?.url).href);
+      } catch {
+        // The structural article gate reports malformed source records.
+      }
+    }
+  }
+  for (const item of draft.claims) {
+    for (const evidenceUrl of item.evidence_urls) {
+      if (!articleSourceUrls.has(evidenceUrl)) {
+        claimIssues.push({ code: "reviewed_evidence_missing_from_article_sources", claim_id: item.claim_id, evidence_url: evidenceUrl });
+      }
+    }
+  }
+  if (claimIssues.length) {
+    return {
+      ok: false,
+      status: "article_claim_evidence_not_ready",
+      claims_assessed: draft.claims.length,
+      issues: claimIssues,
+      review_status: reviewVerification.status,
+      publication_authorized: false,
+      content_published: false
+    };
+  }
+
   const articleQuality = reviewArticleDraft(draft);
   if (!articleQuality.ok) {
     return {
