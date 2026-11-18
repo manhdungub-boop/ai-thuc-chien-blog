@@ -9,11 +9,13 @@
   "observability": { "enabled": true },
   "durable_objects": {
     "bindings": [
-      { "name": "AGENT_TASK_STORE", "class_name": "AgentTaskStore" }
+      { "name": "AGENT_TASK_STORE", "class_name": "AgentTaskStore" },
+      { "name": "AGENT_DRAFT_STORE", "class_name": "AgentDraftStore" }
     ]
   },
   "migrations": [
-    { "tag": "v1-agent-task-store", "new_sqlite_classes": ["AgentTaskStore"] }
+    { "tag": "v1-agent-task-store", "new_sqlite_classes": ["AgentTaskStore"] },
+    { "tag": "v2-agent-draft-store", "new_sqlite_classes": ["AgentDraftStore"] }
   ],
   "workflows": [
     {
@@ -22,10 +24,7 @@
       "class_name": "AgentSupervisorWorkflow",
       "schedules": ["*/15 * * * *"],
       "concurrency": { "limit": 1 },
-      "default_retention": {
-        "success_retention": "1 day",
-        "error_retention": "7 days"
-      }
+      "default_retention": { "success_retention": "1 day", "error_retention": "7 days" }
     }
   ]
 }
