@@ -7,7 +7,8 @@
   },
   "scripts": {
     "test": "vitest run --config vitest.config.mjs",
-    "verify-direct-dependencies": "node ./scripts/verify-test-dependencies.mjs"
+    "verify-direct-dependencies": "node ./scripts/verify-test-dependencies.mjs",
+    "preflight:reviewer-auth": "node ./scripts/check-reviewer-auth-preview-config.mjs"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "1.3.0",
