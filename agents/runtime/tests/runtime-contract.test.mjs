@@ -240,6 +240,19 @@ test("research evidence retrieval is HTTPS allowlisted, bounded, and never publi
   assert.match(evidence, /content_published: false/);
 });
 
+test("draft evidence preparation requires the runtime budgeted fetch and exact stored source URLs", async () => {
+  const preparation = await readFile(new URL("../src/prepare-draft-evidence-ledger.mjs", import.meta.url), "utf8");
+  assert.match(preparation, /fetchImpl is mandatory/);
+  assert.match(preparation, /typeof fetchImpl !== "function"/);
+  assert.match(preparation, /sourceByUrl\.has\(url\)/);
+  assert.match(preparation, /MAX_UNIQUE_SOURCES = 4/);
+  assert.match(preparation, /retrieval\.retrieved !== signals\.length/);
+  assert.match(preparation, /storeEvidenceLedger\(artifactId, artifact\.version/);
+  assert.match(preparation, /publication_authorized: false/);
+  assert.match(preparation, /content_published: false/);
+  assert.doesNotMatch(preparation, /fetch\(signals|fetch\(url/);
+});
+
 test("article quality gate is deterministic and never authorizes publication", () => {
   assert.match(articleGate, /MIN_WORDS = 600/);
   assert.match(articleGate, /MIN_SOURCES = 3/);
