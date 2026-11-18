@@ -5,12 +5,12 @@ const now = Date.parse("2026-11-19T12:00:00.000Z");
 const origin = "https://preview-agent.example.workers.dev";
 const env = {
   AGENT_REVIEWER_AUTH_ENABLED: "true",
-  GOOGLE_REVIEWER_CLIENT_ID: "test-client-id.apps.googleusercontent.com",
-  GOOGLE_REVIEWER_CLIENT_SECRET: "test-google-client-secret-value-0123456789",
+  GOOGLE_REVIEWER_CLIENT_ID: "preview-test-client-id-abcdefghijklmnopqrstuvwxyz.apps.googleusercontent.com",
+  GOOGLE_REVIEWER_CLIENT_SECRET: "test-google-client-secret-value-abcdefghijklmnopqrstuvwxyz0123456789",
   GOOGLE_REVIEWER_REDIRECT_URI: origin + "/auth/google/callback",
   GOOGLE_REVIEWER_ALLOWED_EMAILS: "reviewer@example.com",
-  GOOGLE_REVIEWER_STATE_SECRET: "state-secret-for-tests-only-0123456789",
-  GOOGLE_REVIEWER_SESSION_SECRET: "session-secret-for-tests-only-0123456789",
+  GOOGLE_REVIEWER_STATE_SECRET: "state-secret-for-tests-only-abcdefghijklmnopqrstuvwxyz0123456789",
+  GOOGLE_REVIEWER_SESSION_SECRET: "session-secret-for-tests-only-zyxwvutsrqponmlkjihgfedcba9876543210",
   AGENT_REVIEWER_AUTH_STORE: {
     getByName() {
       return {
