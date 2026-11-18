@@ -120,9 +120,9 @@ test("runtime has isolated SQLite storage and no website Production bindings", (
 
 test("AI Bank reviewer API is GET-only, session-authenticated, and read-only", () => {
   assert.match(source, /verifyGoogleReviewerSessionToken/);
-  assert.match(source, /api\\/reviewer\\/ai-bank\\/candidates/);
-  assert.match(source, /candidateStore\\.listCandidates\\(limit\\)/);
-  assert.match(source, /candidateStore\\.getReviewPacket/);
+  assert.ok(source.includes("/api/reviewer/ai-bank/candidates"));
+  assert.ok(source.includes("candidateStore.listCandidates(limit)"));
+  assert.ok(source.includes("candidateStore.getReviewPacket"));
   assert.match(source, /catalog_write_authorized: false/);
   assert.match(source, /public_publication_authorized: false/);
   assert.match(source, /verification_authorized: false/);
