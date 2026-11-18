@@ -1,3 +1,4 @@
+import { readBoundedJsonResponse } from "./bounded-json-response.mjs";
 const GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs";
 const MAX_TOKEN_CHARS = 12_000;
 const MAX_JWKS_KEYS = 20;
@@ -117,7 +118,7 @@ export async function verifyGoogleReviewerIdToken(token, {
       headers: { accept: "application/json" }
     });
     if (!response?.ok) return failure("google_jwks_unavailable");
-    jwks = await response.json();
+    jwks = await readBoundedJsonResponse(response, 64 * 1024);
   } catch {
     return failure("google_jwks_unavailable");
   }
