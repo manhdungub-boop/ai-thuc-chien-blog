@@ -8,15 +8,19 @@ const task = (id, query = "research open models") => ({
   payload: { query }
 });
 
-function storeFor(name = "agent-runtime-tests") {
+function storeFor(name) {
   return env.AGENT_TASK_STORE.getByName(name);
 }
 
 describe("AgentTaskStore Durable Object", () => {
   let store;
+  let testIndex = 0;
 
   beforeEach(() => {
-    store = storeFor();
+    // Give each test a fresh Durable Object so persistent SQLite rows from
+    // one test cannot contaminate the next test's assertions.
+    testIndex += 1;
+    store = storeFor(`agent-runtime-tests-${testIndex}`);
   });
 
   it("accepts valid tasks and rejects unsupported types or payload fields", async () => {
@@ -24,17 +28,17 @@ describe("AgentTaskStore Durable Object", () => {
     expect(accepted.accepted).toBe(true);
     expect(accepted.task.status).toBe("pending");
 
-    await expect(store.enqueue({
+    await expect(Promise.resolve().then(() => store.enqueue({
       id: "task-invalid-0001",
       task_type: "shell_exec",
       payload: { command: "whoami" }
-    })).rejects.toThrow("task_type_not_allowed");
+    }))).rejects.toThrow("task_type_not_allowed");
 
-    await expect(store.enqueue({
+    await expect(Promise.resolve().then(() => store.enqueue({
       id: "task-invalid-0002",
       task_type: "ai_bank_discovery",
       payload: { query: "valid query", url: "https://example.com" }
-    })).rejects.toThrow("invalid_payload");
+    }))).rejects.toThrow("invalid_payload");
   });
 
   it("treats identical idempotency requests as duplicates and rejects conflicts", async () => {
