@@ -81,7 +81,7 @@ test("State Store client validates read queries and bounds POST bodies", async (
     taskId: "task-1",
     status: "failed",
     errorCode: "x".repeat(20_000),
-  }), /request_too_large/);
+  }), /state_store_request_invalid/);
   assert.equal(calls.length, 0);
 });
 
