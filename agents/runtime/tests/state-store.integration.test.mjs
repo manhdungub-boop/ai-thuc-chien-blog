@@ -432,6 +432,7 @@ test("pause blocks new claims and expiry recovery but allows safe heartbeat and 
 
 test("State Store rejects oversized and malformed request bodies before admission writes", async () => {
   await withRuntime({}, async ({ stub }) => {
+    const before = await call(stub, "/__test/snapshot", {});
     const routes = ["/reserve", "/claim", "/heartbeat", "/complete", "/recover", "/transition"];
     for (const route of routes) {
       const rejected = await stub.fetch("http://do.local" + route, {
@@ -442,6 +443,31 @@ test("State Store rejects oversized and malformed request bodies before admissio
       assert.equal(rejected.status, 413, route + " oversized body");
       assert.equal((await rejected.json()).error, "request_body_too_large");
     }
+
+    const declaredTooLarge = await stub.fetch("http://do.local/reserve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Content-Length": "12289", Authorization: "Bearer " + TEST_STATE_STORE_TOKEN },
+      body: "{}",
+    });
+    assert.equal(declaredTooLarge.status, 413);
+    assert.equal((await declaredTooLarge.json()).error, "request_body_too_large");
+
+    const chunkedTooLarge = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('{"probe":"' + "x".repeat(8 * 1024)));
+        controller.enqueue(new TextEncoder().encode("x".repeat(8 * 1024) + '"}'));
+        controller.close();
+      },
+    });
+    const streamed = await stub.fetch("http://do.local/reserve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + TEST_STATE_STORE_TOKEN },
+      body: chunkedTooLarge,
+      duplex: "half",
+    });
+    assert.equal(streamed.status, 413);
+    assert.equal((await streamed.json()).error, "request_body_too_large");
+
     const badJson = await stub.fetch("http://do.local/reserve", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: "Bearer " + TEST_STATE_STORE_TOKEN },
@@ -465,6 +491,9 @@ test("State Store rejects oversized and malformed request bodies before admissio
     assert.equal(invalidUtf8.status, 400);
     assert.equal((await invalidUtf8.json()).error, "request_body_invalid_utf8");
 
+    const after = await call(stub, "/__test/snapshot", {});
+    assert.deepEqual(after.body.counts, before.body.counts);
+    assert.deepEqual(after.body.counts, { tasks: 0, dailyUsage: 0, auditEvents: 0, leases: 0 });
     const usage = await call(stub, "/usage");
     assert.equal(usage.body.acceptedToday, 0);
     assert.equal(usage.body.inFlight, 0);
