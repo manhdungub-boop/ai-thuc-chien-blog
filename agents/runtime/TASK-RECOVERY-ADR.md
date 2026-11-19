@@ -44,7 +44,7 @@ Every claim, heartbeat, retry/requeue, expiry failure, cancellation, and termina
 - Retry transient store/network failures only when the operation is known to be safe to repeat.
 - Exhausted tasks become terminal and visible for operator review; never retry indefinitely.
 
-These are proposed defaults, not live configuration.
+These are proposed retry/lease defaults, not live configuration. The current state-store admission defaults are separately capped at 100 reservations/day and 5 in-flight tasks for the Free-tier pilot; hard code ceilings remain 1,000/day and 100 in-flight.
 
 ## At-least-once semantics and side effects
 
