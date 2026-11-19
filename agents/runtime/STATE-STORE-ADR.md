@@ -38,21 +38,23 @@ Use Durable Object SQLite \`transactionSync(callback)\`; do not issue SQL \`BEGI
 
 ## Implemented schema
 
-- \`runtime_meta\`: schema version.
-- \`daily_usage\`: UTC day primary key and accepted count.
-- \`tasks\`: opaque task ID, unique idempotency key, allowlisted type, validated minimal payload JSON, payload hash/size, state, timestamps, and optional bounded error code.
-- \`audit_events\`: event ID, task ID, event type, timestamp, and non-sensitive metadata only.
+- `runtime_meta`: schema version.
+- `daily_usage`: UTC day primary key and accepted count.
+- `tasks`: opaque task ID, unique idempotency key, allowlisted type, validated minimal payload JSON, payload hash/size, state, timestamps, bounded attempt count, maximum attempts, lease generation/owner/expiry/absolute expiry, next retry time, and bounded error codes.
+- `audit_events`: event ID, task ID, event type, timestamp, and non-sensitive metadata only.
 
-Constraints include a unique idempotency key, CHECK constraints for task state/type, bounded payload size, and bounded audit metadata. No credentials, bearer tokens, article body contents, or personal data are stored in audit rows.
+Schema v2 adds the lease/retry columns through a transactional v1-to-v2 migration while preserving existing task and daily-usage rows. Constraints include a unique idempotency key, CHECK constraints for task state/type and bounded lease fields, bounded payload size, and bounded audit metadata. No credentials, bearer tokens, article body contents, or personal data are stored in audit rows.
 
 ## State transitions
 
-- \`queued -> running\` only while `AGENT_ENABLED=true` and `AGENT_PAUSED=false`; otherwise the transition is rejected. \`queued -> cancelled\` remains available while paused for operator/recovery cleanup.
-- \`running -> succeeded\`, \`running -> failed\`, or \`running -> cancelled\`
-- Repeating the same terminal transition is idempotent; attempting to reopen or change a terminal state is rejected.
+- `queued -> running` occurs only through an atomic claim while `AGENT_ENABLED=true` and `AGENT_PAUSED=false`; generic `/transition` cannot bypass lease ownership. `queued -> cancelled` remains available while paused for operator cleanup.
+- Claim increments the attempt count and lease generation and assigns an opaque lease owner. Heartbeat and completion require the current owner/generation and an unexpired lease; stale owners are rejected by fencing checks.
+- A lease has a five-minute initial duration, a 15-minute maximum individual extension, and a 30-minute absolute lifetime. Heartbeat and completion may finish an already-owned in-flight task while admission is paused; new claims and recovery are blocked while paused.
+- Expired-lease recovery is bounded: it requeues before the attempt ceiling with a bounded retry delay, or marks the task failed at the ceiling. Recovery is an operator-invoked `POST /recover`; it is **not automatic**.
+- Repeating the same terminal completion for the same lease generation is idempotent; attempting to reopen or change a terminal state is rejected.
 - In-flight count is derived from durable task rows; terminal transitions do not decrement a separate counter.
 
-Crash leases, automatic requeue, retry policy, and external side-effect idempotency are deliberately not implemented.
+The implementation does not include an alarm, cron trigger, queue consumer, automatic recovery scheduler, task handler, or external-side-effect idempotency. An expired task can remain running until an authorized operator invokes recovery.
 
 ## Retention and budgets
 
