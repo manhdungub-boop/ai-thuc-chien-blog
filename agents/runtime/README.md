@@ -4,11 +4,11 @@ This directory is a separate Cloudflare Worker service. It is not imported by th
 
 ## Runtime foundation
 
-- A Cloudflare Workflow binding is present for orchestration. The default `wrangler.jsonc` remains unscheduled; the isolated `wrangler.preview.jsonc` defines a 15-minute paused heartbeat only. The runtime remains disabled and paused. A deterministic human-authoring scaffold executor is registered, but it is not active while the pause flags are set; external provider adapters, quota verification, claim-level quality review, owner release, and publication gates remain incomplete.
+- A Cloudflare Workflow binding is present for orchestration. Both `wrangler.jsonc` and `wrangler.preview.jsonc` are unscheduled; the Preview configuration is manual-only and defines no recurring Workflow trigger. The runtime remains disabled and paused. A deterministic human-authoring scaffold executor is registered, but it is not active while the pause flags are set; external provider adapters, quota verification, claim-level quality review, owner release, and publication gates remain incomplete.
 - A separate SQLite-backed Durable Object provides a durable task queue. It is not the website's D1 database.
 - Queue contracts include an allowlist of task types, per-agent payload schemas, an 8 KiB payload ceiling, idempotent task IDs, a 500-task active-queue ceiling, five-minute leases with unique fencing tokens, a five-attempt ceiling, a dead-letter state, and rejection of stale worker completion.
 - Queue operations are internal Durable Object RPC methods only. There is no public task-enqueue endpoint.
-- The supervisor code supports an idempotent `runtime_health_check` only when explicitly invoked in an enabled isolated environment. The Preview schedule is a paused heartbeat: with `AGENT_ENABLED=false` and `AGENT_PAUSED=true`, it returns before Workflow steps, queue access, network requests, or task execution. The default Wrangler config remains unscheduled.
+- The supervisor code supports an idempotent `runtime_health_check` only when explicitly invoked in an enabled isolated environment. The Preview configuration has no recurring schedule. If invoked manually in an isolated enabled environment, the supervisor still requires `AGENT_ENABLED=true` and `AGENT_PAUSED` not true before queue access, network requests, or task execution.
 - Once per UTC day, the supervisor enqueues an idempotent `ai_bank_discovery` task. Its only handler fetches ten hard-coded public GitHub Atom release feeds over HTTPS using GET, rejects redirects, applies a 10-second per-source timeout and a 1 MB response ceiling, validates release URLs against the exact repository, and stores at most five sanitized recent signals in the task result.
 - The same daily cycle enqueues one idempotent `content_research` task for the fixed topic `AI agents, automation, and open-source AI tools`. Its discovery handler reads four fixed public feeds: OpenAI News, Google DeepMind, Hugging Face, and arXiv cs.AI. It uses GET only, rejects redirects, applies an 8-second timeout and a 750 KB response ceiling per feed, validates HTTPS host and path, and stores at most four recent source signals. 
 - After discovery, the runtime retrieves at most four original source pages from the exact HTTPS host/path allowlist. It rejects redirects, non-HTML content, off-domain/final URLs, applies a six-second timeout and 120 KB streaming body ceiling per page, strips active/noisy markup, and stores only a text excerpt of at most 600 characters with source URL, source name, publication timestamp, and retrieval timestamp. Raw HTML is never stored.
@@ -48,7 +48,7 @@ This directory is a separate Cloudflare Worker service. It is not imported by th
 ## Explicit enable gate and emergency pause
 
 - `AGENT_ENABLED` must be exactly `true` before the supervisor can access the Durable Object queue or make any outbound request. Missing, empty, or any other value leaves the runtime disabled.
-- The default Wrangler config remains unscheduled with `AGENT_ENABLED=false`, `AGENT_PAUSED=true`, and `AGENT_SCHEDULE_MODE=manual_only_no_cron`. The isolated Preview config may install a 15-minute Workflow heartbeat, but it retains `AGENT_ENABLED=false` and `AGENT_PAUSED=true`; the supervisor returns `paused` before queue access and before outbound requests.
+- The default Wrangler config remains unscheduled with `AGENT_ENABLED=false`, `AGENT_PAUSED=true`, and `AGENT_SCHEDULE_MODE=manual_only_no_cron`. The isolated Preview config is also unscheduled and retains `AGENT_ENABLED=false` and `AGENT_PAUSED=true`; no recurring Workflow instances are created. Manual invocation remains disabled by the pause flags.
 - `AGENT_PAUSED=true` is an independent emergency stop and takes precedence even when `AGENT_ENABLED=true`.
 - `GET /health` reports the explicit enable state and reports task execution disabled unless the enable flag is exactly true and the pause flag is not true.
 - Do not enable the service until Preview resource boundaries, current free-tier usage, provider quotas, monitoring, and the deployment plan have been reviewed. Neither switch is connected to the public website Worker. No Production configuration is changed by this PR.
@@ -78,7 +78,7 @@ Do not deploy from this branch until the separate Preview account/resource bound
 6. Add an authenticated operator control plane, monitoring, alerting and a pause switch.
 7. Consider public actions only through the existing owner approval gates.
 
-The Preview-only paused 15-minute Workflow heartbeat is scheduler groundwork, not autonomous task execution. Do not enable task execution or deploy the schedule until the account's free-tier plan and current usage, monitoring, and emergency-pause behavior are verified. Quota exhaustion must fail closed rather than enable billing.
+The Preview configuration is manual-only and installs no recurring Workflow schedule. It is not autonomous task execution. Do not enable task execution or introduce a schedule until the account's free-tier plan and current usage, monitoring, and emergency-pause behavior are verified. Quota exhaustion must fail closed rather than enable billing.
 
 
 ### Google reviewer OAuth and session flow (Preview foundation only)
@@ -188,9 +188,9 @@ The reviewer console deliberately does not offer a decision form based only on a
 - This does not enable reviewer OAuth, configure credentials, create a Google client, or make any live Google request during tests. The reviewer authentication feature remains disabled until an isolated Preview deployment and explicit secret configuration are separately approved.
 
 
-### Preview-only 15-minute Workflow heartbeat (paused)
+### Preview-only Workflow scheduling (disabled)
 
-- The isolated `wrangler.preview.jsonc` config schedules `AgentSupervisorWorkflow` every 15 minutes using Cloudflare Workflows `schedules`; the default `wrangler.jsonc` remains unscheduled.
+- Both the default `wrangler.jsonc` and isolated `wrangler.preview.jsonc` omit the Cloudflare Workflows `schedules` property. No cron or recurring invocation is installed.
 - Preview keeps `AGENT_ENABLED=false`, `AGENT_PAUSED=true`, and `AGENT_SCHEDULE_MODE=preview_cron_15m_paused`. The Workflow checks these flags before any `step.do`, queue access, network request, or task execution and returns `paused` with zero tasks and zero external calls.
-- This is scheduler groundwork and a heartbeat only, not an active autonomous Agent. If deployed, it creates 96 paused Workflow instances per day. Cloudflare Free documents 100,000 shared Worker/Workflow requests per day, 3,000 Workflow steps per day, and 1 GB-month Workflow storage; actual account tier and remaining usage must still be checked before deployment or enabling execution.
-- Preview deployment remains manual and requires the dedicated least-privilege `CLOUDFLARE_AGENT_PREVIEW_API_TOKEN`. No automatic deployment, Production Worker, D1, DNS, OAuth secrets, AI inference, content publication, or social posting is enabled.
+- This is manual-only orchestration configuration, not an active autonomous Agent. It does not create scheduled Workflow instances. Account tier and remaining usage still must be checked before any Preview deployment or execution.
+- Preview deployment remains manual and requires the dedicated least-privilege `CLOUDFLARE_AGENT_PREVIEW_API_TOKEN`. No automatic deployment, recurring schedule, Production Worker, D1, DNS, OAuth secrets, AI inference, content publication, or social posting is enabled.
