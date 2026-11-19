@@ -1,6 +1,6 @@
 # Agent Runtime — internal Worker-to-State-Store security boundary
 
-Status: **design only; no Durable Object binding, secret, public operator API, or deployment is configured.**
+Status: **partially implemented in source and local tests; no Durable Object binding, secret, public operator API, or deployment is configured.**
 
 Date: 2026-11-19
 
@@ -8,7 +8,7 @@ Date: 2026-11-19
 
 Keep the SQLite Durable Object reachable only through the Agent Runtime Worker code path. Do not expose a public route that forwards arbitrary caller-supplied paths, headers, or bodies to the Durable Object.
 
-Before adding a Durable Object binding, separate external operator authentication from internal State Store authentication:
+The credential separation is now implemented in source and covered by integration tests: `state-store.mjs` calls `hasValidStateStoreBearer` from `internal-auth.mjs`, and the tests verify that the external `AGENT_OPERATOR_TOKEN` is rejected by every State Store route. The Worker-to-DO call path is not implemented yet. Before adding a Durable Object binding, complete that call path while preserving this separation:
 
 - `AGENT_OPERATOR_TOKEN`: authenticates an authorized operator at the Worker ingress. It must never be forwarded to the Durable Object or exposed to browser code.
 - `AGENT_STATE_STORE_TOKEN`: a distinct high-entropy secret used only by the Worker when calling the Durable Object and by the Durable Object when authenticating that internal call. It must never be accepted as an external operator credential.
