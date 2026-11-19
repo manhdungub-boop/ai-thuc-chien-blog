@@ -303,14 +303,13 @@ describe("authenticated read-only AI Bank reviewer routes", () => {
       body: JSON.stringify({ audit_event_id: eventId, evidence })
     }), env);
     expect(response.status).toBe(201);
-    expect(received).toHaveLength(6);
+    expect(received).toHaveLength(5);
     expect(received.slice(0, 4)).toEqual(["github:ollama/ollama", evidence, token, eventId]);
     expect(received[4]).toMatchObject({
       AGENT_REVIEWER_AUTH_ENABLED: "true",
       GOOGLE_REVIEWER_EVIDENCE_WRITER_EMAILS: "reviewer@example.com"
     });
     expect(received[4].AGENT_AI_BANK_CANDIDATE_STORE).toBeUndefined();
-    expect(received[5]).toBeUndefined();
     expect(await response.json()).toEqual({
       accepted: true,
       evidence: {
