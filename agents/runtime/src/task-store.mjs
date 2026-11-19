@@ -19,6 +19,12 @@ const MAX_PAYLOAD_BYTES = 8192;
 const MAX_ACTIVE_TASKS = 500;
 const MAX_ATTEMPTS = 5;
 const LEASE_MS = 5 * 60 * 1000;
+// Retry delays after failed attempts 1-4: 30s, 2m, 10m, then 30m.
+// The fifth failed attempt is terminal and is never scheduled again.
+const RETRY_BACKOFF_MS = Object.freeze([30_000, 120_000, 600_000, 1_800_000]);
+function retryDelayMs(attempts) {
+  return RETRY_BACKOFF_MS[Math.min(Math.max(attempts, 1), RETRY_BACKOFF_MS.length) - 1];
+}
 const EXTERNAL_REQUEST_LIMITS = Object.freeze({ ai_bank_discovery: 10, content_research: 8 });
 
 function validatePayload(type, payload) {
@@ -57,6 +63,7 @@ function safeTask(row) {
     created_at: row.created_at,
     updated_at: row.updated_at,
     lease_until: row.lease_until,
+    available_at: row.available_at,
     last_error: row.last_error,
     result: row.result_json ? JSON.parse(row.result_json) : null
   };
@@ -75,6 +82,7 @@ export class AgentTaskStore extends DurableObject {
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL,
         lease_until INTEGER,
+        available_at INTEGER NOT NULL DEFAULT 0,
         lease_token TEXT,
         last_error TEXT,
         result_json TEXT
@@ -164,8 +172,8 @@ export class AgentTaskStore extends DurableObject {
     // Validate caller input before any recovery mutation. Expired leases return
     // to the queue; exhausted tasks move to dead-letter state.
     this.ctx.storage.sql.exec(
-      "UPDATE tasks SET status = CASE WHEN attempts >= ? THEN 'dead' ELSE 'pending' END, lease_until = NULL, lease_token = NULL, updated_at = ? WHERE status = 'leased' AND lease_until <= ?",
-      MAX_ATTEMPTS, now, now
+      "UPDATE tasks SET status = CASE WHEN attempts >= ? THEN 'dead' ELSE 'pending' END, available_at = CASE WHEN attempts >= ? THEN available_at ELSE ? + CASE attempts WHEN 1 THEN 30000 WHEN 2 THEN 120000 WHEN 3 THEN 600000 ELSE 1800000 END END, lease_until = NULL, lease_token = NULL, updated_at = ? WHERE status = 'leased' AND lease_until <= ?",
+      MAX_ATTEMPTS, MAX_ATTEMPTS, now, now, now
     );
     // Default and explicit claims share the same code-registered executor allowlist.
     // This also prevents legacy pending rows for unimplemented tasks from leasing.
@@ -173,8 +181,8 @@ export class AgentTaskStore extends DurableObject {
     const typeFilter = " AND task_type IN (" + claimableTypes.map(() => "?").join(",") + ")";
     const idFilter = taskId === null ? "" : " AND id = ?";
     const row = this.ctx.storage.sql.exec(
-      "SELECT * FROM tasks WHERE status = 'pending' AND attempts < ?" + typeFilter + idFilter + " ORDER BY created_at ASC LIMIT 1",
-      MAX_ATTEMPTS, ...claimableTypes, ...(taskId === null ? [] : [taskId])
+      "SELECT * FROM tasks WHERE status = 'pending' AND attempts < ? AND available_at <= ?" + typeFilter + idFilter + " ORDER BY created_at ASC LIMIT 1",
+      MAX_ATTEMPTS, now, ...claimableTypes, ...(taskId === null ? [] : [taskId])
     ).toArray()[0];
     if (!row) return { task: null };
     const leaseUntil = now + LEASE_MS;
@@ -217,8 +225,8 @@ export class AgentTaskStore extends DurableObject {
     if (!row || row.status !== "leased" || row.lease_until <= now || row.lease_token !== leaseToken) return { updated: false };
     const status = row.attempts >= MAX_ATTEMPTS ? "dead" : "pending";
     const updated = this.ctx.storage.sql.exec(
-      "UPDATE tasks SET status = ?, lease_until = NULL, lease_token = NULL, updated_at = ?, last_error = ? WHERE id = ? AND status = 'leased' AND lease_until > ? AND lease_token = ? RETURNING id",
-      status, now, safeError, taskId, now, leaseToken
+      "UPDATE tasks SET status = ?, available_at = CASE WHEN ? = 'pending' THEN ? + CASE attempts WHEN 1 THEN 30000 WHEN 2 THEN 120000 WHEN 3 THEN 600000 ELSE 1800000 END ELSE available_at END, lease_until = NULL, lease_token = NULL, updated_at = ?, last_error = ? WHERE id = ? AND status = 'leased' AND lease_until > ? AND lease_token = ? RETURNING id",
+      status, status, now, now, safeError, taskId, now, leaseToken
     ).toArray();
     return { updated: updated.length === 1, status: updated.length === 1 ? status : undefined };
   }
