@@ -66,8 +66,8 @@ export function heartbeatLease(row, {
   if (row.lease_owner !== leaseOwner || row.lease_generation !== leaseGeneration) {
     return reject("lease_fencing_conflict");
   }
-  if (row.lease_expires_at <= now) return reject("lease_expired");
   if (row.lease_max_expires_at <= now) return reject("lease_max_lifetime_exceeded");
+  if (row.lease_expires_at <= now) return reject("lease_expired");
   if (!validInteger(leaseDurationMs, 1) || leaseDurationMs > MAX_LEASE_MS) {
     return reject("lease_policy_invalid");
   }
