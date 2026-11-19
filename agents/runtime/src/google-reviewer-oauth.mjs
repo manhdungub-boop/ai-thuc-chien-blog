@@ -39,6 +39,9 @@ function cookie(name, value, maxAge) {
 function clearCookie(name) {
   return name + "=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Lax";
 }
+function callbackFailure(error, status, extraHeaders = {}) {
+  return json({ error }, status, { ...extraHeaders, "set-cookie": clearCookie(TX_COOKIE) });
+}
 function randomToken(bytes = 32) {
   const value = new Uint8Array(bytes);
   crypto.getRandomValues(value);
@@ -78,7 +81,7 @@ function config(env) {
       allowedEmails.length !== 1 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(allowedEmails[0]) || allowedEmails[0].length > 254 || env.GOOGLE_REVIEWER_STATE_SECRET === env.GOOGLE_REVIEWER_SESSION_SECRET) return null;
   try {
     const uri = new URL(env.GOOGLE_REVIEWER_REDIRECT_URI);
-    if (uri.protocol !== "https:" || !uri.hostname.startsWith("ai-thuc-chien-agent-runtime-preview.") || !uri.hostname.endsWith(".workers.dev") || uri.pathname !== "/auth/google/callback" || uri.search || uri.hash || uri.username || uri.password) return null;
+    if (uri.protocol !== "https:" || !/^ai-thuc-chien-agent-runtime-preview\.[a-z0-9-]+\.workers\.dev$/i.test(uri.hostname) || uri.pathname !== "/auth/google/callback" || uri.search || uri.hash || uri.username || uri.password) return null;
     return { allowedEmails, redirectUri: uri.href, redirectOrigin: uri.origin };
   } catch { return null; }
 }
@@ -152,6 +155,11 @@ export async function handleGoogleReviewerAuth(request, env, { fetchImpl = fetch
   if (url.origin !== cfg.redirectOrigin && path !== "/auth/google/start" && path !== "/auth/google/me" && path !== "/auth/google/logout") {
     return json({ error: "redirect_origin_mismatch" }, 400);
   }
+  const requestOrigin = request.headers.get("origin");
+  if (["/auth/google/start", "/auth/google/me", "/auth/google/logout"].includes(path) &&
+      requestOrigin && requestOrigin !== cfg.redirectOrigin) {
+    return json({ error: "origin_mismatch" }, 403);
+  }
   const store = storeFrom(env);
   if (!store) return json({ error: "reviewer_auth_store_unavailable" }, 503);
   const nowSeconds = Math.floor(now / 1000);
@@ -187,14 +195,14 @@ export async function handleGoogleReviewerAuth(request, env, { fetchImpl = fetch
     const state = url.searchParams.get("state") || "";
     const code = url.searchParams.get("code") || "";
     if (!/^[A-Za-z0-9_-]{40,64}$/.test(state) || !/^[^\x00-\x20\x7f]{1,2048}$/.test(code) || url.searchParams.has("error")) {
-      return json({ error: "oauth_callback_rejected" }, 400);
+      return callbackFailure("oauth_callback_rejected", 400);
     }
     const txCookie = await verifyPayload(env.GOOGLE_REVIEWER_STATE_SECRET, cookieValue(request, TX_COOKIE));
     if (!txCookie || typeof txCookie.binding !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(txCookie.binding) || !Number.isInteger(txCookie.exp) || txCookie.exp <= nowSeconds) {
-      return json({ error: "login_transaction_cookie_invalid" }, 400, { "set-cookie": clearCookie(TX_COOKIE) });
+      return callbackFailure("login_transaction_cookie_invalid", 400);
     }
     const transaction = await store.consumeTransaction(await digest(state), await digest(txCookie.binding), nowSeconds);
-    if (!transaction) return json({ error: "login_transaction_missing_or_replayed" }, 400);
+    if (!transaction) return callbackFailure("login_transaction_missing_or_replayed", 400);
     let tokenResponse;
     try {
       tokenResponse = await fetchImpl(GOOGLE_TOKEN_URL, {
@@ -211,10 +219,10 @@ export async function handleGoogleReviewerAuth(request, env, { fetchImpl = fetch
         code_verifier: transaction.code_verifier
       })
       });
-    } catch { return json({ error: "google_code_exchange_unavailable" }, 502); }
-    if (!tokenResponse.ok) return json({ error: "google_code_exchange_failed" }, 401);
+    } catch { return callbackFailure("google_code_exchange_unavailable", 502); }
+    if (!tokenResponse.ok) return callbackFailure("google_code_exchange_failed", 401);
     let tokenBody;
-    try { tokenBody = await readBoundedJsonResponse(tokenResponse, 32 * 1024); } catch { return json({ error: "google_token_response_invalid_or_too_large" }, 502); }
+    try { tokenBody = await readBoundedJsonResponse(tokenResponse, 32 * 1024); } catch { return callbackFailure("google_token_response_invalid_or_too_large", 502); }
     const identity = await verifyGoogleReviewerIdToken(tokenBody?.id_token, {
       audience: env.GOOGLE_REVIEWER_CLIENT_ID,
       nonce: transaction.nonce,
@@ -222,7 +230,7 @@ export async function handleGoogleReviewerAuth(request, env, { fetchImpl = fetch
       now,
       fetchImpl
     });
-    if (!identity.ok) return json({ error: "google_identity_verification_failed", status: identity.status }, 401);
+    if (!identity.ok) return callbackFailure("google_identity_verification_failed", 401);
     const session = await signPayload(env.GOOGLE_REVIEWER_SESSION_SECRET, {
       provider: "google", sub: identity.reviewer.subject, email: identity.reviewer.email,
       reviewer_ref: identity.reviewer.reviewer_ref, iat: nowSeconds, exp: nowSeconds + SESSION_TTL_SECONDS
