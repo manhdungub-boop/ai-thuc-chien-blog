@@ -324,6 +324,10 @@ assert.equal(db.pageViews.length, 0, 'oversized request must not write analytics
 const malformedLength = await callRaw('/analytics/pageview', new TextEncoder().encode('{"path":"/"}'), { 'Content-Length': 'invalid' });
 assert.equal(malformedLength.status, 400, 'malformed Content-Length must fail closed');
 assert.equal(db.pageViews.length, 0, 'malformed length must not write analytics data');
+const leadingZeroLength = await callRaw('/register', new TextEncoder().encode('{}'), { 'Content-Length': '0002' });
+assert.equal(leadingZeroLength.status, 400);
+assert.notEqual((await leadingZeroLength.json()).error, 'Độ dài nội dung không hợp lệ.', 'valid decimal Content-Length may contain leading zeroes');
+
 let declaredOversizePulls = 0;
 const declaredOversizeStream = new ReadableStream({
   pull(controller) { declaredOversizePulls += 1; controller.enqueue(new TextEncoder().encode('{"path":"/"}')); }
