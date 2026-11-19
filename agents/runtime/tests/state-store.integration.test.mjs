@@ -838,6 +838,51 @@ test("OIDC replay ledger persists across State Store restart", async () => {
   }
 });
 
+test("retention cleanup deletes bounded oldest-first batches and preserves active or recent tasks", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const now = Date.parse("2026-11-20T12:00:00.000Z");
+    const headers = { "x-test-now": new Date(now).toISOString() };
+    const seeded = await call(stub, "/__test/seed-retention", {}, headers);
+    assert.equal(seeded.status, 200);
+    assert.deepEqual(seeded.body.seeded, {
+      expiredTasks: 105,
+      expiredAuditEvents: 305,
+      expiredControlAudit: 105,
+      expiredRateLimits: 105,
+      expiredDailyUsage: 105,
+    });
+
+    const before = await call(stub, "/__test/retention-counts", undefined, headers);
+    assert.equal(before.body.expiredTasks, 105);
+    assert.equal(before.body.expiredAuditEvents, 305);
+    assert.equal(before.body.expiredControlAudit, 105);
+    assert.equal(before.body.expiredRateLimits, 105);
+    assert.equal(before.body.expiredDailyUsage, 105);
+
+    const firstAdmission = await call(stub, "/reserve", task("retention-trigger-first"), headers);
+    assert.equal(firstAdmission.status, 201);
+    const afterFirst = await call(stub, "/__test/retention-counts", undefined, headers);
+    assert.equal(afterFirst.body.expiredTasks, 5, "only 100 expired tasks are removed per pass");
+    assert.equal(afterFirst.body.expiredAuditEvents, 55, "only 250 expired audit events are removed per pass");
+    assert.equal(afterFirst.body.expiredControlAudit, 5);
+    assert.equal(afterFirst.body.expiredRateLimits, 5);
+    assert.equal(afterFirst.body.expiredDailyUsage, 5);
+    assert.equal(afterFirst.body.runningTasks, 1, "running tasks are never eligible for retention deletion");
+    assert.equal(afterFirst.body.recentTerminalTasks, 1, "recent terminal tasks are retained");
+
+    const secondAdmission = await call(stub, "/reserve", task("retention-trigger-second"), headers);
+    assert.equal(secondAdmission.status, 201);
+    const afterSecond = await call(stub, "/__test/retention-counts", undefined, headers);
+    assert.equal(afterSecond.body.expiredTasks, 0);
+    assert.equal(afterSecond.body.expiredAuditEvents, 0);
+    assert.equal(afterSecond.body.expiredControlAudit, 0);
+    assert.equal(afterSecond.body.expiredRateLimits, 0);
+    assert.equal(afterSecond.body.expiredDailyUsage, 0);
+    assert.equal(afterSecond.body.runningTasks, 1);
+    assert.equal(afterSecond.body.recentTerminalTasks, 1);
+  });
+});
+
 test("OIDC replay ledger prunes expired entries and permits a later fresh token identifier", async () => {
   await withRuntime({}, async ({ stub }) => {
     const firstNow = Date.parse("2026-11-19T10:00:00.000Z");
