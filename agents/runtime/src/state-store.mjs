@@ -23,10 +23,11 @@ function jsonResponse(body, status = 200) {
 }
 function isObject(value) { return value !== null && typeof value === "object" && !Array.isArray(value); }
 
+
 function parseControlJson(text) {
   let index = 0;
   const skipWhitespace = () => {
-    while (index < text.length && /[\\t\\n\\r ]/.test(text[index])) index++;
+    while (index < text.length && /[\t\n\r ]/.test(text[index])) index++;
   };
   const readString = () => {
     const start = index;
@@ -39,14 +40,14 @@ function parseControlJson(text) {
         index++;
         return JSON.parse(text.slice(start, index));
       }
-      if (character === "\\\\") {
+      if (character === "\\") {
         index++;
         if (index >= text.length) throw new Error("control_json_invalid");
         if (text[index] === "u") {
           if (!/^[0-9a-fA-F]{4}$/.test(text.slice(index + 1, index + 5))) throw new Error("control_json_invalid");
           index += 5;
         } else {
-          if (!/["\\\\/bfnrt]/.test(text[index])) throw new Error("control_json_invalid");
+          if (!/["\\/bfnrt]/.test(text[index])) throw new Error("control_json_invalid");
           index++;
         }
         continue;
