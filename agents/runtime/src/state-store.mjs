@@ -1,5 +1,6 @@
 import { validateTaskRequest } from "./task-contract.mjs";
 import { hasValidStateStoreBearer } from "./internal-auth.mjs";
+import { claimQueuedTask, heartbeatLease, recoverExpiredLease, completeLeasedTask } from "./lease-policy.mjs";
 
 const SCHEMA_VERSION = 2;
 // Conservative Free-tier pilot defaults; hard caps remain enforced below.
@@ -94,6 +95,22 @@ export class AgentStateStore {
       const url = new URL(request.url);
       if (url.pathname === "/reserve" && request.method === "POST") {
         const result = await this.reserve(await request.json(), this.requestTime(request));
+        return jsonResponse(result.body, result.status);
+      }
+      if (url.pathname === "/claim" && request.method === "POST") {
+        const result = this.claim(await request.json(), this.requestTime(request));
+        return jsonResponse(result.body, result.status);
+      }
+      if (url.pathname === "/heartbeat" && request.method === "POST") {
+        const result = this.heartbeat(await request.json(), this.requestTime(request));
+        return jsonResponse(result.body, result.status);
+      }
+      if (url.pathname === "/complete" && request.method === "POST") {
+        const result = this.complete(await request.json(), this.requestTime(request));
+        return jsonResponse(result.body, result.status);
+      }
+      if (url.pathname === "/recover" && request.method === "POST") {
+        const result = this.recover(await request.json(), this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
       if (url.pathname === "/transition" && request.method === "POST") {
@@ -205,6 +222,155 @@ export class AgentStateStore {
         this.sql.exec("INSERT INTO daily_usage (day_utc,accepted_count) VALUES (?,1) ON CONFLICT(day_utc) DO UPDATE SET accepted_count = accepted_count + 1", day);
         this.audit(taskId, "task.queued", now, { taskType: task.type });
         return { status: 201, body: { ok: true, duplicate: false, task: safeTask(readRow(this.sql, "SELECT * FROM tasks WHERE task_id = ?", taskId)) } };
+      });
+    } catch {
+      return { status: 503, body: { ok: false, error: "state_store_unavailable" } };
+    }
+  }
+
+  claim(body, now) {
+    if (this.env.AGENT_ENABLED !== "true" || this.env.AGENT_PAUSED !== "false") {
+      return { status: 503, body: { ok: false, error: "agent_disabled_or_paused" } };
+    }
+    if (!isObject(body) || Object.keys(body).length !== 1 ||
+        typeof body.taskId !== "string" || body.taskId.length < 1 || body.taskId.length > 64) {
+      return { status: 400, body: { ok: false, error: "claim_request_invalid" } };
+    }
+    try {
+      return this.ctx.storage.transactionSync(() => {
+        const row = readRow(this.sql, "SELECT * FROM tasks WHERE task_id = ?", body.taskId);
+        if (!row) return { status: 404, body: { ok: false, error: "task_not_found" } };
+        const leaseOwner = crypto.randomUUID();
+        const decision = claimQueuedTask(row, { now, leaseOwner });
+        if (!decision.ok) {
+          const status = decision.error === "lease_state_invalid" || decision.error === "lease_owner_invalid" ? 400 : 409;
+          return { status, body: { ok: false, error: decision.error } };
+        }
+        const fields = decision.fields;
+        this.sql.exec(
+          "UPDATE tasks SET state=?,attempt_count=?,lease_generation=?,lease_owner=?,lease_expires_at=?,next_attempt_at=?,updated_at=? WHERE task_id=? AND state='queued' AND attempt_count=? AND lease_generation=?",
+          fields.state, fields.attempt_count, fields.lease_generation, fields.lease_owner,
+          fields.lease_expires_at, fields.next_attempt_at, fields.updated_at,
+          body.taskId, row.attempt_count, row.lease_generation,
+        );
+        const updated = readRow(this.sql, "SELECT * FROM tasks WHERE task_id = ?", body.taskId);
+        if (!updated || updated.state !== "running" || updated.lease_owner !== leaseOwner ||
+            updated.lease_generation !== fields.lease_generation) {
+          return { status: 409, body: { ok: false, error: "task_claim_conflict" } };
+        }
+        this.audit(body.taskId, "task.claimed", now, {
+          attempt: updated.attempt_count,
+          leaseGeneration: updated.lease_generation,
+        });
+        return {
+          status: 200,
+          body: {
+            ok: true,
+            task: safeTask(updated),
+            lease: { owner: updated.lease_owner, generation: updated.lease_generation, expiresAt: updated.lease_expires_at },
+          },
+        };
+      });
+    } catch {
+      return { status: 503, body: { ok: false, error: "state_store_unavailable" } };
+    }
+  }
+
+  heartbeat(body, now) {
+    if (!isObject(body) || Object.keys(body).some((key) => !["taskId","leaseOwner","leaseGeneration"].includes(key)) ||
+        !Object.hasOwn(body, "taskId") || !Object.hasOwn(body, "leaseOwner") || !Object.hasOwn(body, "leaseGeneration") ||
+        typeof body.taskId !== "string" || body.taskId.length < 1 || body.taskId.length > 64) {
+      return { status: 400, body: { ok: false, error: "heartbeat_request_invalid" } };
+    }
+    try {
+      return this.ctx.storage.transactionSync(() => {
+        const row = readRow(this.sql, "SELECT * FROM tasks WHERE task_id = ?", body.taskId);
+        if (!row) return { status: 404, body: { ok: false, error: "task_not_found" } };
+        const decision = heartbeatLease(row, {
+          now, leaseOwner: body.leaseOwner, leaseGeneration: body.leaseGeneration,
+        });
+        if (!decision.ok) return { status: 409, body: { ok: false, error: decision.error } };
+        this.sql.exec(
+          "UPDATE tasks SET lease_expires_at=?,updated_at=? WHERE task_id=? AND state='running' AND lease_owner=? AND lease_generation=? AND lease_expires_at>?",
+          decision.fields.lease_expires_at, decision.fields.updated_at,
+          body.taskId, body.leaseOwner, body.leaseGeneration, now,
+        );
+        const updated = readRow(this.sql, "SELECT * FROM tasks WHERE task_id = ?", body.taskId);
+        if (!updated || updated.lease_expires_at !== decision.fields.lease_expires_at) {
+          return { status: 409, body: { ok: false, error: "lease_fencing_conflict" } };
+        }
+        return { status: 200, body: { ok: true, task: safeTask(updated) } };
+      });
+    } catch {
+      return { status: 503, body: { ok: false, error: "state_store_unavailable" } };
+    }
+  }
+
+  complete(body, now) {
+    if (!isObject(body) || Object.keys(body).some((key) => !["taskId","leaseOwner","leaseGeneration","status","errorCode"].includes(key)) ||
+        !["taskId","leaseOwner","leaseGeneration","status"].every((key) => Object.hasOwn(body, key)) ||
+        typeof body.taskId !== "string" || body.taskId.length < 1 || body.taskId.length > 64) {
+      return { status: 400, body: { ok: false, error: "complete_request_invalid" } };
+    }
+    try {
+      return this.ctx.storage.transactionSync(() => {
+        const row = readRow(this.sql, "SELECT * FROM tasks WHERE task_id = ?", body.taskId);
+        if (!row) return { status: 404, body: { ok: false, error: "task_not_found" } };
+        const decision = completeLeasedTask(row, {
+          now, leaseOwner: body.leaseOwner, leaseGeneration: body.leaseGeneration,
+          status: body.status, errorCode: body.errorCode,
+        });
+        if (!decision.ok) return { status: 409, body: { ok: false, error: decision.error } };
+        const fields = decision.fields;
+        this.sql.exec(
+          "UPDATE tasks SET state=?,updated_at=?,terminal_at=?,error_code=?,lease_owner=NULL,lease_expires_at=NULL,next_attempt_at=NULL,last_error_code=? WHERE task_id=? AND state='running' AND lease_owner=? AND lease_generation=? AND lease_expires_at>?",
+          fields.state, fields.updated_at, fields.terminal_at, fields.error_code,
+          fields.error_code, body.taskId, body.leaseOwner, body.leaseGeneration, now,
+        );
+        const updated = readRow(this.sql, "SELECT * FROM tasks WHERE task_id = ?", body.taskId);
+        if (!updated || updated.state !== fields.state || updated.lease_owner !== null) {
+          return { status: 409, body: { ok: false, error: "lease_fencing_conflict" } };
+        }
+        this.audit(body.taskId, "task." + fields.state, now, {
+          taskType: row.task_type,
+          leaseGeneration: row.lease_generation,
+        });
+        return { status: 200, body: { ok: true, task: safeTask(updated) } };
+      });
+    } catch {
+      return { status: 503, body: { ok: false, error: "state_store_unavailable" } };
+    }
+  }
+
+  recover(body, now) {
+    if (this.env.AGENT_ENABLED !== "true" || this.env.AGENT_PAUSED !== "false") {
+      return { status: 503, body: { ok: false, error: "agent_disabled_or_paused" } };
+    }
+    if (!isObject(body) || Object.keys(body).length !== 1 ||
+        typeof body.taskId !== "string" || body.taskId.length < 1 || body.taskId.length > 64) {
+      return { status: 400, body: { ok: false, error: "recover_request_invalid" } };
+    }
+    try {
+      return this.ctx.storage.transactionSync(() => {
+        const row = readRow(this.sql, "SELECT * FROM tasks WHERE task_id = ?", body.taskId);
+        if (!row) return { status: 404, body: { ok: false, error: "task_not_found" } };
+        const decision = recoverExpiredLease(row, { now });
+        if (!decision.ok) return { status: 409, body: { ok: false, error: decision.error } };
+        const fields = decision.fields;
+        this.sql.exec(
+          "UPDATE tasks SET state=?,updated_at=?,terminal_at=?,error_code=?,lease_owner=NULL,lease_expires_at=NULL,next_attempt_at=?,last_error_code=? WHERE task_id=? AND state='running' AND lease_generation=? AND lease_expires_at<=?",
+          fields.state, fields.updated_at, fields.terminal_at, fields.error_code,
+          fields.next_attempt_at, fields.last_error_code, body.taskId, row.lease_generation, now,
+        );
+        const updated = readRow(this.sql, "SELECT * FROM tasks WHERE task_id = ?", body.taskId);
+        if (!updated || updated.state !== fields.state || updated.lease_owner !== null) {
+          return { status: 409, body: { ok: false, error: "lease_recovery_conflict" } };
+        }
+        this.audit(body.taskId, decision.outcome === "failed" ? "task.lease_expired_failed" : "task.lease_expired_requeued", now, {
+          attempt: row.attempt_count,
+          leaseGeneration: row.lease_generation,
+        });
+        return { status: 200, body: { ok: true, outcome: decision.outcome, task: safeTask(updated) } };
       });
     } catch {
       return { status: 503, body: { ok: false, error: "state_store_unavailable" } };
