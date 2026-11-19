@@ -6,6 +6,47 @@ const sources = [
   { vendor: "ComfyUI", product: "ComfyUI", repo: "Comfy-Org/ComfyUI" }
 ];
 
+const writerAuthEnv = {
+  AGENT_REVIEWER_AUTH_ENABLED: "true",
+  GOOGLE_REVIEWER_CLIENT_ID: "preview-test-client-id-abcdefghijklmnopqrstuvwxyz.apps.googleusercontent.com",
+  GOOGLE_REVIEWER_CLIENT_SECRET: "test-google-client-secret-value-abcdefghijklmnopqrstuvwxyz0123456789",
+  GOOGLE_REVIEWER_REDIRECT_URI: "https://ai-thuc-chien-agent-runtime-preview.test-account.workers.dev/auth/google/callback",
+  GOOGLE_REVIEWER_ALLOWED_EMAILS: "reviewer@example.com",
+  GOOGLE_REVIEWER_EVIDENCE_WRITER_EMAILS: "reviewer@example.com",
+  GOOGLE_REVIEWER_STATE_SECRET: "state-secret-for-tests-only-abcdefghijklmnopqrstuvwxyz0123456789",
+  GOOGLE_REVIEWER_SESSION_SECRET: "session-secret-for-tests-only-zyxwvutsrqponmlkjihgfedcba9876543210"
+};
+
+function encodeBase64Url(bytes) {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/=/g, "").replaceAll("+", "-").replaceAll("/", "_");
+}
+
+async function writerSessionToken(now = Date.now(), email = "reviewer@example.com") {
+  const payload = {
+    provider: "google",
+    sub: "google-subject-writer-123",
+    email,
+    reviewer_ref: "google:google-subject-writer-123",
+    iat: Math.floor(now / 1000) - 10,
+    exp: Math.floor(now / 1000) + 600
+  };
+  const encoded = encodeBase64Url(new TextEncoder().encode(JSON.stringify(payload)));
+  const key = await crypto.subtle.importKey(
+    "raw", new TextEncoder().encode(writerAuthEnv.GOOGLE_REVIEWER_SESSION_SECRET),
+    { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
+  );
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(encoded));
+  return encoded + "." + encodeBase64Url(new Uint8Array(signature));
+}
+
+async function submitEvidence(store, candidateId, evidence, now = Date.now(), eventId = crypto.randomUUID()) {
+  return store.submitAuthorizedReviewEvidence(
+    candidateId, evidence, await writerSessionToken(now), eventId, writerAuthEnv, now
+  );
+}
+
 function candidate(source = sources[0], release = "v1.2.3", publishedAt = "2026-11-19T08:00:00.000Z") {
   return {
     candidate_id: "github:" + source.repo,
@@ -126,7 +167,7 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
   });
   it("stores submitted evidence as unverified and pending human review", async () => {
     await store.upsertCandidates([candidate()], Date.parse("2026-11-19T08:06:00.000Z"));
-    const result = await store.submitReviewEvidence("github:ollama/ollama", {
+    const result = await submitEvidence(store, "github:ollama/ollama", {
       check_type: "pricing_and_free_limits",
       source_title: "Official pricing page",
       source_url: "https://ollama.com/pricing",
@@ -156,11 +197,11 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
       source_url: "https://example.com/pricing",
       excerpt: "Evidence excerpt."
     };
-    expect(await store.submitReviewEvidence("github:missing/tool", evidence)).toEqual({
+    expect(await submitEvidence(store, "github:missing/tool", evidence)).toEqual({
       accepted: false, reason: "candidate_not_found"
     });
     await store.upsertCandidates([candidate()]);
-    expect(await store.submitReviewEvidence("github:ollama/ollama", {
+    expect(await submitEvidence(store, "github:ollama/ollama", {
       ...evidence, check_type: "make_it_free"
     })).toEqual({ accepted: false, reason: "unsupported_check_type" });
     for (const source_url of [
@@ -171,7 +212,7 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
       "https://example.com/pricing?tracking=1",
       "https://example.com/pricing#fragment"
     ]) {
-      expect(await store.submitReviewEvidence("github:ollama/ollama", {
+      expect(await submitEvidence(store, "github:ollama/ollama", {
         ...evidence, source_url
       })).toEqual({ accepted: false, reason: "invalid_evidence_url" });
     }
@@ -187,14 +228,14 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
       excerpt: "License scope needs human review."
     });
     for (let index = 0; index < 5; index += 1) {
-      expect((await store.submitReviewEvidence(
+      expect((await submitEvidence(store, 
         "github:ollama/ollama", makeEvidence(index)
       )).accepted).toBe(true);
     }
-    expect(await store.submitReviewEvidence(
+    expect(await submitEvidence(store, 
       "github:ollama/ollama", makeEvidence(0)
     )).toEqual({ accepted: false, reason: "duplicate_evidence" });
-    expect(await store.submitReviewEvidence(
+    expect(await submitEvidence(store, 
       "github:ollama/ollama", makeEvidence(5)
     )).toEqual({ accepted: false, reason: "evidence_limit_reached" });
     expect(await store.listReviewEvidence("github:ollama/ollama", 30)).toHaveLength(5);
@@ -203,15 +244,78 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     )).rejects.toThrow("invalid_evidence_list_limit");
   });
 
+  it("atomically rejects replayed audit event IDs, including concurrent submissions", async () => {
+    await store.upsertCandidates([candidate()]);
+    const evidence = {
+      check_type: "pricing_and_free_limits",
+      source_title: "Official pricing page",
+      source_url: "https://ollama.com/pricing",
+      excerpt: "Pricing evidence requires human review."
+    };
+    const eventId = "a4e6d1c2-3b7f-4a91-8c22-1234567890ab";
+    const now = Date.parse("2026-11-19T10:00:00.000Z");
+    const token = await writerSessionToken(now);
+    const submit = () => store.submitAuthorizedReviewEvidence(
+      "github:ollama/ollama", evidence, token, eventId, writerAuthEnv, now
+    );
+    const results = await Promise.all([submit(), submit()]);
+    expect(results.filter(item => item.accepted)).toHaveLength(1);
+    expect(results.filter(item => item.reason === "duplicate_audit_event")).toHaveLength(1);
+    expect(await store.listReviewEvidence("github:ollama/ollama")).toHaveLength(1);
+  });
+
+  it("binds an audit event ID to its actor and exact evidence payload", async () => {
+    await store.upsertCandidates([candidate()]);
+    const eventId = "b4e6d1c2-3b7f-4a91-8c22-1234567890ab";
+    const now = Date.parse("2026-11-19T10:00:00.000Z");
+    const firstEvidence = {
+      check_type: "license_scope",
+      source_title: "Official license",
+      source_url: "https://github.com/ollama/ollama/blob/main/LICENSE",
+      excerpt: "License evidence requires human review."
+    };
+    const first = await store.submitAuthorizedReviewEvidence(
+      "github:ollama/ollama", firstEvidence, await writerSessionToken(now),
+      eventId, writerAuthEnv, now
+    );
+    expect(first.accepted).toBe(true);
+    const changedPayload = await store.submitAuthorizedReviewEvidence(
+      "github:ollama/ollama", { ...firstEvidence, excerpt: "Changed evidence excerpt." },
+      await writerSessionToken(now), eventId, writerAuthEnv, now
+    );
+    expect(changedPayload).toEqual({ accepted: false, reason: "audit_event_id_reused" });
+    expect(await store.listReviewEvidence("github:ollama/ollama")).toHaveLength(1);
+  });
+
+  it("denies an unallowlisted writer without recording evidence or an audit event", async () => {
+    await store.upsertCandidates([candidate()]);
+    const now = Date.parse("2026-11-19T10:00:00.000Z");
+    const denied = await store.submitAuthorizedReviewEvidence(
+      "github:ollama/ollama",
+      {
+        check_type: "pricing_and_free_limits",
+        source_title: "Pricing",
+        source_url: "https://ollama.com/pricing",
+        excerpt: "Pending review."
+      },
+      await writerSessionToken(now, "other@example.com"),
+      "c4e6d1c2-3b7f-4a91-8c22-1234567890ab",
+      writerAuthEnv,
+      now
+    );
+    expect(denied).toEqual({ accepted: false, reason: "evidence_writer_not_allowlisted" });
+    expect(await store.listReviewEvidence("github:ollama/ollama")).toEqual([]);
+  });
+
   it("builds an explicit six-part review packet without treating submitted evidence as verified", async () => {
     await store.upsertCandidates([candidate()]);
-    await store.submitReviewEvidence("github:ollama/ollama", {
+    await submitEvidence(store, "github:ollama/ollama", {
       check_type: "pricing_and_free_limits",
       source_title: "Pricing reference",
       source_url: "https://ollama.com/pricing",
       excerpt: "Pricing excerpt awaiting review."
     });
-    await store.submitReviewEvidence("github:ollama/ollama", {
+    await submitEvidence(store, "github:ollama/ollama", {
       check_type: "license_scope",
       source_title: "License reference",
       source_url: "https://github.com/ollama/ollama/blob/main/LICENSE",
@@ -262,7 +366,7 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
 
   it("does not carry evidence from an older release into a newer release review packet", async () => {
     await store.upsertCandidates([candidate()], Date.parse("2026-11-19T08:06:00.000Z"));
-    await store.submitReviewEvidence("github:ollama/ollama", {
+    await submitEvidence(store, "github:ollama/ollama", {
       check_type: "license_scope",
       source_title: "License for prior release",
       source_url: "https://github.com/ollama/ollama/blob/v1.2.3/LICENSE",
@@ -291,7 +395,7 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
       source_url: "https://github.com/ollama/ollama/blob/main/LICENSE",
       excerpt: "License source must be reviewed for this release."
     };
-    const first = await store.submitReviewEvidence(
+    const first = await submitEvidence(store, 
       "github:ollama/ollama", evidence, Date.parse("2026-11-19T08:10:00.000Z")
     );
     expect(first.accepted).toBe(true);
@@ -300,7 +404,7 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     newer.discovered_at = "2026-11-19T11:05:00.000Z";
     await store.upsertCandidates([newer], Date.parse("2026-11-19T11:06:00.000Z"));
 
-    const second = await store.submitReviewEvidence(
+    const second = await submitEvidence(store, 
       "github:ollama/ollama", evidence, Date.parse("2026-11-19T11:10:00.000Z")
     );
     expect(second).toMatchObject({ accepted: true, evidence_id: first.evidence_id });
@@ -312,7 +416,7 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
       "https://github.com/ollama/ollama/releases/tag/v1.2.3",
       "https://github.com/ollama/ollama/releases/tag/v1.2.4"
     ]));
-    expect(await store.submitReviewEvidence(
+    expect(await submitEvidence(store, 
       "github:ollama/ollama", evidence, Date.parse("2026-11-19T11:11:00.000Z")
     )).toEqual({ accepted: false, reason: "duplicate_evidence" });
   });
@@ -326,7 +430,7 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
       excerpt: "License evidence awaiting human review."
     });
     for (let index = 0; index < 5; index += 1) {
-      expect((await store.submitReviewEvidence(
+      expect((await submitEvidence(store, 
         "github:ollama/ollama", makeEvidence("old", index)
       )).accepted).toBe(true);
     }
@@ -336,11 +440,11 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     await store.upsertCandidates([newer], Date.parse("2026-11-19T11:06:00.000Z"));
 
     for (let index = 0; index < 5; index += 1) {
-      expect((await store.submitReviewEvidence(
+      expect((await submitEvidence(store, 
         "github:ollama/ollama", makeEvidence("new", index)
       )).accepted).toBe(true);
     }
-    expect(await store.submitReviewEvidence(
+    expect(await submitEvidence(store, 
       "github:ollama/ollama", makeEvidence("new", 5)
     )).toEqual({ accepted: false, reason: "evidence_limit_reached" });
     const packet = await store.getReviewPacket("github:ollama/ollama");
