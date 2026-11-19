@@ -286,7 +286,6 @@ export class AgentSupervisorWorkflow extends WorkflowEntrypoint {
       };
       const artifactId = contentDraft.result?.artifact_id;
       if (typeof artifactId === "string") {
-        const artifactVersion = contentDraft.result?.artifact_version;
         const qualityTaskId = "quality-review-" + scanDate;
         qualityReview = await executeTask(
           store,
