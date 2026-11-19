@@ -33,7 +33,7 @@ jobs:
         run: node --check agents/runtime/src/worker.mjs
 
       - name: Run isolated Worker shell tests
-        run: node --test agents/runtime/tests/worker.test.mjs
+        run: node --test agents/runtime/tests/*.test.mjs
 
       - name: Verify preview config is isolated and has no execution triggers
         run: |
