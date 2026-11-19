@@ -129,6 +129,31 @@ describe("AgentTaskStore Durable Object", () => {
     expect(await store.stats()).toEqual({ completed: 1 });
   });
 
+  it("rejects invalid claim input before mutating expired leases", async () => {
+    const now = Date.now();
+    await runInDurableObject(store, async (_instance, state) => {
+      state.storage.sql.exec(
+        "INSERT INTO tasks (id, task_type, payload_json, status, attempts, created_at, updated_at, lease_until, lease_token) VALUES (?, ?, ?, 'leased', 1, ?, ?, ?, ?)",
+        "task-invalid-claim-01",
+        "ai_bank_discovery",
+        JSON.stringify({ query: "research open models" }),
+        now - 10_000,
+        now - 10_000,
+        now - 1,
+        "expired-lease-token"
+      );
+    });
+
+    await expect(Promise.resolve().then(() => store.claim(["quality_review"])))
+      .rejects.toThrow("invalid_claim_task_types");
+    expect(await store.stats()).toEqual({ leased: 1 });
+
+    const recovered = await store.claim(["ai_bank_discovery"], "task-invalid-claim-01");
+    expect(recovered.task.status).toBe("leased");
+    expect(recovered.task.attempts).toBe(2);
+    expect(recovered.lease_token).not.toBe("expired-lease-token");
+  });
+
   it("recovers an expired fifth-attempt lease into dead-letter without allowing stale completion", async () => {
     await store.enqueue(task("task-expired-fifth-01"));
     const claim = await store.claim([ "ai_bank_discovery" ], "task-expired-fifth-01");
