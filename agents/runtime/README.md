@@ -186,3 +186,11 @@ The reviewer console deliberately does not offer a decision form based only on a
 - The Google OAuth token exchange response is parsed as JSON with a strict 32 KiB streamed-byte ceiling; the Google OIDC JWKS response has a 64 KiB ceiling.
 - Both limits are enforced while reading the response stream, not only from the untrusted `Content-Length` header. Non-JSON content types, missing bodies, invalid UTF-8, malformed JSON, and oversized bodies fail closed.
 - This does not enable reviewer OAuth, configure credentials, create a Google client, or make any live Google request during tests. The reviewer authentication feature remains disabled until an isolated Preview deployment and explicit secret configuration are separately approved.
+
+
+### Preview-only 15-minute Workflow heartbeat (paused)
+
+- The isolated `wrangler.preview.jsonc` config schedules `AgentSupervisorWorkflow` every 15 minutes using Cloudflare Workflows `schedules`; the default `wrangler.jsonc` remains unscheduled.
+- Preview keeps `AGENT_ENABLED=false`, `AGENT_PAUSED=true`, and `AGENT_SCHEDULE_MODE=preview_cron_15m_paused`. The Workflow checks these flags before any `step.do`, queue access, network request, or task execution and returns `paused` with zero tasks and zero external calls.
+- This is scheduler groundwork and a heartbeat only, not an active autonomous Agent. If deployed, it creates 96 paused Workflow instances per day. Cloudflare Free documents 100,000 shared Worker/Workflow requests per day, 3,000 Workflow steps per day, and 1 GB-month Workflow storage; actual account tier and remaining usage must still be checked before deployment or enabling execution.
+- Preview deployment remains manual and requires the dedicated least-privilege `CLOUDFLARE_AGENT_PREVIEW_API_TOKEN`. No automatic deployment, Production Worker, D1, DNS, OAuth secrets, AI inference, content publication, or social posting is enabled.
