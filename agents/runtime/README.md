@@ -48,7 +48,7 @@ This directory is a separate Cloudflare Worker service. It is not imported by th
 ## Explicit enable gate and emergency pause
 
 - `AGENT_ENABLED` must be exactly `true` before the supervisor can access the Durable Object queue or make any outbound request. Missing, empty, or any other value leaves the runtime disabled.
-- Both committed Wrangler configs set `AGENT_ENABLED=false`, `AGENT_PAUSED=true`, and `AGENT_SCHEDULE_MODE=manual_only_no_cron`; neither config defines a recurring Workflow schedule. The supervisor returns `paused` before queue access and before outbound requests.
+- The default Wrangler config remains unscheduled with `AGENT_ENABLED=false`, `AGENT_PAUSED=true`, and `AGENT_SCHEDULE_MODE=manual_only_no_cron`. The isolated Preview config may install a 15-minute Workflow heartbeat, but it retains `AGENT_ENABLED=false` and `AGENT_PAUSED=true`; the supervisor returns `paused` before queue access and before outbound requests.
 - `AGENT_PAUSED=true` is an independent emergency stop and takes precedence even when `AGENT_ENABLED=true`.
 - `GET /health` reports the explicit enable state and reports task execution disabled unless the enable flag is exactly true and the pause flag is not true.
 - Do not enable the service until Preview resource boundaries, current free-tier usage, provider quotas, monitoring, and the deployment plan have been reviewed. Neither switch is connected to the public website Worker. No Production configuration is changed by this PR.
@@ -78,7 +78,7 @@ Do not deploy from this branch until the separate Preview account/resource bound
 6. Add an authenticated operator control plane, monitoring, alerting and a pause switch.
 7. Consider public actions only through the existing owner approval gates.
 
-No recurring Workflow schedule is configured while the runtime lacks a verified no-cost model provider and complete content executors. When a schedule is proposed later, it must be introduced as a separate reviewed change with verified free-tier limits, monitoring, and an emergency pause; quota exhaustion must fail closed rather than enable billing.
+The Preview-only paused 15-minute Workflow heartbeat is scheduler groundwork, not autonomous task execution. Do not enable task execution or deploy the schedule until the account's free-tier plan and current usage, monitoring, and emergency-pause behavior are verified. Quota exhaustion must fail closed rather than enable billing.
 
 
 ### Google reviewer OAuth and session flow (Preview foundation only)
