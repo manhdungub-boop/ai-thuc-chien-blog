@@ -1,0 +1,81 @@
+name: Generate and Verify Agent Runtime Lockfile
+
+on:
+  push:
+    branches:
+      - fix/runtime-lockfile-generation-20261120
+
+permissions:
+  contents: write
+
+concurrency:
+  group: agent-runtime-lockfile-generation
+  cancel-in-progress: false
+
+jobs:
+  lockfile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out isolated lockfile branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+
+      - name: Pin npm toolchain
+        run: |
+          set -euo pipefail
+          npm install --global npm@10.9.4 --ignore-scripts --no-audit --no-fund
+          test "$(npm --version)" = "10.9.4"
+          node --version
+          npm --version
+
+      - name: Generate lockfile from the declared dependency graph
+        working-directory: agents/runtime
+        run: |
+          set -euo pipefail
+          npm install --package-lock-only --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+          test -s package-lock.json
+
+      - name: Verify clean reproducible installation
+        working-directory: agents/runtime
+        run: |
+          set -euo pipefail
+          npm ci --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+          npm run verify-direct-dependencies
+          npm test
+          node --test tests/runtime-contract.test.mjs
+
+      - name: Commit only the verified lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          git status --short
+          git add agents/runtime/package-lock.json
+          if git diff --cached --quiet; then
+            echo "No lockfile change to commit."
+            exit 0
+          fi
+          test "$(git diff --cached --name-only | wc -l | tr -d ' ')" = "1"
+          test "$(git diff --cached --name-only)" = "agents/runtime/package-lock.json"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "build(agent-runtime): add verified npm lockfile"
+          git push origin HEAD
+
+      - name: Report safety boundary
+        if: always()
+        run: |
+          {
+            echo "## Agent Runtime lockfile generation"
+            echo "- Isolated branch only: fix/runtime-lockfile-generation-20261120"
+            echo "- Node.js 22 and npm 10.9.4"
+            echo "- npm lifecycle scripts disabled"
+            echo "- npm ci and targeted Runtime tests required before commit"
+            echo "- Only agents/runtime/package-lock.json may be committed"
+            echo "- No Cloudflare credentials, deployment, OAuth, Cron, AI inference, publication, Production Worker, D1, or DNS access"
+          } >> "$GITHUB_STEP_SUMMARY"
