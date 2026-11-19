@@ -71,6 +71,12 @@ The implementation does not include an alarm, cron trigger, queue consumer, auto
 - Store failure must never be represented as successful acceptance.
 - Keep \`AGENT_ENABLED=false\` and \`AGENT_PAUSED=true\` until all independent gates pass.
 
+## Operational control-plane gaps
+
+- The State Store `POST /recover` route exists only behind the dedicated Worker-to-DO internal bearer. The current Worker shell exposes no operator-authenticated recovery bridge. Therefore recovery is implemented in the DO class but is **not yet operationally callable by an operator through the deployed Worker surface**.
+- The current pause controls are environment flags (`AGENT_ENABLED` and `AGENT_PAUSED`), not a separately authenticated, dynamically mutable kill-switch API. A change to runtime flags requires a controlled configuration/deployment operation; do not describe this as an instant remote kill switch.
+- There is no operator UI, session-based admin access, rate-limited control plane, or operator-action audit identity. Do not expose the internal State Store token to a browser or add a public recovery route using the operator bearer until an independently reviewed control-plane design is approved.
+- Before any task execution, implement and test a minimal operator control plane with server-side authentication, narrow allowlisted actions, rate limiting, explicit pause/resume semantics, operator identity in audit events, and a tested rollback path. Until then, keep the Runtime disabled and unbound.
 ## Not approved by this ADR
 
 - No Durable Object namespace/binding or migration is added to the checked-in Preview Worker config.
