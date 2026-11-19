@@ -130,16 +130,16 @@ test("runtime has isolated SQLite storage and no website Production bindings", (
 test("operator control API is authenticated, same-origin, separately allowlisted, and disabled by default", () => {
   assert.equal(config.vars.AGENT_OPERATOR_CONTROL_ENABLED, "false");
   assert.equal(previewConfig.vars.AGENT_OPERATOR_CONTROL_ENABLED, "false");
-  assert.match(source, /api\\/operator\\/runtime-control/);
-  assert.match(source, /request\\.headers\\.get\\("origin"\\) !== url\\.origin/);
-  assert.match(source, /store\\.setOperatorControl/);
-  assert.match(source, /store\\.getOperatorControl/);
-  assert.match(store, /verifyGoogleReviewerSessionToken\\(sessionToken, this\\.env\\)/);
-  assert.match(store, /AGENT_OPERATOR_ALLOWED_EMAILS/);
-  assert.match(store, /operator_control_disabled/);
-  assert.match(store, /operator_resume/);
-  assert.match(runtimeReadme, /Authenticated operator control plane/);
-  assert.match(runtimeReadme, /does not override `AGENT_ENABLED=false` or `AGENT_PAUSED=true`/);
+  assert.ok(source.includes('url.pathname === "/api/operator/runtime-control"'));
+  assert.ok(source.includes('request.headers.get("origin") !== url.origin'));
+  assert.ok(source.includes("store.setOperatorControl"));
+  assert.ok(source.includes("store.getOperatorControl"));
+  assert.ok(store.includes("verifyGoogleReviewerSessionToken(sessionToken, this.env)"));
+  assert.ok(store.includes("AGENT_OPERATOR_ALLOWED_EMAILS"));
+  assert.ok(store.includes("operator_control_disabled"));
+  assert.ok(store.includes("operator_resume"));
+  assert.ok(runtimeReadme.includes("Authenticated operator control plane"));
+  assert.ok(runtimeReadme.includes("does not override `AGENT_ENABLED=false` or `AGENT_PAUSED=true`"));
 });
 
 test("health endpoint is read-only and does not expose task enqueue", () => {
