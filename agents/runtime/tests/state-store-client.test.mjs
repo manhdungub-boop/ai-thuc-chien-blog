@@ -73,6 +73,10 @@ test("State Store client validates read queries and bounds POST bodies", async (
   const env = { AGENT_STATE_STORE: namespace, AGENT_STATE_STORE_TOKEN: TOKEN };
   await assert.rejects(() => callStateStore(env, "task", { taskId: "x".repeat(65) }), /task_id_invalid/);
   await assert.rejects(() => callStateStore(env, "usage", { day: "not-a-date" }), /usage_day_invalid/);
+  await assert.rejects(() => callStateStore(env, "usage", { day: "2026-02-31" }), /usage_day_invalid/);
+  await assert.rejects(() => callStateStore(env, "reserve", { task: { type: "seo.audit", idempotencyKey: "invalid-key", payload: { path: "/guides" } } }), /state_store_task_invalid/);
+  await assert.rejects(() => callStateStore(env, "transition", { taskId: "task-1", status: "queued" }), /state_store_request_invalid/);
+  await assert.rejects(() => callStateStore(env, "transition", { taskId: "task-1", status: "failed", errorCode: "INVALID CODE" }), /state_store_request_invalid/);
   await assert.rejects(() => callStateStore(env, "transition", {
     taskId: "task-1",
     status: "failed",
@@ -81,14 +85,14 @@ test("State Store client validates read queries and bounds POST bodies", async (
   assert.equal(calls.length, 0);
 });
 
-test("State Store client builds encoded GET queries without forwarding arbitrary headers", async () => {
+test("State Store client builds constrained GET queries without forwarding arbitrary headers", async () => {
   const { namespace, calls } = mockNamespace();
   await callStateStore({
     AGENT_STATE_STORE: namespace,
     AGENT_STATE_STORE_TOKEN: TOKEN,
-  }, "task", { taskId: "task id/with?reserved" });
+  }, "task", { taskId: "task_123" });
   const request = calls[2];
   assert.equal(request.method, "GET");
-  assert.equal(request.url, "https://agent-state-store.internal/task?id=task+id%2Fwith%3Freserved");
+  assert.equal(request.url, "https://agent-state-store.internal/task?id=task_123");
   assert.deepEqual(request.headers, [["authorization", "Bearer " + TOKEN]]);
 });
