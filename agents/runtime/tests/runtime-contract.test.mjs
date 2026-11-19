@@ -156,7 +156,7 @@ test("health endpoint is read-only and does not expose task enqueue", () => {
   assert.match(source, /content_draft_executor_registered: true/);
   assert.match(source, /content_draft_executor_enabled: env\.AGENT_ENABLED === "true" && env\.AGENT_PAUSED !== "true"/);
   assert.match(source, /quality_review_executor_registered: true/);
-  assert.match(source, /quality_review_executor_enabled: env\\.AGENT_ENABLED === "true" && env\\.AGENT_PAUSED !== "true"/);
+  assert.match(source, /quality_review_executor_enabled: env\.AGENT_ENABLED === "true" && env\.AGENT_PAUSED !== "true"/);
   assert.match(source, /website_publication_enabled: false/);
   assert.match(source, /facebook_publication_enabled: false/);
   assert.match(source, /reviewer_auth_enabled: env\.AGENT_REVIEWER_AUTH_ENABLED === "true"/);
