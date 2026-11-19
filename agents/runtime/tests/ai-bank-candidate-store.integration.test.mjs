@@ -393,6 +393,50 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     });
   });
 
+  it("rejects destination mutation between interrupted restore and resume without writing more rows", async () => {
+    const now = Date.parse("2026-11-19T10:00:00.000Z");
+    await store.upsertCandidates([candidate()], now);
+    const accepted = await submitEvidence(store, "github:ollama/ollama", {
+      check_type: "pricing_and_free_limits",
+      source_title: "Official pricing page",
+      source_url: "https://ollama.com/pricing",
+      excerpt: "Mutation conflict fixture."
+    }, now, "c4e6d1c2-3b7f-4a91-8c22-1234567890ab");
+    expect(accepted.accepted).toBe(true);
+    const sourceSnapshot = await runInDurableObject(store, async (_instance, state) =>
+      captureTestSnapshot(state, 1)
+    );
+    const destination = env.AGENT_AI_BANK_CANDIDATE_STORE.getByName(
+      "agent-ai-bank-candidates-restore-mutated-" + testIndex
+    );
+
+    await runInDurableObject(destination, async (_instance, state) => {
+      await expect(restoreTestSnapshotInBatches(state, sourceSnapshot, 1, 1))
+        .rejects.toThrow("simulated_restore_interruption");
+      const beforeMutation = state.storage.sql.exec(
+        "SELECT COUNT(*) AS count FROM ai_bank_candidates"
+      ).one().count;
+      expect(beforeMutation).toBe(1);
+
+      state.storage.sql.exec(
+        "UPDATE ai_bank_candidates SET candidate_json = ? WHERE candidate_id = ?",
+        "{\"tampered\":true}", "github:ollama/ollama"
+      );
+
+      expect(await restoreTestSnapshotInBatches(state, sourceSnapshot, 1)).toEqual({
+        restored: false,
+        reason: "restore_destination_conflict"
+      });
+      expect(state.storage.sql.exec(
+        "SELECT candidate_json FROM ai_bank_candidates WHERE candidate_id = ?",
+        "github:ollama/ollama"
+      ).one().candidate_json).toBe("{\"tampered\":true}");
+      expect(state.storage.sql.exec(
+        "SELECT COUNT(*) AS count FROM ai_bank_review_evidence"
+      ).one().count).toBe(0);
+    });
+  });
+
   it("rejects a non-empty restore destination containing unrelated rows", async () => {
     const now = Date.parse("2026-11-19T10:00:00.000Z");
     await store.upsertCandidates([candidate()], now);
