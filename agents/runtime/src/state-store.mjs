@@ -109,7 +109,7 @@ export class AgentStateStore {
 
   async fetch(request) {
     if (!await hasValidStateStoreBearer(request, this.env)) {
-      return jsonResponse({ ok: false, error: "operator_auth_required" }, 401);
+      return jsonResponse({ ok: false, error: "state_store_auth_required" }, 401);
     }
     try {
       await this.ready;
