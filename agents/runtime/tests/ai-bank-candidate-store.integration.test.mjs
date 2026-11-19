@@ -140,8 +140,63 @@ async function captureTestSnapshot(state, pageSize = 1) {
   };
   return {
     ...manifest,
+    tables: rowsByTable,
     manifest_sha256: await sha256Hex(canonicalSnapshotJson(manifest))
   };
+}
+
+async function verifyTestSnapshot(snapshot) {
+  if (!snapshot || snapshot.format_id !== "ai-bank-audit-emulator-snapshot" ||
+      snapshot.format_version !== 1 || !snapshot.tables || !snapshot.counts ||
+      !snapshot.table_sha256 || Object.keys(snapshot.tables).sort().join("|") !==
+        SNAPSHOT_TABLES.map(table => table.name).sort().join("|")) {
+    return false;
+  }
+  const manifest = {
+    format_id: snapshot.format_id,
+    format_version: snapshot.format_version,
+    counts: snapshot.counts,
+    table_sha256: snapshot.table_sha256
+  };
+  for (const table of SNAPSHOT_TABLES) {
+    const rows = snapshot.tables[table.name];
+    if (!Array.isArray(rows) || rows.length !== snapshot.counts[table.name] ||
+        await sha256Hex(canonicalSnapshotJson(rows)) !== snapshot.table_sha256[table.name]) {
+      return false;
+    }
+  }
+  if (snapshot.counts.ai_bank_evidence_audit_events > 10000) return false;
+  return await sha256Hex(canonicalSnapshotJson(manifest)) === snapshot.manifest_sha256;
+}
+
+async function restoreTestSnapshot(state, snapshot) {
+  if (!await verifyTestSnapshot(snapshot)) return { restored: false, reason: "snapshot_integrity_invalid" };
+  const columns = {
+    ai_bank_candidates: ["candidate_id", "repository", "candidate_json", "release_at", "first_seen_at", "last_seen_at"],
+    ai_bank_review_evidence: ["evidence_id", "candidate_id", "check_type", "source_title", "source_url", "excerpt", "source_status", "review_status", "submitted_at", "candidate_release_url"],
+    ai_bank_review_evidence_releases: ["evidence_id", "candidate_release_url", "associated_at"],
+    ai_bank_evidence_audit_events: ["event_id", "actor_subject", "actor_email", "request_sha256", "evidence_id", "recorded_at"]
+  };
+  state.storage.transactionSync(() => {
+    for (const table of SNAPSHOT_TABLES) {
+      for (const row of snapshot.tables[table.name]) {
+        const names = columns[table.name];
+        if (Object.keys(row).sort().join("|") !== names.slice().sort().join("|")) {
+          throw new Error("snapshot_row_schema_invalid");
+        }
+        state.storage.sql.exec(
+          "INSERT OR IGNORE INTO " + table.name + " (" + names.join(", ") + ") VALUES (" +
+          names.map(() => "?").join(", ") + ")",
+          ...names.map(name => row[name])
+        );
+      }
+    }
+  });
+  const restored = await captureTestSnapshot(state, 1);
+  if (restored.manifest_sha256 !== snapshot.manifest_sha256) {
+    return { restored: false, reason: "restored_snapshot_digest_mismatch" };
+  }
+  return { restored: true, manifest_sha256: restored.manifest_sha256 };
 }
 
 describe("AgentAIBankCandidateStore Durable Object", () => {
@@ -150,6 +205,70 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
   beforeEach(() => {
     testIndex += 1;
     store = env.AGENT_AI_BANK_CANDIDATE_STORE.getByName("agent-ai-bank-candidates-" + testIndex);
+  });
+
+  it("restores a verified snapshot into a fresh emulator object idempotently and preserves replay protection", async () => {
+    const now = Date.parse("2026-11-19T10:00:00.000Z");
+    const eventId = "e4e6d1c2-3b7f-4a91-8c22-1234567890ab";
+    const evidence = {
+      check_type: "pricing_and_free_limits",
+      source_title: "Official pricing page",
+      source_url: "https://ollama.com/pricing",
+      excerpt: "Pricing evidence is retained for human review."
+    };
+    await store.upsertCandidates([candidate()], now);
+    const accepted = await submitEvidence(store, "github:ollama/ollama", evidence, now, eventId);
+    expect(accepted.accepted).toBe(true);
+
+    const sourceSnapshot = await runInDurableObject(store, async (_instance, state) =>
+      captureTestSnapshot(state, 1)
+    );
+    const restoredStore = env.AGENT_AI_BANK_CANDIDATE_STORE.getByName(
+      "agent-ai-bank-candidates-restore-" + testIndex
+    );
+    await runInDurableObject(restoredStore, async (_instance, state) => {
+      expect(await restoreTestSnapshot(state, sourceSnapshot)).toEqual({
+        restored: true,
+        manifest_sha256: sourceSnapshot.manifest_sha256
+      });
+      expect(await restoreTestSnapshot(state, sourceSnapshot)).toEqual({
+        restored: true,
+        manifest_sha256: sourceSnapshot.manifest_sha256
+      });
+      const counts = Object.fromEntries(SNAPSHOT_TABLES.map(table => [
+        table.name,
+        state.storage.sql.exec("SELECT COUNT(*) AS count FROM " + table.name).one().count
+      ]));
+      expect(counts).toEqual(sourceSnapshot.counts);
+    });
+
+    const replay = await submitEvidence(restoredStore, "github:ollama/ollama", evidence, now, eventId);
+    expect(replay).toEqual({ accepted: false, reason: "duplicate_audit_event" });
+    const sourceAfterRestore = await runInDurableObject(store, async (_instance, state) =>
+      captureTestSnapshot(state, 1)
+    );
+    expect(sourceAfterRestore.manifest_sha256).toBe(sourceSnapshot.manifest_sha256);
+  });
+
+  it("rejects a tampered snapshot before writing to the destination emulator object", async () => {
+    await store.upsertCandidates([candidate()]);
+    const sourceSnapshot = await runInDurableObject(store, async (_instance, state) =>
+      captureTestSnapshot(state, 1)
+    );
+    const tampered = structuredClone(sourceSnapshot);
+    tampered.tables.ai_bank_candidates[0].repository = "attacker/modified";
+    const destination = env.AGENT_AI_BANK_CANDIDATE_STORE.getByName(
+      "agent-ai-bank-candidates-tampered-" + testIndex
+    );
+    await runInDurableObject(destination, async (_instance, state) => {
+      expect(await restoreTestSnapshot(state, tampered)).toEqual({
+        restored: false,
+        reason: "snapshot_integrity_invalid"
+      });
+      expect(state.storage.sql.exec(
+        "SELECT COUNT(*) AS count FROM ai_bank_candidates"
+      ).one().count).toBe(0);
+    });
   });
 
   it("captures a deterministic read-only four-table snapshot in one SQLite transaction", async () => {
