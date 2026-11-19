@@ -407,7 +407,8 @@ export default {
         }
         if (url.pathname === "/internal/metrics") {
           const taskFields = ["totalRetained", "queued", "queuedDue", "running", "succeededRetained", "failedRetained", "cancelledRetained", "failedLast24h"];
-          const quotaFields = ["acceptedToday", "dailyLimit", "dailyUtilizationPercent", "inFlight", "concurrentLimit", "concurrentUtilizationPercent", "payloadLimitBytes"];
+          const quotaFields = ["acceptedToday", "dailyLimit", "dailyUtilizationPercent", "dailyPressure", "inFlight", "concurrentLimit", "concurrentUtilizationPercent", "concurrentPressure", "overallPressure", "payloadLimitBytes"];
+          const validPressure = (value) => ["normal", "warning", "critical", "exhausted"].includes(value);
           const validCount = (value) => Number.isSafeInteger(value) && value >= 0;
           const validPercent = (value) => typeof value === "number" && Number.isFinite(value) && value >= 0;
           const validAge = (value) => value === null || validCount(value);
@@ -418,6 +419,7 @@ export default {
               !taskFields.every((field) => validCount(result.tasks[field])) ||
               !validAge(result.tasks.oldestQueuedAgeMs) || !validAge(result.tasks.oldestRunningUpdateAgeMs) ||
               !["dailyUtilizationPercent", "concurrentUtilizationPercent"].every((field) => validPercent(result.quota[field])) ||
+              !["dailyPressure", "concurrentPressure", "overallPressure"].every((field) => validPressure(result.quota[field])) ||
               !["acceptedToday", "dailyLimit", "inFlight", "concurrentLimit", "payloadLimitBytes"].every((field) => validCount(result.quota[field])) ||
               result.auditLast24h.length > 20 ||
               !result.auditLast24h.every((event) => event && typeof event.eventType === "string" &&
