@@ -44,7 +44,7 @@ test("Preview deployment workflow is manual, explicitly confirmed, token-isolate
   assert.match(previewDeployWorkflow, /wrangler deploy --dry-run/);
   assert.match(previewDeployWorkflow, /wrangler deploy --config wrangler\.preview\.jsonc/);
   assert.match(previewDeployWorkflow, /\.paused == true/);
-  assert.match(previewDeployWorkflow, /manual_only_no_cron/);
+  assert.match(previewDeployWorkflow, /preview_cron_15m_paused/);
   assert.match(previewDeployWorkflow, /production_access == false/);
   assert.match(previewDeployWorkflow, /content_draft_executor_enabled == true/);
   assert.doesNotMatch(previewDeployWorkflow, /content_draft_executor_enabled == false/);
@@ -75,17 +75,17 @@ test("default runtime config is disabled, paused, and has no recurring Workflow 
   assert.equal(config.workflows[0].concurrency.limit, 1);
 });
 
-test("manual preview config is paused, has no recurring schedule, and uses isolated Worker resources", () => {
+test("manual Preview config has a paused 15-minute Workflow schedule and isolated Worker resources", () => {
   assert.equal(previewConfig.name, "ai-thuc-chien-agent-runtime-preview");
   assert.equal(previewConfig.workers_dev, true);
   assert.deepEqual(previewConfig.vars, {
     AGENT_ENABLED: "false",
     AGENT_PAUSED: "true",
-    AGENT_SCHEDULE_MODE: "manual_only_no_cron",
+    AGENT_SCHEDULE_MODE: "preview_cron_15m_paused",
     AGENT_REVIEWER_AUTH_ENABLED: "false"
   });
   assert.equal(previewConfig.workflows.length, 1);
-  assert.equal(previewConfig.workflows[0].schedules, undefined);
+  assert.deepEqual(previewConfig.workflows[0].schedules, ["*/15 * * * *"]);
   assert.equal(previewConfig.routes, undefined);
   assert.equal(previewConfig.d1_databases, undefined);
   assert.equal(previewConfig.ai, undefined);
@@ -119,6 +119,11 @@ test("runtime has isolated SQLite storage and no website Production bindings", (
 });
 
 test("health endpoint is read-only and does not expose task enqueue", () => {
+  const pauseGuard = source.indexOf('if (this.env.AGENT_ENABLED !== "true" || this.env.AGENT_PAUSED === "true")');
+  const earlyReturn = source.indexOf('queue_accessed: false', pauseGuard);
+  const firstWorkflowStep = source.indexOf('const cycle = await step.do', pauseGuard);
+  assert.ok(pauseGuard >= 0 && earlyReturn > pauseGuard && firstWorkflowStep > earlyReturn,
+    "paused scheduled instances must return before Workflow steps or queue access");
   assert.match(source, /request\.method !== "GET"/);
   assert.match(source, /task_execution_enabled: env.AGENT_ENABLED === "true" && env.AGENT_PAUSED !== "true"/);
   assert.match(source, /task_enqueue_endpoint_enabled: false/);
