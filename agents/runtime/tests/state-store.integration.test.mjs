@@ -11,7 +11,7 @@ const workerPath = path.resolve(here, "../src/worker.mjs");
 const TEST_OPERATOR_TOKEN = "integration-test-operator-token-0123456789abcdef";
 const TEST_STATE_STORE_TOKEN = "integration-test-state-store-token-0123456789abcdef";
 
-async function createRuntime({ daily = 100, concurrent = 5, persistDir, enabled = "true", paused = "false" } = {}) {
+async function createRuntime({ daily = 100, concurrent = 5, persistDir, enabled = "true", paused = "false", resumeControl = true } = {}) {
   const directory = persistDir ?? await mkdtemp(path.join(tmpdir(), "ai-thuc-chien-do-"));
   const mf = new Miniflare({
     modules: true,
@@ -33,6 +33,16 @@ async function createRuntime({ daily = 100, concurrent = 5, persistDir, enabled 
   });
   const namespace = await mf.getDurableObjectNamespace("AGENT_STATE_STORE");
   const stub = namespace.get(namespace.idFromName("agent-runtime-global"));
+  // Tests that exercise an enabled runtime explicitly open the durable control gate.
+  // Fresh-store defaults remain paused unless the test opts into this fixture setup.
+  if (resumeControl && enabled === "true" && paused === "false") {
+    const opened = await call(stub, "/control/resume", {
+      actor: "integration-test",
+      requestId: crypto.randomUUID(),
+      reason: "test fixture initialization",
+    });
+    if (opened.status !== 200) throw new Error("test_fixture_control_resume_failed");
+  }
   return { mf, stub, directory };
 }
 
