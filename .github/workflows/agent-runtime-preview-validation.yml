@@ -2,7 +2,7 @@ name: Agent Runtime Preview Shell Validation
 
 on:
   pull_request:
-    branches: [main, feat/agent-runtime-state-schema-v2-20261119]
+    branches: [main, feat/agent-runtime-state-schema-v2-20261119, fix/state-store-bounded-json-schema-v5-20261120]
     paths:
       - "agents/runtime/**"
       - ".github/workflows/agent-runtime-preview-validation.yml"
