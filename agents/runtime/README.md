@@ -39,7 +39,7 @@ This directory is a separate Cloudflare Worker service. It is not imported by th
 - OAuth configuration is accepted only when the redirect URI is HTTPS and points to the exact `ai-thuc-chien-agent-runtime-preview.manhdungub.workers.dev/auth/google/callback` hostname/path. Production website Worker callback URLs are rejected by the code.
 - Google reviewer login starts are rate-limited by the dedicated auth Durable Object to 10 attempts per fixed 60-second window. The 11th attempt receives HTTP 429 with `Retry-After`; this is an abuse-control limit, not a provider quota or proof of Cloudflare billing limits.
 - `wrangler.preview.jsonc` defines the isolated `AgentReviewerAuthStore` Durable Object and its SQLite migration. Both runtime configs keep `AGENT_REVIEWER_AUTH_ENABLED=false`; the Preview deploy workflow requires a manually confirmed dispatch and a dedicated Preview token.
-- `GET /reviewer-console` serves the reviewer UI. Authenticated `GET /api/reviewer/drafts` and `GET /api/reviewer/drafts/:id` return bounded queue metadata and selected draft details only after the Durable Object independently validates the signed session. The UI renders Markdown as text and is read-only.
+- `GET /reviewer-console` serves the authenticated authoring/reviewer UI. Queue and detail reads require a signed Google reviewer session; same-origin authoring and evidence-review POST routes independently revalidate that session inside the Draft Store Durable Object.
 - The evidence-review recording endpoint is a separate authenticated API contract, but the current console does not submit decisions. Reviewer identity does not grant owner release approval, publication authorization, deployment permissions, or Facebook publishing.
 - Tests use local ephemeral RSA keys, mocked token/JWKS responses, and a fake transaction store. They do not use real Google credentials or contact Google.
 - This is implemented code with unit and contract coverage, not an operational login service: no Google OAuth client, real Preview redirect registration, client secret, session secret, or reviewer allowlist has been configured or verified. Therefore OAuth remains disabled and reviewer data endpoints remain inaccessible until a separate Preview-only configuration and end-to-end test are completed.
@@ -131,20 +131,20 @@ The Preview configuration is manual-only and installs no recurring Workflow sche
 
 
 
-### Read-only reviewer console (Preview candidate)
+### Authenticated authoring and evidence-review console (Preview candidate)
 
-- `GET /reviewer-console` serves a static same-origin interface for Google reviewer sign-in, bounded queue browsing, and opening a selected draft.
+- `GET /reviewer-console` serves a same-origin interface for Google reviewer sign-in, bounded queue browsing, opening a draft, editing its structured article JSON, and reviewing source excerpts claim by claim.
 - `GET /reviewer-console.js` serves the console client as a separate same-origin script so the HTML can enforce a restrictive Content Security Policy without inline JavaScript.
-- The console reads only `/auth/google/me`, `GET /api/reviewer/drafts?limit=20`, and `GET /api/reviewer/drafts/:id`. It does not submit evidence decisions, edit drafts, approve owner release, publish content, or post to social networks.
+- The console reads `/auth/google/me`, the bounded reviewer queues, and draft details. It submits article revisions to `POST /api/reviewer/drafts/:id/authoring` and per-claim/per-source decisions to `POST /api/reviewer/drafts/:id/evidence-review`. It cannot approve owner release, publish content, or post to social networks.
 - Draft Markdown, review metadata, and evidence packets are inserted into the page as text using DOM `textContent`; no Markdown/HTML rendering or `innerHTML` sink is used. Source links are accepted only for HTTPS and open with `noopener noreferrer`.
 - The HTML response sets a restrictive CSP (`default-src 'none'`, same-origin script/connect, no framing, no base URI, same-origin form actions), plus no-store, nosniff, frame denial, and no-referrer headers. The JavaScript response is also no-store and nosniff.
-- This is a Preview-only candidate. The reviewer OAuth allowlist and secrets are not configured, `AGENT_REVIEWER_AUTH_ENABLED=false`, and the console has not been deployed. It cannot display private drafts until the authenticated Preview path is separately configured and tested.
+- This is a Preview-only candidate. The reviewer OAuth allowlist and secrets are not configured, `AGENT_REVIEWER_AUTH_ENABLED=false`, and the console has not been deployed. It cannot display or edit private drafts until the authenticated Preview path is separately configured and tested.
 - The console is intentionally read-only. Evidence decisions, owner release review, publication, and deployment remain separate gated workflows.
 
 
 #### Evidence review prerequisite
 
-The reviewer console deliberately does not offer a decision form based only on a draft's claim manifest or source URLs. A reviewer must be able to inspect the actual source excerpts captured in a traceable evidence ledger. If `artifact.evidence_review.ledger.claims` is absent, the console displays an explicit blocked state and explains that URLs/claim mappings are not source evidence. The next integration step is to persist and expose the immutable research ledger with the draft before any claim-level decision UI is enabled.
+The reviewer console offers no decision form based only on URLs. It displays bounded excerpts retrieved by the trusted Worker path, allows an authenticated reviewer to edit the article and submit an explicit claim manifest, and only enables claim decisions after the Draft Store has built a version-bound ledger from those exact stored excerpts.
 
 
 ### Human claim evidence-ledger builder
@@ -152,7 +152,7 @@ The reviewer console deliberately does not offer a decision form based only on a
 - `buildHumanClaimReviewLedger(claims, retrievedEvidence)` binds only explicitly human-authored claim text and claim IDs to exact excerpts already returned by the bounded research retrieval module.
 - Each claim must map to 2–4 retrieved excerpts from distinct allowlisted publisher hosts. URLs must match the retrieved evidence exactly; missing, duplicate, unallowlisted, failed, or too-short evidence is rejected.
 - The builder does not generate claims, infer semantic support, or create review decisions. Every claim remains `traceable_evidence_pending_human_review`, and the ledger explicitly requires human review.
-- This module is a deterministic building block only. It is not yet connected to durable draft storage or the reviewer console; do not treat a generated ledger as attached to a draft until that persistence path is implemented and tested.
+- The ledger builder is connected to the Draft Store's internal persistence path. It remains a provenance binder, not a semantic fact-checker or publication authorization.
 - Publication, catalog mutation, draft creation, and social posting remain unauthorized.
 
 
@@ -162,7 +162,7 @@ The reviewer console deliberately does not offer a decision form based only on a
 - It derives the ledger only from the stored draft's exact claim manifest and the bounded retrieved-excerpt objects, then stores the ledger with the draft version it was built from.
 - A ledger is visible to the authenticated reviewer as a pending evidence packet; it is not a review decision and cannot authorize release.
 - A draft revision clears the ledger, review record, and readiness result. The final evidence-review write must match the previously stored ledger snapshot and its version.
-- The current runtime still has no content-draft executor that connects Research Agent output to this store method. This PR adds the durable, version-checked persistence boundary; it does not claim an end-to-end autonomous writing pipeline.
+- The supervisor stores successfully retrieved, bounded source excerpts with its internal authoring scaffold. After an authenticated human adds a claim manifest and a structurally eligible article revision, the Draft Store builds the ledger from those stored excerpts; this is still a human-assisted workflow, not autonomous article generation.
 
 
 ### Research-to-draft evidence preparation
