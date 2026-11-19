@@ -127,6 +127,10 @@ export class AgentStateStore {
   }
 
   async reserve(body, now) {
+    // Admission must remain closed unless both runtime controls explicitly allow it.
+    if (this.env.AGENT_ENABLED !== "true" || this.env.AGENT_PAUSED !== "false") {
+      return { status: 503, body: { ok: false, error: "agent_disabled_or_paused" } };
+    }
     if (!isObject(body) || Object.keys(body).length !== 1 || !("task" in body)) {
       return { status: 400, body: { ok: false, error: "reserve_request_invalid" } };
     }
