@@ -33,6 +33,34 @@ function normalizeClaimText(value) {
     .toLocaleLowerCase("vi");
 }
 
+
+function findUnmanifestedQuantitativeCandidates(markdown, reviewedClaims) {
+  const reviewed = reviewedClaims.map(normalizeClaimText).filter(Boolean);
+  const candidates = [];
+  const prose = removeFencedCode(markdown);
+  const paragraphs = prose.split(/\n{2,}/);
+  for (const [paragraphIndex, paragraph] of paragraphs.entries()) {
+    const sentences = paragraph.split(/(?<=[.!?。！？])\s+|\n+/u);
+    for (const sentence of sentences) {
+      const candidate = sentence
+        .replace(/!?\[[^\]]*\]\([^)]*\)/g, " ")
+        .replace(/\[\d+\]/g, " ")
+        .replace(/https?:\/\/\S+/g, " ")
+        .replace(/^\s*(?:[-*+]\s+|\d+[.)]\s+)/, "")
+        .trim();
+      if (!/\d/u.test(candidate)) continue;
+      const normalized = normalizeClaimText(candidate);
+      if (reviewed.some(claim => normalized.includes(claim))) continue;
+      candidates.push({
+        paragraph_index: paragraphIndex + 1,
+        excerpt: candidate.slice(0, 280),
+        detection: "numeric_marker_requires_human_claim_mapping"
+      });
+    }
+  }
+  return candidates;
+}
+
 /**
  * Evaluate whether an article draft is traceable to claims explicitly reviewed
  * as supported. This is a release-readiness pre-check only; it never publishes.
@@ -72,6 +100,7 @@ export async function assessArticleEvidenceReadiness({
   const reviewById = new Map(reviewRecord.claims.map(claim => [claim.claim_id, claim]));
   const seen = new Set();
   const claimIssues = [];
+  let quantitativeCandidates = [];
 
   for (const item of draft.claims) {
     const id = item?.claim_id;
@@ -182,12 +211,24 @@ export async function assessArticleEvidenceReadiness({
     }
   }
 
+  quantitativeCandidates = findUnmanifestedQuantitativeCandidates(
+    body,
+    draft.claims.map(item => item.claim)
+  );
+  for (const candidate of quantitativeCandidates) {
+    claimIssues.push({
+      code: "unreviewed_quantitative_claim_candidate",
+      ...candidate
+    });
+  }
+
   if (claimIssues.length) {
     return {
       ok: false,
       status: "article_claim_evidence_not_ready",
       claims_assessed: draft.claims.length,
       issues: claimIssues,
+      unreviewed_quantitative_claim_candidates: quantitativeCandidates,
       review_status: reviewVerification.status,
       evidence_summary: reviewVerification.evidence_summary,
       publication_authorized: false,
@@ -237,9 +278,14 @@ export async function assessArticleEvidenceReadiness({
     claims_assessed: draft.claims.length,
     article_quality: articleQuality,
     review_status: reviewVerification.status,
-      evidence_summary: reviewVerification.evidence_summary,
+    evidence_summary: reviewVerification.evidence_summary,
+    quantitative_claim_scan: {
+      status: "heuristic_scan_completed",
+      unreviewed_candidates: quantitativeCandidates.length
+    },
     limitations: [
-      "Only the explicitly supplied claim manifest is checked; this does not discover omitted factual claims in the article body.",
+      "The numeric-marker scan is heuristic and does not discover all factual claims; human claim-manifest completeness review remains mandatory.",
+      "Only the explicitly supplied claim manifest is checked; this does not discover omitted non-quantitative factual claims in the article body.",
       "Inline citation indices are bound to the exact reviewed evidence URLs and source-list positions, but this does not prove semantic support.",
       "A supported decision is a recorded human judgment, not an independent fact-check or proof of truth.",
       "This gate does not assess originality, source authority, licensing, copyright clearance, or legal compliance.",
