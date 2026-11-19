@@ -1,6 +1,11 @@
 name: Agent Runtime Preview Shell Validation
 
 on:
+  push:
+    branches: [fix/runtime-test-fixture-isolation-20261120]
+    paths:
+      - "agents/runtime/**"
+      - ".github/workflows/agent-runtime-preview-validation.yml"
   pull_request:
     branches: [main, feat/agent-runtime-state-schema-v2-20261119]
     paths:
