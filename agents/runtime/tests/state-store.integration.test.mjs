@@ -22,6 +22,8 @@ async function createRuntime({ daily = 1000, concurrent = 100, persistDir } = {}
     durableObjectsPersist: directory,
     bindings: {
       RUNTIME_TESTING: "true",
+      AGENT_ENABLED: "true",
+      AGENT_PAUSED: "false",
       AGENT_OPERATOR_TOKEN: TEST_OPERATOR_TOKEN,
       RUNTIME_MAX_TASKS_PER_DAY: String(daily),
       RUNTIME_MAX_CONCURRENT_TASKS: String(concurrent),
@@ -69,6 +71,31 @@ test("all state-store routes reject missing or invalid operator authentication",
       assert.equal(invalid.body.error, "operator_auth_required");
     }
   });
+});
+
+test("state-store admission fails closed while disabled or paused", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "ai-thuc-chien-do-paused-"));
+  const mf = new Miniflare({
+    modules: true,
+    scriptPath: workerPath,
+    compatibilityDate: "2026-07-08",
+    durableObjects: { AGENT_STATE_STORE: { className: "AgentStateStore", useSQLite: true } },
+    durableObjectsPersist: directory,
+    bindings: { RUNTIME_TESTING: "true", AGENT_OPERATOR_TOKEN: TEST_OPERATOR_TOKEN, AGENT_ENABLED: "false", AGENT_PAUSED: "true" },
+  });
+  try {
+    const namespace = await mf.getDurableObjectNamespace("AGENT_STATE_STORE");
+    const stub = namespace.get(namespace.idFromName("agent-runtime-paused"));
+    const response = await call(stub, "/reserve", task("paused-admission"));
+    assert.equal(response.status, 503);
+    assert.equal(response.body.error, "agent_disabled_or_paused");
+    const usage = await call(stub, "/usage");
+    assert.equal(usage.body.acceptedToday, 0);
+    assert.equal(usage.body.inFlight, 0);
+  } finally {
+    await mf.dispose();
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 test("SQLite Durable Object reserves once and rejects idempotency payload conflicts", async () => {
