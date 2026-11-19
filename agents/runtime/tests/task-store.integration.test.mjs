@@ -578,4 +578,30 @@ describe("AgentTaskStore Durable Object", () => {
     expect(retried).toMatchObject({ updated: true, status: "pending" });
     expect(await store.getControl()).toMatchObject({ paused: false, failure_count_last_10m: 0 });
   });
+
+  it("fails closed for operator controls until a dedicated authenticated operator is configured", async () => {
+    expect(await store.getOperatorControl("untrusted-session")).toEqual({
+      authorized: false,
+      reason: "operator_control_disabled"
+    });
+    expect(await store.setOperatorControl(
+      false,
+      "Operator requested a controlled runtime resume",
+      "untrusted-session"
+    )).toEqual({
+      authorized: false,
+      reason: "operator_control_disabled",
+      changed: false
+    });
+    expect(await store.getControl()).toMatchObject({ paused: false });
+  });
+
+  it("rejects short operator reasons before attempting authorization", async () => {
+    expect(await store.setOperatorControl(true, "stop", "untrusted-session")).toEqual({
+      authorized: false,
+      changed: false,
+      reason: "invalid_operator_control_request"
+    });
+    expect(await store.getControl()).toMatchObject({ paused: false });
+  });
 });
