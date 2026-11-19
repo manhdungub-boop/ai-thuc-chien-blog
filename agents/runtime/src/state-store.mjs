@@ -13,7 +13,7 @@ class RequestBodyError extends Error {
 async function readBoundedJson(request) {
   const declared = request.headers.get("content-length");
   if (declared !== null) {
-    if (!/^\\d+$/.test(declared)) throw new RequestBodyError(400, "request_content_length_invalid");
+    if (!/^[0-9]+$/.test(declared)) throw new RequestBodyError(400, "request_content_length_invalid");
     if (Number(declared) > MAX_STATE_STORE_REQUEST_BYTES) throw new RequestBodyError(413, "request_body_too_large");
   }
   if (!request.body) throw new RequestBodyError(400, "request_body_empty");
