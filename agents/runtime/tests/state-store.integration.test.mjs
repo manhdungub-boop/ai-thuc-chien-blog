@@ -55,7 +55,7 @@ async function call(stub, pathname, body, headers = {}) {
   return { status: response.status, body: await response.json() };
 }
 
-test("all state-store routes reject missing or invalid operator authentication", async () => {
+test("all state-store routes require the distinct internal credential", async () => {
   await withRuntime({}, async ({ stub }) => {
     for (const [pathname, body] of [
       ["/reserve", task("unauth-reserve")],
@@ -70,8 +70,8 @@ test("all state-store routes reject missing or invalid operator authentication",
       assert.equal(externalOperator.status, 401, pathname + " external operator token must not authenticate internal store");
       assert.equal(missing.status, 401, pathname + " missing token");
       assert.equal(invalid.status, 401, pathname + " invalid token");
-      assert.equal(missing.body.error, "operator_auth_required");
-      assert.equal(invalid.body.error, "operator_auth_required");
+      assert.equal(missing.body.error, "state_store_auth_required");
+      assert.equal(invalid.body.error, "state_store_auth_required");
     }
   });
 });
