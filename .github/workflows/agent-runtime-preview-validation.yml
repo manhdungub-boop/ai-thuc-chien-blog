@@ -12,12 +12,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: agent-runtime-preview-validation-\${{ github.ref }}
+  group: agent-runtime-preview-validation-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Check out source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -36,7 +37,8 @@ jobs:
         run: node --check agents/runtime/src/worker.mjs && node --check agents/runtime/src/state-store.mjs
 
       - name: Run isolated Worker shell and contract tests
-        run: node --test agents/runtime/tests/*.test.mjs
+        timeout-minutes: 4
+        run: timeout --signal=TERM --kill-after=10s 180s node --test agents/runtime/tests/*.test.mjs
 
       - name: Verify preview config is isolated and has no execution triggers
         run: |
