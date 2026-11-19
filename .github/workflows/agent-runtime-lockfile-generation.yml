@@ -4,6 +4,14 @@ on:
   push:
     branches:
       - fix/runtime-lockfile-generation-20261120
+  pull_request:
+    branches:
+      - fix/runtime-lockfile-generation-20261120
+    paths:
+      - ".github/workflows/agent-runtime-lockfile-generation.yml"
+      - "agents/runtime/package.json"
+      - "agents/runtime/package-lock.json"
+      - "agents/runtime/tests/**"
 
 permissions:
   contents: write
@@ -72,7 +80,7 @@ jobs:
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
       - name: Push verified lockfile after all untrusted code has finished
-        if: steps.commit.outputs.changed == 'true'
+        if: github.event_name == 'push' && steps.commit.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -85,11 +93,11 @@ jobs:
         run: |
           {
             echo "## Agent Runtime lockfile generation"
-            echo "- Isolated branch only: fix/runtime-lockfile-generation-20261120"
+            echo "- Isolated lockfile workflow; PR runs validate without pushing"
             echo "- Node.js 22 and npm 10.9.4"
             echo "- npm lifecycle scripts disabled"
             echo "- Checkout credentials are not persisted during dependency installation or tests"
-            echo "- Repository write token is exposed only to the final push step, after tests and commit"
+            echo "- Repository write token is exposed only to the final push step on the dedicated push event"
             echo "- npm ci and targeted Runtime tests required before commit"
             echo "- Only agents/runtime/package-lock.json may be committed"
             echo "- No Cloudflare credentials, deployment, OAuth, Cron, AI inference, publication, Production Worker, D1, or DNS access"
