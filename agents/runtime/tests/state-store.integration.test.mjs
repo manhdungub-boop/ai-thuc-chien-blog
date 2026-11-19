@@ -8,6 +8,7 @@ import { Miniflare } from "miniflare";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const workerPath = path.resolve(here, "../src/worker.mjs");
+const TEST_OPERATOR_TOKEN = "integration-test-operator-token-0123456789abcdef";
 
 async function createRuntime({ daily = 1000, concurrent = 100, persistDir } = {}) {
   const directory = persistDir ?? await mkdtemp(path.join(tmpdir(), "ai-thuc-chien-do-"));
@@ -19,6 +20,7 @@ async function createRuntime({ daily = 1000, concurrent = 100, persistDir } = {}
     durableObjectsPersist: directory,
     bindings: {
       RUNTIME_TESTING: "true",
+      AGENT_OPERATOR_TOKEN: TEST_OPERATOR_TOKEN,
       RUNTIME_MAX_TASKS_PER_DAY: String(daily),
       RUNTIME_MAX_CONCURRENT_TASKS: String(concurrent),
     },
@@ -42,11 +44,30 @@ function task(id, payload = { path: "/guides" }) {
 async function call(stub, pathname, body, headers = {}) {
   const response = await stub.fetch("http://do.local" + pathname, {
     method: body === undefined ? "GET" : "POST",
-    headers: { ...(body === undefined ? {} : { "Content-Type": "application/json" }), ...headers },
+    headers: { ...(body === undefined ? {} : { "Content-Type": "application/json" }), Authorization: "Bearer " + TEST_OPERATOR_TOKEN, ...headers },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   return { status: response.status, body: await response.json() };
 }
+
+test("all state-store routes reject missing or invalid operator authentication", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    for (const [pathname, body] of [
+      ["/reserve", task("unauth-reserve")],
+      ["/transition", { taskId: "missing", status: "running" }],
+      ["/task?id=missing", undefined],
+      ["/usage", undefined],
+      ["/__test/rollback", {}],
+    ]) {
+      const missing = await call(stub, pathname, body, { Authorization: "" });
+      const invalid = await call(stub, pathname, body, { Authorization: "Bearer invalid-token" });
+      assert.equal(missing.status, 401, pathname + " missing token");
+      assert.equal(invalid.status, 401, pathname + " invalid token");
+      assert.equal(missing.body.error, "operator_auth_required");
+      assert.equal(invalid.body.error, "operator_auth_required");
+    }
+  });
+});
 
 test("SQLite Durable Object reserves once and rejects idempotency payload conflicts", async () => {
   await withRuntime({}, async ({ stub }) => {
