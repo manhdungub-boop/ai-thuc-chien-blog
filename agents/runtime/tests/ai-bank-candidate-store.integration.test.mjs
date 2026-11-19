@@ -298,9 +298,9 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
         source_url: "https://ollama.com/pricing",
         excerpt: "Pending review."
       },
-      await writerSessionToken(now, "other@example.com"),
+      await writerSessionToken(now),
       "c4e6d1c2-3b7f-4a91-8c22-1234567890ab",
-      writerAuthEnv,
+      { ...writerAuthEnv, GOOGLE_REVIEWER_EVIDENCE_WRITER_EMAILS: "other@example.com" },
       now
     );
     expect(denied).toEqual({ accepted: false, reason: "evidence_writer_not_allowlisted" });
