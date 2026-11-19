@@ -289,8 +289,10 @@ describe("AgentDraftStore Durable Object", () => {
   it("requires a cryptographically verified reviewer session for queue metadata and full draft reads", async () => {
     await store.createDraft("draft-review-auth-01", validDraft());
     const queue = await store.listPendingReviewsForReviewer(20, "forged-session");
+    const authoringQueue = await store.listNeedsRevisionForReviewer(20, "forged-session");
     const detail = await store.getDraftForReviewer("draft-review-auth-01", "forged-session");
     expect(queue).toMatchObject({ authorized: false, reason: "reviewer_auth_not_configured" });
+    expect(authoringQueue).toMatchObject({ authorized: false, reason: "reviewer_auth_not_configured" });
     expect(detail).toMatchObject({ authorized: false, reason: "reviewer_auth_not_configured" });
   });
 
