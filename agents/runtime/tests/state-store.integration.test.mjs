@@ -15,7 +15,9 @@ async function createRuntime({ daily = 1000, concurrent = 100, persistDir } = {}
   const mf = new Miniflare({
     modules: true,
     scriptPath: workerPath,
-    compatibilityDate: "2026-11-19",
+    // Keep the local simulator date within the pinned workerd build (supports through 2026-07-08).
+    // This is test-harness-only; the isolated Preview Worker date remains in wrangler.jsonc.
+    compatibilityDate: "2026-07-08",
     durableObjects: { AGENT_STATE_STORE: { className: "AgentStateStore", useSQLite: true } },
     durableObjectsPersist: directory,
     bindings: {
