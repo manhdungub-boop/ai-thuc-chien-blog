@@ -77,3 +77,18 @@ Before adding a Durable Object binding or deploying this Runtime Preview:
 - complete stale-task recovery, execution idempotency, kill-switch, monitoring and rollback reviews.
 
 No Production Worker, DNS, D1, live user data, secret, schedule or paid setting is changed or authorized by this document.
+
+
+## Read-only account verification (2026-11-19)
+
+A read-only Cloudflare API inspection was performed for the connected account:
+
+- Workers account settings were readable; the account reports the `standard` Workers usage model. This field alone does **not** prove that the account is on Workers Free or Paid.
+- The Durable Objects namespace listing returned an empty result at the time of inspection. No existing namespace was found to reuse for this Agent Runtime.
+- The account's Worker script listing showed the existing website and other Preview scripts; no Agent Runtime Durable Object namespace was present.
+- Billing profile and billing usage endpoints returned HTTP 403 because the connected OAuth authorization does not include the required Billing Read scope. Actual plan, billing state, current usage, and remaining quota therefore remain **unverified**.
+- No namespace was created, no binding or secret was added, no deployment was attempted, and no account configuration was changed.
+
+### Decision
+
+**Do not create a Durable Object namespace or deploy the Agent Runtime yet.** Published Free-tier limits are not a substitute for confirming this account's actual plan and usage. The next safe prerequisite is a read-only verification of the account's Workers plan and Durable Objects usage through an authorized billing-read view (or the Cloudflare dashboard). If the plan/usage cannot be verified as Free with sufficient headroom, keep the runtime unbound and disabled; do not upgrade or enable billing.
