@@ -261,6 +261,40 @@ describe("authenticated read-only AI Bank reviewer routes", () => {
     expect(storeAccesses).toBe(0);
   });
 
+  it("rejects oversized streamed evidence bodies without allocating the full body or accessing the store", async () => {
+    let storeAccesses = 0;
+    const env = {
+      AGENT_AI_BANK_CANDIDATE_STORE: {
+        getByName() {
+          storeAccesses += 1;
+          return {};
+        }
+      }
+    };
+    const evidencePath = origin + "/api/reviewer/ai-bank/candidates/ollama/ollama/evidence";
+    const oversizedBody = JSON.stringify({
+      audit_event_id: "a4e6d1c2-3b7f-4a91-8c22-1234567890ab",
+      evidence: {
+        check_type: "pricing_and_free_limits",
+        source_title: "Pricing",
+        source_url: "https://ollama.com/pricing",
+        excerpt: "x".repeat(17 * 1024)
+      }
+    });
+    const response = await worker.fetch(new Request(evidencePath, {
+      method: "POST",
+      headers: {
+        origin,
+        "content-type": "application/json",
+        cookie: "__Host-ai_reviewer_session=opaque-session"
+      },
+      body: oversizedBody
+    }), env);
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({ error: "review_request_too_large" });
+    expect(storeAccesses).toBe(0);
+  });
+
   it("passes only the signed session and serializable auth configuration to the Durable Object", async () => {
     const token = "opaque-signed-reviewer-session";
     const evidence = {
