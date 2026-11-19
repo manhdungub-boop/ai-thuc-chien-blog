@@ -1,6 +1,6 @@
 # Agent Runtime — internal Worker-to-State-Store security boundary
 
-Status: **design only; no Durable Object binding, secret, public operator API, or deployment is configured.**
+Status: **the dedicated State Store bearer validator is implemented and tested separately from operator authentication; Worker-to-DO forwarding, Durable Object binding, secret injection, public operator API, and deployment remain unconfigured.**
 
 Date: 2026-11-19
 
@@ -14,6 +14,12 @@ Before adding a Durable Object binding, separate external operator authenticatio
 - `AGENT_STATE_STORE_TOKEN`: a distinct high-entropy secret used only by the Worker when calling the Durable Object and by the Durable Object when authenticating that internal call. It must never be accepted as an external operator credential.
 - Both values must be injected as Preview-only secrets. Neither belongs in source, Wrangler vars, CI logs, task payloads, audit metadata, URLs, or client-side JavaScript.
 - If either secret is absent, malformed, or unavailable, the relevant operation fails closed.
+
+## Implementation progress (2026-11-19)
+
+- `src/internal-auth.mjs` validates `AGENT_STATE_STORE_TOKEN` with bounded syntax/length and constant-time digest comparison.
+- The State Store rejects the external `AGENT_OPERATOR_TOKEN`; integration tests verify that missing, invalid, and cross-boundary credentials fail closed.
+- The Worker does not yet call the State Store, and the Wrangler shell config still has no Durable Object binding or secret. This is intentional; the credential validator is a tested boundary component, not deployment authorization.
 
 ## Request path
 
