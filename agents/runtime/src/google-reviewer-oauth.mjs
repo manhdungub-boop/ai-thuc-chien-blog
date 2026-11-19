@@ -136,9 +136,18 @@ export async function handleGoogleReviewerAuth(request, env, { fetchImpl = fetch
   const url = new URL(request.url);
   const path = url.pathname;
   if (!["/auth/google/start", "/auth/google/callback", "/auth/google/me", "/auth/google/logout"].includes(path)) return null;
-  if (request.method !== "GET") return json({ error: "method_not_allowed" }, 405);
   const cfg = config(env);
   if (!cfg) return json({ error: "reviewer_auth_not_configured" }, 503);
+  if (path === "/auth/google/logout") {
+    if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405, { allow: "POST" });
+    if (request.headers.get("origin") !== cfg.redirectOrigin) return json({ error: "logout_origin_rejected" }, 403);
+    return new Response(null, { status: 204, headers: [
+      ["cache-control", "no-store"],
+      ["set-cookie", clearCookie(SESSION_COOKIE)],
+      ["set-cookie", clearCookie(TX_COOKIE)]
+    ] });
+  }
+  if (request.method !== "GET") return json({ error: "method_not_allowed" }, 405);
   if (url.origin !== cfg.redirectOrigin && path !== "/auth/google/start" && path !== "/auth/google/me" && path !== "/auth/google/logout") {
     return json({ error: "redirect_origin_mismatch" }, 400);
   }
@@ -232,5 +241,5 @@ export async function handleGoogleReviewerAuth(request, env, { fetchImpl = fetch
     return json({ authenticated: true, reviewer: verified.reviewer, expires_at: new Date(verified.expires_at * 1000).toISOString(), publication_authorized: false });
   }
 
-  return new Response(null, { status: 204, headers: [["cache-control", "no-store"], ["set-cookie", clearCookie(SESSION_COOKIE)], ["set-cookie", clearCookie(TX_COOKIE)]] });
+  return json({ error: "not_found" }, 404);
 }
