@@ -26,14 +26,16 @@ node --test agents/runtime/tests/*.test.mjs
 
 - `src/task-contract.mjs` accepts only `content.review`, `ai_bank.candidate_review`, and `seo.audit`; each has exact payload keys, bounded serialized size, and strict local path/identifier validation.
 - `src/operator-auth.mjs` validates an externally supplied operator bearer token and fails closed when the secret is absent or weak.
-- These modules validate requests only. There is no enqueue, persistence, task execution, or schedule.
+- `src/admission-policy.mjs` makes a pure fail-closed admission decision from explicit limits and trusted usage counters; it rejects missing/invalid values, daily quota exhaustion, concurrency saturation, and oversized payloads. Safety caps are 1,000 tasks/day, 100 concurrent tasks, and 8 KiB per payload.
+- These modules validate requests only. The admission policy does not reserve capacity, count usage, enqueue, persist, execute tasks, or schedule work. There is no trusted durable usage store, so this is not yet real quota enforcement.
 
 ## Next implementation gates
 
 1. Task contract is implemented as validation-only: `content.review`, `ai_bank.candidate_review`, and `seo.audit` have strict payload allowlists, bounded size, path validation, and idempotency-key syntax.
 2. Add authenticated operator-only enqueue and inspect paths; the contract does not enqueue or execute work.
-3. Add idempotency, bounded payloads, quota guard, and audit events.
-4. Add isolated storage only after schema and retention review.
-5. Add a separately reviewed Preview deployment workflow; do not add schedules until kill-switch and budget tests pass.
+3. Connect admission decisions to an atomic durable usage/idempotency store; the current policy is not an enforcement mechanism until counters are trusted and updated transactionally.
+4. Add append-only audit events with retention and privacy review.
+5. Add isolated storage only after schema, concurrency, and retention review.
+6. Add a separately reviewed Preview deployment workflow; do not add schedules until kill-switch and budget tests pass.
 
 This scaffold makes no claim of 24/7 execution, backup readiness, or production recovery.
