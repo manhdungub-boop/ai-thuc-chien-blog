@@ -119,7 +119,7 @@ export const REVIEWER_CONSOLE_JS = `"use strict";
     }
     for (const item of items) {
       const candidateId = String(item.candidate?.candidate_id || "");
-      const match = candidateId.match(/^github:([a-zA-Z0-9_.-]{1,100})\\/([a-zA-Z0-9_.-]{1,100})$/);
+      const match = candidateId.match(/^github:([a-zA-Z0-9_.-]{1,100})\/([a-zA-Z0-9_.-]{1,100})$/);
       if (!match) continue;
       const li = node("li");
       const button = node("button", candidateId + " · chờ rà soát");
