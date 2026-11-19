@@ -19,8 +19,12 @@ describe("AgentReviewerAuthStore Durable Object", () => {
     const codeVerifier = "v".repeat(64);
     const nowSeconds = 1_800_000_000;
 
-    expect(await store.createTransaction(stateHash, browserHash, nonce, codeVerifier, nowSeconds))
-      .toEqual({ created: true });
+    await runInDurableObject(store, (_instance, state) => {
+      state.storage.sql.exec(
+        "INSERT INTO reviewer_auth_transactions (state_hash,browser_hash,nonce,code_verifier,created_at,expires_at) VALUES (?,?,?,?,?,?)",
+        stateHash, browserHash, nonce, codeVerifier, nowSeconds, nowSeconds + 300
+      );
+    });
 
     expect(await store.consumeTransaction(stateHash, wrongBrowserHash, nowSeconds)).toBeNull();
 
@@ -43,7 +47,12 @@ describe("AgentReviewerAuthStore Durable Object", () => {
     const stateHash = "e".repeat(43);
     const browserHash = "c".repeat(43);
     const nowSeconds = 1_800_000_000;
-    await store.createTransaction(stateHash, browserHash, "n".repeat(43), "v".repeat(64), nowSeconds);
+    await runInDurableObject(store, (_instance, state) => {
+      state.storage.sql.exec(
+        "INSERT INTO reviewer_auth_transactions (state_hash,browser_hash,nonce,code_verifier,created_at,expires_at) VALUES (?,?,?,?,?,?)",
+        stateHash, browserHash, "n".repeat(43), "v".repeat(64), nowSeconds, nowSeconds + 300
+      );
+    });
     expect(await store.consumeTransaction(stateHash, browserHash, nowSeconds + 301)).toBeNull();
   });
 });
