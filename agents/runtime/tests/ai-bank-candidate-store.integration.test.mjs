@@ -276,7 +276,9 @@ async function restoreTestSnapshotInBatches(state, snapshot, batchSize = 2, inte
 }
 
 async function restoreTestSnapshot(state, snapshot) {
-  return restoreTestSnapshotInBatches(state, snapshot, 100);
+  const result = await restoreTestSnapshotInBatches(state, snapshot, 100);
+  if (!result.restored) return result;
+  return { restored: true, manifest_sha256: result.manifest_sha256 };
 }
 
 describe("AgentAIBankCandidateStore Durable Object", () => {
@@ -385,7 +387,7 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     await runInDurableObject(destination, async (_instance, state) => {
       state.storage.sql.exec(
         "INSERT INTO ai_bank_candidates (candidate_id, repository, candidate_json, release_at, first_seen_at, last_seen_at) VALUES (?, ?, ?, ?, ?, ?)",
-        "unrelated-candidate", "other/repo", "{}", null, now, now
+        "unrelated-candidate", "other/repo", "{}", now, now, now
       );
       expect(await restoreTestSnapshotInBatches(state, sourceSnapshot, 1)).toEqual({
         restored: false,
