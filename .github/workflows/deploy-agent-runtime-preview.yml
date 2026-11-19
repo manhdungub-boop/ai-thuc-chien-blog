@@ -76,7 +76,7 @@ jobs:
           fi
           printf '%s\n' "$worker_url" > "$RUNNER_TEMP/agent-runtime-preview-url.txt"
 
-      - name: Verify Preview health is paused and the 15-minute Workflow schedule is configured
+      - name: Verify Preview health is paused and no recurring Workflow schedule is configured
         shell: bash
         run: |
           set -euo pipefail
