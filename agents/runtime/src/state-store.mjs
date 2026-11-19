@@ -1,7 +1,7 @@
 import { validateTaskRequest } from "./task-contract.mjs";
 import { hasValidOperatorBearer } from "./operator-auth.mjs";
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 // Conservative Free-tier pilot defaults; hard caps remain enforced below.
 const DEFAULT_LIMITS = Object.freeze({ daily: 100, concurrent: 5, payloadBytes: 8192 });
 const TERMINAL_STATES = new Set(["succeeded", "failed", "cancelled"]);
@@ -54,9 +54,30 @@ export class AgentStateStore {
           "CREATE INDEX IF NOT EXISTS audit_occurred_idx ON audit_events(occurred_at)",
         ];
         for (const statement of schema) this.sql.exec(statement);
-        const version = readRow(this.sql, "SELECT value FROM runtime_meta WHERE key = 'schema_version'");
-        if (version && version.value !== String(SCHEMA_VERSION)) throw new Error("runtime_schema_version_unsupported");
-        this.sql.exec("INSERT OR IGNORE INTO runtime_meta (key, value) VALUES ('schema_version', ?)", String(SCHEMA_VERSION));
+        let version = readRow(this.sql, "SELECT value FROM runtime_meta WHERE key = 'schema_version'");
+        if (!version) {
+          this.sql.exec("INSERT INTO runtime_meta (key, value) VALUES ('schema_version', '1')");
+          version = { value: "1" };
+        }
+        if (version.value === "1") {
+          // Transactional v1 -> v2 migration. Fresh databases deliberately follow
+          // the same path as persisted v1 databases so both cases share one code path.
+          const columns = [
+            "ALTER TABLE tasks ADD COLUMN attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count BETWEEN 0 AND 5)",
+            "ALTER TABLE tasks ADD COLUMN max_attempts INTEGER NOT NULL DEFAULT 3 CHECK (max_attempts BETWEEN 1 AND 5)",
+            "ALTER TABLE tasks ADD COLUMN lease_generation INTEGER NOT NULL DEFAULT 0 CHECK (lease_generation >= 0)",
+            "ALTER TABLE tasks ADD COLUMN lease_owner TEXT CHECK (lease_owner IS NULL OR length(lease_owner) BETWEEN 16 AND 64)",
+            "ALTER TABLE tasks ADD COLUMN lease_expires_at INTEGER",
+            "ALTER TABLE tasks ADD COLUMN next_attempt_at INTEGER",
+            "ALTER TABLE tasks ADD COLUMN last_error_code TEXT CHECK (last_error_code IS NULL OR length(last_error_code) BETWEEN 1 AND 64)",
+          ];
+          for (const statement of columns) this.sql.exec(statement);
+          this.sql.exec("CREATE INDEX IF NOT EXISTS tasks_retry_due_idx ON tasks(state, next_attempt_at)");
+          this.sql.exec("CREATE INDEX IF NOT EXISTS tasks_lease_expiry_idx ON tasks(state, lease_expires_at)");
+          this.sql.exec("UPDATE runtime_meta SET value = '2' WHERE key = 'schema_version'");
+        } else if (version.value !== String(SCHEMA_VERSION)) {
+          throw new Error("runtime_schema_version_unsupported");
+        }
       });
     });
   }
@@ -90,6 +111,19 @@ export class AgentStateStore {
         const usage = readRow(this.sql, "SELECT accepted_count FROM daily_usage WHERE day_utc = ?", day);
         const active = readRow(this.sql, "SELECT COUNT(*) AS count FROM tasks WHERE state IN ('queued','running')");
         return jsonResponse({ ok: true, dayUtc: day, acceptedToday: usage?.accepted_count ?? 0, inFlight: active?.count ?? 0 });
+      }
+      if (url.pathname === "/__test/downgrade-v1" && request.method === "POST") {
+        if (this.env.RUNTIME_TESTING !== "true") return jsonResponse({ ok: false, error: "not_found" }, 404);
+        this.ctx.storage.transactionSync(() => {
+          this.sql.exec("CREATE TABLE tasks_v1_fixture (task_id TEXT PRIMARY KEY, idempotency_key TEXT NOT NULL UNIQUE, task_type TEXT NOT NULL CHECK (task_type IN (" + TASK_TYPES_SQL + ")), payload_json TEXT NOT NULL, payload_hash TEXT NOT NULL, payload_bytes INTEGER NOT NULL CHECK (payload_bytes BETWEEN 1 AND 8192), state TEXT NOT NULL CHECK (state IN ('queued','running','succeeded','failed','cancelled')), created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, terminal_at INTEGER, error_code TEXT)");
+          this.sql.exec("INSERT INTO tasks_v1_fixture (task_id,idempotency_key,task_type,payload_json,payload_hash,payload_bytes,state,created_at,updated_at,terminal_at,error_code) SELECT task_id,idempotency_key,task_type,payload_json,payload_hash,payload_bytes,state,created_at,updated_at,terminal_at,error_code FROM tasks");
+          this.sql.exec("DROP TABLE tasks");
+          this.sql.exec("ALTER TABLE tasks_v1_fixture RENAME TO tasks");
+          this.sql.exec("CREATE INDEX tasks_state_idx ON tasks(state)");
+          this.sql.exec("CREATE INDEX tasks_terminal_idx ON tasks(terminal_at)");
+          this.sql.exec("UPDATE runtime_meta SET value = '1' WHERE key = 'schema_version'");
+        });
+        return jsonResponse({ ok: true, schemaVersion: 1 });
       }
       if (url.pathname === "/__test/rollback" && request.method === "POST") {
         if (this.env.RUNTIME_TESTING !== "true") return jsonResponse({ ok: false, error: "not_found" }, 404);
