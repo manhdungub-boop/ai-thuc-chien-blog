@@ -254,7 +254,7 @@ async function restoreTestSnapshotInBatches(state, snapshot, batchSize = 2, inte
     const batch = orderedRows.slice(offset, offset + batchSize);
     const missingRows = batch.filter(item => {
       const names = RESTORE_COLUMNS[item.table];
-      const where = names.map(name => name + " = ?").join(" AND ");
+      const where = names.map(name => name + " IS ?").join(" AND ");
       return state.storage.sql.exec(
         "SELECT 1 AS present FROM " + item.table + " WHERE " + where + " LIMIT 1",
         ...names.map(name => item.row[name])
