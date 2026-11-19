@@ -73,6 +73,39 @@ test("all state-store routes reject missing or invalid operator authentication",
   });
 });
 
+test("State Store bounds request bodies before JSON parsing", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const headers = {
+      Authorization: "Bearer " + TEST_OPERATOR_TOKEN,
+      "Content-Type": "application/json",
+    };
+
+    const numericLength = await stub.fetch("http://do.local/reserve", {
+      method: "POST",
+      headers: { ...headers, "Content-Length": "2" },
+      body: "{}",
+    });
+    assert.equal(numericLength.status, 400);
+    assert.equal((await numericLength.json()).error, "reserve_request_invalid");
+
+    const oversized = await stub.fetch("http://do.local/reserve", {
+      method: "POST",
+      headers,
+      body: " ".repeat(16 * 1024 + 1),
+    });
+    assert.equal(oversized.status, 413);
+    assert.equal((await oversized.json()).error, "request_body_too_large");
+
+    const malformed = await stub.fetch("http://do.local/reserve", {
+      method: "POST",
+      headers,
+      body: "{not-json",
+    });
+    assert.equal(malformed.status, 400);
+    assert.equal((await malformed.json()).error, "request_json_invalid");
+  });
+});
+
 test("state-store admission fails closed while disabled or paused", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "ai-thuc-chien-do-paused-"));
   const mf = new Miniflare({
