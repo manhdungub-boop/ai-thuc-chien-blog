@@ -133,7 +133,10 @@ export class AgentStateStore {
       }
       if (url.pathname === "/usage" && request.method === "GET") {
         const day = url.searchParams.get("day") ?? utcDay(this.requestTime(request));
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || Number.isNaN(Date.parse(day + "T00:00:00Z"))) {
+        if (url.searchParams.size > 1 || [...url.searchParams.keys()].some((key) => key !== "day") ||
+            !/^\d{4}-\d{2}-\d{2}$/.test(day) ||
+            !Number.isFinite(Date.parse(day + "T00:00:00Z")) ||
+            new Date(day + "T00:00:00Z").toISOString().slice(0, 10) !== day) {
           return jsonResponse({ ok: false, error: "utc_day_invalid" }, 400);
         }
         const usage = readRow(this.sql, "SELECT accepted_count FROM daily_usage WHERE day_utc = ?", day);
