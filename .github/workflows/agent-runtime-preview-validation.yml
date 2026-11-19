@@ -31,7 +31,7 @@ jobs:
           node-version: 22
 
       - name: Install pinned local Cloudflare runtime simulator
-        run: npm install --no-save --no-package-lock --ignore-scripts miniflare@4.20260701.0
+        run: npm install --no-save --no-package-lock --ignore-scripts miniflare@4.20260730.0
 
       - name: Report exact npm dependency advisories
         if: always()
@@ -39,7 +39,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/agent-runtime-audit"
           cd "$RUNNER_TEMP/agent-runtime-audit"
           npm init -y >/dev/null
-          npm install --package-lock-only --ignore-scripts --no-audit --no-fund --save-exact miniflare@4.20260701.0
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund --save-exact miniflare@4.20260730.0
           npm audit --json > "$RUNNER_TEMP/agent-runtime-npm-audit.json" || true
           node --input-type=module <<'NODE'
           import { readFile } from 'node:fs/promises';
