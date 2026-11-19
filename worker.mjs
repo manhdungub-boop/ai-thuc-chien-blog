@@ -333,7 +333,7 @@ async function createCommunitySession(db, memberId) {
 }
 async function readBoundedJsonPayload(request, maxBytes = 6000) {
   const contentLength = request.headers.get("content-length");
-  if (contentLength !== null && !/^(?:0|[1-9][0-9]*)$/.test(contentLength)) {
+  if (contentLength !== null && !/^[0-9]+$/.test(contentLength)) {
     return { ok: false, status: 400, error: "Độ dài nội dung không hợp lệ." };
   }
   if (contentLength !== null && Number(contentLength) > maxBytes) {
