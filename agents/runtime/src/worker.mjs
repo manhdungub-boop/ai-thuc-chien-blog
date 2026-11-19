@@ -15,6 +15,42 @@ function json(data, status = 200) {
 }
 function isEnabled(value) { return value === "true"; }
 
+async function readBoundedJsonRequest(request, maxBytes) {
+  const declared = request.headers.get("content-length");
+  if (declared !== null) {
+    if (!/^(0|[1-9][0-9]*)$/.test(declared)) return { ok: false, status: 400 };
+    if (Number(declared) > maxBytes) return { ok: false, status: 413 };
+  }
+  if (!request.body) return { ok: false, status: 400 };
+  const reader = request.body.getReader();
+  const chunks = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        try { await reader.cancel(); } catch {}
+        return { ok: false, status: 413 };
+      }
+      chunks.push(value);
+    }
+  } catch {
+    return { ok: false, status: 400 };
+  } finally {
+    try { reader.releaseLock(); } catch {}
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  try {
+    return { ok: true, value: JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) };
+  } catch {
+    return { ok: false, status: 400 };
+  }
+}
+
 async function writeStateStore(env, pathname, payload) {
   if (!await hasValidStateStoreBearer(
     new Request("https://state-store.internal/", {
@@ -140,8 +176,11 @@ export default {
       if (typeof actor !== "string" || !/^[a-zA-Z0-9._:-]{3,64}$/.test(actor)) {
         return json({ ok: false, error: "operator_identity_unavailable" }, 503);
       }
-      let body;
-      try { body = await request.json(); } catch { return json({ ok: false, error: "request_invalid" }, 400); }
+      const parsedBody = await readBoundedJsonRequest(request, 1024);
+      if (!parsedBody.ok) {
+        return json({ ok: false, error: parsedBody.status === 413 ? "request_body_too_large" : "request_invalid" }, parsedBody.status);
+      }
+      const body = parsedBody.value;
       if (body === null || typeof body !== "object" || Array.isArray(body) ||
           Object.keys(body).some((key) => key !== "reason") ||
           (body.reason !== undefined && (typeof body.reason !== "string" || body.reason.length > 160 ||
