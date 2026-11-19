@@ -176,11 +176,14 @@ test("concurrent admissions respect the in-flight limit and terminal transitions
     assert.equal(accepted.length, 2);
     assert.equal(results.filter((item) => item.body.error === "concurrency_limit_reached").length, 2);
     const taskId = accepted[0].body.task.taskId;
-    assert.equal((await call(stub, "/transition", { taskId, status: "running" })).status, 200);
-    assert.equal((await call(stub, "/transition", { taskId, status: "succeeded" })).status, 200);
-    const repeated = await call(stub, "/transition", { taskId, status: "succeeded" });
-    assert.equal(repeated.status, 200);
-    assert.equal(repeated.body.duplicate, true);
+    const claimed = await call(stub, "/claim", { taskId });
+    assert.equal(claimed.status, 200);
+    const completed = await call(stub, "/complete", {
+      taskId, leaseOwner: claimed.body.lease.owner,
+      leaseGeneration: claimed.body.lease.generation, status: "succeeded",
+    });
+    assert.equal(completed.status, 200);
+    assert.equal(completed.body.task.state, "succeeded");
     assert.equal((await call(stub, "/reserve", task("after-release"))).status, 201);
     const usage = await call(stub, "/usage");
     assert.equal(usage.body.acceptedToday, 3);
@@ -193,8 +196,16 @@ test("state transitions reject invalid paths and do not reopen terminal tasks", 
     const created = await call(stub, "/reserve", task("transitions"));
     const taskId = created.body.task.taskId;
     assert.equal((await call(stub, "/transition", { taskId, status: "succeeded" })).status, 409);
-    assert.equal((await call(stub, "/transition", { taskId, status: "running" })).status, 200);
-    assert.equal((await call(stub, "/transition", { taskId, status: "failed", errorCode: "review_failed" })).status, 200);
+    assert.equal((await call(stub, "/transition", { taskId, status: "running" })).status, 409);
+    const claimed = await call(stub, "/claim", { taskId });
+    assert.equal(claimed.status, 200);
+    assert.equal((await call(stub, "/transition", { taskId, status: "failed", errorCode: "review_failed" })).body.error, "lease_required");
+    const completed = await call(stub, "/complete", {
+      taskId, leaseOwner: claimed.body.lease.owner,
+      leaseGeneration: claimed.body.lease.generation, status: "failed", errorCode: "review_failed",
+    });
+    assert.equal(completed.status, 200);
+    assert.equal(completed.body.task.state, "failed");
     assert.equal((await call(stub, "/transition", { taskId, status: "running" })).status, 409);
     assert.equal((await call(stub, "/usage")).body.inFlight, 0);
   });
@@ -289,6 +300,121 @@ test("persisted v1 State Store migrates transactionally to v2 without losing tas
   } finally {
     if (first) await first.mf.dispose();
     if (second) await second.mf.dispose();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+
+test("atomic claim admits only one worker and stale lease generations cannot heartbeat or complete", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const created = await call(stub, "/reserve", task("lease-fence"));
+    const taskId = created.body.task.taskId;
+    const attempts = await Promise.all([
+      call(stub, "/claim", { taskId }, { "x-test-now": "2026-11-19T10:00:00.000Z" }),
+      call(stub, "/claim", { taskId }, { "x-test-now": "2026-11-19T10:00:00.000Z" }),
+    ]);
+    assert.equal(attempts.filter((item) => item.status === 200).length, 1);
+    assert.equal(attempts.filter((item) => item.status === 409).length, 1);
+    const lease = attempts.find((item) => item.status === 200).body.lease;
+
+    const staleHeartbeat = await call(stub, "/heartbeat", {
+      taskId, leaseOwner: lease.owner, leaseGeneration: lease.generation + 1,
+    });
+    assert.equal(staleHeartbeat.status, 409);
+    assert.equal(staleHeartbeat.body.error, "lease_fencing_conflict");
+
+    const validHeartbeat = await call(stub, "/heartbeat", {
+      taskId, leaseOwner: lease.owner, leaseGeneration: lease.generation,
+    }, { "x-test-now": "2026-11-19T10:01:00.000Z" });
+    assert.equal(validHeartbeat.status, 200);
+    assert.equal(validHeartbeat.body.task.leaseExpiresAt, Date.parse("2026-11-19T10:06:00.000Z"));
+
+    const staleCompletion = await call(stub, "/complete", {
+      taskId, leaseOwner: lease.owner, leaseGeneration: lease.generation + 1, status: "succeeded",
+    }, { "x-test-now": "2026-11-19T10:02:00.000Z" });
+    assert.equal(staleCompletion.status, 409);
+    assert.equal(staleCompletion.body.error, "lease_fencing_conflict");
+
+    const completed = await call(stub, "/complete", {
+      taskId, leaseOwner: lease.owner, leaseGeneration: lease.generation, status: "succeeded",
+    }, { "x-test-now": "2026-11-19T10:02:00.000Z" });
+    assert.equal(completed.status, 200);
+    assert.equal(completed.body.task.state, "succeeded");
+    assert.equal(completed.body.task.leaseExpiresAt, null);
+  });
+});
+
+test("expired leases are requeued after bounded delay and fail at the attempt ceiling", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const created = await call(stub, "/reserve", task("lease-retry"));
+    const taskId = created.body.task.taskId;
+    const first = await call(stub, "/claim", { taskId }, { "x-test-now": "2026-11-19T10:00:00.000Z" });
+    assert.equal(first.status, 200);
+
+    const tooEarly = await call(stub, "/recover", { taskId }, { "x-test-now": "2026-11-19T10:04:59.999Z" });
+    assert.equal(tooEarly.status, 409);
+    assert.equal(tooEarly.body.error, "lease_not_expired");
+
+    const recovered1 = await call(stub, "/recover", { taskId }, { "x-test-now": "2026-11-19T10:05:00.000Z" });
+    assert.equal(recovered1.status, 200);
+    assert.equal(recovered1.body.outcome, "requeued");
+    assert.equal(recovered1.body.task.state, "queued");
+    assert.equal(recovered1.body.task.attemptCount, 1);
+    assert.equal(recovered1.body.task.nextAttemptAt, Date.parse("2026-11-19T10:05:30.000Z"));
+
+    const beforeDue = await call(stub, "/claim", { taskId }, { "x-test-now": "2026-11-19T10:05:29.999Z" });
+    assert.equal(beforeDue.status, 409);
+    assert.equal(beforeDue.body.error, "retry_not_due");
+
+    const second = await call(stub, "/claim", { taskId }, { "x-test-now": "2026-11-19T10:05:30.000Z" });
+    assert.equal(second.status, 200);
+    const recovered2 = await call(stub, "/recover", { taskId }, { "x-test-now": "2026-11-19T10:10:30.000Z" });
+    assert.equal(recovered2.status, 200);
+    assert.equal(recovered2.body.outcome, "requeued");
+
+    const third = await call(stub, "/claim", { taskId }, { "x-test-now": "2026-11-19T10:11:00.000Z" });
+    assert.equal(third.status, 200);
+    const exhausted = await call(stub, "/recover", { taskId }, { "x-test-now": "2026-11-19T10:16:00.000Z" });
+    assert.equal(exhausted.status, 200);
+    assert.equal(exhausted.body.outcome, "failed");
+    assert.equal(exhausted.body.task.state, "failed");
+    assert.equal(exhausted.body.task.errorCode, "lease_expired_max_attempts");
+    assert.equal(exhausted.body.task.attemptCount, 3);
+    assert.equal((await call(stub, "/usage")).body.inFlight, 0);
+  });
+});
+
+test("pause blocks new claims and expiry recovery but allows safe heartbeat and completion", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "ai-thuc-chien-do-pause-lease-"));
+  let active;
+  let paused;
+  try {
+    active = await createRuntime({ persistDir: directory });
+    const created = await call(active.stub, "/reserve", task("pause-lease"));
+    const taskId = created.body.task.taskId;
+    const claimed = await call(active.stub, "/claim", { taskId }, { "x-test-now": "2026-11-19T10:00:00.000Z" });
+    assert.equal(claimed.status, 200);
+    const lease = claimed.body.lease;
+    await active.mf.dispose();
+    active = null;
+
+    paused = await createRuntime({ persistDir: directory, enabled: "false", paused: "true" });
+    assert.equal((await call(paused.stub, "/claim", { taskId })).status, 503);
+    assert.equal((await call(paused.stub, "/recover", { taskId })).status, 503);
+
+    const heartbeat = await call(paused.stub, "/heartbeat", {
+      taskId, leaseOwner: lease.owner, leaseGeneration: lease.generation,
+    }, { "x-test-now": "2026-11-19T10:01:00.000Z" });
+    assert.equal(heartbeat.status, 200);
+
+    const completed = await call(paused.stub, "/complete", {
+      taskId, leaseOwner: lease.owner, leaseGeneration: lease.generation, status: "succeeded",
+    }, { "x-test-now": "2026-11-19T10:02:00.000Z" });
+    assert.equal(completed.status, 200);
+    assert.equal(completed.body.task.state, "succeeded");
+  } finally {
+    if (active) await active.mf.dispose();
+    if (paused) await paused.mf.dispose();
     await rm(directory, { recursive: true, force: true });
   }
 });
