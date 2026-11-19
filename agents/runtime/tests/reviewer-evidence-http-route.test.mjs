@@ -384,6 +384,47 @@ describe("authorized AI Bank reviewer reads", () => {
     expect(response.status).toBe(400);
     expect(storeAccessed).toBe(false);
   });
+
+  it("rejects zero, malformed, non-canonical, and repeated list limits before candidate-store access", async () => {
+    const { token, secret } = await makeReviewerSessionToken();
+    const invalidQueries = ["limit=0", "limit=01", "limit=abc", "limit=1&limit=2"];
+    for (const query of invalidQueries) {
+      let storeAccessed = false;
+      const env = {
+        ...reviewerAuthEnv(secret),
+        AGENT_AI_BANK_CANDIDATE_STORE: {
+          getByName: () => {
+            storeAccessed = true;
+            return { async listCandidates() { return []; } };
+          }
+        }
+      };
+      const response = await worker.fetch(new Request(origin + "/api/reviewer/ai-bank/candidates?" + query, {
+        headers: { cookie: "__Host-ai_reviewer_session=" + token }
+      }), env);
+      expect(response.status, query).toBe(400);
+      expect(storeAccessed, query).toBe(false);
+    }
+  });
+
+  it("returns not-found for an unknown candidate without granting any write or publication capability", async () => {
+    const { token, secret } = await makeReviewerSessionToken();
+    const env = {
+      ...reviewerAuthEnv(secret),
+      AGENT_AI_BANK_CANDIDATE_STORE: {
+        getByName: () => ({ async getReviewPacket(candidateId) {
+          expect(candidateId).toBe("github:unknown/unknown");
+          return null;
+        } })
+      }
+    };
+    const response = await worker.fetch(new Request(origin + "/api/reviewer/ai-bank/candidates/unknown/unknown", {
+      headers: { cookie: "__Host-ai_reviewer_session=" + token }
+    }), env);
+    expect(response.status).toBe(404);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.json()).toEqual({ error: "ai_bank_candidate_not_found" });
+  });
 });
 
 
