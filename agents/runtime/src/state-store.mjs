@@ -33,6 +33,9 @@ function safeTask(row) {
     taskId: row.task_id, idempotencyKey: row.idempotency_key, type: row.task_type,
     payload: JSON.parse(row.payload_json), state: row.state, createdAt: row.created_at,
     updatedAt: row.updated_at, terminalAt: row.terminal_at, errorCode: row.error_code,
+    attemptCount: row.attempt_count, maxAttempts: row.max_attempts,
+    leaseGeneration: row.lease_generation, leaseExpiresAt: row.lease_expires_at,
+    nextAttemptAt: row.next_attempt_at, lastErrorCode: row.last_error_code,
   };
 }
 
