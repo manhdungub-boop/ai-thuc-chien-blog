@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -281,6 +281,46 @@ test("transactionSync rolls back all writes when its callback throws", async () 
     assert.equal(result.body.rolledBack, true);
     assert.equal(result.body.acceptedToday, 0);
   });
+});
+
+test("deployable State Store has no test-only route or clock override", async () => {
+  const source = await readFile(path.resolve(here, "../src/state-store.mjs"), "utf8");
+  assert.equal(source.includes("RUNTIME_TESTING"), false);
+  assert.equal(source.includes("/__test/rollback"), false);
+  assert.equal(source.includes("x-test-now"), false);
+
+  const directory = await mkdtemp(path.join(tmpdir(), "ai-thuc-chien-do-production-hooks-"));
+  const mf = new Miniflare({
+    modules: true,
+    scriptPath: workerPath,
+    compatibilityDate: "2026-07-08",
+    durableObjects: { AGENT_STATE_STORE: { className: "AgentStateStore", useSQLite: true } },
+    durableObjectsPersist: directory,
+    bindings: {
+      AGENT_ENABLED: "true",
+      AGENT_PAUSED: "false",
+      AGENT_STATE_STORE_TOKEN: TEST_STATE_STORE_TOKEN,
+    },
+  });
+  try {
+    const namespace = await mf.getDurableObjectNamespace("AGENT_STATE_STORE");
+    const stub = namespace.get(namespace.idFromName("agent-runtime-production-source"));
+    const rollback = await call(stub, "/__test/rollback", {});
+    assert.equal(rollback.status, 404);
+
+    const reserved = await call(
+      stub,
+      "/reserve",
+      task("production-clock"),
+      { "x-test-now": "2000-01-01T00:00:00.000Z" },
+    );
+    assert.equal(reserved.status, 201);
+    const injectedDay = await call(stub, "/usage?day=2000-01-01");
+    assert.equal(injectedDay.body.acceptedToday, 0);
+  } finally {
+    await mf.dispose();
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 test("SQLite state survives a Miniflare runtime restart", async () => {
