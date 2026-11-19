@@ -8,7 +8,7 @@ describe("AgentReviewerAuthStore Durable Object", () => {
 
   beforeEach(() => {
     testIndex += 1;
-    store = env.AGENT_REVIEWER_AUTH_STORE.getByName("reviewer-auth-store-test-" + testIndex);
+    store = env.AGENT_REVIEWER_AUTH_STORE.getByName("reviewer-auth-store-test-" + Date.now() + "-" + testIndex + "-" + crypto.randomUUID());
   });
 
   it("does not let a mismatched browser binding consume or delete a valid login transaction", async () => {
