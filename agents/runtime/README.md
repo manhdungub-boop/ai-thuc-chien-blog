@@ -29,6 +29,10 @@ node --test agents/runtime/tests/*.test.mjs
 - `src/admission-policy.mjs` makes a pure fail-closed admission decision from explicit limits and trusted usage counters; it rejects missing/invalid values, daily quota exhaustion, concurrency saturation, and oversized payloads. Safety caps are 1,000 tasks/day, 100 concurrent tasks, and 8 KiB per payload.
 - These modules validate requests only. The admission policy does not reserve capacity, count usage, enqueue, persist, execute tasks, or schedule work. There is no trusted durable usage store, so this is not yet real quota enforcement.
 
+## Durable state-store decision
+
+See [STATE-STORE-ADR.md](./STATE-STORE-ADR.md) for the proposed SQLite-backed Durable Object design, Free-tier budget, transaction boundary, failure behavior, and implementation gates. No binding, migration, or deployment is included yet.
+
 ## Next implementation gates
 
 1. Task contract is implemented as validation-only: `content.review`, `ai_bank.candidate_review`, and `seo.audit` have strict payload allowlists, bounded size, path validation, and idempotency-key syntax.
