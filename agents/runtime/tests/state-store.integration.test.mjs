@@ -9,6 +9,7 @@ import { Miniflare } from "miniflare";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const workerPath = path.resolve(here, "../src/worker.mjs");
 const TEST_OPERATOR_TOKEN = "integration-test-operator-token-0123456789abcdef";
+const TEST_STATE_STORE_TOKEN = "integration-test-state-store-token-0123456789abcdef";
 
 async function createRuntime({ daily = 100, concurrent = 5, persistDir, enabled = "true", paused = "false" } = {}) {
   const directory = persistDir ?? await mkdtemp(path.join(tmpdir(), "ai-thuc-chien-do-"));
@@ -24,7 +25,7 @@ async function createRuntime({ daily = 100, concurrent = 5, persistDir, enabled 
       RUNTIME_TESTING: "true",
       AGENT_ENABLED: enabled,
       AGENT_PAUSED: paused,
-      AGENT_OPERATOR_TOKEN: TEST_OPERATOR_TOKEN,
+      AGENT_OPERATOR_TOKEN: TEST_OPERATOR_TOKEN, AGENT_STATE_STORE_TOKEN: TEST_STATE_STORE_TOKEN,
       RUNTIME_MAX_TASKS_PER_DAY: String(daily),
       RUNTIME_MAX_CONCURRENT_TASKS: String(concurrent),
     },
@@ -48,7 +49,7 @@ function task(id, payload = { path: "/guides" }) {
 async function call(stub, pathname, body, headers = {}) {
   const response = await stub.fetch("http://do.local" + pathname, {
     method: body === undefined ? "GET" : "POST",
-    headers: { ...(body === undefined ? {} : { "Content-Type": "application/json" }), Authorization: "Bearer " + TEST_OPERATOR_TOKEN, ...headers },
+    headers: { ...(body === undefined ? {} : { "Content-Type": "application/json" }), Authorization: "Bearer " + TEST_STATE_STORE_TOKEN, ...headers },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   return { status: response.status, body: await response.json() };
@@ -65,6 +66,8 @@ test("all state-store routes reject missing or invalid operator authentication",
     ]) {
       const missing = await call(stub, pathname, body, { Authorization: "" });
       const invalid = await call(stub, pathname, body, { Authorization: "Bearer invalid-token" });
+      const externalOperator = await call(stub, pathname, body, { Authorization: "Bearer " + TEST_OPERATOR_TOKEN });
+      assert.equal(externalOperator.status, 401, pathname + " external operator token must not authenticate internal store");
       assert.equal(missing.status, 401, pathname + " missing token");
       assert.equal(invalid.status, 401, pathname + " invalid token");
       assert.equal(missing.body.error, "operator_auth_required");
@@ -76,7 +79,7 @@ test("all state-store routes reject missing or invalid operator authentication",
 test("State Store bounds request bodies before JSON parsing", async () => {
   await withRuntime({}, async ({ stub }) => {
     const headers = {
-      Authorization: "Bearer " + TEST_OPERATOR_TOKEN,
+      Authorization: "Bearer " + TEST_STATE_STORE_TOKEN,
       "Content-Type": "application/json",
     };
 
@@ -122,7 +125,7 @@ test("state-store admission fails closed while disabled or paused", async () => 
     compatibilityDate: "2026-07-08",
     durableObjects: { AGENT_STATE_STORE: { className: "AgentStateStore", useSQLite: true } },
     durableObjectsPersist: directory,
-    bindings: { RUNTIME_TESTING: "true", AGENT_OPERATOR_TOKEN: TEST_OPERATOR_TOKEN, AGENT_ENABLED: "false", AGENT_PAUSED: "true" },
+    bindings: { RUNTIME_TESTING: "true", AGENT_OPERATOR_TOKEN: TEST_OPERATOR_TOKEN, AGENT_STATE_STORE_TOKEN: TEST_STATE_STORE_TOKEN, AGENT_ENABLED: "false", AGENT_PAUSED: "true" },
   });
   try {
     const namespace = await mf.getDurableObjectNamespace("AGENT_STATE_STORE");
