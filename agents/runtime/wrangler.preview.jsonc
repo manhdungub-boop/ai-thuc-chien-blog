@@ -10,7 +10,8 @@
     "AGENT_ENABLED": "false",
     "AGENT_PAUSED": "true",
     "AGENT_SCHEDULE_MODE": "manual_only_no_cron",
-    "AGENT_REVIEWER_AUTH_ENABLED": "false"
+    "AGENT_REVIEWER_AUTH_ENABLED": "false",
+    "AGENT_OPERATOR_CONTROL_ENABLED": "false"
   },
   "durable_objects": {
     "bindings": [
