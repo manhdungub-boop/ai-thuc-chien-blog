@@ -31,6 +31,7 @@ function running(overrides = {}) {
     lease_generation: 1,
     lease_owner: OWNER_A,
     lease_expires_at: 5000,
+    lease_max_expires_at: 20000,
     ...overrides,
   };
 }
@@ -80,6 +81,18 @@ test("heartbeat accepts only the current owner and unexpired generation", () => 
   assert.equal(heartbeatLease(running({ lease_expires_at: 2000 }), {
     now: 2000, leaseOwner: OWNER_A, leaseGeneration: 1,
   }).error, "lease_expired");
+});
+
+test("heartbeat cannot extend a lease beyond its absolute maximum lifetime", () => {
+  const row = running({ lease_expires_at: 29 * 60 * 1000, lease_max_expires_at: 30 * 60 * 1000 });
+  const capped = heartbeatLease(row, {
+    now: 29 * 60 * 1000, leaseOwner: OWNER_A, leaseGeneration: 1,
+  });
+  assert.equal(capped.ok, true);
+  assert.equal(capped.fields.lease_expires_at, 30 * 60 * 1000);
+  assert.equal(heartbeatLease(row, {
+    now: 30 * 60 * 1000, leaseOwner: OWNER_A, leaseGeneration: 1,
+  }).error, "lease_max_lifetime_exceeded");
 });
 
 test("expired lease is requeued only below attempt ceiling and with bounded delay", () => {
