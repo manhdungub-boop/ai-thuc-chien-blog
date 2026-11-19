@@ -216,6 +216,7 @@ export class AgentSupervisorWorkflow extends WorkflowEntrypoint {
             if (authoringPolicy.action !== "execute" ||
                 authoringPolicy.provider !== "article-authoring-brief") {
               return {
+                ok: false,
                 status: "authoring_provider_deferred",
                 reason: authoringPolicy.reason,
                 artifact_created: false,
