@@ -65,6 +65,9 @@ test("all state-store routes require the distinct internal credential", async ()
       ["/complete", { taskId: "missing", leaseOwner: "a1b2c3d4-e5f6-4711-8123-abcdef012345", leaseGeneration: 1, status: "succeeded" }],
       ["/recover", { taskId: "missing" }],
       ["/transition", { taskId: "missing", status: "running" }],
+      ["/control", undefined],
+      ["/control/pause", {}],
+      ["/control/resume", {}],
       ["/task?id=missing", undefined],
       ["/usage", undefined],
       ["/__test/rollback", {}],
@@ -130,6 +133,48 @@ test("pause switch blocks queued-to-running transitions but permits terminal can
   } finally {
     if (active) await active.mf.dispose();
     if (paused) await paused.mf.dispose();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("durable pause is atomic, survives restart, and resume never dispatches queued work", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "ai-thuc-chien-do-durable-control-"));
+  let active;
+  let restarted;
+  try {
+    active = await createRuntime({ persistDir: directory });
+    const created = await call(active.stub, "/reserve", task("durable-control"));
+    assert.equal(created.status, 201);
+    const taskId = created.body.task.taskId;
+    const paused = await call(active.stub, "/control/pause", { reason: "operator maintenance" });
+    assert.equal(paused.status, 200);
+    assert.equal(paused.body.changed, true);
+    assert.equal(paused.body.control.paused, true);
+    const duplicatePause = await call(active.stub, "/control/pause", { reason: "duplicate" });
+    assert.equal(duplicatePause.status, 200);
+    assert.equal(duplicatePause.body.changed, false);
+    assert.equal((await call(active.stub, "/reserve", task("durable-control-blocked"))).status, 503);
+    assert.equal((await call(active.stub, "/claim", { taskId })).status, 503);
+
+    await active.mf.dispose();
+    active = null;
+    restarted = await createRuntime({ persistDir: directory });
+    const persisted = await call(restarted.stub, "/control");
+    assert.equal(persisted.body.control.paused, true);
+    assert.equal(persisted.body.control.version, 1);
+    assert.equal((await call(restarted.stub, "/claim", { taskId })).status, 503);
+
+    const resumed = await call(restarted.stub, "/control/resume", { reason: "maintenance complete" });
+    assert.equal(resumed.status, 200);
+    assert.equal(resumed.body.changed, true);
+    assert.equal(resumed.body.control.paused, false);
+    assert.equal((await call(restarted.stub, "/task?id=" + encodeURIComponent(taskId))).body.task.state, "queued");
+    assert.equal((await call(restarted.stub, "/usage")).body.inFlight, 1);
+    assert.equal((await call(restarted.stub, "/claim", { taskId })).status, 200);
+    assert.equal((await call(restarted.stub, "/control/pause", { reason: "bad\nreason" })).status, 400);
+  } finally {
+    if (active) await active.mf.dispose();
+    if (restarted) await restarted.mf.dispose();
     await rm(directory, { recursive: true, force: true });
   }
 });
@@ -294,7 +339,7 @@ test("SQLite state survives a Miniflare runtime restart", async () => {
 });
 
 
-test("fresh State Store initializes schema v2 with conservative lease defaults", async () => {
+test("fresh State Store initializes schema v3 with conservative lease defaults", async () => {
   await withRuntime({}, async ({ stub }) => {
     const created = await call(stub, "/reserve", task("schema-v2-fresh"));
     assert.equal(created.status, 201);
@@ -307,7 +352,7 @@ test("fresh State Store initializes schema v2 with conservative lease defaults",
   });
 });
 
-test("persisted v1 State Store migrates transactionally to v2 without losing task or usage", async () => {
+test("persisted v1 State Store migrates transactionally to v3 without losing task or usage", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "ai-thuc-chien-do-v1-migration-"));
   let first;
   let second;
