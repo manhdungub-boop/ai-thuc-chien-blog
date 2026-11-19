@@ -252,7 +252,9 @@ export class AgentSupervisorWorkflow extends WorkflowEntrypoint {
               };
             }
             const draftStore = this.env.AGENT_DRAFT_STORE.getByName("primary");
-            const persisted = await draftStore.createDraft(draftTaskId, brief.draft);
+            const persisted = await draftStore.createDraft(
+              draftTaskId, brief.draft, research.result.evidence_retrieval.evidence
+            );
             if (!persisted.accepted) {
               return {
                 status: "authoring_brief_persistence_rejected",
@@ -438,6 +440,57 @@ export default {
         }
       });
     }
+    const reviewerAuthoringMatch = url.pathname.match(/^\/api\/reviewer\/drafts\/([a-zA-Z0-9._:-]{8,128})\/authoring$/);
+    if (reviewerAuthoringMatch) {
+      if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
+      if (request.headers.get("origin") !== url.origin ||
+          (request.headers.get("content-type") || "").split(";")[0].trim().toLowerCase() !== "application/json") {
+        return json({ error: "review_request_origin_or_content_type_rejected" }, 403);
+      }
+      const contentLength = Number(request.headers.get("content-length") || 0);
+      if (contentLength > 48 * 1024) return json({ error: "authoring_request_too_large" }, 413);
+      const sessionToken = readGoogleReviewerSessionCookie(request);
+      if (!sessionToken) return json({ error: "reviewer_session_required" }, 401);
+      let body;
+      try {
+        const raw = await request.text();
+        if (new TextEncoder().encode(raw).byteLength > 48 * 1024) return json({ error: "authoring_request_too_large" }, 413);
+        body = JSON.parse(raw);
+      } catch { return json({ error: "invalid_authoring_request_json" }, 400); }
+      if (!body || typeof body !== "object" || Array.isArray(body) ||
+          Object.keys(body).some(key => !["expected_version", "draft"].includes(key)) ||
+          !Number.isInteger(body.expected_version) || !body.draft ||
+          !Array.isArray(body.draft.claims) || body.draft.claims.length < 1 || body.draft.claims.length > 40) {
+        return json({ error: "authoring_claim_manifest_required" }, 400);
+      }
+      const draftStore = env.AGENT_DRAFT_STORE?.getByName("primary");
+      if (!draftStore) return json({ error: "draft_store_unavailable" }, 503);
+      const revised = await draftStore.reviseDraftForReviewer(
+        reviewerAuthoringMatch[1], body.expected_version, body.draft, sessionToken
+      );
+      if (!revised.authorized) return json({ error: revised.reason || "reviewer_session_invalid" }, 401);
+      if (!revised.updated) return json({ error: revised.reason || "draft_revision_rejected", current_version: revised.current_version || null }, 400);
+      let evidenceLedger = { stored: false, reason: "quality_gate_not_passed" };
+      if (revised.artifact.status === "pending_human_review") {
+        evidenceLedger = await draftStore.storeEvidenceLedger(
+          reviewerAuthoringMatch[1], revised.artifact.version
+        );
+      }
+      const artifact = draftStore.getDraft(reviewerAuthoringMatch[1]);
+      return json({
+        updated: true,
+        artifact,
+        evidence_ledger: {
+          stored: evidenceLedger.stored === true,
+          status: evidenceLedger.stored ? evidenceLedger.artifact.evidence_review?.ledger?.status : evidenceLedger.reason
+        },
+        human_review_required: true,
+        publication_authorized: false,
+        content_published: false,
+        social_post_published: false
+      });
+    }
+
     const reviewerDraftCollection = url.pathname === "/api/reviewer/drafts";
     const reviewerNeedsRevisionCollection = url.pathname === "/api/reviewer/drafts-needing-authoring";
     const reviewerDraftDetail = url.pathname.match(/^\/api\/reviewer\/drafts\/([a-zA-Z0-9._:-]{8,128})$/);
@@ -489,15 +542,16 @@ export default {
         body = JSON.parse(raw);
       } catch { return json({ error: "invalid_review_request_json" }, 400); }
       if (!body || typeof body !== "object" || Array.isArray(body) ||
-          Object.keys(body).some(key => !["expected_version", "ledger", "review_record"].includes(key)) ||
-          !Number.isInteger(body.expected_version) || !body.ledger || !body.review_record) {
+          Object.keys(body).some(key => !["expected_version", "decisions"].includes(key)) ||
+          !Number.isInteger(body.expected_version) || !Array.isArray(body.decisions)) {
         return json({ error: "invalid_review_request_shape" }, 400);
       }
       const draftStore = env.AGENT_DRAFT_STORE?.getByName("primary");
       if (!draftStore) return json({ error: "draft_store_unavailable" }, 503);
-      const result = await draftStore.recordEvidenceReview(
-        reviewerEvidenceMatch[1], body.expected_version, body.ledger, body.review_record, sessionToken
+      const result = await draftStore.recordReviewerClaimDecisions(
+        reviewerEvidenceMatch[1], body.expected_version, body.decisions, sessionToken
       );
+      if (!result.authorized) return json({ error: result.reason || "reviewer_session_invalid" }, 401);
       if (!result.recorded) return json({ error: result.reason, readiness: result.readiness || null }, 400);
       return json({
         recorded: true,
