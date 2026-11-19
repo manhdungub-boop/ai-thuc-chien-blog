@@ -322,7 +322,7 @@ export default {
         }
       });
     }
-    const reviewerAIBankEvidenceMatch = url.pathname.match(/^\\/api\\/reviewer\\/ai-bank\\/candidates\\/([a-zA-Z0-9_.-]{1,100})\\/([a-zA-Z0-9_.-]{1,100})\\/evidence$/);
+    const reviewerAIBankEvidenceMatch = url.pathname.match(/^\/api\/reviewer\/ai-bank\/candidates\/([a-zA-Z0-9_.-]{1,100})\/([a-zA-Z0-9_.-]{1,100})\/evidence$/);
     if (reviewerAIBankEvidenceMatch) {
       if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
       if (request.headers.get("origin") !== url.origin ||
