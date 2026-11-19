@@ -8,7 +8,8 @@ Status: **scaffold only; not an autonomous agent and not deployed**.
 - No account ID, production route, custom domain, D1 binding, KV/R2 binding, Durable Object binding, secret, cron trigger, or queue consumer is configured.
 - `AGENT_ENABLED=false` and `AGENT_PAUSED=true` are the checked-in defaults.
 - `POST /run` fails closed while disabled or paused.
-- Even if both flags are manually opened, execution returns `501 execution_not_implemented`; no task execution exists in this scaffold.
+- If both flags are manually opened, `POST /run` requires an `Authorization: Bearer` token matching the externally injected `AGENT_OPERATOR_TOKEN`; missing or invalid credentials fail closed with `401`. A valid token still receives `501 execution_not_implemented`; no task execution exists.
+- Operator bearer validation uses SHA-256 digests with constant-time byte comparison. The secret is never committed, logged, or returned; no secret is configured in this repository.
 - `GET /health` returns only non-sensitive state.
 - No deploy workflow is provided. CI only runs local Node.js tests and syntax checks.
 
@@ -20,6 +21,12 @@ From the repository root:
 node --check agents/runtime/src/worker.mjs
 node --test agents/runtime/tests/*.test.mjs
 ```
+
+## Implemented validation-only building blocks
+
+- `src/task-contract.mjs` accepts only `content.review`, `ai_bank.candidate_review`, and `seo.audit`; each has exact payload keys, bounded serialized size, and strict local path/identifier validation.
+- `src/operator-auth.mjs` validates an externally supplied operator bearer token and fails closed when the secret is absent or weak.
+- These modules validate requests only. There is no enqueue, persistence, task execution, or schedule.
 
 ## Next implementation gates
 
