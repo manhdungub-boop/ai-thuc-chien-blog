@@ -50,6 +50,8 @@ test("Preview deployment workflow is manual, explicitly confirmed, token-isolate
   assert.match(previewDeployWorkflow, /production_access == false/);
   assert.match(previewDeployWorkflow, /content_draft_executor_registered == true/);
   assert.match(previewDeployWorkflow, /content_draft_executor_enabled == false/);
+  assert.match(previewDeployWorkflow, /quality_review_executor_registered == true/);
+  assert.match(previewDeployWorkflow, /quality_review_executor_enabled == false/);
   assert.match(source, /handleGoogleReviewerAuth\(request, env\)/);
   assert.ok(previewConfig.durable_objects.bindings.some(binding => binding.name === "AGENT_REVIEWER_AUTH_STORE"));
   assert.ok(previewConfig.migrations.some(migration => migration.tag === "v4-reviewer-auth-store"));
