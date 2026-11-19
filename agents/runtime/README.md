@@ -4,7 +4,7 @@ This directory is a separate Cloudflare Worker service. It is not imported by th
 
 ## Runtime foundation
 
-- A Cloudflare Workflow binding is present for orchestration. The default `wrangler.jsonc` remains unscheduled; the isolated `wrangler.preview.jsonc` defines a 15-minute paused heartbeat only. The runtime remains disabled and paused until provider, quota, draft-executor, and release gates are complete.
+- A Cloudflare Workflow binding is present for orchestration. The default `wrangler.jsonc` remains unscheduled; the isolated `wrangler.preview.jsonc` defines a 15-minute paused heartbeat only. The runtime remains disabled and paused. A deterministic human-authoring scaffold executor is registered, but it is not active while the pause flags are set; external provider adapters, quota verification, claim-level quality review, owner release, and publication gates remain incomplete.
 - A separate SQLite-backed Durable Object provides a durable task queue. It is not the website's D1 database.
 - Queue contracts include an allowlist of task types, per-agent payload schemas, an 8 KiB payload ceiling, idempotent task IDs, a 500-task active-queue ceiling, five-minute leases with unique fencing tokens, a five-attempt ceiling, a dead-letter state, and rejection of stale worker completion.
 - Queue operations are internal Durable Object RPC methods only. There is no public task-enqueue endpoint.
