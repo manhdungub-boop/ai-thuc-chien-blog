@@ -6,6 +6,42 @@ const SCHEMA_VERSION = 2;
 // Conservative Free-tier pilot defaults; hard caps remain enforced below.
 const DEFAULT_LIMITS = Object.freeze({ daily: 100, concurrent: 5, payloadBytes: 8192 });
 const TERMINAL_STATES = new Set(["succeeded", "failed", "cancelled"]);
+const MAX_STATE_STORE_REQUEST_BYTES = 12 * 1024;
+class RequestBodyError extends Error {
+  constructor(status, code) { super(code); this.status = status; this.code = code; }
+}
+async function readBoundedJson(request) {
+  const declared = request.headers.get("content-length");
+  if (declared !== null) {
+    if (!/^\\d+$/.test(declared)) throw new RequestBodyError(400, "request_content_length_invalid");
+    if (Number(declared) > MAX_STATE_STORE_REQUEST_BYTES) throw new RequestBodyError(413, "request_body_too_large");
+  }
+  if (!request.body) throw new RequestBodyError(400, "request_body_empty");
+  const reader = request.body.getReader();
+  const chunks = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > MAX_STATE_STORE_REQUEST_BYTES) {
+        await reader.cancel();
+        throw new RequestBodyError(413, "request_body_too_large");
+      }
+      chunks.push(value);
+    }
+  } finally { reader.releaseLock(); }
+  if (total === 0) throw new RequestBodyError(400, "request_body_empty");
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  let decoded;
+  try { decoded = new TextDecoder("utf-8", { fatal: true }).decode(bytes); }
+  catch { throw new RequestBodyError(400, "request_body_invalid_utf8"); }
+  try { return JSON.parse(decoded); }
+  catch { throw new RequestBodyError(400, "request_json_invalid"); }
+}
 const TASK_TYPES_SQL = "'content.review','ai_bank.candidate_review','seo.audit'";
 
 function boundedLimit(value, fallback, maximum) {
@@ -92,39 +128,52 @@ export class AgentStateStore {
       return jsonResponse({ ok: false, error: "state_store_auth_required" }, 401);
     }
     try {
-      await this.ready;
       const url = new URL(request.url);
       if (url.pathname === "/reserve" && request.method === "POST") {
-        const result = await this.reserve(await request.json(), this.requestTime(request));
+        const body = await readBoundedJson(request);
+        await this.ready;
+        const result = await this.reserve(body, this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
       if (url.pathname === "/claim" && request.method === "POST") {
-        const result = this.claim(await request.json(), this.requestTime(request));
+        const body = await readBoundedJson(request);
+        await this.ready;
+        const result = this.claim(body, this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
       if (url.pathname === "/heartbeat" && request.method === "POST") {
-        const result = this.heartbeat(await request.json(), this.requestTime(request));
+        const body = await readBoundedJson(request);
+        await this.ready;
+        const result = this.heartbeat(body, this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
       if (url.pathname === "/complete" && request.method === "POST") {
-        const result = this.complete(await request.json(), this.requestTime(request));
+        const body = await readBoundedJson(request);
+        await this.ready;
+        const result = this.complete(body, this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
       if (url.pathname === "/recover" && request.method === "POST") {
-        const result = this.recover(await request.json(), this.requestTime(request));
+        const body = await readBoundedJson(request);
+        await this.ready;
+        const result = this.recover(body, this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
       if (url.pathname === "/transition" && request.method === "POST") {
-        const result = this.transition(await request.json(), this.requestTime(request));
+        const body = await readBoundedJson(request);
+        await this.ready;
+        const result = this.transition(body, this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
       if (url.pathname === "/task" && request.method === "GET") {
+        await this.ready;
         const taskId = url.searchParams.get("id");
         if (!taskId || taskId.length > 64) return jsonResponse({ ok: false, error: "task_id_invalid" }, 400);
         const row = readRow(this.sql, "SELECT * FROM tasks WHERE task_id = ?", taskId);
         return row ? jsonResponse({ ok: true, task: safeTask(row) }) : jsonResponse({ ok: false, error: "task_not_found" }, 404);
       }
       if (url.pathname === "/usage" && request.method === "GET") {
+        await this.ready;
         const day = url.searchParams.get("day") ?? utcDay(this.requestTime(request));
         if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || Number.isNaN(Date.parse(day + "T00:00:00Z"))) {
           return jsonResponse({ ok: false, error: "utc_day_invalid" }, 400);
@@ -161,7 +210,8 @@ export class AgentStateStore {
       }
       if (request.method !== "GET" && request.method !== "POST") return jsonResponse({ ok: false, error: "method_not_allowed" }, 405);
       return jsonResponse({ ok: false, error: "not_found" }, 404);
-    } catch {
+    } catch (error) {
+      if (error instanceof RequestBodyError) return jsonResponse({ ok: false, error: error.code }, error.status);
       return jsonResponse({ ok: false, error: "state_store_unavailable" }, 503);
     }
   }
