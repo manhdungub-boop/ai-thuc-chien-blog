@@ -266,6 +266,12 @@ async function signTestSnapshot(snapshot, keyId, privateKey) {
   };
 }
 
+async function verifyTestSnapshotSignatureWithKeyState(snapshot, envelope, trustedKeys) {
+  const record = trustedKeys.get(envelope?.key_id);
+  if (!record || !["active", "verify_only"].includes(record.status)) return false;
+  return verifyTestSnapshotSignature(snapshot, envelope, new Map([[envelope.key_id, record.publicKey]]));
+}
+
 async function verifyTestSnapshotSignature(snapshot, envelope, trustedPublicKeys) {
   if (!envelope || envelope.algorithm !== "Ed25519" ||
       typeof envelope.key_id !== "string" ||
@@ -446,6 +452,48 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
         "SELECT COUNT(*) AS count FROM ai_bank_candidates"
       ).one().count).toBe(0);
     });
+  });
+
+  it("verifies raw imported public keys and enforces active, verify-only, and revoked key states", async () => {
+    await store.upsertCandidates([candidate()]);
+    const snapshot = await runInDurableObject(store, async (_instance, state) =>
+      captureTestSnapshot(state, 1)
+    );
+    const firstPair = await crypto.subtle.generateKey(
+      { name: "Ed25519" }, true, ["sign", "verify"]
+    );
+    const rawPublicKey = await crypto.subtle.exportKey("raw", firstPair.publicKey);
+    const importedPublicKey = await crypto.subtle.importKey(
+      "raw", rawPublicKey, { name: "Ed25519" }, true, ["verify"]
+    );
+    const oldEnvelope = await signTestSnapshot(snapshot, "emulator-key-old", firstPair.privateKey);
+
+    expect(await verifyTestSnapshotSignatureWithKeyState(
+      snapshot, oldEnvelope,
+      new Map([["emulator-key-old", { publicKey: importedPublicKey, status: "active" }]])
+    )).toBe(true);
+    expect(await verifyTestSnapshotSignatureWithKeyState(
+      snapshot, oldEnvelope,
+      new Map([["emulator-key-old", { publicKey: importedPublicKey, status: "verify_only" }]])
+    )).toBe(true);
+    expect(await verifyTestSnapshotSignatureWithKeyState(
+      snapshot, oldEnvelope,
+      new Map([["emulator-key-old", { publicKey: importedPublicKey, status: "revoked" }]])
+    )).toBe(false);
+
+    const newPair = await crypto.subtle.generateKey(
+      { name: "Ed25519" }, true, ["sign", "verify"]
+    );
+    const newEnvelope = await signTestSnapshot(snapshot, "emulator-key-new", newPair.privateKey);
+    const rotatedKeys = new Map([
+      ["emulator-key-old", { publicKey: importedPublicKey, status: "verify_only" }],
+      ["emulator-key-new", { publicKey: newPair.publicKey, status: "active" }]
+    ]);
+    expect(await verifyTestSnapshotSignatureWithKeyState(snapshot, newEnvelope, rotatedKeys)).toBe(true);
+    expect(await verifyTestSnapshotSignatureWithKeyState(snapshot, oldEnvelope, rotatedKeys)).toBe(true);
+
+    rotatedKeys.set("emulator-key-old", { publicKey: importedPublicKey, status: "revoked" });
+    expect(await verifyTestSnapshotSignatureWithKeyState(snapshot, oldEnvelope, rotatedKeys)).toBe(false);
   });
 
   it("signs and verifies the snapshot manifest with an isolated Ed25519 keypair", async () => {
