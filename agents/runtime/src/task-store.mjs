@@ -30,6 +30,26 @@ function retryDelayMs(attempts) {
 }
 const EXTERNAL_REQUEST_LIMITS = Object.freeze({ ai_bank_discovery: 10, content_research: 8 });
 
+export async function authorizeOperatorSession(sessionToken, env) {
+  if (env.AGENT_OPERATOR_CONTROL_ENABLED !== "true") {
+    return { authorized: false, reason: "operator_control_disabled" };
+  }
+  const operatorEmails = typeof env.AGENT_OPERATOR_ALLOWED_EMAILS === "string"
+    ? env.AGENT_OPERATOR_ALLOWED_EMAILS.split(",").map(value => value.trim().toLowerCase()).filter(Boolean)
+    : [];
+  if (operatorEmails.length !== 1 ||
+      !/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(operatorEmails[0]) ||
+      operatorEmails[0].length > 254) {
+    return { authorized: false, reason: "operator_allowlist_not_configured" };
+  }
+  const verified = await verifyGoogleReviewerSessionToken(sessionToken, env);
+  if (!verified.authenticated) return { authorized: false, reason: "operator_session_invalid" };
+  if (verified.reviewer.email !== operatorEmails[0]) {
+    return { authorized: false, reason: "operator_not_allowed" };
+  }
+  return { authorized: true, actor_ref: verified.reviewer.reviewer_ref };
+}
+
 function validatePayload(type, payload) {
   const keys = Object.keys(payload);
   const text = (value, min, max) =>
@@ -331,23 +351,7 @@ export class AgentTaskStore extends DurableObject {
   }
 
   async authorizeOperator(sessionToken) {
-    if (this.env.AGENT_OPERATOR_CONTROL_ENABLED !== "true") {
-      return { authorized: false, reason: "operator_control_disabled" };
-    }
-    const operatorEmails = typeof this.env.AGENT_OPERATOR_ALLOWED_EMAILS === "string"
-      ? this.env.AGENT_OPERATOR_ALLOWED_EMAILS.split(",").map(value => value.trim().toLowerCase()).filter(Boolean)
-      : [];
-    if (operatorEmails.length !== 1 ||
-        !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(operatorEmails[0]) ||
-        operatorEmails[0].length > 254) {
-      return { authorized: false, reason: "operator_allowlist_not_configured" };
-    }
-    const verified = await verifyGoogleReviewerSessionToken(sessionToken, this.env);
-    if (!verified.authenticated) return { authorized: false, reason: "operator_session_invalid" };
-    if (verified.reviewer.email !== operatorEmails[0]) {
-      return { authorized: false, reason: "operator_not_allowed" };
-    }
-    return { authorized: true, actor_ref: verified.reviewer.reviewer_ref };
+    return authorizeOperatorSession(sessionToken, this.env);
   }
 
   async getOperatorControl(sessionToken) {
