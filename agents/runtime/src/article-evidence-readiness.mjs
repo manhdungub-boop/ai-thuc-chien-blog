@@ -50,6 +50,7 @@ export async function assessArticleEvidenceReadiness({
       ok: false,
       status: "human_review_record_not_verified",
       review_status: reviewVerification.status,
+      evidence_summary: reviewVerification.evidence_summary,
       publication_authorized: false,
       content_published: false
     };
@@ -114,6 +115,7 @@ export async function assessArticleEvidenceReadiness({
       claims_assessed: draft.claims.length,
       issues: claimIssues,
       review_status: reviewVerification.status,
+      evidence_summary: reviewVerification.evidence_summary,
       publication_authorized: false,
       content_published: false
     };
@@ -187,6 +189,7 @@ export async function assessArticleEvidenceReadiness({
       claims_assessed: draft.claims.length,
       issues: claimIssues,
       review_status: reviewVerification.status,
+      evidence_summary: reviewVerification.evidence_summary,
       publication_authorized: false,
       content_published: false
     };
@@ -200,6 +203,7 @@ export async function assessArticleEvidenceReadiness({
       claims_assessed: draft.claims.length,
       article_quality: articleQuality,
       review_status: reviewVerification.status,
+      evidence_summary: reviewVerification.evidence_summary,
       publication_authorized: false,
       content_published: false
     };
@@ -214,6 +218,7 @@ export async function assessArticleEvidenceReadiness({
       claims_assessed: draft.claims.length,
       article_quality: articleQuality,
       review_status: reviewVerification.status,
+      evidence_summary: reviewVerification.evidence_summary,
       reviewer_identity_authenticated: false,
       limitations: [
         "The review record matches the supplied ledger, but the reviewer identity is not authenticated.",
@@ -232,6 +237,7 @@ export async function assessArticleEvidenceReadiness({
     claims_assessed: draft.claims.length,
     article_quality: articleQuality,
     review_status: reviewVerification.status,
+      evidence_summary: reviewVerification.evidence_summary,
     limitations: [
       "Only the explicitly supplied claim manifest is checked; this does not discover omitted factual claims in the article body.",
       "Inline citation indices are bound to the exact reviewed evidence URLs and source-list positions, but this does not prove semantic support.",
