@@ -81,12 +81,123 @@ function candidate(source = sources[0], release = "v1.2.3", publishedAt = "2026-
   };
 }
 
+const SNAPSHOT_TABLES = [
+  { name: "ai_bank_candidates", order: "candidate_id" },
+  { name: "ai_bank_review_evidence", order: "evidence_id" },
+  { name: "ai_bank_review_evidence_releases", order: "evidence_id ASC, candidate_release_url" },
+  { name: "ai_bank_evidence_audit_events", order: "event_id" }
+];
+
+function canonicalSnapshotJson(value) {
+  if (Array.isArray(value)) return "[" + value.map(canonicalSnapshotJson).join(",") + "]";
+  if (value && typeof value === "object") {
+    return "{" + Object.keys(value).sort().map(key =>
+      JSON.stringify(key) + ":" + canonicalSnapshotJson(value[key])
+    ).join(",") + "}";
+  }
+  return JSON.stringify(value);
+}
+
+async function sha256Hex(value) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+}
+
+// Test-only snapshot prototype. All table reads occur inside one synchronous
+// SQLite transaction; hashing happens after the consistent row set is copied.
+async function captureTestSnapshot(state, pageSize = 1) {
+  const rowsByTable = state.storage.transactionSync(() => {
+    const result = {};
+    for (const table of SNAPSHOT_TABLES) {
+      const rows = [];
+      let offset = 0;
+      while (true) {
+        const page = state.storage.sql.exec(
+          "SELECT * FROM " + table.name + " ORDER BY " + table.order + " LIMIT ? OFFSET ?",
+          pageSize, offset
+        ).toArray();
+        rows.push(...page);
+        if (page.length < pageSize) break;
+        offset += page.length;
+      }
+      result[table.name] = rows;
+    }
+    return result;
+  });
+
+  const counts = {};
+  const tableDigests = {};
+  for (const table of SNAPSHOT_TABLES) {
+    const rows = rowsByTable[table.name];
+    counts[table.name] = rows.length;
+    tableDigests[table.name] = await sha256Hex(canonicalSnapshotJson(rows));
+  }
+  const manifest = {
+    format_id: "ai-bank-audit-emulator-snapshot",
+    format_version: 1,
+    counts,
+    table_sha256: tableDigests
+  };
+  return {
+    ...manifest,
+    manifest_sha256: await sha256Hex(canonicalSnapshotJson(manifest))
+  };
+}
+
 describe("AgentAIBankCandidateStore Durable Object", () => {
   let store;
   let testIndex = 0;
   beforeEach(() => {
     testIndex += 1;
     store = env.AGENT_AI_BANK_CANDIDATE_STORE.getByName("agent-ai-bank-candidates-" + testIndex);
+  });
+
+  it("captures a deterministic read-only four-table snapshot in one SQLite transaction", async () => {
+    const now = Date.parse("2026-11-19T10:00:00.000Z");
+    await store.upsertCandidates([candidate()], now);
+    const eventId = "d4e6d1c2-3b7f-4a91-8c22-1234567890ab";
+    const accepted = await submitEvidence(store, "github:ollama/ollama", {
+      check_type: "pricing_and_free_limits",
+      source_title: "Official pricing page",
+      source_url: "https://ollama.com/pricing",
+      excerpt: "Pricing evidence is retained for human review."
+    }, now, eventId);
+    expect(accepted.accepted).toBe(true);
+
+    await runInDurableObject(store, async (_instance, state) => {
+      const before = Object.fromEntries(SNAPSHOT_TABLES.map(table => [
+        table.name,
+        state.storage.sql.exec("SELECT COUNT(*) AS count FROM " + table.name).one().count
+      ]));
+      const first = await captureTestSnapshot(state, 1);
+      const second = await captureTestSnapshot(state, 1);
+      const after = Object.fromEntries(SNAPSHOT_TABLES.map(table => [
+        table.name,
+        state.storage.sql.exec("SELECT COUNT(*) AS count FROM " + table.name).one().count
+      ]));
+
+      expect(first).toEqual(second);
+      expect(first.format_id).toBe("ai-bank-audit-emulator-snapshot");
+      expect(first.format_version).toBe(1);
+      expect(first.counts).toEqual({
+        ai_bank_candidates: 1,
+        ai_bank_review_evidence: 1,
+        ai_bank_review_evidence_releases: 1,
+        ai_bank_evidence_audit_events: 1
+      });
+      expect(first.manifest_sha256).toMatch(/^[a-f0-9]{64}$/);
+      expect(before).toEqual(after);
+
+      const tampered = structuredClone(first);
+      tampered.table_sha256.ai_bank_review_evidence = "0".repeat(64);
+      const tamperedManifest = {
+        format_id: tampered.format_id,
+        format_version: tampered.format_version,
+        counts: tampered.counts,
+        table_sha256: tampered.table_sha256
+      };
+      expect(await sha256Hex(canonicalSnapshotJson(tamperedManifest))).not.toBe(first.manifest_sha256);
+    });
   });
 
   it("persists allowlisted candidates as review-only records", async () => {
