@@ -1,5 +1,5 @@
 import { validateTaskRequest } from "./task-contract.mjs";
-import { hasValidOperatorBearer } from "./operator-auth.mjs";
+import { hasValidStateStoreBearer } from "./internal-auth.mjs";
 
 const SCHEMA_VERSION = 1;
 // Conservative Free-tier pilot defaults; hard caps remain enforced below.
@@ -108,7 +108,7 @@ export class AgentStateStore {
   }
 
   async fetch(request) {
-    if (!await hasValidOperatorBearer(request, this.env)) {
+    if (!await hasValidStateStoreBearer(request, this.env)) {
       return jsonResponse({ ok: false, error: "operator_auth_required" }, 401);
     }
     try {
