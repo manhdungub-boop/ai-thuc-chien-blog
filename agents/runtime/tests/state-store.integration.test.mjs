@@ -713,6 +713,9 @@ test("dead-letter inspection returns bounded failed-task metadata with stable cu
     assert.equal(first.body.items.length, 1);
     assert.equal(first.body.items[0].taskId, newerTaskId);
     assert.equal(first.body.items[0].errorCode, "lease_expired_max_attempts");
+    assert.deepEqual(first.body.items[0].classification, {
+      category: "transient", confidence: "high", recommendedAction: "inspect_provider_or_network_health",
+    });
     assert.equal(first.body.items[0].attemptCount, 3);
     assert.equal(first.body.nextCursor.taskId, newerTaskId);
     assert.equal("payload" in first.body.items[0], false);
