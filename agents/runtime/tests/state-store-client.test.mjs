@@ -53,7 +53,7 @@ test("State Store client allows only fixed operations and rejects caller-control
   const { namespace, calls } = mockNamespace();
   const env = { AGENT_STATE_STORE: namespace, AGENT_STATE_STORE_TOKEN: TOKEN };
   await assert.rejects(() => callStateStore(env, "../admin", {}), /operation_not_allowed/);
-  await assert.rejects(() => callStateStore(env, "reserve", { url: "https://attacker.test" }), /request_too_large|/);
+  await assert.rejects(() => callStateStore(env, "reserve", { url: "https://attacker.test" }), /state_store_request_invalid/);
   assert.equal(calls.length, 0);
 });
 
