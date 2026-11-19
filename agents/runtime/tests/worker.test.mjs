@@ -30,10 +30,16 @@ test("run is rejected while disabled", async () => {
   assert.equal((await response.json()).error, "agent_disabled_or_paused");
 });
 
-test("run remains unavailable even if flags are manually opened", async () => {
-  const response = await worker.fetch(request("/run", "POST"), {
+test("run remains unavailable after flags and operator authentication are opened", async () => {
+  const token = "preview-only-test-secret-0123456789abcdef";
+  const authorizedRequest = new Request("https://agent-runtime-preview.example.workers.dev/run", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + token },
+  });
+  const response = await worker.fetch(authorizedRequest, {
     AGENT_ENABLED: "true",
     AGENT_PAUSED: "false",
+    AGENT_OPERATOR_TOKEN: token,
   });
   assert.equal(response.status, 501);
   assert.equal((await response.json()).error, "execution_not_implemented");
