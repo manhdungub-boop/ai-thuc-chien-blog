@@ -318,6 +318,16 @@ export class AgentDraftStore extends DurableObject {
     };
   }
 
+  async listNeedsRevisionForReviewer(limit = 20, reviewerSessionToken) {
+    const session = await verifyGoogleReviewerSessionToken(reviewerSessionToken, this.env, Date.now());
+    if (!session.authenticated) return { authorized: false, reason: session.status || "reviewer_session_invalid" };
+    return {
+      authorized: true,
+      reviewer_ref: session.reviewer.reviewer_ref,
+      items: this.listNeedsRevision(limit)
+    };
+  }
+
   async getDraftForReviewer(id, reviewerSessionToken) {
     const session = await verifyGoogleReviewerSessionToken(reviewerSessionToken, this.env, Date.now());
     if (!session.authenticated) return { authorized: false, reason: session.status || "reviewer_session_invalid" };
