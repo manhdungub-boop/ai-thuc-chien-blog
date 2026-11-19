@@ -21,6 +21,7 @@ const googleOidc = await readFile(new URL("../src/google-oidc-reviewer-verifier.
 const previewDeployWorkflow = await readFile(new URL("../../../.github/workflows/deploy-agent-runtime-preview.yml", import.meta.url), "utf8");
 const runtimeReadme = await readFile(new URL("../README.md", import.meta.url), "utf8");
 const reviewerConsole = await readFile(new URL("../src/reviewer-console.mjs", import.meta.url), "utf8");
+const reviewerConsoleJs = reviewerConsole.match(/export const REVIEWER_CONSOLE_JS = `([\\s\\S]*?)`;/)?.[1] || "";
 
 test("Google OAuth and OIDC upstream JSON responses are byte-bounded", () => {
   assert.match(boundedJson, /getReader\(\)/);
@@ -421,6 +422,11 @@ test("draft artifact persistence runs deterministic quality review only after pr
     "create and revision paths must both use the same policy gate, plus helper declaration");
 });
 
+
+test("reviewer console browser script parses as valid JavaScript", () => {
+  assert.ok(reviewerConsoleJs.length > 0, "reviewer console script must be present");
+  assert.doesNotThrow(() => new Function(reviewerConsoleJs));
+});
 
 test("AI Bank reviewer console renders untrusted candidate data as text and stays read-only", () => {
   assert.match(reviewerConsole, /api\/reviewer\/ai-bank\/candidates\?limit=20/);
