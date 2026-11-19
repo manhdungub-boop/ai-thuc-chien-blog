@@ -594,6 +594,54 @@ test("expired leases are requeued after bounded delay and fail at the attempt ce
   });
 });
 
+test("dead-letter inspection returns bounded failed-task metadata with stable cursor pagination", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    async function failAfterLeaseRetries(id, start) {
+      const created = await call(stub, "/reserve", task(id));
+      const taskId = created.body.task.taskId;
+      const first = await call(stub, "/claim", { taskId }, { "x-test-now": new Date(start).toISOString() });
+      assert.equal(first.status, 200);
+      const recovered1 = await call(stub, "/recover", recoveryBody(taskId), { "x-test-now": new Date(start + 5 * 60_000).toISOString() });
+      assert.equal(recovered1.body.outcome, "requeued");
+      const second = await call(stub, "/claim", { taskId }, { "x-test-now": new Date(start + 5.5 * 60_000).toISOString() });
+      assert.equal(second.status, 200);
+      const recovered2 = await call(stub, "/recover", recoveryBody(taskId), { "x-test-now": new Date(start + 10.5 * 60_000).toISOString() });
+      assert.equal(recovered2.body.outcome, "requeued");
+      const third = await call(stub, "/claim", { taskId }, { "x-test-now": new Date(start + 11 * 60_000).toISOString() });
+      assert.equal(third.status, 200);
+      const failed = await call(stub, "/recover", recoveryBody(taskId), { "x-test-now": new Date(start + 16 * 60_000).toISOString() });
+      assert.equal(failed.status, 200);
+      assert.equal(failed.body.outcome, "failed");
+      return taskId;
+    }
+
+    const base = Date.parse("2026-11-19T10:00:00.000Z");
+    const olderTaskId = await failAfterLeaseRetries("dead-letter-older", base);
+    const newerTaskId = await failAfterLeaseRetries("dead-letter-newer", base + 60 * 60_000);
+    const first = await call(stub, "/dead-letter?limit=1");
+    assert.equal(first.status, 200);
+    assert.equal(first.body.items.length, 1);
+    assert.equal(first.body.items[0].taskId, newerTaskId);
+    assert.equal(first.body.items[0].errorCode, "lease_expired_max_attempts");
+    assert.equal(first.body.items[0].attemptCount, 3);
+    assert.equal(first.body.nextCursor.taskId, newerTaskId);
+    assert.equal("payload" in first.body.items[0], false);
+    assert.equal("idempotencyKey" in first.body.items[0], false);
+
+    const cursor = first.body.nextCursor;
+    const second = await call(stub, "/dead-letter?limit=1&beforeTerminalAt=" + cursor.terminalAt + "&beforeTaskId=" + encodeURIComponent(cursor.taskId));
+    assert.equal(second.status, 200);
+    assert.equal(second.body.items.length, 1);
+    assert.equal(second.body.items[0].taskId, olderTaskId);
+    assert.equal(second.body.nextCursor, null);
+
+    assert.equal((await call(stub, "/dead-letter?limit=0")).status, 400);
+    assert.equal((await call(stub, "/dead-letter?limit=1&beforeTerminalAt=123")).status, 400);
+    assert.equal((await call(stub, "/dead-letter?limit=1&limit=2")).status, 400);
+    assert.equal((await call(stub, "/dead-letter?limit=51")).status, 400);
+  });
+});
+
 test("task recovery requires actor identity and applies a durable per-operator rate limit", async () => {
   await withRuntime({}, async ({ stub }) => {
     assert.equal((await call(stub, "/recover", { taskId: "missing", requestId: crypto.randomUUID() })).status, 400);

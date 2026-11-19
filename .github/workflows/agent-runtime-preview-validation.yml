@@ -2,12 +2,12 @@ name: Agent Runtime Preview Shell Validation
 
 on:
   push:
-    branches: [feat/runtime-readonly-observability-20261120]
+    branches: [feat/operator-dead-letter-inspection-20261120]
     paths:
       - "agents/runtime/**"
       - ".github/workflows/agent-runtime-preview-validation.yml"
   pull_request:
-    branches: [main, feat/agent-runtime-state-schema-v2-20261119, fix/state-store-bounded-json-schema-v5-20261120, fix/runtime-test-fixture-isolation-20261120, feat/operator-authenticated-task-recovery-20261120-v3]
+    branches: [main, feat/agent-runtime-state-schema-v2-20261119, fix/state-store-bounded-json-schema-v5-20261120, fix/runtime-test-fixture-isolation-20261120, feat/operator-authenticated-task-recovery-20261120-v3, feat/runtime-readonly-observability-20261120]
     paths:
       - "agents/runtime/**"
       - ".github/workflows/agent-runtime-preview-validation.yml"

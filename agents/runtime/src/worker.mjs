@@ -324,13 +324,38 @@ export default {
         return json({ ok: false, error: "state_store_unavailable" }, 503);
       }
     }
-    if (url.pathname === "/internal/usage" || url.pathname === "/internal/metrics" || url.pathname === "/internal/task") {
+    if (url.pathname === "/internal/usage" || url.pathname === "/internal/metrics" || url.pathname === "/internal/task" || url.pathname === "/internal/dead-letter") {
       if (request.method !== "GET") return json({ ok: false, error: "method_not_allowed" }, 405);
       if (!await hasValidOperatorBearer(request, env)) return json({ ok: false, error: "operator_auth_required" }, 401);
       let pathname;
       if (url.pathname === "/internal/usage" || url.pathname === "/internal/metrics") {
         if ([...url.searchParams.keys()].length > 0) return json({ ok: false, error: "request_invalid" }, 400);
         pathname = url.pathname === "/internal/metrics" ? "/metrics" : "/usage";
+      } else if (url.pathname === "/internal/dead-letter") {
+        const allowed = new Set(["limit", "beforeTerminalAt", "beforeTaskId"]);
+        const keys = [...url.searchParams.keys()];
+        if (keys.some((key) => !allowed.has(key)) ||
+            keys.some((key) => url.searchParams.getAll(key).length !== 1) ||
+            (url.searchParams.has("beforeTerminalAt") !== url.searchParams.has("beforeTaskId"))) {
+          return json({ ok: false, error: "request_invalid" }, 400);
+        }
+        const limitText = url.searchParams.get("limit") ?? "25";
+        if (!/^\d{1,2}$/.test(limitText) || Number(limitText) < 1 || Number(limitText) > 50) {
+          return json({ ok: false, error: "request_invalid" }, 400);
+        }
+        const query = new URLSearchParams({ limit: limitText });
+        if (url.searchParams.has("beforeTerminalAt")) {
+          const timestamp = url.searchParams.get("beforeTerminalAt");
+          const taskId = url.searchParams.get("beforeTaskId");
+          if (!/^\d{1,16}$/.test(timestamp) || !Number.isSafeInteger(Number(timestamp)) ||
+              Number(timestamp) < 0 || !taskId || taskId.length > 64 ||
+              [...taskId].some((character) => character.charCodeAt(0) < 33 || character.charCodeAt(0) === 127)) {
+            return json({ ok: false, error: "request_invalid" }, 400);
+          }
+          query.set("beforeTerminalAt", timestamp);
+          query.set("beforeTaskId", taskId);
+        }
+        pathname = "/dead-letter?" + query.toString();
       } else {
         const taskId = url.searchParams.get("id");
         if (!taskId || taskId.length > 64 || url.searchParams.getAll("id").length !== 1 || [...url.searchParams.keys()].some((key) => key !== "id")) {
@@ -345,6 +370,40 @@ export default {
             ok: true, dayUtc: result.dayUtc,
             acceptedToday: result.acceptedToday, inFlight: result.inFlight,
           });
+        }
+        if (url.pathname === "/internal/dead-letter") {
+          const requestedLimit = Number(url.searchParams.get("limit") ?? "25");
+          const validNullableCode = (value) => value === null || (typeof value === "string" && value.length > 0 && value.length <= 64);
+          if (!Array.isArray(result.items) || result.items.length > requestedLimit ||
+              !(result.nextCursor === null || (result.nextCursor && Number.isSafeInteger(result.nextCursor.terminalAt) &&
+                result.nextCursor.terminalAt >= 0 && typeof result.nextCursor.taskId === "string" &&
+                result.nextCursor.taskId.length > 0 && result.nextCursor.taskId.length <= 64)) ||
+              !result.items.every((item) => item && typeof item.taskId === "string" &&
+                item.taskId.length > 0 && item.taskId.length <= 64 &&
+                typeof item.type === "string" && item.type.length > 0 && item.type.length <= 64 &&
+                Number.isSafeInteger(item.createdAt) && item.createdAt >= 0 &&
+                Number.isSafeInteger(item.terminalAt) && item.terminalAt >= 0 &&
+                validNullableCode(item.errorCode) && validNullableCode(item.lastErrorCode) &&
+                Number.isSafeInteger(item.attemptCount) && item.attemptCount >= 0 &&
+                Number.isSafeInteger(item.maxAttempts) && item.maxAttempts >= 1 && item.maxAttempts <= 5)) {
+            return json({ ok: false, error: "state_store_response_invalid" }, 503);
+          }
+          const items = result.items.map((item) => ({
+            taskId: item.taskId, type: item.type, createdAt: item.createdAt,
+            terminalAt: item.terminalAt, errorCode: item.errorCode,
+            lastErrorCode: item.lastErrorCode, attemptCount: item.attemptCount,
+            maxAttempts: item.maxAttempts,
+          }));
+          const last = items[items.length - 1];
+          const nextCursor = result.nextCursor && last &&
+            result.nextCursor.terminalAt === last.terminalAt &&
+            result.nextCursor.taskId === last.taskId
+            ? { terminalAt: last.terminalAt, taskId: last.taskId }
+            : null;
+          if (result.nextCursor !== null && nextCursor === null) {
+            return json({ ok: false, error: "state_store_response_invalid" }, 503);
+          }
+          return json({ ok: true, items, nextCursor });
         }
         if (url.pathname === "/internal/metrics") {
           const taskFields = ["totalRetained", "queued", "queuedDue", "running", "succeededRetained", "failedRetained", "cancelledRetained", "failedLast24h"];
