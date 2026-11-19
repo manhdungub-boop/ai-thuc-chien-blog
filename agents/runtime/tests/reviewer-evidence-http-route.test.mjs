@@ -118,6 +118,7 @@ describe("authenticated reviewer evidence HTTP route", () => {
 describe("authenticated reviewer draft read routes", () => {
   const collection = origin + "/api/reviewer/drafts?limit=5";
   const detail = origin + "/api/reviewer/drafts/draft-review-12345678";
+  const authoringCollection = origin + "/api/reviewer/drafts-needing-authoring?limit=5";
   it("rejects queue reads without a session before accessing the store", async () => {
     const response = await worker.fetch(new Request(collection), {});
     expect(response.status).toBe(401);
@@ -130,6 +131,42 @@ describe("authenticated reviewer draft read routes", () => {
     }), {});
     expect(response.status).toBe(403);
     expect(await response.json()).toMatchObject({ error: "review_request_origin_or_content_type_rejected" });
+  });
+
+  it("requires an authenticated reviewer session for the authoring revision queue", async () => {
+    const response = await worker.fetch(new Request(authoringCollection), {});
+    expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({ error: "reviewer_session_required" });
+  });
+
+  it("returns only bounded authoring metadata after independent reviewer authorization", async () => {
+    const item = {
+      id: "article-brief-scaffold-01",
+      status: "needs_revision",
+      version: 1,
+      title: "Draft outline",
+      issue_count: 2,
+      word_count: 350
+    };
+    let received;
+    const token = "opaque-signed-reviewer-session";
+    const env = { AGENT_DRAFT_STORE: { getByName: () => ({
+      async listNeedsRevisionForReviewer(...args) {
+        received = args;
+        return { authorized: true, items: [item] };
+      }
+    }) } };
+    const response = await worker.fetch(new Request(authoringCollection, {
+      headers: { cookie: "__Host-ai_reviewer_session=" + token }
+    }), env);
+    expect(received).toEqual([5, token]);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      items: [item],
+      count: 1,
+      queue: "authoring_revision_required",
+      publication_authorized: false
+    });
   });
 
   it("passes the opaque session token to the Durable Object for independent queue authorization", async () => {
