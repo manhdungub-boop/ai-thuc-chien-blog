@@ -182,32 +182,6 @@ export class AgentStateStore {
         const active = readRow(this.sql, "SELECT COUNT(*) AS count FROM tasks WHERE state IN ('queued','running')");
         return jsonResponse({ ok: true, dayUtc: day, acceptedToday: usage?.accepted_count ?? 0, inFlight: active?.count ?? 0 });
       }
-      if (url.pathname === "/__test/downgrade-v1" && request.method === "POST") {
-        if (this.env.RUNTIME_TESTING !== "true") return jsonResponse({ ok: false, error: "not_found" }, 404);
-        this.ctx.storage.transactionSync(() => {
-          this.sql.exec("CREATE TABLE tasks_v1_fixture (task_id TEXT PRIMARY KEY, idempotency_key TEXT NOT NULL UNIQUE, task_type TEXT NOT NULL CHECK (task_type IN (" + TASK_TYPES_SQL + ")), payload_json TEXT NOT NULL, payload_hash TEXT NOT NULL, payload_bytes INTEGER NOT NULL CHECK (payload_bytes BETWEEN 1 AND 8192), state TEXT NOT NULL CHECK (state IN ('queued','running','succeeded','failed','cancelled')), created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, terminal_at INTEGER, error_code TEXT)");
-          this.sql.exec("INSERT INTO tasks_v1_fixture (task_id,idempotency_key,task_type,payload_json,payload_hash,payload_bytes,state,created_at,updated_at,terminal_at,error_code) SELECT task_id,idempotency_key,task_type,payload_json,payload_hash,payload_bytes,state,created_at,updated_at,terminal_at,error_code FROM tasks");
-          this.sql.exec("DROP TABLE tasks");
-          this.sql.exec("ALTER TABLE tasks_v1_fixture RENAME TO tasks");
-          this.sql.exec("CREATE INDEX tasks_state_idx ON tasks(state)");
-          this.sql.exec("CREATE INDEX tasks_terminal_idx ON tasks(terminal_at)");
-          this.sql.exec("UPDATE runtime_meta SET value = '1' WHERE key = 'schema_version'");
-        });
-        return jsonResponse({ ok: true, schemaVersion: 1 });
-      }
-      if (url.pathname === "/__test/rollback" && request.method === "POST") {
-        if (this.env.RUNTIME_TESTING !== "true") return jsonResponse({ ok: false, error: "not_found" }, 404);
-        try {
-          this.ctx.storage.transactionSync(() => {
-            this.sql.exec("INSERT INTO daily_usage (day_utc, accepted_count) VALUES ('2099-12-31', 1)");
-            throw new Error("intentional_rollback_probe");
-          });
-        } catch {
-          const usage = readRow(this.sql, "SELECT accepted_count FROM daily_usage WHERE day_utc = '2099-12-31'");
-          return jsonResponse({ ok: true, rolledBack: usage === null, acceptedToday: usage?.accepted_count ?? 0 });
-        }
-        return jsonResponse({ ok: false, error: "rollback_probe_did_not_throw" }, 500);
-      }
       if (request.method !== "GET" && request.method !== "POST") return jsonResponse({ ok: false, error: "method_not_allowed" }, 405);
       return jsonResponse({ ok: false, error: "not_found" }, 404);
     } catch (error) {
@@ -216,11 +190,7 @@ export class AgentStateStore {
     }
   }
 
-  requestTime(request) {
-    if (this.env.RUNTIME_TESTING === "true") {
-      const value = request.headers.get("x-test-now");
-      if (value) { const parsed = Date.parse(value); if (Number.isFinite(parsed)) return parsed; }
-    }
+  requestTime() {
     return Date.now();
   }
 
