@@ -43,7 +43,7 @@ async function writerSessionToken(now = Date.now(), email = "reviewer@example.co
 
 async function submitEvidence(store, candidateId, evidence, now = Date.now(), eventId = crypto.randomUUID()) {
   return store.submitAuthorizedReviewEvidence(
-    candidateId, evidence, await writerSessionToken(now), eventId, writerAuthEnv, now
+    candidateId, evidence, await writerSessionToken(now), eventId, now
   );
 }
 
@@ -256,7 +256,7 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     const now = Date.parse("2026-11-19T10:00:00.000Z");
     const token = await writerSessionToken(now);
     const submit = () => store.submitAuthorizedReviewEvidence(
-      "github:ollama/ollama", evidence, token, eventId, writerAuthEnv, now
+      "github:ollama/ollama", evidence, token, eventId, now
     );
     const results = await Promise.all([submit(), submit()]);
     expect(results.filter(item => item.accepted)).toHaveLength(1);
@@ -276,7 +276,7 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     };
     const first = await store.submitAuthorizedReviewEvidence(
       "github:ollama/ollama", firstEvidence, await writerSessionToken(now),
-      eventId, writerAuthEnv, now
+      eventId, now
     );
     expect(first.accepted).toBe(true);
     const changedPayload = await store.submitAuthorizedReviewEvidence(
@@ -300,7 +300,6 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
       },
       await writerSessionToken(now, "other@example.com"),
       "c4e6d1c2-3b7f-4a91-8c22-1234567890ab",
-      writerAuthEnv,
       now
     );
     expect(denied).toEqual({ accepted: false, reason: "evidence_writer_not_allowlisted" });
