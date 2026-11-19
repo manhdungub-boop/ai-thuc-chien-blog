@@ -36,6 +36,10 @@ jobs:
       - name: Report exact npm dependency advisories
         if: always()
         run: |
+          mkdir -p "$RUNNER_TEMP/agent-runtime-audit"
+          cd "$RUNNER_TEMP/agent-runtime-audit"
+          npm init -y >/dev/null
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund --save-exact miniflare@4.20260701.0
           npm audit --json > "$RUNNER_TEMP/agent-runtime-npm-audit.json" || true
           node --input-type=module <<'NODE'
           import { readFile } from 'node:fs/promises';
