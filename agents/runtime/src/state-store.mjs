@@ -181,6 +181,11 @@ export class AgentStateStore {
     }
     const next = body.status;
     if (!["running","succeeded","failed","cancelled"].includes(next)) return { status: 400, body: { ok: false, error: "task_status_invalid" } };
+    // The pause switch must also stop queued work from entering the running state.
+    // Terminal transitions remain available so an operator/recovery path can cancel or fail work.
+    if (next === "running" && (this.env.AGENT_ENABLED !== "true" || this.env.AGENT_PAUSED !== "false")) {
+      return { status: 503, body: { ok: false, error: "agent_disabled_or_paused" } };
+    }
     if (body.errorCode !== undefined && (next !== "failed" || typeof body.errorCode !== "string" || !/^[a-z0-9_.:-]{1,64}$/.test(body.errorCode))) {
       return { status: 400, body: { ok: false, error: "error_code_invalid" } };
     }
