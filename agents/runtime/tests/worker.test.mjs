@@ -180,6 +180,11 @@ test("bridge rejects unknown query parameters and never exposes internal routes 
   const response = await worker.fetch(bad, env);
   assert.equal(response.status, 400);
   assert.equal(calls.length, 0);
+  const duplicateId = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/task?id=task-123&id=task-456", {
+    headers: { Authorization: "Bearer " + OPERATOR_TOKEN },
+  }), env);
+  assert.equal(duplicateId.status, 400);
+  assert.equal(calls.length, 0);
   const noAuth = await worker.fetch(request("/internal/usage"), env);
   assert.equal(noAuth.status, 401);
   assert.equal(calls.length, 0);
