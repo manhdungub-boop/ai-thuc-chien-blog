@@ -28,6 +28,30 @@ export class AgentStateStoreTestFixture extends AgentStateStore {
 
   async fetch(request) {
     const url = new URL(request.url);
+    if (request.method === "GET" && url.pathname === "/__test/audit") {
+      if (!await hasValidStateStoreBearer(request, this.env)) {
+        return jsonResponse({ ok: false, error: "state_store_auth_required" }, 401);
+      }
+      const taskId = url.searchParams.get("taskId");
+      if (!taskId || taskId.length > 64 || url.searchParams.getAll("taskId").length !== 1 ||
+          [...url.searchParams.keys()].some((key) => key !== "taskId")) {
+        return jsonResponse({ ok: false, error: "test_audit_query_invalid" }, 400);
+      }
+      try {
+        await this.ready;
+        const events = this.sql.exec(
+          "SELECT event_type, occurred_at, metadata_json FROM audit_events WHERE task_id = ? ORDER BY occurred_at DESC LIMIT 20",
+          taskId,
+        ).toArray().map((row) => ({
+          eventType: row.event_type,
+          occurredAt: row.occurred_at,
+          metadata: JSON.parse(row.metadata_json),
+        }));
+        return jsonResponse({ ok: true, events });
+      } catch {
+        return jsonResponse({ ok: false, error: "state_store_unavailable" }, 503);
+      }
+    }
     if (request.method !== "POST" ||
         (url.pathname !== "/__test/downgrade-v1" && url.pathname !== "/__test/rollback")) {
       return super.fetch(request);
