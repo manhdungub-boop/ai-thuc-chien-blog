@@ -25,6 +25,34 @@ const json = (value, status = 200) => new Response(JSON.stringify(value), {
   }
 });
 
+async function readBoundedRequestText(request, maxBytes) {
+  if (!request.body) return { tooLarge: false, text: "" };
+  const reader = request.body.getReader();
+  const chunks = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel("request_body_limit_exceeded");
+        return { tooLarge: true, text: null };
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return { tooLarge: false, text: new TextDecoder("utf-8", { fatal: true }).decode(bytes) };
+}
+
 function createBudgetedFetch(store, day, scope) {
   let calls = 0;
   return {
@@ -329,15 +357,20 @@ export default {
           (request.headers.get("content-type") || "").split(";")[0].trim().toLowerCase() !== "application/json") {
         return json({ error: "review_request_origin_or_content_type_rejected" }, 403);
       }
-      const contentLength = Number(request.headers.get("content-length") || 0);
-      if (contentLength > 16 * 1024) return json({ error: "review_request_too_large" }, 413);
+      const contentLengthHeader = request.headers.get("content-length");
+      if (contentLengthHeader !== null && !/^(?:0|[1-9][0-9]*)$/.test(contentLengthHeader)) {
+        return json({ error: "invalid_review_request_content_length" }, 400);
+      }
+      if (contentLengthHeader !== null && Number(contentLengthHeader) > 16 * 1024) {
+        return json({ error: "review_request_too_large" }, 413);
+      }
       const sessionToken = readGoogleReviewerSessionCookie(request);
       if (!sessionToken) return json({ error: "reviewer_session_required" }, 401);
       let body;
       try {
-        const raw = await request.text();
-        if (new TextEncoder().encode(raw).byteLength > 16 * 1024) return json({ error: "review_request_too_large" }, 413);
-        body = JSON.parse(raw);
+        const bounded = await readBoundedRequestText(request, 16 * 1024);
+        if (bounded.tooLarge) return json({ error: "review_request_too_large" }, 413);
+        body = JSON.parse(bounded.text);
       } catch { return json({ error: "invalid_review_request_json" }, 400); }
       if (!body || typeof body !== "object" || Array.isArray(body) ||
           Object.keys(body).some(key => !["audit_event_id", "evidence"].includes(key)) ||
