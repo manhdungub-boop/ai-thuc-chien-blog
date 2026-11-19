@@ -24,6 +24,7 @@ function jsonResponse(body, status = 200) {
 function isObject(value) { return value !== null && typeof value === "object" && !Array.isArray(value); }
 
 
+
 function parseControlJson(text) {
   let index = 0;
   const skipWhitespace = () => {
@@ -60,24 +61,36 @@ function parseControlJson(text) {
 
   skipWhitespace();
   if (text[index++] !== "{") throw new Error("control_json_invalid");
+  const result = {};
+  const allowedKeys = new Set(["reason", "actor", "requestId"]);
   skipWhitespace();
   if (text[index] === "}") {
     index++;
     skipWhitespace();
     if (index !== text.length) throw new Error("control_json_invalid");
-    return {};
+    return result;
   }
-  const key = readString();
-  if (key !== "reason") throw new Error("control_json_invalid");
-  skipWhitespace();
-  if (text[index++] !== ":") throw new Error("control_json_invalid");
-  skipWhitespace();
-  const reason = readString();
-  skipWhitespace();
-  if (text[index++] !== "}") throw new Error("control_json_invalid");
-  skipWhitespace();
-  if (index !== text.length) throw new Error("control_json_invalid");
-  return { reason };
+
+  while (index < text.length) {
+    const key = readString();
+    if (!allowedKeys.has(key) || Object.prototype.hasOwnProperty.call(result, key)) {
+      throw new Error("control_json_invalid");
+    }
+    skipWhitespace();
+    if (text[index++] !== ":") throw new Error("control_json_invalid");
+    skipWhitespace();
+    result[key] = readString();
+    skipWhitespace();
+    if (text[index] === "}") {
+      index++;
+      skipWhitespace();
+      if (index !== text.length) throw new Error("control_json_invalid");
+      return result;
+    }
+    if (text[index++] !== ",") throw new Error("control_json_invalid");
+    skipWhitespace();
+  }
+  throw new Error("control_json_invalid");
 }
 
 async function readBoundedJsonRequest(request, maxBytes) {
