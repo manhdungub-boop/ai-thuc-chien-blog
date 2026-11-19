@@ -390,6 +390,7 @@ export class AgentStateStore {
     if (next === "running" && (this.env.AGENT_ENABLED !== "true" || this.env.AGENT_PAUSED !== "false")) {
       return { status: 503, body: { ok: false, error: "agent_disabled_or_paused" } };
     }
+    if (next === "running") return { status: 409, body: { ok: false, error: "lease_required" } };
     if (body.errorCode !== undefined && (next !== "failed" || typeof body.errorCode !== "string" || !/^[a-z0-9_.:-]{1,64}$/.test(body.errorCode))) {
       return { status: 400, body: { ok: false, error: "error_code_invalid" } };
     }
@@ -401,7 +402,8 @@ export class AgentStateStore {
           if (row.state === next) return { status: 200, body: { ok: true, duplicate: true, task: safeTask(row) } };
           return { status: 409, body: { ok: false, error: "terminal_state_conflict" } };
         }
-        const allowed = row.state === "queued" ? ["running","cancelled"] : row.state === "running" ? ["succeeded","failed","cancelled"] : [];
+        if (row.state === "running") return { status: 409, body: { ok: false, error: "lease_required" } };
+        const allowed = row.state === "queued" ? ["cancelled"] : [];
         if (!allowed.includes(next)) return { status: 409, body: { ok: false, error: "task_transition_invalid" } };
         const terminalAt = TERMINAL_STATES.has(next) ? now : null;
         const errorCode = next === "failed" ? (body.errorCode ?? "task_failed") : null;
