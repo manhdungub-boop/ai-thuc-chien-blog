@@ -2,7 +2,7 @@ name: Agent Runtime Preview Shell Validation
 
 on:
   push:
-    branches: [fix/bounded-retention-cleanup-20261120]
+    branches: [fix/bounded-retention-cleanup-20261120, feat/runtime-quota-pressure-guardrails-20261120]
     paths:
       - "agents/runtime/**"
       - ".github/workflows/agent-runtime-preview-validation.yml"
