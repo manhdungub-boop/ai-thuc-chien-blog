@@ -28,13 +28,13 @@ The validation workflow installs the pinned open-source Miniflare simulator and 
 From the repository root:
 
 \`\`\`sh
-npm install --no-save --no-package-lock --ignore-scripts miniflare@4.20260701.0
+npm install --no-save --no-package-lock --ignore-scripts miniflare@4.20260730.0
 node --check agents/runtime/src/worker.mjs
 node --check agents/runtime/src/state-store.mjs
 node --test agents/runtime/tests/*.test.mjs
 \`\`\`
 
-This is local-runtime evidence, not a live Cloudflare deployment test. Miniflare is a development simulator, not a hardened security boundary.
+The GitHub Actions workflow is authoritative for the test dependency tree: it applies isolated npm overrides for the patched `sharp` and `undici` versions and fails on remaining High/Critical advisories. This is local-runtime evidence, not a live Cloudflare deployment test. Miniflare is a development simulator, not a hardened security boundary.
 
 ## Limits and retention
 
