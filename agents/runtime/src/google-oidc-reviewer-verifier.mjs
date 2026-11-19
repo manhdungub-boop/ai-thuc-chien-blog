@@ -98,6 +98,7 @@ export async function verifyGoogleReviewerIdToken(token, {
       claims.exp <= nowSeconds - skew ||
       claims.iat > nowSeconds + skew ||
       claims.exp <= claims.iat ||
+      claims.exp - claims.iat > 3600 ||
       (claims.nbf !== undefined &&
         (!Number.isInteger(claims.nbf) || claims.nbf > nowSeconds + skew)) ||
       claims.nonce !== nonce) {
