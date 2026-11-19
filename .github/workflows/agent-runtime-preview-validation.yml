@@ -49,6 +49,7 @@ jobs:
           assert.equal(config.preview_urls, true);
           assert.equal(config.vars.AGENT_ENABLED, 'false');
           assert.equal(config.vars.AGENT_PAUSED, 'true');
+          assert.equal(JSON.stringify(config).includes('RUNTIME_TESTING'), false, 'test-only controls must not be deploy-configurable');
           assert.equal('routes' in config, false);
           assert.equal('d1_databases' in config, false);
           assert.equal('triggers' in config, false);
