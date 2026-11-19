@@ -276,15 +276,15 @@
         "local-ai"
       ],
       "pricing_model": "freemium",
-      "pricing_status": "Freemium. Free Edition supports local on-device generation and model downloads. The official pricing page also lists a free Community account with Cloud Compute on managed servers; usage limits and eligibility are not fully specified there, and this is not offline/local processing. Cloud Compute requires optional Apple Sign-in and sends jobs/LoRAs to provider infrastructure, so do not use it for sensitive project data. Draw Things+ is listed at USD 8.99/month; the Vietnam App Store lists VND 399,000 and separate paid Boost Bundles, but the billing period for the localized in-app-purchase amount is not shown. Do not buy Boosts or subscribe under the project's zero-cost rule.",
-      "license": "The Draw Things app is proprietary. This does not grant a blanket license to all generated outputs. Each imported or community model and LoRA has its own license and usage restrictions. Draw Things' official community-model repository requires a LICENSE file for every model/LoRA entry; the repository's CC0 license applies to repository materials, not automatically to third-party model weights.",
+      "pricing_status": "App Store Việt Nam niêm yết Free + In-App Purchases. Free Edition hỗ trợ tải model và tạo ảnh bằng local compute; trang chính thức mô tả local creation không cần internet/subscription và không có token limit. Storefront liệt kê Draw Things+ 399.000đ và các Boost Bundle 29.000đ, 149.000đ, 599.000đ nhưng không hiển thị rõ chu kỳ tính phí/điều kiện của từng mục; không mua. Community Cloud Compute là xử lý trên máy chủ, không thuộc quy trình local-only 0 đồng/bảo mật.",
+      "license": "Ứng dụng Draw Things là phần mềm proprietary, không phải mã nguồn mở. License của model và LoRA nhập từ cộng đồng khác nhau; repository community yêu cầu license riêng cho từng entry, và license của repository không tự động áp dụng cho model weights. Kiểm tra từng model/LoRA trước khi dùng thương mại hoặc phân phối.",
       "platforms": [
         "ios",
         "ipados",
         "macos"
       ],
       "description": "Apple-device image creation and editing app with local text-to-image, image-to-image, inpainting/outpainting, ControlNet, local LoRA training and selected local image-to-video workflows. Local generation is distinct from optional Cloud Compute; supported workflows depend on the selected model and device resources.",
-      "free_tier_summary": "App Store niêm yết miễn phí kèm mua trong ứng dụng. Free Edition hỗ trợ tải model và tạo ảnh cục bộ trên thiết bị; Community account mở thêm Cloud Compute miễn phí (xử lý trên máy chủ, cần tài khoản/mạng); Draw Things+ là gói trả phí, không dùng. Tạo ảnh local không cần subscription và nhà phát triển tuyên bố prompt/ảnh ở trên thiết bị. App Store yêu cầu iOS 15.4+; listing US ghi 18+ và dữ liệu có thể thu thập gồm Purchases, User Content, Identifiers (không liên kết danh tính). Không bật Cloud Compute/remote API trong luồng bảo mật. Model tải về chiếm dung lượng lớn: tài liệu cộng đồng ghi khoảng 800MB cho model 8-bit, 1.8GB cho SD 1.5, gần 10GB cho SDXL; tài liệu kỹ thuật lưu ý CoreML trên điện thoại có thể chậm hoặc crash. Chưa có benchmark chính thức cho iPhone 11 Pro Max/A13; không kết luận máy chạy ổn chỉ từ yêu cầu iOS.",
+      "free_tier_summary": "App Store Việt Nam hiện hiển thị Free + In-App Purchases; version history liệt kê 26.1020.0 ngày 22/10, dung lượng 342.3 MB, iOS 15.4+, tuổi 18+ và có tiếng Việt trong danh sách ngôn ngữ. App Privacy ghi dữ liệu không liên kết người dùng gồm purchase history, other user content và user ID; đây là khai báo nhà phát triển, chưa được Apple xác minh. Free Edition cho phép tải model và tạo ảnh cục bộ; Cloud Compute cần đăng nhập Apple và gửi tác vụ/LoRA lên hạ tầng máy chủ. Privacy Policy nói LoRA upload được giữ đến khi người dùng xóa hoặc xóa tài khoản; thông tin subscription/transaction được giữ theo nhu cầu vận hành và lưu trữ tài chính. Draw Things+ và Boosts là tùy chọn trả phí; không sử dụng. App proprietary; license từng model/LoRA phải kiểm tra riêng. Chưa benchmark dung lượng, pin, nhiệt độ, tốc độ hoặc độ ổn định trên iPhone cụ thể.",
       "official_sources": [
         "https://drawthings.ai/",
         "https://apps.apple.com/vn/app/draw-things-offline-ai-art/id6444050820",
@@ -294,7 +294,7 @@
         "https://github.com/drawthingsai/community-docs/blob/main/Documentation.docc/2.Models.md",
         "https://drawthings.ai/pricing/"
       ],
-      "last_verified": "2026-11-18",
+      "last_verified": "2026-11-19",
       "verification_status": "needs_review",
       "status": "active",
       "tags": [
@@ -325,15 +325,15 @@
         "text-to-speech"
       ],
       "pricing_model": "freemium",
-      "pricing_status": "Ứng dụng cơ bản miễn phí, mã nguồn mở MIT; chat cục bộ, model/voice/tools được công bố miễn phí sau khi tải về. Bản App Store Việt Nam có PocketPal Plus là mua một lần 699.000đ (giá hiển thị ngày 18/11/2026), mở hands-free voice và local API server; không mua. PalsHub có nội dung trả phí riêng. Không dùng tính năng online cần API key/dịch vụ ngoài nếu chưa xác minh 0 đồng.",
-      "license": "Ứng dụng mã nguồn mở MIT. Model LLM tải từ Hugging Face là nội dung bên thứ ba, phải kiểm tra license từng model. TTS engines có license riêng: Kokoro Apache-2.0, Supertonic code MIT và weights BigScience OpenRAIL-M, Kitten TTS Apache-2.0; kiểm tra từng model/voice trước khi dùng thương mại.",
+      "pricing_status": "Ứng dụng cơ bản được niêm yết Free trên App Store Việt Nam, có In-App Purchases. Storefront hiện liệt kê nhiều mức PocketPal Plus (119.000đ, 299.000đ, 699.000đ, 1.299.000đ) cùng các gói Pals; trang không giải thích rõ thời hạn hoặc tính năng tương ứng từng mức, vì vậy không khẳng định 699.000đ là giá mua một lần. Chat local cơ bản miễn phí; không mua Plus/Pals và không dùng tính năng online/remote nếu chưa xác minh riêng.",
+      "license": "Ứng dụng PocketPal AI là mã nguồn mở MIT theo điều khoản và repository chính thức. Model weights, voice packs, TTS engines và nội dung PalsHub là tài sản riêng có license/điều khoản khác nhau; phải kiểm tra từng model/voice trước khi dùng hoặc phân phối. MIT của ứng dụng không cấp quyền chung cho mọi model hay nội dung.",
       "platforms": [
         "ios",
         "ipados",
         "android"
       ],
       "description": "Ứng dụng AI cục bộ cho iPhone/iPad/Android: chạy GGUF bằng llama.cpp, chat offline, tải model từ Hugging Face, Whisper nhận dạng giọng nói và TTS neural trên thiết bị gồm Supertonic, Kokoro, Kitten, Phonon trên thiết bị tương thích. Có web search/page reading tùy chọn và remote server; không bật các tính năng này nếu yêu cầu giữ dữ liệu cục bộ.",
-      "free_tier_summary": "App Store Việt Nam niêm yết ứng dụng tải miễn phí. Các bản chụp chỉ mục App Store ở các storefront/thời điểm khác nhau trả về số phiên bản và dung lượng không nhất quán (ví dụ v1.18.0 trong kết quả VN và v1.23.0 trong bản ghi nghiên cứu trước); vì vậy không khẳng định số phiên bản hoặc dung lượng hiện hành. Cần kiểm tra trực tiếp trên iPhone trước khi thử. Trang App Store nêu yêu cầu iOS 15.1+ và ngôn ngữ giao diện English; Apple hiển thị Data Not Collected nhưng lưu ý chưa xác minh khai báo nhà phát triển. PocketPal Plus hiển thị 699.000đ mua một lần, không mua. Official GitHub README xác nhận chat GGUF offline, TTS on-device Kokoro/Kitten/Supertonic/Phonon trên thiết bị tương thích, Whisper on-device; web search/page reading, remote server và system voice online là tính năng người dùng chủ động bật có thể đưa dữ liệu ra ngoài. App Store version history ghi Supertonic có 31 ngôn ngữ; locale source chính thức của PocketPal có mã `vi` (Vietnamese). Tuy vậy chưa xác minh giọng Alex/Male 1 có tên hiển thị tương ứng trong app, chất lượng trên iPhone cụ thể hoặc xuất WAV/audio file. Không có căn cứ khẳng định xuất file âm thanh. Supertonic code MIT nhưng weights BigScience OpenRAIL-M; Kokoro Apache-2.0, Kitten Apache-2.0; license từng model/voice vẫn phải kiểm tra. Tải model/voice cần mạng và dung lượng lớn; không tải trong lần rà soát này.",
+      "free_tier_summary": "App Store Việt Nam hiện niêm yết Free + In-App Purchases; trang hiển thị v1.23.0, 140.3 MB, iOS 15.1+, ngôn ngữ English và tuổi 18+. App Privacy ghi Data Not Collected theo khai báo nhà phát triển, chưa được Apple xác minh. Điều khoản chính thức (17/04/2026) mô tả ứng dụng miễn phí, MIT và chạy model trên thiết bị. Privacy Policy (18/04/2026) mô tả benchmark, feedback và error reports là tùy chọn; khi người dùng chủ động gửi, một số metadata/feedback có thể được xử lý qua Firebase Functions của Google tại Hoa Kỳ. App Store liệt kê nhiều giá PocketPal Plus và Pals; chưa xác minh loại giao dịch/thời hạn của từng mức, không quảng cáo 699.000đ là giá mua một lần. Web search, page reading và remote server có thể gửi truy vấn/ngữ cảnh tới dịch vụ ngoài khi bật. Model weights và voice licenses phải kiểm tra riêng; chưa có kiểm thử hiệu năng hoặc xuất audio trên thiết bị thực.",
       "official_sources": [
         "https://github.com/a-ghorbani/pocketpal-ai",
         "https://github.com/a-ghorbani/pocketpal-ai/blob/main/src/locales/en.json",
@@ -343,7 +343,7 @@
         "https://huggingface.co/Supertone/supertonic-3",
         "https://pocketpal.dev/about"
       ],
-      "last_verified": "2026-11-18",
+      "last_verified": "2026-11-19",
       "verification_status": "needs_review",
       "status": "active",
       "tags": [
@@ -502,8 +502,8 @@
         "offline-ai"
       ],
       "pricing_model": "freemium",
-      "pricing_status": "Ứng dụng cá nhân được NoemaAI và App Store niêm yết miễn phí; website chính thức nói dùng cá nhân không cần tài khoản Noema. Có sản phẩm Noema Teams dành cho tổ chức và các dịch vụ/provider từ bên thứ ba có thể tính phí. Chạy mô hình local sau khi tải về không yêu cầu trả phí theo token; không bật remote provider, không mua dịch vụ Teams và không bật billing.",
-      "license": "Mã nguồn community edition của ứng dụng Noema trên GitHub chính thức được cấp phép Apache-2.0. Các model weights Noema 1.5 được mô tả là open-weight, không phải open-source; phải kiểm tra giấy phép riêng của từng model và model nền (ví dụ Qwen) trước khi sử dụng/phân phối.",
+      "pricing_status": "App Store Việt Nam niêm yết Free; Noema mô tả personal local use không cần tài khoản. Local inference không tính phí theo token của Noema; Noema Teams, remote model providers, search providers, transcription và các dịch vụ bên thứ ba có thể có điều khoản/chi phí riêng. Không bật billing hoặc kết nối provider trả phí.",
+      "license": "Community edition của ứng dụng Noema trên GitHub chính thức có license Apache-2.0. Model weights của Noema được mô tả là open-weight, không đồng nghĩa open-source; model nền và từng weights có license riêng. Kiểm tra license cụ thể trước khi sử dụng hoặc phân phối.",
       "platforms": [
         "ios",
         "ipados",
@@ -511,7 +511,7 @@
         "visionos"
       ],
       "description": "Ứng dụng AI cục bộ cho iPhone/iPad/Mac/Apple Vision, chạy các mô hình tương thích GGUF, MLX, ExecuTorch, Core ML và Apple Foundation Models; hỗ trợ trò chuyện ngoại tuyến, hỏi đáp tài liệu PDF/EPUB, RAG, công cụ Python trên thiết bị, nhận dạng giọng nói cục bộ và tùy chọn tìm kiếm web/remote providers.",
-      "free_tier_summary": "App Store Việt Nam niêm yết Free; website chính thức ghi Free on the App Store và personal use không cần tài khoản. Phiên bản App Store hiện hiển thị 4.4, dung lượng 489.4 MB, yêu cầu iOS 18 trở lên, ngôn ngữ English và 10 ngôn ngữ khác (không liệt kê tiếng Việt). Mã nguồn ứng dụng community edition Apache-2.0; model weights có điều khoản riêng. Tài liệu chính thức ghi iPhone/iPad cần A12 Bionic trở lên và đủ bộ nhớ/lưu trữ cho model; model có thể từ vài trăm MB đến nhiều GB. Privacy Policy (02/11/2026) nói chat, tài liệu, model và index local lưu trên thiết bị; local inference không cần gửi prompt/tài liệu về Noema. Tìm kiếm web, iCloud sync, remote model/API, MCP servers, remote transcription và các kết nối tùy chọn có thể gửi dữ liệu tới dịch vụ tương ứng; app yêu cầu cho phép trước khi gửi tới third-party AI/web/transcription. Off-grid Mode chặn HTTP/HTTPS từ network stack của Noema. Apple App Store hiển thị Data Not Collected theo khai báo của nhà phát triển, chưa được Apple xác minh. Không có bảo đảm hiệu năng trên iPhone đời cũ; chọn model nhỏ và benchmark trước. Ngôn ngữ giao diện không có tiếng Việt theo danh sách hiện tại. Không bật remote providers, MCP, iCloud sync hoặc quyền thiết bị nhạy cảm trong thử nghiệm 0 đồng.",
+      "free_tier_summary": "App Store Việt Nam có kết quả storefront niêm yết Free, iOS 18+ và một snapshot version 4.0.1/370.2 MB; storefront Hoa Kỳ hiện hiển thị 4.2/409.4 MB. Version và dung lượng khác nhau theo storefront/thời điểm nên không khẳng định một phiên bản/dung lượng chung. App Privacy hiển thị Data Not Collected theo khai báo nhà phát triển, chưa được Apple xác minh. Privacy Policy chính thức cập nhật 02/11/2026 nói chat, tài liệu, model và index local nằm trên thiết bị; trước khi gửi nội dung tới third-party AI, web search hoặc remote transcription, ứng dụng phải hỏi quyền riêng cho recipient. Noema không chạy analytics hoặc advertising trackers trong app; dữ liệu đã gửi cho provider bên thứ ba chịu chính sách retention/training của provider đó. Off-grid Mode chỉ chặn HTTP/HTTPS từ network stack của Noema, không cô lập app khác hoặc dịch vụ hệ điều hành. Personal local use miễn phí; Teams và provider bên ngoài có thể tính phí. Model weights phải kiểm tra license riêng; chưa benchmark thiết bị thực.",
       "official_sources": [
         "https://noemaai.com/",
         "https://noemaai.com/privacy",
@@ -521,7 +521,7 @@
         "https://noemaai.com/models",
         "https://noemaai.com/changelog"
       ],
-      "last_verified": "2026-11-18",
+      "last_verified": "2026-11-19",
       "verification_status": "needs_review",
       "status": "active",
       "tags": [
@@ -550,8 +550,8 @@
         "voice-assistant"
       ],
       "pricing_model": "free",
-      "pricing_status": "Website chính thức (cập nhật 30/10/2026) nói ứng dụng miễn phí, không quảng cáo, không subscription, không giới hạn tin nhắn và không cần tài khoản cho local chat. App Store Việt Nam cũng niêm yết Free. Tải model cần Internet và dung lượng dữ liệu; chưa có bằng chứng về chi phí inference theo token khi chạy model local. Không dùng web search hoặc kết nối assistant bên ngoài nếu chưa kiểm tra chính sách dịch vụ nhận dữ liệu.",
-      "license": "Chưa tìm thấy giấy phép mã nguồn ứng dụng trong nguồn chính thức đã kiểm tra; không phân loại là open-source. Model weights được cung cấp bởi các bên thứ ba (ví dụ Gemma, Qwen, Llama); phải kiểm tra giấy phép và điều khoản riêng của từng model.",
+      "pricing_status": "App Store Việt Nam niêm yết Free; nhà phát triển nói local chat không cần tài khoản hoặc subscription. Tải model cần Internet và dung lượng thiết bị. Các tính năng web search hoặc connected assistants gửi dữ liệu tới dịch vụ bên ngoài và phải đánh giá theo điều khoản của từng provider; không dùng chúng trong thử nghiệm bảo mật.",
+      "license": "Chưa tìm thấy license mã nguồn ứng dụng trong nguồn chính thức đã rà soát; không phân loại ứng dụng là open-source. Model weights của Gemma, Qwen, Llama và các model khác có license/điều khoản riêng; kiểm tra từng model trước khi sử dụng hoặc phân phối.",
       "platforms": [
         "ios",
         "ipados",
@@ -560,7 +560,7 @@
         "windows"
       ],
       "description": "Trợ lý AI chạy mô hình cục bộ trên thiết bị; hỗ trợ trò chuyện ngoại tuyến sau khi tải model, hỏi đáp PDF/Word/EPUB, ảnh, giọng nói, công cụ lịch/nhắc việc, Apple Shortcuts và tùy chọn tìm kiếm web. Ứng dụng chọn model theo thiết bị; Mac/Windows beta theo website tại ngày xác minh.",
-      "free_tier_summary": "Website chính thức askloci.ai ghi miễn phí, không quảng cáo, không subscription, không giới hạn tin nhắn và không cần tài khoản cho local chat. App Store Việt Nam niêm yết Free, yêu cầu iOS 18+, dung lượng khoảng 86.2 MB, ngôn ngữ English/German/Spanish (không có tiếng Việt). Local chat, file, ảnh, memories và model ở trên thiết bị; web search gửi truy vấn tới dịch vụ tìm kiếm bên thứ ba. Privacy Policy 05/11/2026 nói diagnostic sharing thường bật mặc định trên phần lớn phiên bản; có thể gửi thông tin thiết bị, phiên bản, model, tính năng, số lượng/độ dài tin nhắn, lỗi và dữ liệu chẩn đoán, nhưng không gồm nội dung prompt, câu trả lời, file, ảnh, giọng nói hay vị trí chính xác. Google ad measurement cũng hoạt động khi diagnostic sharing bật. Có thể tắt diagnostic sharing và ad measurement trong Privacy settings; phải tắt trước khi dùng nếu ưu tiên quyền riêng tư. App Store privacy disclosure của nhà phát triển còn liệt kê dữ liệu liên kết người dùng gồm vị trí gần đúng, định danh, tương tác và diagnostics; Apple nói khai báo chưa được xác minh. Không gửi dữ liệu dự án hoặc thông tin nhạy cảm.",
+      "free_tier_summary": "App Store Việt Nam hiện hiển thị Free, version 1.3.42 (10/11), dung lượng 86.2 MB, yêu cầu iOS 18+, ngôn ngữ English/German/Spanish. App Privacy liệt kê dữ liệu có thể liên kết người dùng gồm coarse location, device ID, product interaction, user ID và diagnostics; khai báo do nhà phát triển cung cấp, chưa được Apple xác minh. Privacy Policy cập nhật 05/11/2026 nói hội thoại, file, ảnh và memories ở trên thiết bị; diagnostic sharing bật mặc định trong phần lớn phiên bản và có thể tắt trong Privacy Settings. Khi bật, diagnostics có thể gửi thông tin app/device/model/feature, số lượng và độ dài tin nhắn, lỗi/crash; không gồm prompt, response, file, ảnh, voice, memories hoặc vị trí chính xác. Diagnostics được giữ 12 tháng, ad measurement khoảng 90 ngày; thông tin nhận được lưu tại Hoa Kỳ. Tắt diagnostic sharing và ad measurement trước khi dùng; không bật web search/connected assistants. Model downloads vẫn cần Internet. Chưa benchmark hiệu năng trên thiết bị thực.",
       "official_sources": [
         "https://askloci.ai/",
         "https://askloci.ai/about",
@@ -568,7 +568,7 @@
         "https://apps.apple.com/vn/app/loci-private-unlimited-ai/id6762100748",
         "https://github.com/AskLoci"
       ],
-      "last_verified": "2026-11-18",
+      "last_verified": "2026-11-19",
       "verification_status": "needs_review",
       "status": "active",
       "tags": [
