@@ -225,8 +225,8 @@ export class AgentTaskStore extends DurableObject {
     if (!row || row.status !== "leased" || row.lease_until <= now || row.lease_token !== leaseToken) return { updated: false };
     const status = row.attempts >= MAX_ATTEMPTS ? "dead" : "pending";
     const updated = this.ctx.storage.sql.exec(
-      "UPDATE tasks SET status = ?, available_at = CASE WHEN ? = 'pending' THEN ? + CASE attempts WHEN 1 THEN 30000 WHEN 2 THEN 120000 WHEN 3 THEN 600000 ELSE 1800000 END ELSE available_at END, lease_until = NULL, lease_token = NULL, updated_at = ?, last_error = ? WHERE id = ? AND status = 'leased' AND lease_until > ? AND lease_token = ? RETURNING id",
-      status, status, now, now, safeError, taskId, now, leaseToken
+      "UPDATE tasks SET status = ?, available_at = CASE WHEN ? = 'pending' THEN ? ELSE available_at END, lease_until = NULL, lease_token = NULL, updated_at = ?, last_error = ? WHERE id = ? AND status = 'leased' AND lease_until > ? AND lease_token = ? RETURNING id",
+      status, status, now + retryDelayMs(row.attempts), now, safeError, taskId, now, leaseToken
     ).toArray();
     return { updated: updated.length === 1, status: updated.length === 1 ? status : undefined };
   }
