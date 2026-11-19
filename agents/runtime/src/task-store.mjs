@@ -14,6 +14,7 @@ const EXECUTABLE_TASK_TYPES = new Set([
   "ai_bank_discovery",
   "content_research",
   "content_draft",
+  "quality_review",
   "runtime_health_check"
 ]);
 const MAX_PAYLOAD_BYTES = 8192;
@@ -70,7 +71,7 @@ function validatePayload(type, payload) {
   }
   if (type === "content_draft") return text(payload.topic, 5, 200) && id(payload.research_task_id);
   if (type === "quality_review") {
-    return id(payload.artifact_id) && ["article", "ai_tool"].includes(payload.artifact_type);
+    return id(payload.artifact_id) && payload.artifact_type === "article";
   }
   if (type === "runtime_health_check") return keys.length === 0;
   return false;
