@@ -9,7 +9,7 @@ export const REVIEWER_CONSOLE_HTML = `<!doctype html>
 <body>
   <main>
     <h1>Bảng điều khiển duyệt bài</h1>
-    <p>Preview riêng biệt · Chỉ đọc · Không có quyền xuất bản</p>
+    <p>Preview riêng biệt · Biên tập và duyệt bằng chứng có xác thực · Không có quyền xuất bản</p>
     <p id="session-status" role="status">Đang kiểm tra phiên đăng nhập…</p>
     <p>
       <a id="login-link" href="/auth/google/start">Đăng nhập Google</a>
