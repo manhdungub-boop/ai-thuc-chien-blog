@@ -79,3 +79,119 @@ test("run remains unimplemented after valid operator authentication", async () =
   assert.equal(response.status, 501);
   assert.equal((await response.json()).error, "execution_not_implemented");
 });
+
+
+const OPERATOR_TOKEN = "worker-bridge-operator-token-0123456789abcdef";
+const STATE_TOKEN = "worker-bridge-state-store-token-0123456789abcdef";
+function bridgeEnv({ responseBody = { ok: true, dayUtc: "2026-11-19", acceptedToday: 2, inFlight: 1 } } = {}) {
+  const calls = [];
+  const stub = {
+    async fetch(internalRequest) {
+      calls.push(internalRequest);
+      return Response.json(responseBody);
+    },
+  };
+  const env = {
+    AGENT_OPERATOR_TOKEN: OPERATOR_TOKEN,
+    AGENT_STATE_STORE_TOKEN: STATE_TOKEN,
+    AGENT_STATE_STORE: {
+      idFromName(name) {
+        assert.equal(name, "agent-runtime-global");
+        return "fixed-object-id";
+      },
+      get(id) {
+        assert.equal(id, "fixed-object-id");
+        return stub;
+      },
+    },
+  };
+  return { env, calls };
+}
+
+test("read-only usage bridge requires operator auth and the internal binding", async () => {
+  const unauthorized = await worker.fetch(request("/internal/usage"), {});
+  assert.equal(unauthorized.status, 401);
+  assert.equal((await unauthorized.json()).error, "operator_auth_required");
+
+  const token = OPERATOR_TOKEN;
+  const authorized = new Request("https://agent-runtime-preview.example.workers.dev/internal/usage", {
+    headers: { Authorization: "Bearer " + token },
+  });
+  const missingBinding = await worker.fetch(authorized, {
+    AGENT_OPERATOR_TOKEN: token,
+    AGENT_STATE_STORE_TOKEN: STATE_TOKEN,
+  });
+  assert.equal(missingBinding.status, 503);
+  assert.equal((await missingBinding.json()).error, "state_store_unavailable");
+});
+
+test("usage bridge uses fixed DO identity and sends only the dedicated internal credential", async () => {
+  const { env, calls } = bridgeEnv();
+  const incoming = new Request("https://agent-runtime-preview.example.workers.dev/internal/usage", {
+    headers: {
+      Authorization: "Bearer " + OPERATOR_TOKEN,
+      Cookie: "session=must-not-forward",
+      Origin: "https://untrusted.example",
+      "X-Arbitrary": "must-not-forward",
+    },
+  });
+  const response = await worker.fetch(incoming, env);
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.acceptedToday, 2);
+  assert.equal(body.inFlight, 1);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "https://state-store.internal/usage");
+  assert.equal(calls[0].method, "GET");
+  assert.equal(calls[0].headers.get("authorization"), "Bearer " + STATE_TOKEN);
+  assert.equal(calls[0].headers.get("cookie"), null);
+  assert.equal(calls[0].headers.get("origin"), null);
+  assert.equal(calls[0].headers.get("x-arbitrary"), null);
+  assert.equal(JSON.stringify(body).includes(STATE_TOKEN), false);
+});
+
+test("task inspection uses a fixed route and strips payload and lease secrets", async () => {
+  const { env, calls } = bridgeEnv({
+    responseBody: { ok: true, task: {
+      taskId: "task-123", type: "seo.audit", state: "queued",
+      createdAt: 100, updatedAt: 101, attemptCount: 1, maxAttempts: 3,
+      nextAttemptAt: null, lastErrorCode: null,
+      payload: { private: "do-not-return" }, leaseOwner: "private-lease-owner",
+    } },
+  });
+  const incoming = new Request("https://agent-runtime-preview.example.workers.dev/internal/task?id=task-123", {
+    headers: { Authorization: "Bearer " + OPERATOR_TOKEN },
+  });
+  const response = await worker.fetch(incoming, env);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(calls[0].url, "https://state-store.internal/task?id=task-123");
+  assert.equal(body.task.taskId, "task-123");
+  assert.equal("payload" in body.task, false);
+  assert.equal("leaseOwner" in body.task, false);
+});
+
+test("bridge rejects unknown query parameters and never exposes internal routes without auth", async () => {
+  const { env, calls } = bridgeEnv();
+  const bad = new Request("https://agent-runtime-preview.example.workers.dev/internal/task?id=task-123&path=/reserve", {
+    headers: { Authorization: "Bearer " + OPERATOR_TOKEN },
+  });
+  const response = await worker.fetch(bad, env);
+  assert.equal(response.status, 400);
+  assert.equal(calls.length, 0);
+  const noAuth = await worker.fetch(request("/internal/usage"), env);
+  assert.equal(noAuth.status, 401);
+  assert.equal(calls.length, 0);
+});
+
+test("bridge fails closed when the internal token is missing", async () => {
+  const { env, calls } = bridgeEnv();
+  delete env.AGENT_STATE_STORE_TOKEN;
+  const incoming = new Request("https://agent-runtime-preview.example.workers.dev/internal/usage", {
+    headers: { Authorization: "Bearer " + OPERATOR_TOKEN },
+  });
+  const response = await worker.fetch(incoming, env);
+  assert.equal(response.status, 503);
+  assert.equal(calls.length, 0);
+});
