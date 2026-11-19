@@ -2,7 +2,7 @@ import { validateTaskRequest } from "./task-contract.mjs";
 import { hasValidStateStoreBearer } from "./internal-auth.mjs";
 import { claimQueuedTask, heartbeatLease, recoverExpiredLease, completeLeasedTask } from "./lease-policy.mjs";
 
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 // Conservative Free-tier pilot defaults; hard caps remain enforced below.
 const DEFAULT_LIMITS = Object.freeze({ daily: 100, concurrent: 5, payloadBytes: 8192 });
 const TERMINAL_STATES = new Set(["succeeded", "failed", "cancelled"]);
@@ -62,7 +62,7 @@ function parseControlJson(text) {
   skipWhitespace();
   if (text[index++] !== "{") throw new Error("control_json_invalid");
   const result = {};
-  const allowedKeys = new Set(["reason", "actor", "requestId"]);
+  const allowedKeys = new Set(["reason", "actor", "requestId", "jti", "expiresAt"]);
   skipWhitespace();
   if (text[index] === "}") {
     index++;
@@ -203,6 +203,12 @@ export class AgentStateStore {
           this.sql.exec("UPDATE runtime_meta SET value = '4' WHERE key = 'schema_version'");
           version = { value: "4" };
         }
+        if (version.value === "4") {
+          this.sql.exec("CREATE TABLE oidc_jti_replay (jti_hash TEXT PRIMARY KEY, expires_at INTEGER NOT NULL, consumed_at INTEGER NOT NULL CHECK (consumed_at >= 0), CHECK (expires_at > consumed_at))");
+          this.sql.exec("CREATE INDEX oidc_jti_replay_expiry_idx ON oidc_jti_replay(expires_at)");
+          this.sql.exec("UPDATE runtime_meta SET value = '5' WHERE key = 'schema_version'");
+          version = { value: "5" };
+        }
         if (version.value !== String(SCHEMA_VERSION)) {
           throw new Error("runtime_schema_version_unsupported");
         }
@@ -219,6 +225,14 @@ export class AgentStateStore {
       const url = new URL(request.url);
       if (url.pathname === "/control" && request.method === "GET") {
         return jsonResponse({ ok: true, control: this.controlState() });
+      }
+      if (url.pathname === "/oidc/replay/consume" && request.method === "POST") {
+        const parsedBody = await readBoundedJsonRequest(request, 1024);
+        if (!parsedBody.ok) {
+          return jsonResponse({ ok: false, error: parsedBody.status === 413 ? "request_body_too_large" : "request_invalid" }, parsedBody.status);
+        }
+        const result = await this.consumeOidcJti(parsedBody.value, this.requestTime(request));
+        return jsonResponse(result.body, result.status);
       }
       if ((url.pathname === "/control/pause" || url.pathname === "/control/resume") && request.method === "POST") {
         const parsedBody = await readBoundedJsonRequest(request, 16 * 1024);
@@ -276,6 +290,7 @@ export class AgentStateStore {
           this.sql.exec("ALTER TABLE tasks_v1_fixture RENAME TO tasks");
           this.sql.exec("CREATE INDEX tasks_state_idx ON tasks(state)");
           this.sql.exec("CREATE INDEX tasks_terminal_idx ON tasks(terminal_at)");
+          this.sql.exec("DROP TABLE oidc_jti_replay");
           this.sql.exec("DROP TABLE runtime_control_rate_limit");
           this.sql.exec("DROP TABLE runtime_control_audit");
           this.sql.exec("DROP TABLE runtime_control");
@@ -323,6 +338,33 @@ export class AgentStateStore {
     const row = readRow(this.sql, "SELECT paused, changed_at, version FROM runtime_control WHERE singleton_id = 1");
     if (!row) throw new Error("runtime_control_missing");
     return { paused: row.paused === 1, changedAt: row.changed_at, version: row.version };
+  }
+
+  async consumeOidcJti(body, now) {
+    if (!isObject(body) || Object.keys(body).length !== 2 ||
+        typeof body.jti !== "string" || !/^[a-zA-Z0-9._:-]{16,128}$/.test(body.jti) ||
+        typeof body.expiresAt !== "string" || !/^[0-9]{1,12}$/.test(body.expiresAt)) {
+      return { status: 400, body: { ok: false, error: "oidc_replay_request_invalid" } };
+    }
+    const expiresAtSeconds = Number(body.expiresAt);
+    const tokenExpiresAt = expiresAtSeconds * 1000;
+    if (!Number.isSafeInteger(expiresAtSeconds) || !Number.isSafeInteger(tokenExpiresAt) ||
+        tokenExpiresAt <= now || tokenExpiresAt > now + 11 * 60 * 1000) {
+      return { status: 400, body: { ok: false, error: "oidc_replay_expiry_invalid" } };
+    }
+    try {
+      const jtiHash = await sha256Hex(body.jti);
+      const retentionUntil = tokenExpiresAt + 24 * 60 * 60 * 1000;
+      return this.ctx.storage.transactionSync(() => {
+        this.sql.exec("DELETE FROM oidc_jti_replay WHERE jti_hash IN (SELECT jti_hash FROM oidc_jti_replay WHERE expires_at <= ? ORDER BY expires_at LIMIT 100)", now);
+        const existing = readRow(this.sql, "SELECT jti_hash FROM oidc_jti_replay WHERE jti_hash = ?", jtiHash);
+        if (existing) return { status: 409, body: { ok: false, error: "oidc_token_replayed" } };
+        this.sql.exec("INSERT INTO oidc_jti_replay (jti_hash, expires_at, consumed_at) VALUES (?,?,?)", jtiHash, retentionUntil, now);
+        return { status: 200, body: { ok: true, consumed: true } };
+      });
+    } catch {
+      return { status: 503, body: { ok: false, error: "oidc_replay_store_unavailable" } };
+    }
   }
 
   setPaused(paused, body, now) {
