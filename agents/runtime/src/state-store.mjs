@@ -22,6 +22,42 @@ function jsonResponse(body, status = 200) {
   }});
 }
 function isObject(value) { return value !== null && typeof value === "object" && !Array.isArray(value); }
+
+async function readBoundedJsonRequest(request, maxBytes) {
+  const declared = request.headers.get("content-length");
+  if (declared !== null) {
+    if (!/^(0|[1-9][0-9]*)$/.test(declared)) return { ok: false, status: 400 };
+    if (Number(declared) > maxBytes) return { ok: false, status: 413 };
+  }
+  if (!request.body) return { ok: false, status: 400 };
+  const reader = request.body.getReader();
+  const chunks = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        try { await reader.cancel(); } catch {}
+        return { ok: false, status: 413 };
+      }
+      chunks.push(value);
+    }
+  } catch {
+    return { ok: false, status: 400 };
+  } finally {
+    try { reader.releaseLock(); } catch {}
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  try {
+    return { ok: true, value: JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) };
+  } catch {
+    return { ok: false, status: 400 };
+  }
+}
 function readRow(sql, query, ...bindings) { return sql.exec(query, ...bindings).toArray()[0] ?? null; }
 function utcDay(timestamp) { return new Date(timestamp).toISOString().slice(0, 10); }
 async function sha256Hex(value) {
@@ -115,7 +151,11 @@ export class AgentStateStore {
         return jsonResponse({ ok: true, control: this.controlState() });
       }
       if ((url.pathname === "/control/pause" || url.pathname === "/control/resume") && request.method === "POST") {
-        const result = this.setPaused(url.pathname.endsWith("/pause"), await request.json(), this.requestTime(request));
+        const parsedBody = await readBoundedJsonRequest(request, 16 * 1024);
+        if (!parsedBody.ok) {
+          return jsonResponse({ ok: false, error: parsedBody.status === 413 ? "request_body_too_large" : "request_invalid" }, parsedBody.status);
+        }
+        const result = this.setPaused(url.pathname.endsWith("/pause"), parsedBody.value, this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
       if (url.pathname === "/reserve" && request.method === "POST") {
