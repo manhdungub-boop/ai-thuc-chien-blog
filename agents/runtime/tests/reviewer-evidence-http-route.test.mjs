@@ -236,14 +236,20 @@ describe("authenticated read-only AI Bank reviewer routes", () => {
 
   it("does not expose an AI Bank evidence-write route", async () => {
     let storeAccesses = 0;
-    const response = await worker.fetch(new Request(
-      origin + "/api/reviewer/ai-bank/candidates/ollama/ollama/evidence",
-      { method: "POST", headers: { origin, "content-type": "application/json" }, body: JSON.stringify({}) }
-    ), {
+    const env = {
       AGENT_AI_BANK_CANDIDATE_STORE: { getByName() { storeAccesses += 1; } }
-    });
-    expect(response.status).toBe(404);
-    expect(await response.json()).toEqual({ error: "not_found" });
+    };
+    const evidencePath = origin + "/api/reviewer/ai-bank/candidates/ollama/ollama/evidence";
+    const writeAttempt = await worker.fetch(new Request(evidencePath, {
+      method: "POST",
+      headers: { origin, "content-type": "application/json" },
+      body: JSON.stringify({})
+    }), env);
+    const readAttempt = await worker.fetch(new Request(evidencePath), env);
+    expect(writeAttempt.status).toBe(405);
+    expect(await writeAttempt.json()).toEqual({ error: "method_not_allowed" });
+    expect(readAttempt.status).toBe(404);
+    expect(await readAttempt.json()).toEqual({ error: "not_found" });
     expect(storeAccesses).toBe(0);
   });
 });
