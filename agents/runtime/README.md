@@ -52,6 +52,11 @@ The GitHub Actions workflow is authoritative for the test dependency tree: it ap
 
 See [STATE-STORE-ADR.md](./STATE-STORE-ADR.md) for the design decision, Free-tier budget, transaction boundary, failure behavior, and remaining gates.
 
+## Operator control-plane status
+
+- The State Store `POST /recover` route is implemented behind the internal Worker-to-DO credential, but the Worker shell does not expose an operator-authenticated recovery bridge. Recovery is therefore not yet callable through the current Worker surface.
+- `AGENT_ENABLED` and `AGENT_PAUSED` are deployment environment flags, not a dynamic remote kill-switch API. Changing them requires a controlled configuration/deployment operation.
+- Do not put `AGENT_STATE_STORE_TOKEN` in browser code or expose a public recovery route with the operator bearer. A server-side authenticated, rate-limited control plane with narrow actions and operator audit identity is a prerequisite for task execution.
 ## Remaining gates
 
 1. Independently review the schema migration, lease transactions, auth boundary, and integration-test evidence.
