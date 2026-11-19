@@ -338,6 +338,56 @@ export default {
         }
       });
     }
+    if (url.pathname === "/api/operator/runtime-control") {
+      if (request.method !== "GET" && request.method !== "POST") {
+        return json({ error: "method_not_allowed" }, 405, { allow: "GET, POST" });
+      }
+      if (request.method === "GET") {
+        const origin = request.headers.get("origin");
+        if (origin && origin !== url.origin) return json({ error: "operator_request_origin_rejected" }, 403);
+        const sessionToken = readGoogleReviewerSessionCookie(request);
+        if (!sessionToken) return json({ error: "operator_session_required" }, 401);
+        const store = env.AGENT_TASK_STORE?.getByName("primary");
+        if (!store) return json({ error: "task_store_unavailable" }, 503);
+        const result = await store.getOperatorControl(sessionToken);
+        if (!result.authorized) {
+          const status = result.reason === "operator_not_allowed" ? 403 :
+            result.reason === "operator_control_disabled" || result.reason === "operator_allowlist_not_configured" ? 503 : 401;
+          return json({ error: result.reason }, status);
+        }
+        return json({ control: result.control, operator_control_enabled: true });
+      }
+      if (request.headers.get("origin") !== url.origin ||
+          (request.headers.get("content-type") || "").split(";")[0].trim().toLowerCase() !== "application/json") {
+        return json({ error: "operator_request_origin_or_content_type_rejected" }, 403);
+      }
+      const contentLength = Number(request.headers.get("content-length") || 0);
+      if (contentLength > 2048) return json({ error: "operator_request_too_large" }, 413);
+      const sessionToken = readGoogleReviewerSessionCookie(request);
+      if (!sessionToken) return json({ error: "operator_session_required" }, 401);
+      let body;
+      try {
+        const raw = await request.text();
+        if (new TextEncoder().encode(raw).byteLength > 2048) return json({ error: "operator_request_too_large" }, 413);
+        body = JSON.parse(raw);
+      } catch { return json({ error: "invalid_operator_request_json" }, 400); }
+      if (!body || typeof body !== "object" || Array.isArray(body) ||
+          Object.keys(body).some(key => !["action", "reason"].includes(key)) ||
+          !["pause", "resume"].includes(body.action) ||
+          typeof body.reason !== "string" || body.reason.trim().length < 12 || body.reason.trim().length > 240) {
+        return json({ error: "invalid_operator_request_shape" }, 400);
+      }
+      const store = env.AGENT_TASK_STORE?.getByName("primary");
+      if (!store) return json({ error: "task_store_unavailable" }, 503);
+      const result = await store.setOperatorControl(body.action === "pause", body.reason, sessionToken);
+      if (!result.authorized) {
+        const status = result.reason === "operator_not_allowed" ? 403 :
+          result.reason === "operator_control_disabled" || result.reason === "operator_allowlist_not_configured" ? 503 : 401;
+        return json({ error: result.reason }, status);
+      }
+      if (!result.changed) return json({ changed: false, control: result.control });
+      return json({ changed: true, control: result.control });
+    }
     const reviewerDraftCollection = url.pathname === "/api/reviewer/drafts";
     const reviewerNeedsRevisionCollection = url.pathname === "/api/reviewer/drafts-needing-authoring";
     const reviewerDraftDetail = url.pathname.match(/^\/api\/reviewer\/drafts\/([a-zA-Z0-9._:-]{8,128})$/);
@@ -410,6 +460,9 @@ export default {
     }
     if (request.method !== "GET") return json({ error: "method_not_allowed" }, 405);
     if (url.pathname === "/health") {
+      const taskStore = env.AGENT_TASK_STORE?.getByName("primary");
+      const runtimeControl = taskStore ? await taskStore.getControl() : null;
+      const taskAdmission = taskStore ? await taskStore.getDailyAdmissionUsage() : null;
       return json({
         ok: true,
         service: SERVICE,
@@ -428,6 +481,9 @@ export default {
         website_publication_enabled: false,
         facebook_publication_enabled: false,
         reviewer_auth_enabled: env.AGENT_REVIEWER_AUTH_ENABLED === "true",
+        operator_control_enabled: env.AGENT_OPERATOR_CONTROL_ENABLED === "true",
+        runtime_control: runtimeControl,
+        task_admission: taskAdmission,
         task_enqueue_endpoint_enabled: false,
         production_access: false
       });
