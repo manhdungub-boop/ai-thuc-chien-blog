@@ -292,3 +292,36 @@ test("bridge maps malformed and oversized State Store responses to generic unava
     assert.equal(JSON.stringify(body).includes("database_sql_detail"), false);
   }
 });
+
+
+test("control mutation rejects oversized declared and chunked request bodies before State Store access", async () => {
+  const { env, calls } = bridgeEnv();
+  const url = "https://agent-runtime-preview.example.workers.dev/internal/control/pause";
+  const headers = { Authorization: "Bearer " + OPERATOR_TOKEN, "Content-Type": "application/json" };
+
+  const declaredTooLarge = await worker.fetch(new Request(url, {
+    method: "POST", headers: { ...headers, "Content-Length": "1025" }, body: "{}",
+  }), env);
+  assert.equal(declaredTooLarge.status, 413);
+  assert.equal((await declaredTooLarge.json()).error, "request_body_too_large");
+
+  const chunkedTooLarge = await worker.fetch(new Request(url, {
+    method: "POST", headers,
+    body: new ReadableStream({
+      start(controller) {
+        controller.enqueue(new Uint8Array(1025));
+        controller.close();
+      },
+    }),
+    duplex: "half",
+  }), env);
+  assert.equal(chunkedTooLarge.status, 413);
+  assert.equal((await chunkedTooLarge.json()).error, "request_body_too_large");
+
+  const malformed = await worker.fetch(new Request(url, {
+    method: "POST", headers, body: "{invalid-json",
+  }), env);
+  assert.equal(malformed.status, 400);
+  assert.equal((await malformed.json()).error, "request_invalid");
+  assert.equal(calls.length, 0);
+});
