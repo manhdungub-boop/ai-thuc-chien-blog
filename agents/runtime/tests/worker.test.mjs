@@ -207,6 +207,73 @@ test("metrics bridge rejects unauthenticated requests, query strings, and malfor
   assert.equal((await malformed.json()).error, "state_store_response_invalid");
 });
 
+test("dead-letter bridge authenticates, fixes the State Store route, and allowlists failed-task metadata", async () => {
+  const { env, calls } = bridgeEnv({
+    responseBody: {
+      ok: true,
+      items: [{
+        taskId: "failed-task-01", type: "seo.audit", createdAt: 100, terminalAt: 200,
+        errorCode: "lease_expired_max_attempts", lastErrorCode: "lease_expired",
+        attemptCount: 3, maxAttempts: 3, payload: { private: "must-not-escape" },
+        idempotencyKey: "private-idempotency-key", leaseOwner: "private-owner",
+      }],
+      nextCursor: { terminalAt: 200, taskId: "failed-task-01" },
+    },
+  });
+  const incoming = new Request("https://agent-runtime-preview.example.workers.dev/internal/dead-letter?limit=1", {
+    headers: { Authorization: "Bearer " + OPERATOR_TOKEN, Cookie: "session=not-forwarded" },
+  });
+  const response = await worker.fetch(incoming, env);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "https://state-store.internal/dead-letter?limit=1");
+  assert.equal(calls[0].headers.get("authorization"), "Bearer " + STATE_TOKEN);
+  assert.equal(calls[0].headers.get("cookie"), null);
+  assert.equal(body.items[0].taskId, "failed-task-01");
+  assert.equal(body.items[0].attemptCount, 3);
+  assert.equal(body.nextCursor.taskId, "failed-task-01");
+  assert.equal("payload" in body.items[0], false);
+  assert.equal("idempotencyKey" in body.items[0], false);
+  assert.equal("leaseOwner" in body.items[0], false);
+  assert.equal(JSON.stringify(body).includes("must-not-escape"), false);
+});
+
+test("dead-letter bridge rejects unauthenticated, malformed, duplicate, and oversized page queries", async () => {
+  const unauthorized = await worker.fetch(request("/internal/dead-letter"), {});
+  assert.equal(unauthorized.status, 401);
+  const { env, calls } = bridgeEnv();
+  for (const query of [
+    "?limit=0",
+    "?limit=51",
+    "?limit=1&limit=2",
+    "?beforeTerminalAt=100",
+    "?limit=1&beforeTerminalAt=100&beforeTaskId=",
+    "?limit=1&unexpected=1",
+  ]) {
+    const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/dead-letter" + query, {
+      headers: { Authorization: "Bearer " + OPERATOR_TOKEN },
+    }), env);
+    assert.equal(response.status, 400, query);
+  }
+  assert.equal(calls.length, 0);
+});
+
+test("dead-letter bridge fails closed on malformed State Store items or inconsistent cursor", async () => {
+  const { env } = bridgeEnv({
+    responseBody: {
+      ok: true,
+      items: [{ taskId: "failed-task", type: "seo.audit", createdAt: 1, terminalAt: 2, errorCode: null, lastErrorCode: null, attemptCount: 1, maxAttempts: 3, payload: "private" }],
+      nextCursor: { terminalAt: 999, taskId: "not-last-item" },
+    },
+  });
+  const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/dead-letter", {
+    headers: { Authorization: "Bearer " + OPERATOR_TOKEN },
+  }), env);
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).error, "state_store_response_invalid");
+});
+
 test("task inspection uses a fixed route and strips payload and lease secrets", async () => {
   const { env, calls } = bridgeEnv({
     responseBody: { ok: true, task: {
