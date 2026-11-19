@@ -331,11 +331,41 @@ async function createCommunitySession(db, memberId) {
     .bind(crypto.randomUUID(), memberId, tokenHash, now.toISOString(), expiresAt).run();
   return token;
 }
-async function readJsonPayload(request, maxBytes = 6000) {
-  const length = Number(request.headers.get("Content-Length") || 0);
-  if (length > maxBytes) return { ok: false, status: 413, error: "Nội dung gửi quá lớn." };
-  const raw = await request.text();
-  if (raw.length > maxBytes) return { ok: false, status: 413, error: "Nội dung gửi quá lớn." };
+async function readBoundedJsonPayload(request, maxBytes) {
+  const contentLength = request.headers.get("content-length");
+  if (contentLength !== null && !/^(?:0|[1-9][0-9]*)$/.test(contentLength)) {
+    return { ok: false, status: 400, error: "Độ dài nội dung không hợp lệ." };
+  }
+  if (contentLength !== null && Number(contentLength) > maxBytes) {
+    return { ok: false, status: 413, error: "Nội dung gửi quá lớn." };
+  }
+  if (!request.body) return { ok: false, status: 400, error: "Dữ liệu gửi không hợp lệ." };
+  const reader = request.body.getReader();
+  const chunks = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        try { await reader.cancel("request_body_limit_exceeded"); } catch { /* Preserve the established 413 result. */ }
+        return { ok: false, status: 413, error: "Nội dung gửi quá lớn." };
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  let raw;
+  try { raw = new TextDecoder("utf-8", { fatal: true }).decode(bytes); }
+  catch { return { ok: false, status: 400, error: "Dữ liệu gửi không hợp lệ." }; }
   try {
     const value = JSON.parse(raw);
     if (!value || typeof value !== "object" || Array.isArray(value)) return { ok: false, status: 400, error: "Dữ liệu gửi không hợp lệ." };
@@ -900,7 +930,7 @@ async function handleCommunityApi(request, env) {
   try {
       // Public aggregate analytics: store counters only, never raw IP addresses.
       if (route === "analytics/pageview" && request.method === "POST") {
-        const parsed = await readJsonPayload(request, 1200);
+        const parsed = await readBoundedJsonPayload(request, 1200);
         if (!parsed.ok) return communityJson({ error: parsed.error }, parsed.status, request);
         const path = String(parsed.value.path || "/");
         const topic = String(parsed.value.topic || "");
@@ -936,7 +966,7 @@ async function handleCommunityApi(request, env) {
       if (route === "presence" && request.method === "POST") {
         const member = await communityMemberFromRequest(request, db);
         if (!member) return communityJson({ error: "Hãy đăng nhập để cập nhật trạng thái trực tuyến." }, 401, request);
-        const parsed = await readJsonPayload(request, 1200);
+        const parsed = await readBoundedJsonPayload(request, 1200);
         if (!parsed.ok) return communityJson({ error: parsed.error }, parsed.status, request);
         const topic = String(parsed.value.topic || "");
         if (!Object.hasOwn(COMMUNITY_TOPICS, topic)) return communityJson({ error: "Chủ đề trực tuyến không hợp lệ." }, 400, request);
@@ -950,7 +980,7 @@ async function handleCommunityApi(request, env) {
       }
 
     if (route === "register" && request.method === "POST") {
-      const parsed = await readJsonPayload(request);
+      const parsed = await readBoundedJsonPayload(request);
       if (!parsed.ok) return communityJson({ error: parsed.error }, parsed.status, request);
       const payload = parsed.value;
       const username = String(payload.username || "").trim().toLowerCase();
@@ -995,7 +1025,7 @@ async function handleCommunityApi(request, env) {
     }
 
     if (route === "verify-email" && request.method === "POST") {
-      const parsed = await readJsonPayload(request);
+      const parsed = await readBoundedJsonPayload(request);
       if (!parsed.ok) return communityJson({ error: parsed.error }, parsed.status, request);
       const token = String(parsed.value.token || "");
       if (!/^[A-Za-z0-9_-]{32,80}$/.test(token)) return communityJson({ error: "Liên kết xác nhận không hợp lệ hoặc đã hết hạn." }, 400, request);
@@ -1028,7 +1058,7 @@ async function handleCommunityApi(request, env) {
     }
 
     if (route === "resend-verification" && request.method === "POST") {
-      const parsed = await readJsonPayload(request);
+      const parsed = await readBoundedJsonPayload(request);
       if (!parsed.ok) return communityJson({ error: parsed.error }, parsed.status, request);
       const email = String(parsed.value.email || "").trim().toLowerCase();
       if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return communityJson({ error: "Vui lòng nhập email hợp lệ." }, 400, request);
@@ -1065,7 +1095,7 @@ async function handleCommunityApi(request, env) {
     }
 
     if (route === "password-reset/request" && request.method === "POST") {
-      const parsed = await readJsonPayload(request);
+      const parsed = await readBoundedJsonPayload(request);
       if (!parsed.ok) return communityJson({ error: parsed.error }, parsed.status, request);
       const email = String(parsed.value.email || "").trim().toLowerCase();
       if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return communityJson({ error: "Vui lòng nhập email hợp lệ." }, 400, request);
@@ -1103,7 +1133,7 @@ async function handleCommunityApi(request, env) {
     }
 
     if (route === "password-reset/complete" && request.method === "POST") {
-      const parsed = await readJsonPayload(request);
+      const parsed = await readBoundedJsonPayload(request);
       if (!parsed.ok) return communityJson({ error: parsed.error }, parsed.status, request);
       const token = String(parsed.value.token || "");
       const password = String(parsed.value.password || "");
@@ -1156,7 +1186,7 @@ async function handleCommunityApi(request, env) {
     }
 
     if (route === "login" && request.method === "POST") {
-      const parsed = await readJsonPayload(request);
+      const parsed = await readBoundedJsonPayload(request);
       if (!parsed.ok) return communityJson({ error: parsed.error }, parsed.status, request);
       const payload = parsed.value;
       const email = String(payload.email || "").trim().toLowerCase();
@@ -1215,7 +1245,7 @@ async function handleCommunityApi(request, env) {
     if (route === "messages" && request.method === "POST") {
       const member = await communityMemberFromRequest(request, db);
       if (!member) return communityJson({ error: "Hãy đăng nhập trước khi gửi tin nhắn." }, 401, request);
-      const parsed = await readJsonPayload(request, 3000);
+      const parsed = await readBoundedJsonPayload(request, 3000);
       if (!parsed.ok) return communityJson({ error: parsed.error }, parsed.status, request);
       const payload = parsed.value;
       const topic = String(payload.topic || "");
