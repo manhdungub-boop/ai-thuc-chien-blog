@@ -150,10 +150,11 @@ export const OPERATOR_CONSOLE_JS = `"use strict";
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ action, reason })
       });
-      actionStatus.textContent = result.changed
+      const actionMessage = result.changed
         ? "Đã ghi nhận thao tác. Trạng thái pause hiện tại: " + result.control.paused + "."
         : "Trạng thái không thay đổi.";
       await refresh();
+      actionStatus.textContent = actionMessage;
     } catch (error) {
       actionStatus.textContent = "Thao tác bị từ chối: " + (error.message || "unknown_error");
     } finally {
