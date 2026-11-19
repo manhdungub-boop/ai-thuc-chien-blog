@@ -7,7 +7,8 @@ import { fileURLToPath } from "node:url";
 import { Miniflare } from "miniflare";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const workerPath = path.resolve(here, "../src/worker.mjs");
+const workerPath = path.resolve(here, "fixtures/state-store-test-worker.mjs");
+const productionWorkerPath = path.resolve(here, "../src/worker.mjs");
 const TEST_OPERATOR_TOKEN = "integration-test-operator-token-0123456789abcdef";
 const TEST_STATE_STORE_TOKEN = "integration-test-state-store-token-0123456789abcdef";
 
@@ -22,7 +23,6 @@ async function createRuntime({ daily = 100, concurrent = 5, persistDir, enabled 
     durableObjects: { AGENT_STATE_STORE: { className: "AgentStateStore", useSQLite: true } },
     durableObjectsPersist: directory,
     bindings: {
-      RUNTIME_TESTING: "true",
       AGENT_ENABLED: enabled,
       AGENT_PAUSED: paused,
       AGENT_OPERATOR_TOKEN: TEST_OPERATOR_TOKEN,
@@ -66,6 +66,46 @@ async function call(stub, pathname, body, headers = {}) {
   return { status: response.status, body: await response.json() };
 }
 
+test("deployable Worker State Store has no test routes or test clock override", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "ai-thuc-chien-do-production-boundary-"));
+  const mf = new Miniflare({
+    modules: true,
+    scriptPath: productionWorkerPath,
+    compatibilityDate: "2026-07-08",
+    durableObjects: { AGENT_STATE_STORE: { className: "AgentStateStore", useSQLite: true } },
+    durableObjectsPersist: directory,
+    bindings: {
+      AGENT_ENABLED: "true",
+      AGENT_PAUSED: "false",
+      AGENT_OPERATOR_TOKEN: TEST_OPERATOR_TOKEN,
+      AGENT_STATE_STORE_TOKEN: TEST_STATE_STORE_TOKEN,
+    },
+  });
+  try {
+    const namespace = await mf.getDurableObjectNamespace("AGENT_STATE_STORE");
+    const stub = namespace.get(namespace.idFromName("agent-runtime-production-boundary"));
+    const opened = await call(stub, "/control/resume", {
+      actor: "integration-test",
+      requestId: crypto.randomUUID(),
+      reason: "production boundary test",
+    });
+    assert.equal(opened.status, 200);
+
+    const rollback = await call(stub, "/__test/rollback", {});
+    assert.equal(rollback.status, 404);
+    assert.equal(rollback.body.error, "not_found");
+
+    const created = await call(stub, "/reserve", task("production-clock"), {
+      "x-test-now": "2000-01-01T00:00:00.000Z",
+    });
+    assert.equal(created.status, 201);
+    assert.ok(created.body.task.createdAt > Date.parse("2020-01-01T00:00:00.000Z"));
+  } finally {
+    await mf.dispose();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("all state-store routes require the distinct internal credential", async () => {
   await withRuntime({}, async ({ stub }) => {
     for (const [pathname, body] of [
@@ -103,7 +143,7 @@ test("state-store admission fails closed while disabled or paused", async () => 
     compatibilityDate: "2026-07-08",
     durableObjects: { AGENT_STATE_STORE: { className: "AgentStateStore", useSQLite: true } },
     durableObjectsPersist: directory,
-    bindings: { RUNTIME_TESTING: "true", AGENT_OPERATOR_TOKEN: TEST_OPERATOR_TOKEN, AGENT_STATE_STORE_TOKEN: TEST_STATE_STORE_TOKEN, AGENT_ENABLED: "false", AGENT_PAUSED: "true" },
+    bindings: { AGENT_OPERATOR_TOKEN: TEST_OPERATOR_TOKEN, AGENT_STATE_STORE_TOKEN: TEST_STATE_STORE_TOKEN, AGENT_ENABLED: "false", AGENT_PAUSED: "true" },
   });
   try {
     const namespace = await mf.getDurableObjectNamespace("AGENT_STATE_STORE");
