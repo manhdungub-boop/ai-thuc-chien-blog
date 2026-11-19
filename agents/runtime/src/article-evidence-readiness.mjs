@@ -134,14 +134,10 @@ export async function assessArticleEvidenceReadiness({
   }
 
   const body = typeof draft.body_markdown === "string" ? draft.body_markdown : "";
-  const proseBody = removeFencedCode(body);
-  const paragraphs = proseBody.split(/\n\s*\n/);
+  const normalizedBody = normalizeClaimText(removeFencedCode(body));
   for (const item of draft.claims) {
     const normalizedClaim = normalizeClaimText(item.claim);
-    const claimParagraph = normalizedClaim
-      ? paragraphs.find(paragraph => normalizeClaimText(paragraph).includes(normalizedClaim))
-      : null;
-    if (!claimParagraph) {
+    if (!normalizedClaim || !normalizedBody.includes(normalizedClaim)) {
       claimIssues.push({
         code: "reviewed_claim_missing_from_article_body",
         claim_id: item.claim_id
@@ -174,7 +170,7 @@ export async function assessArticleEvidenceReadiness({
       continue;
     }
     for (const citationIndex of expectedCitationIndices) {
-      if (!claimParagraph.includes(`[${citationIndex}]`)) {
+      if (!body.includes(`[${citationIndex}]`)) {
         claimIssues.push({
           code: "claim_inline_citation_missing_from_body",
           claim_id: item.claim_id,
