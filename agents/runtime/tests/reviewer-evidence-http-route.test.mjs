@@ -368,6 +368,46 @@ describe("authenticated read-only AI Bank reviewer routes", () => {
     expect(await duplicate.json()).toMatchObject({ error: "duplicate_audit_event", evidence_recorded: false });
     expect(storeAccesses).toBe(1);
   });
+
+  it("maps the exhausted evidence audit budget to HTTP 429", async () => {
+    const auth = reviewerAuthEnv("reviewer-session-secret-for-tests-32chars");
+    const env = {
+      ...auth,
+      GOOGLE_REVIEWER_CLIENT_SECRET: "reviewer-client-secret-for-test-32-characters",
+      GOOGLE_REVIEWER_STATE_SECRET: "reviewer-state-secret-for-tests-32-characters",
+      GOOGLE_REVIEWER_EVIDENCE_WRITER_EMAILS: "reviewer@example.com",
+      AGENT_AI_BANK_CANDIDATE_STORE: {
+        getByName: () => ({
+          async submitAuthorizedReviewEvidence() {
+            return { accepted: false, reason: "evidence_audit_daily_limit_reached" };
+          }
+        })
+      }
+    };
+    const evidencePath = origin + "/api/reviewer/ai-bank/candidates/ollama/ollama/evidence";
+    const response = await worker.fetch(new Request(evidencePath, {
+      method: "POST",
+      headers: {
+        origin,
+        "content-type": "application/json",
+        cookie: "__Host-ai_reviewer_session=opaque-session"
+      },
+      body: JSON.stringify({
+        audit_event_id: "d4e6d1c2-3b7f-4a91-8c22-1234567890ab",
+        evidence: {
+          check_type: "pricing_and_free_limits",
+          source_title: "Pricing",
+          source_url: "https://ollama.com/pricing",
+          excerpt: "Pending review."
+        }
+      })
+    }), env);
+    expect(response.status).toBe(429);
+    expect(await response.json()).toEqual({
+      error: "evidence_audit_daily_limit_reached",
+      evidence_recorded: false
+    });
+  });
 });
 
 
