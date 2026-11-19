@@ -42,8 +42,8 @@ Each heartbeat adds two row writes (one task update and one audit event). The le
 At the current pilot ceiling of 100 accepted tasks/day:
 - Base task-lifecycle writes, excluding heartbeats: up to approximately 700 rows/day.
 - If each task records five heartbeats, add up to approximately 1,000 row writes/day.
-- At steady-state retention, 100 tasks/day can additionally require approximately 100 terminal-task deletes, 300 audit-row deletes and one old daily-usage delete/day, assuming all tasks reach terminal state and the workload is sustained.
-- Illustrative pilot estimate with five heartbeats/task: approximately 2,101 row writes/day including retention deletes; this excludes expiry-recovery events and is not a measured value.
+- At steady-state retention, 100 tasks/day with five heartbeats per task can additionally require approximately 100 terminal-task deletes, 800 audit-row deletes (three lifecycle events plus five heartbeat events per task) and one old daily-usage delete/day, assuming all tasks reach terminal state and the workload is sustained.
+- Illustrative pilot estimate with five heartbeats/task: approximately 2,601 row writes/day including retention deletes (700 base lifecycle writes + 1,000 heartbeat writes + 100 task deletes + 800 audit deletes + one daily-usage delete); this excludes expiry-recovery events and is not a measured value.
 - Each expiry recovery adds one task update and one audit row (two row writes). At higher volume, include actual retry and recovery rates rather than assuming a single attempt.
 - This remains a planning estimate, not evidence of account quota headroom.
 
