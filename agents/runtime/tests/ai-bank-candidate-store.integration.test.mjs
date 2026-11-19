@@ -364,7 +364,15 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
   });
 
   it("rejects internally consistent but referentially broken snapshot rows", async () => {
-    await store.upsertCandidates([candidate()]);
+    const now = Date.parse("2026-11-19T10:00:00.000Z");
+    await store.upsertCandidates([candidate()], now);
+    const accepted = await submitEvidence(store, "github:ollama/ollama", {
+      check_type: "pricing_and_free_limits",
+      source_title: "Official pricing page",
+      source_url: "https://ollama.com/pricing",
+      excerpt: "Reference integrity fixture."
+    }, now, "a4e6d1c2-3b7f-4a91-8c22-1234567890ab");
+    expect(accepted.accepted).toBe(true);
     const sourceSnapshot = await runInDurableObject(store, async (_instance, state) =>
       captureTestSnapshot(state, 1)
     );
