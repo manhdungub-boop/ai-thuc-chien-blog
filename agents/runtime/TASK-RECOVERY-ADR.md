@@ -1,6 +1,6 @@
 # Agent Runtime — task lease and recovery architecture decision
 
-Status: **schema v2 migration and pure lease-policy helpers are implemented in Draft PRs #296/#297; claim/heartbeat/recovery are not yet wired into the State Store. No Durable Object binding, alarm, schedule, or task execution is enabled.**
+Status: **schema v2 migration and transactional claim/heartbeat/completion/expiry-recovery routes are implemented in Draft PR #297, with pure policy helpers and tests. They remain unmerged and unbound. No Durable Object binding, alarm, schedule, or task execution is enabled.**
 
 Date: 2026-11-19
 
@@ -26,14 +26,18 @@ Add indexes for `(state, next_attempt_at)` and `(state, lease_expires_at)`. Migr
 
 ## Implementation progress (2026-11-19)
 
-- Draft PR #296 adds pure policy functions for claim, heartbeat, expiry recovery, and fenced completion, with deterministic unit tests. These helpers do not perform SQL writes and are not yet called by the Worker.
+- Draft PR #296 adds pure policy functions for claim, heartbeat, expiry recovery, and fenced completion.
 - Draft PR #297 adds a transactional schema v1 -> v2 migration. Fresh stores intentionally create the v1 baseline and run the same migration path used for persisted v1 data.
-- Schema v2 adds bounded attempt counters, monotonically increasing lease generation, opaque owner, lease expiry, retry due time, and bounded machine-readable last-error code. The migration adds retry/lease indexes and preserves existing task and usage rows.
-- Task inspection returns lease metadata but never returns the lease owner.
-- Migration tests cover a fresh store and a persisted v1-shaped store with task and daily-usage preservation. These tests still require CI confirmation before the migration can be accepted.
+- Schema v2 adds bounded attempt counters, monotonically increasing lease generation, opaque owner, per-claim expiry, absolute lease maximum expiry (30 minutes), retry due time, and bounded machine-readable last-error code. The migration adds retry/lease indexes and preserves existing task and usage rows.
+- The State Store exposes authenticated `/claim`, `/heartbeat`, `/complete`, and operator-invoked `/recover` routes. Claim and recovery fail closed while paused; heartbeat and completion may finish an already-owned lease while paused.
+- SQL updates are performed in synchronous SQLite transactions with task state, owner, generation, and expiry predicates. A stale generation cannot heartbeat or complete a newer attempt.
+- Every claim, heartbeat, retry/requeue, expiry failure, and terminal completion appends an audit event in the same transaction. Same-generation repeated terminal completion is idempotent and does not write another event.
+- Generic `/transition` can no longer start or finish running work; a valid lease is required.
+- The State Store validates a dedicated `AGENT_STATE_STORE_TOKEN`, distinct from the external `AGENT_OPERATOR_TOKEN`. The Worker-to-DO call path and binding remain intentionally unwired.
+- Migration tests cover a fresh store and a persisted v1-shaped store with task and daily-usage preservation. Lease tests cover concurrent claim, fencing, heartbeat, pause behavior, bounded recovery, and attempt exhaustion.
 - The test-only v1 fixture route is guarded by `RUNTIME_TESTING=true`; the deploy configuration does not set that flag.
 
-The next implementation step is to connect the policy to transactional State Store operations, with conditional SQL updates and audit events. Do not enable a Durable Object binding or scheduler as part of that work.
+The next implementation step is independent security review and Worker-to-State-Store call-path integration in an isolated, separate Preview config. Do not enable a Durable Object binding, scheduler, or task execution as part of this PR.
 
 ## State machine
 
