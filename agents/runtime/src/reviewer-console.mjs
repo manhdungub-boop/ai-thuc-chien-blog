@@ -208,7 +208,7 @@ export const REVIEWER_CONSOLE_JS = `"use strict";
 
   byId("refresh-button").addEventListener("click", loadQueue);
   logout.addEventListener("click", async () => {
-    try { await fetch("/auth/google/logout", { credentials: "same-origin", cache: "no-store" }); }
+    try { await fetch("/auth/google/logout", { method: "POST", credentials: "same-origin", cache: "no-store" }); }
     finally { window.location.reload(); }
   });
   init();
