@@ -96,7 +96,7 @@ describe("article evidence readiness", () => {
     const draft = makeDraft();
     draft.body_markdown = draft.body_markdown
       .replace(" [1] [2] [3]. ", ". ")
-      + "\\n\\nTài liệu tham khảo bổ sung [1] [2] [3].";
+      + "\n\nTài liệu tham khảo bổ sung [1] [2] [3].";
     const result = await assessArticleEvidenceReadiness({ draft, ledger, reviewRecord, now });
     expect(result.status).toBe("article_claim_evidence_not_ready");
     expect(result.issues).toContainEqual({
