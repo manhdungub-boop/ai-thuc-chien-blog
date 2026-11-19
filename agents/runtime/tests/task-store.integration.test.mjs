@@ -513,4 +513,63 @@ describe("AgentTaskStore Durable Object", () => {
     expect(overflow).toEqual({ accepted: false, reason: "queue_capacity_reached" });
     expect(await store.stats()).toEqual({ pending: 500 });
   });
+
+  it("caps newly accepted tasks at 100 per UTC day and does not count idempotent duplicates", async () => {
+    const first = await store.enqueue(task("daily-admission-0001"));
+    const duplicate = await store.enqueue(task("daily-admission-0001"));
+    expect(first.accepted).toBe(true);
+    expect(duplicate).toMatchObject({ accepted: true, duplicate: true });
+    for (let index = 2; index <= 100; index += 1) {
+      const result = await store.enqueue(task(`daily-admission-${String(index).padStart(4, "0")}`));
+      expect(result.accepted).toBe(true);
+    }
+    const rejected = await store.enqueue(task("daily-admission-0101"));
+    expect(rejected).toEqual({ accepted: false, reason: "daily_task_admission_limit_reached" });
+    const usage = await store.getDailyAdmissionUsage();
+    expect(usage.accepted).toBe(100);
+    expect(usage.limit).toBe(100);
+  });
+
+  it("enforces the daily task admission limit under concurrent requests", async () => {
+    const results = await Promise.all(Array.from({ length: 110 }, (_, index) =>
+      store.enqueue(task(`daily-concurrent-${String(index).padStart(4, "0")}`))
+    ));
+    expect(results.filter(result => result.accepted)).toHaveLength(100);
+    expect(results.filter(result => result.reason === "daily_task_admission_limit_reached")).toHaveLength(10);
+    expect((await store.getDailyAdmissionUsage()).accepted).toBe(100);
+  });
+
+  it("durably auto-pauses after five terminal failures in ten minutes and audits the transition", async () => {
+    for (let index = 1; index <= 5; index += 1) {
+      const id = `breaker-terminal-${String(index).padStart(4, "0")}`;
+      await store.enqueue(task(id));
+      const claim = await store.claim(["ai_bank_discovery"], id);
+      expect(claim.task.id).toBe(id);
+      const terminal = await store.abandon(id, claim.lease_token, "source_terminal_failure");
+      expect(terminal).toMatchObject({ updated: true, status: "dead" });
+      const control = await store.getControl();
+      expect(control.paused).toBe(index === 5);
+      expect(control.failure_count_last_10m).toBe(index);
+    }
+
+    expect(await store.enqueue(task("breaker-blocked-0001"))).toEqual({
+      accepted: false,
+      reason: "circuit_breaker_open"
+    });
+    expect(await store.claim()).toMatchObject({ task: null, reason: "circuit_breaker_open" });
+    const audit = await runInDurableObject(store, async (_instance, state) =>
+      state.storage.sql.exec(
+        "SELECT event_type, COUNT(*) AS count FROM task_store_audit GROUP BY event_type"
+      ).toArray()
+    );
+    expect(audit).toEqual([{ event_type: "circuit_breaker_auto_pause", count: 1 }]);
+  });
+
+  it("does not trip the circuit breaker for non-terminal retries", async () => {
+    await store.enqueue(task("breaker-retry-0001"));
+    const claim = await store.claim(["ai_bank_discovery"], "breaker-retry-0001");
+    const retried = await store.retry("breaker-retry-0001", claim.lease_token, "temporary_source_error");
+    expect(retried).toMatchObject({ updated: true, status: "pending" });
+    expect(await store.getControl()).toMatchObject({ paused: false, failure_count_last_10m: 0 });
+  });
 });
