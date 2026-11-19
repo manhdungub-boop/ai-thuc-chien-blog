@@ -160,7 +160,7 @@ test("read-only metrics bridge authenticates, uses a fixed route, and returns on
     observedAt: 1799999999000,
     dayUtc: "2026-11-20",
     tasks: { totalRetained: 7, queued: 2, queuedDue: 1, running: 1, succeededRetained: 3, failedRetained: 1, cancelledRetained: 0, failedLast24h: 1, oldestQueuedAgeMs: 1200, oldestRunningUpdateAgeMs: 900, taskIds: ["private-task"] },
-    quota: { acceptedToday: 7, dailyLimit: 100, dailyUtilizationPercent: 7, inFlight: 3, concurrentLimit: 5, concurrentUtilizationPercent: 60, payloadLimitBytes: 8192 },
+    quota: { acceptedToday: 7, dailyLimit: 100, dailyUtilizationPercent: 7, dailyPressure: "normal", inFlight: 3, concurrentLimit: 5, concurrentUtilizationPercent: 60, concurrentPressure: "warning", overallPressure: "warning", payloadLimitBytes: 8192 },
     auditLast24h: [{ eventType: "task.failed", count: 1 }],
     note: "Internal admission guardrails only; not a measurement of provider or Cloudflare account quota.",
   };
@@ -177,6 +177,9 @@ test("read-only metrics bridge authenticates, uses a fixed route, and returns on
   assert.equal(response.status, 200);
   assert.equal(body.tasks.queuedDue, 1);
   assert.equal(body.quota.dailyUtilizationPercent, 7);
+  assert.equal(body.quota.dailyPressure, "normal");
+  assert.equal(body.quota.concurrentPressure, "warning");
+  assert.equal(body.quota.overallPressure, "warning");
   assert.equal(body.auditLast24h[0].eventType, "task.failed");
   assert.equal("taskIds" in body.tasks, false);
   assert.equal(JSON.stringify(body).includes("private-task"), false);

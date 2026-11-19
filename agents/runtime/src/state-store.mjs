@@ -42,6 +42,16 @@ function jsonResponse(body, status = 200) {
   }});
 }
 function isObject(value) { return value !== null && typeof value === "object" && !Array.isArray(value); }
+function quotaPressure(percent) {
+  if (percent >= 100) return "exhausted";
+  if (percent >= 90) return "critical";
+  if (percent >= 80) return "warning";
+  return "normal";
+}
+function highestQuotaPressure(daily, concurrent) {
+  const rank = { normal: 0, warning: 1, critical: 2, exhausted: 3 };
+  return rank[daily] >= rank[concurrent] ? daily : concurrent;
+}
 
 
 
@@ -385,6 +395,10 @@ export class AgentStateStore {
           now - 24 * 60 * 60 * 1000,
         ).toArray();
         const acceptedToday = usage?.accepted_count ?? 0;
+        const dailyUtilizationPercent = Math.round((acceptedToday / limits.daily) * 10000) / 100;
+        const concurrentUtilizationPercent = Math.round(((counts.queued + counts.running) / limits.concurrent) * 10000) / 100;
+        const dailyPressure = quotaPressure(dailyUtilizationPercent);
+        const concurrentPressure = quotaPressure(concurrentUtilizationPercent);
         return jsonResponse({
           ok: true,
           observedAt: now,
@@ -404,10 +418,13 @@ export class AgentStateStore {
           quota: {
             acceptedToday,
             dailyLimit: limits.daily,
-            dailyUtilizationPercent: Math.round((acceptedToday / limits.daily) * 10000) / 100,
+            dailyUtilizationPercent,
+            dailyPressure,
             inFlight: counts.queued + counts.running,
             concurrentLimit: limits.concurrent,
-            concurrentUtilizationPercent: Math.round(((counts.queued + counts.running) / limits.concurrent) * 10000) / 100,
+            concurrentUtilizationPercent,
+            concurrentPressure,
+            overallPressure: highestQuotaPressure(dailyPressure, concurrentPressure),
             payloadLimitBytes: limits.payloadBytes,
           },
           auditLast24h: audit,
