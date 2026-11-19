@@ -55,7 +55,7 @@ test("Preview deployment workflow is manual, explicitly confirmed, token-isolate
   assert.ok(previewConfig.migrations.some(migration => migration.tag === "v4-reviewer-auth-store"));
   assert.match(previewConfig.vars.AGENT_REVIEWER_AUTH_ENABLED, /^false$/);
   assert.match(runtimeReadme, /implements the Google authorization-code callback flow/);
-  assert.match(runtimeReadme, /Both `wrangler\\.jsonc` and `wrangler\\.preview\\.jsonc` are unscheduled/);
+  assert.match(runtimeReadme, /Both `wrangler\.jsonc` and `wrangler\.preview\.jsonc` are unscheduled/);
   assert.doesNotMatch(runtimeReadme, /15-minute Workflow heartbeat|schedules `AgentSupervisorWorkflow` every 15 minutes|96 paused Workflow instances/);
   assert.match(runtimeReadme, /no Google OAuth client, real Preview redirect registration/);
   assert.doesNotMatch(runtimeReadme, /The module is not yet connected to a login callback/);
