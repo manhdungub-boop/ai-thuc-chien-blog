@@ -340,9 +340,16 @@ export default {
           return json({ error: "invalid_review_queue_limit" }, 400);
         }
         const limit = values.length ? Number(values[0]) : 20;
-        const result = await draftStore.listPendingReviewsForReviewer(limit, sessionToken);
+        const result = reviewerNeedsRevisionCollection
+          ? await draftStore.listNeedsRevisionForReviewer(limit, sessionToken)
+          : await draftStore.listPendingReviewsForReviewer(limit, sessionToken);
         if (!result.authorized) return json({ error: result.reason || "reviewer_session_invalid" }, 401);
-        return json({ items: result.items, count: result.items.length, publication_authorized: false });
+        return json({
+          items: result.items,
+          count: result.items.length,
+          queue: reviewerNeedsRevisionCollection ? "authoring_revision_required" : "pending_human_review",
+          publication_authorized: false
+        });
       }
       const result = await draftStore.getDraftForReviewer(reviewerDraftDetail[1], sessionToken);
       if (!result.authorized) return json({ error: result.reason || "reviewer_session_invalid" }, 401);
