@@ -256,6 +256,45 @@ describe("Google reviewer OAuth session flow", () => {
     });
   });
 
+  it("rejects logout over GET to prevent cross-site logout CSRF", async () => {
+    const response = await handleGoogleReviewerAuth(
+      new Request(origin + "/auth/google/logout"),
+      env,
+      { now }
+    );
+    expect(response.status).toBe(405);
+    expect(response.headers.get("allow")).toBe("POST");
+  });
+
+  it("requires the exact Preview Origin for logout and clears both cookies only on same-origin POST", async () => {
+    const missingOrigin = await handleGoogleReviewerAuth(
+      new Request(origin + "/auth/google/logout", { method: "POST" }),
+      env,
+      { now }
+    );
+    const foreignOrigin = await handleGoogleReviewerAuth(
+      new Request(origin + "/auth/google/logout", {
+        method: "POST",
+        headers: { origin: "https://attacker.example" }
+      }),
+      env,
+      { now }
+    );
+    const valid = await handleGoogleReviewerAuth(
+      new Request(origin + "/auth/google/logout", {
+        method: "POST",
+        headers: { origin }
+      }),
+      env,
+      { now }
+    );
+    expect(missingOrigin.status).toBe(403);
+    expect(foreignOrigin.status).toBe(403);
+    expect(valid.status).toBe(204);
+    expect(valid.headers.get("set-cookie")).toContain("__Host-ai_reviewer_session=; Path=/; Max-Age=0");
+    expect(valid.headers.get("set-cookie")).toContain("__Host-ai_reviewer_tx=; Path=/; Max-Age=0");
+  });
+
   it("does not authenticate a missing session", async () => {
     const response = await handleGoogleReviewerAuth(
       new Request(origin + "/auth/google/me"),
