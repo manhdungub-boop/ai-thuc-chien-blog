@@ -91,6 +91,21 @@ describe("article evidence readiness", () => {
     expect(missingMarkerResult.issues[0].code).toBe("claim_inline_citation_missing_from_body");
   });
 
+  it("does not let citations in an unrelated paragraph satisfy a reviewed claim", async () => {
+    const reviewRecord = await makeReview();
+    const draft = makeDraft();
+    draft.body_markdown = draft.body_markdown
+      .replace(" [1] [2] [3]. ", ". ")
+      + "\n\nTài liệu tham khảo bổ sung [1] [2] [3].";
+    const result = await assessArticleEvidenceReadiness({ draft, ledger, reviewRecord, now });
+    expect(result.status).toBe("article_claim_evidence_not_ready");
+    expect(result.issues).toContainEqual({
+      code: "claim_inline_citation_missing_from_body",
+      claim_id: "claim-1",
+      citation_index: 1
+    });
+  });
+
   it("requires every reviewed claim to appear in the article body", async () => {
     const reviewRecord = await makeReview();
     const missing = makeDraft();
