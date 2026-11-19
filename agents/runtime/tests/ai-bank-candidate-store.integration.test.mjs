@@ -145,6 +145,57 @@ async function captureTestSnapshot(state, pageSize = 1) {
   };
 }
 
+const SNAPSHOT_COLUMNS = {
+  ai_bank_candidates: ["candidate_id", "repository", "candidate_json", "release_at", "first_seen_at", "last_seen_at"],
+  ai_bank_review_evidence: ["evidence_id", "candidate_id", "check_type", "source_title", "source_url", "excerpt", "source_status", "review_status", "submitted_at", "candidate_release_url"],
+  ai_bank_review_evidence_releases: ["evidence_id", "candidate_release_url", "associated_at"],
+  ai_bank_evidence_audit_events: ["event_id", "actor_subject", "actor_email", "request_sha256", "evidence_id", "recorded_at"]
+};
+
+function validateTestSnapshotRows(snapshot) {
+  const ids = {
+    ai_bank_candidates: new Set(),
+    ai_bank_review_evidence: new Set(),
+    ai_bank_evidence_audit_events: new Set()
+  };
+  const releasePairs = new Set();
+  for (const table of SNAPSHOT_TABLES) {
+    const rows = snapshot.tables[table.name];
+    if (!Array.isArray(rows) || !Number.isSafeInteger(snapshot.counts[table.name]) ||
+        snapshot.counts[table.name] < 0 || rows.length !== snapshot.counts[table.name]) return false;
+    const columns = SNAPSHOT_COLUMNS[table.name];
+    for (const row of rows) {
+      if (!row || typeof row !== "object" || Array.isArray(row) ||
+          Object.keys(row).sort().join("|") !== columns.slice().sort().join("|")) return false;
+      if (columns.some(column => row[column] === undefined)) return false;
+    }
+  }
+  for (const row of snapshot.tables.ai_bank_candidates) {
+    if (typeof row.candidate_id !== "string" || !row.candidate_id ||
+        typeof row.repository !== "string" || !row.repository ||
+        ids.ai_bank_candidates.has(row.candidate_id)) return false;
+    ids.ai_bank_candidates.add(row.candidate_id);
+  }
+  for (const row of snapshot.tables.ai_bank_review_evidence) {
+    if (typeof row.evidence_id !== "string" || !row.evidence_id ||
+        !ids.ai_bank_candidates.has(row.candidate_id) ||
+        ids.ai_bank_review_evidence.has(row.evidence_id)) return false;
+    ids.ai_bank_review_evidence.add(row.evidence_id);
+  }
+  for (const row of snapshot.tables.ai_bank_review_evidence_releases) {
+    const pair = row.evidence_id + "|" + row.candidate_release_url;
+    if (!ids.ai_bank_review_evidence.has(row.evidence_id) || releasePairs.has(pair)) return false;
+    releasePairs.add(pair);
+  }
+  for (const row of snapshot.tables.ai_bank_evidence_audit_events) {
+    if (typeof row.event_id !== "string" || !row.event_id ||
+        !ids.ai_bank_review_evidence.has(row.evidence_id) ||
+        ids.ai_bank_evidence_audit_events.has(row.event_id)) return false;
+    ids.ai_bank_evidence_audit_events.add(row.event_id);
+  }
+  return snapshot.counts.ai_bank_evidence_audit_events <= 10000;
+}
+
 async function verifyTestSnapshot(snapshot) {
   if (!snapshot || snapshot.format_id !== "ai-bank-audit-emulator-snapshot" ||
       snapshot.format_version !== 1 || !snapshot.tables || !snapshot.counts ||
@@ -158,14 +209,15 @@ async function verifyTestSnapshot(snapshot) {
     counts: snapshot.counts,
     table_sha256: snapshot.table_sha256
   };
+  if (Object.keys(snapshot.counts).sort().join("|") !==
+      SNAPSHOT_TABLES.map(table => table.name).sort().join("|") ||
+      Object.keys(snapshot.table_sha256).sort().join("|") !==
+      SNAPSHOT_TABLES.map(table => table.name).sort().join("|") ||
+      !validateTestSnapshotRows(snapshot)) return false;
   for (const table of SNAPSHOT_TABLES) {
     const rows = snapshot.tables[table.name];
-    if (!Array.isArray(rows) || rows.length !== snapshot.counts[table.name] ||
-        await sha256Hex(canonicalSnapshotJson(rows)) !== snapshot.table_sha256[table.name]) {
-      return false;
-    }
+    if (await sha256Hex(canonicalSnapshotJson(rows)) !== snapshot.table_sha256[table.name]) return false;
   }
-  if (snapshot.counts.ai_bank_evidence_audit_events > 10000) return false;
   return await sha256Hex(canonicalSnapshotJson(manifest)) === snapshot.manifest_sha256;
 }
 
@@ -290,6 +342,52 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
       captureTestSnapshot(state, 1)
     );
     expect(sourceAfterRestore.manifest_sha256).toBe(sourceSnapshot.manifest_sha256);
+  });
+
+  it("rejects snapshot schema drift and unknown row fields before destination writes", async () => {
+    await store.upsertCandidates([candidate()]);
+    const sourceSnapshot = await runInDurableObject(store, async (_instance, state) =>
+      captureTestSnapshot(state, 1)
+    );
+    const tampered = structuredClone(sourceSnapshot);
+    tampered.tables.ai_bank_candidates[0].unexpected_column = "not-in-schema";
+    const destination = env.AGENT_AI_BANK_CANDIDATE_STORE.getByName(
+      "agent-ai-bank-candidates-schema-drift-" + testIndex
+    );
+    await runInDurableObject(destination, async (_instance, state) => {
+      expect(await restoreTestSnapshot(state, tampered)).toEqual({
+        restored: false,
+        reason: "snapshot_integrity_invalid"
+      });
+      expect(state.storage.sql.exec("SELECT COUNT(*) AS count FROM ai_bank_candidates").one().count).toBe(0);
+    });
+  });
+
+  it("rejects internally consistent but referentially broken snapshot rows", async () => {
+    await store.upsertCandidates([candidate()]);
+    const sourceSnapshot = await runInDurableObject(store, async (_instance, state) =>
+      captureTestSnapshot(state, 1)
+    );
+    const tampered = structuredClone(sourceSnapshot);
+    tampered.tables.ai_bank_candidates[0].candidate_id = "missing-parent";
+    tampered.table_sha256.ai_bank_candidates = await sha256Hex(canonicalSnapshotJson(tampered.tables.ai_bank_candidates));
+    const manifest = {
+      format_id: tampered.format_id,
+      format_version: tampered.format_version,
+      counts: tampered.counts,
+      table_sha256: tampered.table_sha256
+    };
+    tampered.manifest_sha256 = await sha256Hex(canonicalSnapshotJson(manifest));
+    const destination = env.AGENT_AI_BANK_CANDIDATE_STORE.getByName(
+      "agent-ai-bank-candidates-broken-reference-" + testIndex
+    );
+    await runInDurableObject(destination, async (_instance, state) => {
+      expect(await restoreTestSnapshot(state, tampered)).toEqual({
+        restored: false,
+        reason: "snapshot_integrity_invalid"
+      });
+      expect(state.storage.sql.exec("SELECT COUNT(*) AS count FROM ai_bank_candidates").one().count).toBe(0);
+    });
   });
 
   it("rejects a tampered snapshot before writing to the destination emulator object", async () => {
