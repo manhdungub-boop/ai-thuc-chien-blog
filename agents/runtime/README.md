@@ -30,7 +30,7 @@ From the repository root:
 \`\`\`sh
 npm install --no-save --no-package-lock --ignore-scripts miniflare@4.20260730.0
 node --check agents/runtime/src/worker.mjs
-node --check agents/runtime/src/state-store.mjs
+node --check agents/runtime/src/state-store.mjs\nnode --check agents/runtime/src/internal-auth.mjs
 node --test agents/runtime/tests/*.test.mjs
 \`\`\`
 
