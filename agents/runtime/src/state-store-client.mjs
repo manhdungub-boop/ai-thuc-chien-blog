@@ -52,6 +52,18 @@ function operationUrl(operation, input) {
       }
       url.searchParams.set("day", input.day);
     }
+  } else if (operation === "reserve") {
+    if (!isPlainObject(input) || Object.keys(input).length !== 1 ||
+        !Object.hasOwn(input, "task") || !isPlainObject(input.task)) {
+      throw new TypeError("state_store_request_invalid");
+    }
+  } else if (operation === "transition") {
+    const keys = isPlainObject(input) ? Object.keys(input) : [];
+    if (!isPlainObject(input) || !Object.hasOwn(input, "taskId") ||
+        !Object.hasOwn(input, "status") ||
+        keys.some((key) => !["taskId", "status", "errorCode"].includes(key))) {
+      throw new TypeError("state_store_request_invalid");
+    }
   }
   return url;
 }
@@ -80,7 +92,6 @@ export async function callStateStore(env = {}, operation, input = {}) {
   };
 
   if (definition.method === "POST") {
-    if (!isPlainObject(input)) throw new TypeError("state_store_request_invalid");
     const body = JSON.stringify(input);
     if (new TextEncoder().encode(body).byteLength > MAX_BODY_BYTES) {
       throw new TypeError("state_store_request_too_large");
