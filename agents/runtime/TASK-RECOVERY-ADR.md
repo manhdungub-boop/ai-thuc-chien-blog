@@ -1,6 +1,6 @@
 # Agent Runtime — task lease and recovery architecture decision
 
-Status: **design only; no recovery code, Durable Object binding, alarm, schedule, or task execution is enabled.**
+Status: **schema v2 migration and pure lease-policy helpers are implemented in Draft PRs #296/#297; claim/heartbeat/recovery are not yet wired into the State Store. No Durable Object binding, alarm, schedule, or task execution is enabled.**
 
 Date: 2026-11-19
 
@@ -23,6 +23,17 @@ A future schema version should add bounded fields to `tasks`:
 - `last_error_code TEXT` — bounded machine-readable code only
 
 Add indexes for `(state, next_attempt_at)` and `(state, lease_expires_at)`. Migration must be transactional, versioned, and tested against both an empty database and a persisted v1 database. Do not mutate the current schema until the migration and recovery tests are implemented.
+
+## Implementation progress (2026-11-19)
+
+- Draft PR #296 adds pure policy functions for claim, heartbeat, expiry recovery, and fenced completion, with deterministic unit tests. These helpers do not perform SQL writes and are not yet called by the Worker.
+- Draft PR #297 adds a transactional schema v1 -> v2 migration. Fresh stores intentionally create the v1 baseline and run the same migration path used for persisted v1 data.
+- Schema v2 adds bounded attempt counters, monotonically increasing lease generation, opaque owner, lease expiry, retry due time, and bounded machine-readable last-error code. The migration adds retry/lease indexes and preserves existing task and usage rows.
+- Task inspection returns lease metadata but never returns the lease owner.
+- Migration tests cover a fresh store and a persisted v1-shaped store with task and daily-usage preservation. These tests still require CI confirmation before the migration can be accepted.
+- The test-only v1 fixture route is guarded by `RUNTIME_TESTING=true`; the deploy configuration does not set that flag.
+
+The next implementation step is to connect the policy to transactional State Store operations, with conditional SQL updates and audit events. Do not enable a Durable Object binding or scheduler as part of that work.
 
 ## State machine
 
