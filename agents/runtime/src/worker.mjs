@@ -408,15 +408,20 @@ export default {
         if (url.pathname === "/internal/metrics") {
           const taskFields = ["totalRetained", "queued", "queuedDue", "running", "succeededRetained", "failedRetained", "cancelledRetained", "failedLast24h"];
           const quotaFields = ["acceptedToday", "dailyLimit", "dailyUtilizationPercent", "dailyPressure", "inFlight", "concurrentLimit", "concurrentUtilizationPercent", "concurrentPressure", "overallPressure", "payloadLimitBytes"];
+          const circuitFields = ["failureCountLast10m", "threshold", "windowMs"];
           const validPressure = (value) => ["normal", "warning", "critical", "exhausted"].includes(value);
           const validCount = (value) => Number.isSafeInteger(value) && value >= 0;
           const validPercent = (value) => typeof value === "number" && Number.isFinite(value) && value >= 0;
           const validAge = (value) => value === null || validCount(value);
-          if (!result.tasks || !result.quota || !Array.isArray(result.auditLast24h) ||
+          if (!result.tasks || !result.quota || !result.circuitBreaker || !Array.isArray(result.auditLast24h) ||
               !Number.isSafeInteger(result.observedAt) ||
               typeof result.dayUtc !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(result.dayUtc) ||
               typeof result.note !== "string" ||
               !taskFields.every((field) => validCount(result.tasks[field])) ||
+              !circuitFields.every((field) => validCount(result.circuitBreaker[field])) ||
+              typeof result.circuitBreaker.paused !== "boolean" || typeof result.circuitBreaker.autoPaused !== "boolean" ||
+              !["open", "closed"].includes(result.circuitBreaker.state) ||
+              result.circuitBreaker.autoPaused !== (result.circuitBreaker.state === "open") ||
               !validAge(result.tasks.oldestQueuedAgeMs) || !validAge(result.tasks.oldestRunningUpdateAgeMs) ||
               !["dailyUtilizationPercent", "concurrentUtilizationPercent"].every((field) => validPercent(result.quota[field])) ||
               !["dailyPressure", "concurrentPressure", "overallPressure"].every((field) => validPressure(result.quota[field])) ||
@@ -432,6 +437,7 @@ export default {
             dayUtc: result.dayUtc,
             tasks: Object.fromEntries([...taskFields, "oldestQueuedAgeMs", "oldestRunningUpdateAgeMs"].map((field) => [field, result.tasks[field]])),
             quota: Object.fromEntries(quotaFields.map((field) => [field, result.quota[field]])),
+            circuitBreaker: Object.fromEntries([...circuitFields, "state", "autoPaused", "paused"].map((field) => [field, result.circuitBreaker[field]])),
             auditLast24h: result.auditLast24h.map((event) => ({ eventType: event.eventType, count: event.count })),
             note: result.note.slice(0, 240),
           });

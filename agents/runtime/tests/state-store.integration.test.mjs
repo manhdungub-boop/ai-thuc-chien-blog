@@ -344,6 +344,35 @@ test("default Free-tier pilot concurrency is capped at five tasks", async () => 
   });
 });
 
+test("circuit breaker auto-pauses after five terminal failures in ten minutes and requires operator resume", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    for (let index = 0; index < 5; index++) {
+      const created = await call(stub, "/reserve", task("breaker-failure-" + index));
+      assert.equal(created.status, 201);
+      const claimed = await call(stub, "/claim", { taskId: created.body.task.taskId });
+      assert.equal(claimed.status, 200);
+      const failed = await call(stub, "/complete", {
+        taskId: created.body.task.taskId, leaseOwner: claimed.body.lease.owner,
+        leaseGeneration: claimed.body.lease.generation, status: "failed", errorCode: "provider_timeout",
+      });
+      assert.equal(failed.status, 200);
+      if (index < 4) assert.equal((await call(stub, "/control")).body.control.paused, false);
+    }
+    const control = await call(stub, "/control");
+    assert.equal(control.body.control.paused, true);
+    const metrics = await call(stub, "/metrics");
+    assert.deepEqual(metrics.body.circuitBreaker, {
+      state: "open", autoPaused: true, paused: true, failureCountLast10m: 5, threshold: 5, windowMs: 600000,
+    });
+    assert.equal((await call(stub, "/reserve", task("breaker-block-reserve"))).status, 503);
+    const resume = await call(stub, "/control/resume", {
+      actor: "test-operator", requestId: crypto.randomUUID(), reason: "reviewed after circuit breaker trip",
+    });
+    assert.equal(resume.status, 200);
+    assert.equal((await call(stub, "/metrics")).body.circuitBreaker.state, "closed");
+  });
+});
+
 test("quota pressure reports daily 80/90/100 and concurrent 80/100 boundaries without changing admission policy", async () => {
   await withRuntime({ daily: 10, concurrent: 5 }, async ({ stub }) => {
     for (let index = 0; index < 8; index++) {
