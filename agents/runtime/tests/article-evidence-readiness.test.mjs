@@ -135,6 +135,28 @@ describe("article evidence readiness", () => {
     expect(result.publication_authorized).toBe(false);
   });
 
+  it("flags an added numeric assertion appended to an otherwise reviewed sentence", async () => {
+    const reviewRecord = await makeReview();
+    const draft = makeDraft();
+    draft.body_markdown = draft.body_markdown.replace(
+      ledger.claims[0].claim + " [1] [2] [3].",
+      ledger.claims[0].claim + " và cải thiện kết quả thêm 95% [1] [2] [3]."
+    );
+    const result = await assessArticleEvidenceReadiness({
+      draft,
+      ledger,
+      reviewRecord,
+      authenticatedReviewer: { authenticated: true, reviewer_ref: reviewRecord.reviewer_ref },
+      now
+    });
+    expect(result.status).toBe("article_claim_evidence_not_ready");
+    expect(result.issues).toContainEqual(expect.objectContaining({
+      code: "unreviewed_quantitative_claim_candidate",
+      excerpt: expect.stringContaining("95%")
+    }));
+    expect(result.publication_authorized).toBe(false);
+  });
+
   it("does not treat inline numeric citation markers as quantitative claim candidates", async () => {
     const reviewRecord = await makeReview();
     const result = await assessArticleEvidenceReadiness({
