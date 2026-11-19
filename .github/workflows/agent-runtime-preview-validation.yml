@@ -58,7 +58,7 @@ jobs:
 
       - name: Assert workflow is validation-only
         run: |
-          if grep -Eiq 'wrangler (deploy|versions upload)|cloudflare.*token|secrets\.' .github/workflows/agent-runtime-preview-validation.yml; then
+          if grep -Eiq 'wrangler[[:space:]]+(deploy|versions[[:space:]]+upload)|CLOUDFLARE_[A-Z_]*TOKEN|secrets[.]' .github/workflows/agent-runtime-preview-validation.yml; then
             echo "Unexpected deployment or secret reference in validation workflow"
             exit 1
           fi
