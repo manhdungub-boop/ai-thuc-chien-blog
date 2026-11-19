@@ -124,7 +124,10 @@ export class AgentStateStore {
       }
       if (url.pathname === "/task" && request.method === "GET") {
         const taskId = url.searchParams.get("id");
-        if (!taskId || taskId.length > 64) return jsonResponse({ ok: false, error: "task_id_invalid" }, 400);
+        if (url.searchParams.size !== 1 || !url.searchParams.has("id") ||
+            !taskId || !/^[A-Za-z0-9_-]{1,64}$/.test(taskId)) {
+          return jsonResponse({ ok: false, error: "task_id_invalid" }, 400);
+        }
         const row = readRow(this.sql, "SELECT * FROM tasks WHERE task_id = ?", taskId);
         return row ? jsonResponse({ ok: true, task: safeTask(row) }) : jsonResponse({ ok: false, error: "task_not_found" }, 404);
       }
