@@ -70,14 +70,16 @@ export function assessResearchEvidence(evidence, {
   return {
     status: ready ? "evidence_packet_ready_for_claim_review" : "insufficient_independent_evidence",
     ready_for_claim_review: ready,
-    independent_source_count: accepted.length,
-    required_independent_sources: threshold,
+    distinct_publisher_count: accepted.length,
+    required_distinct_publishers: threshold,
+    independent_source_count: 0,
+    independence_assessment: "not_assessed_requires_human_review",
     max_source_age_days: Math.min(90, Math.max(1, Number(maxAgeDays) || MAX_AGE_DAYS)),
     accepted_sources: accepted,
     rejected_sources: rejected,
     limitations: [
       "Publisher identity is matched against a small exact host/path/label allowlist; this is provenance classification, not a source-authority endorsement.",
-      "Distinct publisher domains and freshness do not prove independent ownership or that sources independently support the same claim.",
+      "Distinct publisher domains are only a discovery filter; source ownership, syndication, shared primary sources, and claim-level independence remain unassessed until human review.",
       "No claim extraction, factual corroboration, source-authority assessment, originality check, or copyright review is performed."
     ],
     safety: {
