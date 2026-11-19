@@ -171,7 +171,7 @@ test("durable pause is atomic, survives restart, and resume never dispatches que
     restarted = await createRuntime({ persistDir: directory, resumeControl: false });
     const persisted = await call(restarted.stub, "/control");
     assert.equal(persisted.body.control.paused, true);
-    assert.equal(persisted.body.control.version, 1);
+    assert.equal(persisted.body.control.version, 2);
     assert.equal((await call(restarted.stub, "/claim", { taskId })).status, 503);
 
     const resumed = await call(restarted.stub, "/control/resume", { actor: "test-operator", requestId: crypto.randomUUID(), reason: "maintenance complete" });
