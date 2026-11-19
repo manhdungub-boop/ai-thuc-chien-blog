@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
+import { runInDurableObject } from "cloudflare:test";
 
 const sources = [
   { vendor: "Ollama", product: "Ollama", repo: "ollama/ollama" },
@@ -242,6 +243,49 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     await expect(Promise.resolve().then(() =>
       store.listReviewEvidence("github:ollama/ollama", 31)
     )).rejects.toThrow("invalid_evidence_list_limit");
+  });
+
+  it("rolls back evidence and release association when the audit insert fails", async () => {
+    await store.upsertCandidates([candidate()]);
+    const eventId = "e4e6d1c2-3b7f-4a91-8c22-1234567890ab";
+    const now = Date.parse("2026-11-19T10:00:00.000Z");
+    const evidence = {
+      check_type: "pricing_and_free_limits",
+      source_title: "Official pricing page",
+      source_url: "https://ollama.com/pricing",
+      excerpt: "Pricing evidence requires human review."
+    };
+
+    await runInDurableObject(store, async (_instance, state) => {
+      state.storage.sql.exec(
+        "CREATE TRIGGER fail_ai_bank_evidence_audit_insert " +
+        "BEFORE INSERT ON ai_bank_evidence_audit_events " +
+        "BEGIN SELECT RAISE(ABORT, 'forced_audit_insert_failure'); END"
+      );
+    });
+
+    await expect(store.submitAuthorizedReviewEvidence(
+      "github:ollama/ollama", evidence, await writerSessionToken(now),
+      eventId, writerAuthEnv, now
+    )).rejects.toThrow("forced_audit_insert_failure");
+
+    await runInDurableObject(store, async (_instance, state) => {
+      const evidenceCount = state.storage.sql.exec(
+        "SELECT COUNT(*) AS count FROM ai_bank_review_evidence WHERE candidate_id = ?",
+        "github:ollama/ollama"
+      ).one().count;
+      const releaseAssociationCount = state.storage.sql.exec(
+        "SELECT COUNT(*) AS count FROM ai_bank_review_evidence_releases"
+      ).one().count;
+      const auditCount = state.storage.sql.exec(
+        "SELECT COUNT(*) AS count FROM ai_bank_evidence_audit_events WHERE event_id = ?",
+        eventId
+      ).one().count;
+      expect(evidenceCount).toBe(0);
+      expect(releaseAssociationCount).toBe(0);
+      expect(auditCount).toBe(0);
+      state.storage.sql.exec("DROP TRIGGER fail_ai_bank_evidence_audit_insert");
+    });
   });
 
   it("atomically rejects replayed audit event IDs, including concurrent submissions", async () => {
