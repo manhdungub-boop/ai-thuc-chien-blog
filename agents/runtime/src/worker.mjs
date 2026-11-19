@@ -1,3 +1,5 @@
+import { hasValidOperatorBearer } from "./operator-auth.mjs";
+
 const SECURITY_HEADERS = Object.freeze({
   "Cache-Control": "no-store",
   "Content-Type": "application/json; charset=utf-8",
@@ -42,6 +44,10 @@ export default {
 
       if (!isEnabled(env.AGENT_ENABLED) || isEnabled(env.AGENT_PAUSED)) {
         return json({ ok: false, error: "agent_disabled_or_paused" }, 503);
+      }
+
+      if (!await hasValidOperatorBearer(request, env)) {
+        return json({ ok: false, error: "operator_auth_required" }, 401);
       }
 
       return json({ ok: false, error: "execution_not_implemented" }, 501);
