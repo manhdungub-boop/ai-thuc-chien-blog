@@ -6,6 +6,43 @@ const SCHEMA_VERSION = 4;
 // Conservative Free-tier pilot defaults; hard caps remain enforced below.
 const DEFAULT_LIMITS = Object.freeze({ daily: 100, concurrent: 5, payloadBytes: 8192 });
 const TERMINAL_STATES = new Set(["succeeded", "failed", "cancelled"]);
+const MAX_STATE_STORE_REQUEST_BYTES = 12 * 1024;
+class RequestBodyError extends Error {
+  constructor(status, code) { super(code); this.status = status; this.code = code; }
+}
+async function readBoundedJson(request) {
+  const declared = request.headers.get("content-length");
+  if (declared !== null) {
+    if (!/^[0-9]+$/.test(declared)) throw new RequestBodyError(400, "request_content_length_invalid");
+    if (Number(declared) > MAX_STATE_STORE_REQUEST_BYTES) throw new RequestBodyError(413, "request_body_too_large");
+  }
+  if (!request.body) throw new RequestBodyError(400, "request_body_empty");
+  const reader = request.body.getReader();
+  const chunks = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > MAX_STATE_STORE_REQUEST_BYTES) {
+        await reader.cancel();
+        throw new RequestBodyError(413, "request_body_too_large");
+      }
+      chunks.push(value);
+    }
+  } finally { reader.releaseLock(); }
+  if (total === 0) throw new RequestBodyError(400, "request_body_empty");
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  let decoded;
+  try { decoded = new TextDecoder("utf-8", { fatal: true }).decode(bytes); }
+  catch { throw new RequestBodyError(400, "request_body_invalid_utf8"); }
+  try { return JSON.parse(decoded); }
+  catch { throw new RequestBodyError(400, "request_json_invalid"); }
+}
+
 const TASK_TYPES_SQL = "'content.review','ai_bank.candidate_review','seo.audit'";
 
 function boundedLimit(value, fallback, maximum) {
@@ -109,37 +146,39 @@ export class AgentStateStore {
       return jsonResponse({ ok: false, error: "state_store_auth_required" }, 401);
     }
     try {
-      await this.ready;
       const url = new URL(request.url);
+      const bodyRoutes = new Set(["/control/pause", "/control/resume", "/reserve", "/claim", "/heartbeat", "/complete", "/recover", "/transition"]);
+      const body = request.method === "POST" && bodyRoutes.has(url.pathname) ? await readBoundedJson(request) : undefined;
+      await this.ready;
       if (url.pathname === "/control" && request.method === "GET") {
         return jsonResponse({ ok: true, control: this.controlState() });
       }
       if ((url.pathname === "/control/pause" || url.pathname === "/control/resume") && request.method === "POST") {
-        const result = this.setPaused(url.pathname.endsWith("/pause"), await request.json(), this.requestTime(request));
+        const result = this.setPaused(url.pathname.endsWith("/pause"), body, this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
       if (url.pathname === "/reserve" && request.method === "POST") {
-        const result = await this.reserve(await request.json(), this.requestTime(request));
+        const result = await this.reserve(body, this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
       if (url.pathname === "/claim" && request.method === "POST") {
-        const result = this.claim(await request.json(), this.requestTime(request));
+        const result = this.claim(body, this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
       if (url.pathname === "/heartbeat" && request.method === "POST") {
-        const result = this.heartbeat(await request.json(), this.requestTime(request));
+        const result = this.heartbeat(body, this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
       if (url.pathname === "/complete" && request.method === "POST") {
-        const result = this.complete(await request.json(), this.requestTime(request));
+        const result = this.complete(body, this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
       if (url.pathname === "/recover" && request.method === "POST") {
-        const result = this.recover(await request.json(), this.requestTime(request));
+        const result = this.recover(body, this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
       if (url.pathname === "/transition" && request.method === "POST") {
-        const result = this.transition(await request.json(), this.requestTime(request));
+        const result = this.transition(body, this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
       if (url.pathname === "/task" && request.method === "GET") {
@@ -157,47 +196,15 @@ export class AgentStateStore {
         const active = readRow(this.sql, "SELECT COUNT(*) AS count FROM tasks WHERE state IN ('queued','running')");
         return jsonResponse({ ok: true, dayUtc: day, acceptedToday: usage?.accepted_count ?? 0, inFlight: active?.count ?? 0 });
       }
-      if (url.pathname === "/__test/downgrade-v1" && request.method === "POST") {
-        if (this.env.RUNTIME_TESTING !== "true") return jsonResponse({ ok: false, error: "not_found" }, 404);
-        this.ctx.storage.transactionSync(() => {
-          this.sql.exec("CREATE TABLE tasks_v1_fixture (task_id TEXT PRIMARY KEY, idempotency_key TEXT NOT NULL UNIQUE, task_type TEXT NOT NULL CHECK (task_type IN (" + TASK_TYPES_SQL + ")), payload_json TEXT NOT NULL, payload_hash TEXT NOT NULL, payload_bytes INTEGER NOT NULL CHECK (payload_bytes BETWEEN 1 AND 8192), state TEXT NOT NULL CHECK (state IN ('queued','running','succeeded','failed','cancelled')), created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, terminal_at INTEGER, error_code TEXT)");
-          this.sql.exec("INSERT INTO tasks_v1_fixture (task_id,idempotency_key,task_type,payload_json,payload_hash,payload_bytes,state,created_at,updated_at,terminal_at,error_code) SELECT task_id,idempotency_key,task_type,payload_json,payload_hash,payload_bytes,state,created_at,updated_at,terminal_at,error_code FROM tasks");
-          this.sql.exec("DROP TABLE tasks");
-          this.sql.exec("ALTER TABLE tasks_v1_fixture RENAME TO tasks");
-          this.sql.exec("CREATE INDEX tasks_state_idx ON tasks(state)");
-          this.sql.exec("CREATE INDEX tasks_terminal_idx ON tasks(terminal_at)");
-          this.sql.exec("DROP TABLE runtime_control_rate_limit");
-          this.sql.exec("DROP TABLE runtime_control_audit");
-          this.sql.exec("DROP TABLE runtime_control");
-          this.sql.exec("UPDATE runtime_meta SET value = '1' WHERE key = 'schema_version'");
-        });
-        return jsonResponse({ ok: true, schemaVersion: 1 });
-      }
-      if (url.pathname === "/__test/rollback" && request.method === "POST") {
-        if (this.env.RUNTIME_TESTING !== "true") return jsonResponse({ ok: false, error: "not_found" }, 404);
-        try {
-          this.ctx.storage.transactionSync(() => {
-            this.sql.exec("INSERT INTO daily_usage (day_utc, accepted_count) VALUES ('2099-12-31', 1)");
-            throw new Error("intentional_rollback_probe");
-          });
-        } catch {
-          const usage = readRow(this.sql, "SELECT accepted_count FROM daily_usage WHERE day_utc = '2099-12-31'");
-          return jsonResponse({ ok: true, rolledBack: usage === null, acceptedToday: usage?.accepted_count ?? 0 });
-        }
-        return jsonResponse({ ok: false, error: "rollback_probe_did_not_throw" }, 500);
-      }
       if (request.method !== "GET" && request.method !== "POST") return jsonResponse({ ok: false, error: "method_not_allowed" }, 405);
       return jsonResponse({ ok: false, error: "not_found" }, 404);
-    } catch {
+    } catch (error) {
+      if (error instanceof RequestBodyError) return jsonResponse({ ok: false, error: error.code }, error.status);
       return jsonResponse({ ok: false, error: "state_store_unavailable" }, 503);
     }
   }
 
-  requestTime(request) {
-    if (this.env.RUNTIME_TESTING === "true") {
-      const value = request.headers.get("x-test-now");
-      if (value) { const parsed = Date.parse(value); if (Number.isFinite(parsed)) return parsed; }
-    }
+  requestTime() {
     return Date.now();
   }
 
