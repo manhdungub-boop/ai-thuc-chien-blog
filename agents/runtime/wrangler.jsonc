@@ -4,7 +4,8 @@
   "main": "src/index.mjs",
   "compatibility_date": "2026-10-03",
   "workers_dev": true,
-  "vars": { "AGENT_ENABLED": "false", "AGENT_PAUSED": "true", "AGENT_SCHEDULE_MODE": "manual_only_no_cron", "AGENT_REVIEWER_AUTH_ENABLED": "false" },
+  "vars": { "AGENT_ENABLED": "false", "AGENT_PAUSED": "true", "AGENT_SCHEDULE_MODE": "manual_only_no_cron", "AGENT_REVIEWER_AUTH_ENABLED": "false",
+    "AGENT_OPERATOR_CONTROL_ENABLED": "false" },
   "preview_urls": true,
   "observability": { "enabled": true },
   "durable_objects": {
