@@ -234,23 +234,140 @@ describe("authenticated read-only AI Bank reviewer routes", () => {
     expect(storeAccesses).toBe(0);
   });
 
-  it("does not expose an AI Bank evidence-write route", async () => {
+  it("requires a same-origin JSON request and reviewer cookie before accessing the evidence store", async () => {
     let storeAccesses = 0;
+    const env = { AGENT_AI_BANK_CANDIDATE_STORE: { getByName() { storeAccesses += 1; } } };
+    const evidencePath = origin + "/api/reviewer/ai-bank/candidates/ollama/ollama/evidence";
+    const body = JSON.stringify({
+      audit_event_id: "a4e6d1c2-3b7f-4a91-8c22-1234567890ab",
+      evidence: {
+        check_type: "pricing_and_free_limits",
+        source_title: "Pricing",
+        source_url: "https://ollama.com/pricing",
+        excerpt: "Pending human review."
+      }
+    });
+    const noCookie = await worker.fetch(new Request(evidencePath, {
+      method: "POST", headers: { origin, "content-type": "application/json" }, body
+    }), env);
+    const crossOrigin = await worker.fetch(new Request(evidencePath, {
+      method: "POST",
+      headers: { origin: "https://attacker.example", "content-type": "application/json", cookie: "__Host-ai_reviewer_session=forged" },
+      body
+    }), env);
+    expect(noCookie.status).toBe(401);
+    expect(await noCookie.json()).toMatchObject({ error: "reviewer_session_required" });
+    expect(crossOrigin.status).toBe(403);
+    expect(storeAccesses).toBe(0);
+  });
+
+  it("passes only the signed session and serializable auth configuration to the Durable Object", async () => {
+    const token = "opaque-signed-reviewer-session";
+    const evidence = {
+      check_type: "pricing_and_free_limits",
+      source_title: "Official pricing",
+      source_url: "https://ollama.com/pricing",
+      excerpt: "Pricing requires human review."
+    };
+    const eventId = "b4e6d1c2-3b7f-4a91-8c22-1234567890ab";
+    let received;
+    const auth = reviewerAuthEnv("reviewer-session-secret-for-tests-32chars");
+    auth.GOOGLE_REVIEWER_EVIDENCE_WRITER_EMAILS = "reviewer@example.com";
     const env = {
-      AGENT_AI_BANK_CANDIDATE_STORE: { getByName() { storeAccesses += 1; } }
+      ...auth,
+      GOOGLE_REVIEWER_CLIENT_SECRET: "reviewer-client-secret-for-test-32-characters",
+      GOOGLE_REVIEWER_STATE_SECRET: "reviewer-state-secret-for-tests-32-characters",
+      AGENT_AI_BANK_CANDIDATE_STORE: {
+        getByName(name) {
+          expect(name).toBe("primary");
+          return {
+            async submitAuthorizedReviewEvidence(...args) {
+              received = args;
+              return {
+                accepted: true,
+                evidence_id: "evidence-123",
+                source_status: "submitted_source_not_verified",
+                review_status: "pending_human_review",
+                audit_event_id: eventId,
+                replay_protected: true
+              };
+            }
+          };
+        }
+      }
     };
     const evidencePath = origin + "/api/reviewer/ai-bank/candidates/ollama/ollama/evidence";
-    const writeAttempt = await worker.fetch(new Request(evidencePath, {
+    const response = await worker.fetch(new Request(evidencePath, {
       method: "POST",
-      headers: { origin, "content-type": "application/json" },
-      body: JSON.stringify({})
+      headers: { origin, "content-type": "application/json", cookie: "__Host-ai_reviewer_session=" + token },
+      body: JSON.stringify({ audit_event_id: eventId, evidence })
     }), env);
-    const readAttempt = await worker.fetch(new Request(evidencePath), env);
-    expect(writeAttempt.status).toBe(405);
-    expect(await writeAttempt.json()).toEqual({ error: "method_not_allowed" });
-    expect(readAttempt.status).toBe(404);
-    expect(await readAttempt.json()).toEqual({ error: "not_found" });
+    expect(response.status).toBe(201);
+    expect(received).toHaveLength(6);
+    expect(received.slice(0, 4)).toEqual(["github:ollama/ollama", evidence, token, eventId]);
+    expect(received[4]).toMatchObject({
+      AGENT_REVIEWER_AUTH_ENABLED: "true",
+      GOOGLE_REVIEWER_EVIDENCE_WRITER_EMAILS: "reviewer@example.com"
+    });
+    expect(received[4].AGENT_AI_BANK_CANDIDATE_STORE).toBeUndefined();
+    expect(received[5]).toBeUndefined();
+    expect(await response.json()).toEqual({
+      accepted: true,
+      evidence: {
+        evidence_id: "evidence-123",
+        source_status: "submitted_source_not_verified",
+        review_status: "pending_human_review"
+      },
+      audit_event_id: eventId,
+      replay_protected: true,
+      verification_authorized: false,
+      catalog_write_authorized: false,
+      public_publication_authorized: false
+    });
+  });
+
+  it("maps duplicate audit event submissions to conflict and rejects malformed evidence payloads", async () => {
+    let storeAccesses = 0;
+    const auth = reviewerAuthEnv("reviewer-session-secret-for-tests-32chars");
+    const env = {
+      ...auth,
+      GOOGLE_REVIEWER_CLIENT_SECRET: "reviewer-client-secret-for-test-32-characters",
+      GOOGLE_REVIEWER_STATE_SECRET: "reviewer-state-secret-for-tests-32-characters",
+      GOOGLE_REVIEWER_EVIDENCE_WRITER_EMAILS: "reviewer@example.com",
+      AGENT_AI_BANK_CANDIDATE_STORE: {
+        getByName: () => {
+          storeAccesses += 1;
+          return { async submitAuthorizedReviewEvidence() {
+            return { accepted: false, reason: "duplicate_audit_event" };
+          } };
+        }
+      }
+    };
+    const evidencePath = origin + "/api/reviewer/ai-bank/candidates/ollama/ollama/evidence";
+    const token = "__Host-ai_reviewer_session=opaque-session";
+    const malformed = await worker.fetch(new Request(evidencePath, {
+      method: "POST",
+      headers: { origin, "content-type": "application/json", cookie: token },
+      body: JSON.stringify({ audit_event_id: "a4e6d1c2-3b7f-4a91-8c22-1234567890ab", evidence: {}, extra: true })
+    }), env);
+    expect(malformed.status).toBe(400);
     expect(storeAccesses).toBe(0);
+    const duplicate = await worker.fetch(new Request(evidencePath, {
+      method: "POST",
+      headers: { origin, "content-type": "application/json", cookie: token },
+      body: JSON.stringify({
+        audit_event_id: "a4e6d1c2-3b7f-4a91-8c22-1234567890ab",
+        evidence: {
+          check_type: "pricing_and_free_limits",
+          source_title: "Pricing",
+          source_url: "https://ollama.com/pricing",
+          excerpt: "Pending review."
+        }
+      })
+    }), env);
+    expect(duplicate.status).toBe(409);
+    expect(await duplicate.json()).toMatchObject({ error: "duplicate_audit_event", evidence_recorded: false });
+    expect(storeAccesses).toBe(1);
   });
 });
 
