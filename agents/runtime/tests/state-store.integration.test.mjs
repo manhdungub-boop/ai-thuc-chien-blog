@@ -76,6 +76,30 @@ test("all state-store routes require the distinct internal credential", async ()
   });
 });
 
+test("State Store read routes reject invalid dates, duplicate query keys, and unknown parameters", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const invalidDate = await call(stub, "/usage?day=2026-02-31");
+    assert.equal(invalidDate.status, 400);
+    assert.equal(invalidDate.body.error, "utc_day_invalid");
+
+    const duplicateDay = await call(stub, "/usage?day=2026-11-19&day=2026-11-20");
+    assert.equal(duplicateDay.status, 400);
+    assert.equal(duplicateDay.body.error, "utc_day_invalid");
+
+    const unknownUsageParam = await call(stub, "/usage?unexpected=1");
+    assert.equal(unknownUsageParam.status, 400);
+    assert.equal(unknownUsageParam.body.error, "utc_day_invalid");
+
+    const invalidTaskId = await call(stub, "/task?id=bad%20id");
+    assert.equal(invalidTaskId.status, 400);
+    assert.equal(invalidTaskId.body.error, "task_id_invalid");
+
+    const extraTaskParam = await call(stub, "/task?id=valid_id&extra=1");
+    assert.equal(extraTaskParam.status, 400);
+    assert.equal(extraTaskParam.body.error, "task_id_invalid");
+  });
+});
+
 test("State Store bounds request bodies before JSON parsing", async () => {
   await withRuntime({}, async ({ stub }) => {
     const headers = {
