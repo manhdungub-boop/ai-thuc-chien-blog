@@ -1,6 +1,6 @@
 const LIMIT_CAPS = Object.freeze({
-  maxTasksPerDay: 1000,
-  maxConcurrent: 100,
+  maxTasksPerDay: 100,
+  maxConcurrent: 5,
   maxPayloadBytes: 8 * 1024,
 });
 
