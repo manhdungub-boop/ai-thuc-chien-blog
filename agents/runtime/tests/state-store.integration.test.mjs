@@ -57,6 +57,9 @@ async function withRuntime(options, callback) {
 function task(id, payload = { path: "/guides" }) {
   return { task: { type: "seo.audit", idempotencyKey: "integration-test-key-" + id.padEnd(16, "x"), payload } };
 }
+function recoveryBody(taskId, actor = "test-operator") {
+  return { taskId, actor, requestId: crypto.randomUUID() };
+}
 async function call(stub, pathname, body, headers = {}) {
   const response = await stub.fetch("http://do.local" + pathname, {
     method: body === undefined ? "GET" : "POST",
@@ -113,7 +116,7 @@ test("all state-store routes require the distinct internal credential", async ()
       ["/claim", { taskId: "missing" }],
       ["/heartbeat", { taskId: "missing", leaseOwner: "a1b2c3d4-e5f6-4711-8123-abcdef012345", leaseGeneration: 1 }],
       ["/complete", { taskId: "missing", leaseOwner: "a1b2c3d4-e5f6-4711-8123-abcdef012345", leaseGeneration: 1, status: "succeeded" }],
-      ["/recover", { taskId: "missing" }],
+      ["/recover", recoveryBody("missing")],
       ["/transition", { taskId: "missing", status: "running" }],
       ["/control", undefined],
       ["/oidc/replay/consume", { jti: "test-jti-auth-check-001", expiresAt: "1799999999" }],
@@ -519,11 +522,12 @@ test("expired leases are requeued after bounded delay and fail at the attempt ce
     const first = await call(stub, "/claim", { taskId }, { "x-test-now": "2026-11-19T10:00:00.000Z" });
     assert.equal(first.status, 200);
 
-    const tooEarly = await call(stub, "/recover", { taskId }, { "x-test-now": "2026-11-19T10:04:59.999Z" });
+    const tooEarly = await call(stub, "/recover", recoveryBody(taskId), { "x-test-now": "2026-11-19T10:04:59.999Z" });
     assert.equal(tooEarly.status, 409);
     assert.equal(tooEarly.body.error, "lease_not_expired");
 
-    const recovered1 = await call(stub, "/recover", { taskId }, { "x-test-now": "2026-11-19T10:05:00.000Z" });
+    const recoveryRequest = recoveryBody(taskId);
+    const recovered1 = await call(stub, "/recover", recoveryRequest, { "x-test-now": "2026-11-19T10:05:00.000Z" });
     assert.equal(recovered1.status, 200);
     assert.equal(recovered1.body.outcome, "requeued");
     assert.equal(recovered1.body.task.state, "queued");
@@ -531,25 +535,48 @@ test("expired leases are requeued after bounded delay and fail at the attempt ce
     assert.equal(recovered1.body.task.nextAttemptAt, Date.parse("2026-11-19T10:05:30.000Z"));
     assert.equal(recovered1.body.task.leaseMaxExpiresAt, null);
 
+    const audit = await call(stub, "/__test/audit?taskId=" + encodeURIComponent(taskId));
+    assert.equal(audit.status, 200);
+    const recoveryEvent = audit.body.events.find((event) => event.eventType === "task.lease_expired_requeued");
+    assert.ok(recoveryEvent);
+    assert.equal(recoveryEvent.metadata.actor, recoveryRequest.actor);
+    assert.equal(recoveryEvent.metadata.requestId, recoveryRequest.requestId);
+    assert.equal(recoveryEvent.metadata.attempt, 1);
+    assert.equal(recoveryEvent.metadata.leaseGeneration, 1);
+
     const beforeDue = await call(stub, "/claim", { taskId }, { "x-test-now": "2026-11-19T10:05:29.999Z" });
     assert.equal(beforeDue.status, 409);
     assert.equal(beforeDue.body.error, "retry_not_due");
 
     const second = await call(stub, "/claim", { taskId }, { "x-test-now": "2026-11-19T10:05:30.000Z" });
     assert.equal(second.status, 200);
-    const recovered2 = await call(stub, "/recover", { taskId }, { "x-test-now": "2026-11-19T10:10:30.000Z" });
+    const recovered2 = await call(stub, "/recover", recoveryBody(taskId), { "x-test-now": "2026-11-19T10:10:30.000Z" });
     assert.equal(recovered2.status, 200);
     assert.equal(recovered2.body.outcome, "requeued");
 
     const third = await call(stub, "/claim", { taskId }, { "x-test-now": "2026-11-19T10:11:00.000Z" });
     assert.equal(third.status, 200);
-    const exhausted = await call(stub, "/recover", { taskId }, { "x-test-now": "2026-11-19T10:16:00.000Z" });
+    const exhausted = await call(stub, "/recover", recoveryBody(taskId), { "x-test-now": "2026-11-19T10:16:00.000Z" });
     assert.equal(exhausted.status, 200);
     assert.equal(exhausted.body.outcome, "failed");
     assert.equal(exhausted.body.task.state, "failed");
     assert.equal(exhausted.body.task.errorCode, "lease_expired_max_attempts");
     assert.equal(exhausted.body.task.attemptCount, 3);
     assert.equal((await call(stub, "/usage")).body.inFlight, 0);
+  });
+});
+
+test("task recovery requires actor identity and applies a durable per-operator rate limit", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    assert.equal((await call(stub, "/recover", { taskId: "missing", requestId: crypto.randomUUID() })).status, 400);
+    assert.equal((await call(stub, "/recover", { ...recoveryBody("missing"), actor: "bad actor" })).status, 400);
+    for (let index = 0; index < 10; index += 1) {
+      const missing = await call(stub, "/recover", recoveryBody("missing"));
+      assert.equal(missing.status, 404);
+    }
+    const limited = await call(stub, "/recover", recoveryBody("missing"));
+    assert.equal(limited.status, 429);
+    assert.equal(limited.body.error, "runtime_control_rate_limited");
   });
 });
 
@@ -569,7 +596,7 @@ test("pause blocks new claims and expiry recovery but allows safe heartbeat and 
 
     paused = await createRuntime({ persistDir: directory, enabled: "false", paused: "true" });
     assert.equal((await call(paused.stub, "/claim", { taskId })).status, 503);
-    assert.equal((await call(paused.stub, "/recover", { taskId })).status, 503);
+    assert.equal((await call(paused.stub, "/recover", recoveryBody(taskId))).status, 503);
 
     const heartbeat = await call(paused.stub, "/heartbeat", {
       taskId, leaseOwner: lease.owner, leaseGeneration: lease.generation,
@@ -771,7 +798,7 @@ test("State Store bounds every mutating POST body before initialization or SQL w
       ["/claim", { taskId }, 12 * 1024],
       ["/heartbeat", { taskId, leaseOwner: lease.owner, leaseGeneration: lease.generation }, 12 * 1024],
       ["/complete", { taskId, leaseOwner: lease.owner, leaseGeneration: lease.generation, status: "succeeded" }, 12 * 1024],
-      ["/recover", { taskId }, 12 * 1024],
+      ["/recover", recoveryBody(taskId), 12 * 1024],
       ["/transition", { taskId, status: "succeeded" }, 12 * 1024],
       ["/oidc/replay/consume", { jti: "github-actions-bounded-body-01", expiresAt: "1799999999" }, 1024],
     ];

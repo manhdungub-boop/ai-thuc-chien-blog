@@ -2,7 +2,7 @@ name: Agent Runtime Preview Shell Validation
 
 on:
   push:
-    branches: [fix/runtime-test-fixture-isolation-20261120]
+    branches: [feat/operator-authenticated-task-recovery-20261120-v3]
     paths:
       - "agents/runtime/**"
       - ".github/workflows/agent-runtime-preview-validation.yml"

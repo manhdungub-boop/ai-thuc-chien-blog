@@ -553,13 +553,22 @@ export class AgentStateStore {
     if (this.env.AGENT_ENABLED !== "true" || this.env.AGENT_PAUSED !== "false") {
       return { status: 503, body: { ok: false, error: "agent_disabled_or_paused" } };
     }
-    if (!isObject(body) || Object.keys(body).length !== 1 ||
-        typeof body.taskId !== "string" || body.taskId.length < 1 || body.taskId.length > 64) {
+    if (!isObject(body) || Object.keys(body).length !== 3 ||
+        Object.keys(body).some((key) => !["taskId", "actor", "requestId"].includes(key)) ||
+        typeof body.taskId !== "string" || body.taskId.length < 1 || body.taskId.length > 64 ||
+        typeof body.actor !== "string" || !/^[a-zA-Z0-9._:-]{3,64}$/.test(body.actor) ||
+        typeof body.requestId !== "string" || !/^[a-zA-Z0-9-]{16,64}$/.test(body.requestId)) {
       return { status: 400, body: { ok: false, error: "recover_request_invalid" } };
     }
     try {
       return this.ctx.storage.transactionSync(() => {
         if (this.controlState().paused) return { status: 503, body: { ok: false, error: "agent_disabled_or_paused" } };
+        const rate = readRow(this.sql, "SELECT window_started_at, request_count FROM runtime_control_rate_limit WHERE actor = ?", body.actor);
+        const windowStart = rate && now - rate.window_started_at < 60_000 ? rate.window_started_at : now;
+        const requestCount = rate && windowStart === rate.window_started_at ? rate.request_count : 0;
+        if (requestCount >= 10) return { status: 429, body: { ok: false, error: "runtime_control_rate_limited" } };
+        this.sql.exec("INSERT INTO runtime_control_rate_limit (actor, window_started_at, request_count) VALUES (?,?,1) ON CONFLICT(actor) DO UPDATE SET window_started_at=excluded.window_started_at, request_count=?",
+          body.actor, windowStart, requestCount + 1);
         const row = readRow(this.sql, "SELECT * FROM tasks WHERE task_id = ?", body.taskId);
         if (!row) return { status: 404, body: { ok: false, error: "task_not_found" } };
         const decision = recoverExpiredLease(row, { now });
@@ -575,6 +584,8 @@ export class AgentStateStore {
           return { status: 409, body: { ok: false, error: "lease_recovery_conflict" } };
         }
         this.audit(body.taskId, decision.outcome === "failed" ? "task.lease_expired_failed" : "task.lease_expired_requeued", now, {
+          actor: body.actor,
+          requestId: body.requestId,
           attempt: row.attempt_count,
           leaseGeneration: row.lease_generation,
         });
