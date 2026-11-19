@@ -385,3 +385,35 @@ describe("authorized AI Bank reviewer reads", () => {
     expect(storeAccessed).toBe(false);
   });
 });
+
+
+  it("rejects duplicate, non-canonical, and out-of-range limits before candidate-store access", async () => {
+    const { token, secret } = await makeReviewerSessionToken();
+    let storeAccesses = 0;
+    const env = {
+      ...reviewerAuthEnv(secret),
+      AGENT_AI_BANK_CANDIDATE_STORE: {
+        getByName: () => {
+          storeAccesses += 1;
+          return { async listCandidates() { return []; } };
+        }
+      }
+    };
+    for (const query of [
+      "limit=1&limit=2",
+      "limit=0",
+      "limit=01",
+      "limit=21",
+      "limit=1.5",
+      "limit=1e1",
+      "limit=+1"
+    ]) {
+      const response = await worker.fetch(new Request(
+        origin + "/api/reviewer/ai-bank/candidates?" + query,
+        { headers: { cookie: "__Host-ai_reviewer_session=" + token } }
+      ), env);
+      expect(response.status, query).toBe(400);
+      expect(await response.json(), query).toMatchObject({ error: "invalid_ai_bank_candidate_limit" });
+    }
+    expect(storeAccesses).toBe(0);
+  });
