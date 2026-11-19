@@ -143,6 +143,17 @@ test("SQLite Durable Object reserves once and rejects idempotency payload confli
   });
 });
 
+test("default Free-tier pilot concurrency is capped at five tasks", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const results = await Promise.all(["default-a","default-b","default-c","default-d","default-e","default-f"].map((id) => call(stub, "/reserve", task(id))));
+    assert.equal(results.filter((item) => item.status === 201).length, 5);
+    assert.equal(results.filter((item) => item.body.error === "concurrency_limit_reached").length, 1);
+    const usage = await call(stub, "/usage");
+    assert.equal(usage.body.acceptedToday, 5);
+    assert.equal(usage.body.inFlight, 5);
+  });
+});
+
 test("daily quota is reserved atomically at the boundary", async () => {
   await withRuntime({ daily: 2 }, async ({ stub }) => {
     const results = await Promise.all(["quota-a","quota-b","quota-c","quota-d"].map((id) => call(stub, "/reserve", task(id))));
