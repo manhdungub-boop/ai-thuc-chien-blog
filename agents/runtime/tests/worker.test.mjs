@@ -323,5 +323,11 @@ test("control mutation rejects oversized declared and chunked request bodies bef
   }), env);
   assert.equal(malformed.status, 400);
   assert.equal((await malformed.json()).error, "request_invalid");
+
+  const duplicateField = await worker.fetch(new Request(url, {
+    method: "POST", headers, body: '{"reason":"first","reason":"second"}',
+  }), env);
+  assert.equal(duplicateField.status, 400);
+  assert.equal((await duplicateField.json()).error, "request_invalid");
   assert.equal(calls.length, 0);
 });
