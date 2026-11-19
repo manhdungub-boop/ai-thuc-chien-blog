@@ -275,7 +275,9 @@ async function verifyTestSnapshotSignatureWithKeyState(snapshot, envelope, trust
 }
 
 async function verifyTestSnapshotSignature(snapshot, envelope, trustedPublicKeys) {
-  if (!envelope || envelope.algorithm !== "Ed25519" ||
+  if (!snapshot || snapshot.format_id !== "ai-bank-audit-emulator-snapshot" ||
+      snapshot.format_version !== 1 ||
+      !envelope || envelope.algorithm !== "Ed25519" ||
       envelope.canonicalization !== "canonical-json-v1" ||
       typeof envelope.key_id !== "string" ||
       envelope.manifest_sha256 !== snapshot?.manifest_sha256 ||
@@ -487,11 +489,21 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
 
     const unsupportedFormat = structuredClone(snapshot);
     unsupportedFormat.format_version = 2;
-    expect(await verifyTestSnapshotSignature(unsupportedFormat, envelope, keys)).toBe(false);
+    const unsupportedFormatEnvelope = await signTestSnapshot(
+      unsupportedFormat, "context-binding-key-v1", keyPair.privateKey
+    );
+    expect(await verifyTestSnapshotSignature(
+      unsupportedFormat, unsupportedFormatEnvelope, keys
+    )).toBe(false);
 
     const unsupportedFormatId = structuredClone(snapshot);
     unsupportedFormatId.format_id = "unknown-snapshot-format";
-    expect(await verifyTestSnapshotSignature(unsupportedFormatId, envelope, keys)).toBe(false);
+    const unsupportedFormatIdEnvelope = await signTestSnapshot(
+      unsupportedFormatId, "context-binding-key-v1", keyPair.privateKey
+    );
+    expect(await verifyTestSnapshotSignature(
+      unsupportedFormatId, unsupportedFormatIdEnvelope, keys
+    )).toBe(false);
 
     const unsupportedCanonicalization = {
       ...envelope,
