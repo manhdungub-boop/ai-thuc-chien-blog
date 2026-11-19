@@ -45,6 +45,7 @@ test("claim increments attempt and fencing generation with bounded lease", () =>
     lease_generation: 1,
     lease_owner: OWNER_A,
     lease_expires_at: 1000 + LEASE_POLICY_LIMITS.defaultLeaseMs,
+    lease_max_expires_at: 1000 + LEASE_POLICY_LIMITS.maxTotalLeaseMs,
     next_attempt_at: null,
     updated_at: 1000,
   });
@@ -71,7 +72,7 @@ test("heartbeat accepts only the current owner and unexpired generation", () => 
     now: 2000, leaseOwner: OWNER_A, leaseGeneration: 1,
   });
   assert.equal(accepted.ok, true);
-  assert.equal(accepted.fields.lease_expires_at, 2000 + LEASE_POLICY_LIMITS.defaultLeaseMs);
+  assert.equal(accepted.fields.lease_expires_at, 20000);
   assert.equal(heartbeatLease(running(), {
     now: 2000, leaseOwner: OWNER_B, leaseGeneration: 1,
   }).error, "lease_fencing_conflict");
@@ -84,7 +85,7 @@ test("heartbeat accepts only the current owner and unexpired generation", () => 
 });
 
 test("heartbeat cannot extend a lease beyond its absolute maximum lifetime", () => {
-  const row = running({ lease_expires_at: 29 * 60 * 1000, lease_max_expires_at: 30 * 60 * 1000 });
+  const row = running({ lease_expires_at: 29 * 60 * 1000 + 1, lease_max_expires_at: 30 * 60 * 1000 });
   const capped = heartbeatLease(row, {
     now: 29 * 60 * 1000, leaseOwner: OWNER_A, leaseGeneration: 1,
   });
