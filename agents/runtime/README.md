@@ -30,7 +30,7 @@ From the repository root:
 \`\`\`sh
 npm install --no-save --no-package-lock --ignore-scripts miniflare@4.20260730.0
 node --check agents/runtime/src/worker.mjs
-node --check agents/runtime/src/state-store.mjs\nnode --check agents/runtime/src/internal-auth.mjs
+node --check agents/runtime/src/state-store.mjs\nnode --check agents/runtime/src/internal-auth.mjs\nnode --check agents/runtime/src/state-store-client.mjs
 node --test agents/runtime/tests/*.test.mjs
 \`\`\`
 
@@ -50,9 +50,9 @@ See [STATE-STORE-ADR.md](./STATE-STORE-ADR.md) for the design decision, Free-tie
 
 ## Remaining gates
 
-1. Independently review the state-store implementation and integration-test results.
+1. Independently review the state-store implementation, fixed-operation client, and integration-test results.
 2. Review the Free-tier request/SQL-row budget against expected real workload.
-3. Add a Durable Object binding and SQLite migration only to the separate Runtime Preview config after review; do not change the current checked-in Preview config in this step.
+3. Wire the fixed-operation client behind authenticated Worker ingress only after independent review; then add a Durable Object binding and SQLite migration only to a separate Runtime Preview config. Do not change the current checked-in Preview config in this step.
 4. Deploy the separate Preview Worker only after the local gates pass and Preview-only permissions are explicitly available.
 5. Add authenticated operator-only enqueue/inspect routes only after a separate security review.
 6. Add execution, alarms, or schedules only after idempotent side-effect handling, kill-switch behavior, recovery, and operational monitoring are proven.
