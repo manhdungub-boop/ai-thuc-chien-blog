@@ -251,7 +251,7 @@ describe("AgentTaskStore Durable Object", () => {
   it("executes and persists only allowlisted local health-check results", async () => {
     const request = { id: "runtime-health-test-01", task_type: "runtime_health_check", payload: {} };
     await store.enqueue(request);
-    await expect(Promise.resolve().then(() => store.claim(["quality_review"])))
+    await expect(Promise.resolve().then(() => store.claim(["unsupported_task_type"])))
       .rejects.toThrow("invalid_claim_task_types");
     const claim = await store.claim(["runtime_health_check"], request.id);
     expect(claim.task.task_type).toBe("runtime_health_check");
