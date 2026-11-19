@@ -366,7 +366,7 @@ test("SQLite state survives a Miniflare runtime restart", async () => {
 });
 
 
-test("fresh State Store initializes schema v4 paused with conservative lease defaults", async () => {
+test("fresh State Store initializes schema v5 paused with conservative lease defaults", async () => {
   await withRuntime({ resumeControl: false }, async ({ stub }) => {
     const initialControl = await call(stub, "/control");
     assert.equal(initialControl.body.control.paused, true);
@@ -377,7 +377,7 @@ test("fresh State Store initializes schema v4 paused with conservative lease def
       reason: "explicit test gate opening",
     });
     assert.equal(opened.status, 200);
-    const created = await call(stub, "/reserve", task("schema-v4-fresh"));
+    const created = await call(stub, "/reserve", task("schema-v5-fresh"));
     assert.equal(created.status, 201);
     assert.equal(created.body.task.attemptCount, 0);
     assert.equal(created.body.task.maxAttempts, 3);
@@ -388,7 +388,7 @@ test("fresh State Store initializes schema v4 paused with conservative lease def
   });
 });
 
-test("persisted v1 State Store migrates transactionally to v4 without losing task or usage", async () => {
+test("persisted v1 State Store migrates transactionally to v5 without losing task or usage", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "ai-thuc-chien-do-v1-migration-"));
   let first;
   let second;
@@ -693,4 +693,23 @@ test("OIDC replay ledger persists across State Store restart", async () => {
     if (second) await second.mf.dispose();
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test("OIDC replay ledger prunes expired entries and permits a later fresh token identifier", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const firstNow = Date.parse("2026-11-19T10:00:00.000Z");
+    const firstExpiry = String(Math.floor((firstNow + 60_000) / 1000));
+    const jti = "github-actions-recycled-jti-0001";
+    const first = await call(stub, "/oidc/replay/consume", { jti, expiresAt: firstExpiry }, {
+      "x-test-now": new Date(firstNow).toISOString(),
+    });
+    assert.equal(first.status, 200);
+
+    const laterNow = firstNow + 25 * 60 * 60 * 1000;
+    const laterExpiry = String(Math.floor((laterNow + 60_000) / 1000));
+    const later = await call(stub, "/oidc/replay/consume", { jti, expiresAt: laterExpiry }, {
+      "x-test-now": new Date(laterNow).toISOString(),
+    });
+    assert.equal(later.status, 200);
+  });
 });
