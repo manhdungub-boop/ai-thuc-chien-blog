@@ -25,7 +25,7 @@ These are published platform limits, not a measurement of this account's remaini
 
 ## Estimated SQL row writes per task
 
-The current implementation's normal successful lifecycle has this estimated write count:
+The current implementation's normal successful lifecycle has this estimated write count before heartbeats:
 
 | Operation | SQL row writes |
 |---|---:|
@@ -34,13 +34,18 @@ The current implementation's normal successful lifecycle has this estimated writ
 | Reserve: insert audit event | 1 |
 | queued -> running: update task + audit | 2 |
 | running -> terminal: update task + audit | 2 |
-| **Total for a fully processed task** | **7** |
+| **Total for a fully processed task, excluding heartbeats** | **7** |
+| Each lease heartbeat: task update + audit event | 2 |
 
-At the current hard ceiling of 1,000 accepted tasks/day:
-- Normal task-lifecycle writes: up to approximately 7,000 rows/day.
+Each heartbeat adds two row writes (one task update and one audit event). The lease has a 30-minute absolute lifetime and a five-minute initial lease, so the exact heartbeat count depends on the worker cadence and runtime duration; do not assume zero heartbeats.
+
+At the current pilot ceiling of 100 accepted tasks/day:
+- Base task-lifecycle writes, excluding heartbeats: up to approximately 700 rows/day.
+- If each task records five heartbeats, add up to approximately 1,000 row writes/day.
 - At steady-state retention, cleanup can additionally delete up to approximately 1,000 terminal task rows, 3,000 audit rows and one old daily-usage row/day, assuming every accepted task reaches both transitions and the workload is sustained.
-- Illustrative steady-state upper estimate: approximately 11,001 rows written/day, before schema changes, retries, additional audit events, or unexpected cleanup.
-- This is approximately 11% of the published 100,000 rows-written/day allowance.
+- Illustrative pilot estimate with five heartbeats/task: approximately 2,101 rows/day including the earlier retention estimate scaled to 100 tasks/day; this is not a measured value.
+- At 1,000 tasks/day, five heartbeats/task would add approximately 10,000 writes/day above the earlier lifecycle estimate, before retention deletes.
+- This remains a planning estimate, not evidence of account quota headroom.
 
 This is a reasoned estimate from the current SQL statements, not a measured Cloudflare usage report. Deletes count as writes. Re-run the estimate whenever the schema, audit frequency, transition model or retention policy changes.
 
