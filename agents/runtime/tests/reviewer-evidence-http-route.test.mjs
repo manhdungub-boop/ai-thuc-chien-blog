@@ -261,8 +261,10 @@ describe("authenticated read-only AI Bank reviewer routes", () => {
     expect(storeAccesses).toBe(0);
   });
 
-  it("rejects oversized streamed evidence bodies without allocating the full body or accessing the store", async () => {
+  it("cancels an oversized evidence stream at the byte ceiling before another chunk or store access", async () => {
     let storeAccesses = 0;
+    let pulls = 0;
+    let cancelled = false;
     const env = {
       AGENT_AI_BANK_CANDIDATE_STORE: {
         getByName() {
@@ -272,15 +274,16 @@ describe("authenticated read-only AI Bank reviewer routes", () => {
       }
     };
     const evidencePath = origin + "/api/reviewer/ai-bank/candidates/ollama/ollama/evidence";
-    const oversizedBody = JSON.stringify({
-      audit_event_id: "a4e6d1c2-3b7f-4a91-8c22-1234567890ab",
-      evidence: {
-        check_type: "pricing_and_free_limits",
-        source_title: "Pricing",
-        source_url: "https://ollama.com/pricing",
-        excerpt: "x".repeat(17 * 1024)
+    const bodyStream = new ReadableStream({
+      pull(controller) {
+        pulls += 1;
+        if (pulls === 1) controller.enqueue(new Uint8Array(17 * 1024));
+        else controller.enqueue(new Uint8Array([0x7b, 0x7d]));
+      },
+      cancel() {
+        cancelled = true;
       }
-    });
+    }, { highWaterMark: 0 });
     const response = await worker.fetch(new Request(evidencePath, {
       method: "POST",
       headers: {
@@ -288,10 +291,13 @@ describe("authenticated read-only AI Bank reviewer routes", () => {
         "content-type": "application/json",
         cookie: "__Host-ai_reviewer_session=opaque-session"
       },
-      body: oversizedBody
+      body: bodyStream,
+      duplex: "half"
     }), env);
     expect(response.status).toBe(413);
     expect(await response.json()).toEqual({ error: "review_request_too_large" });
+    expect(cancelled).toBe(true);
+    expect(pulls).toBe(1);
     expect(storeAccesses).toBe(0);
   });
 
