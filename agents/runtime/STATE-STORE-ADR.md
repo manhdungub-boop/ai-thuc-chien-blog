@@ -1,6 +1,6 @@
 # Agent Runtime state store — architecture decision
 
-Status: **SQLite Durable Object implementation added to the isolated branch; local Miniflare/workerd integration validation passed; not bound, not deployed, and not connected to task execution**.
+Status: **SQLite Durable Object implementation with schema v2 migration and transactional lease operations is in Draft PR #297; local Miniflare/workerd validation is running for the latest revision; not bound, not deployed, and not connected to task execution**.
 
 Date: 2026-11-19
 
@@ -56,9 +56,9 @@ Crash leases, automatic requeue, retry policy, and external side-effect idempote
 
 ## Retention and budgets
 
-- Hard code ceilings: 1,000 task reservations/day, 100 in-flight tasks, and 8 KiB per serialized task request. Conservative Free-tier pilot defaults are 100 reservations/day and 5 in-flight tasks when no lower explicit setting is supplied.
+- Enforced code ceilings and defaults: 100 task reservations/day, 5 in-flight tasks, and 8 KiB per serialized task request. These are internal guardrails, not measured account quota.
 - Terminal task rows are retained for 30 days; audit and daily-usage rows are retained for 90 days. Idempotency protection is bounded by the 30-day task retention.
-- The state store writes task, daily usage, and audit rows on admission; state transitions update task rows and append audit events. The workflow must measure actual row-write behavior before any live Preview binding.
+- Admission, claim, heartbeat, recovery and terminal completion update task rows and append audit events in the same SQLite transaction. Heartbeats add two row writes apiece; actual heartbeat cadence and recovery rates must be measured before any live Preview binding.
 - These internal limits are conservative guardrails, not evidence of remaining account quota or guaranteed availability.
 
 ## Failure behavior
@@ -78,8 +78,8 @@ Crash leases, automatic requeue, retry policy, and external side-effect idempote
 
 ## Implementation gates
 
-1. Complete an independent source/security review of the implementation and retain the passing Miniflare/workerd SQLite integration evidence, including rollback, duplicate keys, concurrent admissions, quota boundaries, terminal transitions, UTC day rollover, and restart persistence.
-2. Review Free-plan request and SQL-row budgets against actual expected workload.
-3. Only after those gates pass, add a Durable Object binding and SQLite migration to a separate Runtime Preview config; keep the existing preview config unchanged.
-4. Deploy only after Preview-only permissions are available; keep the runtime disabled and paused.
-5. Add operator-only enqueue/inspect paths and task execution only after independent security, side-effect idempotency, recovery, kill-switch, and monitoring reviews.
+1. Complete independent source/security review and retain passing Miniflare/workerd evidence for schema migration, rollback, distinct operator/internal auth, concurrent claims, fencing, pause, heartbeat, retry bounds, and restart persistence.
+2. Review Free-plan request and SQL-row budgets against actual expected workload, including heartbeat audit writes.
+3. Integrate the Worker-to-State-Store call path through the fixed DO identity and dedicated internal token in a separate Runtime Preview config; do not change this unbound shell config.
+4. Deploy only after Preview-only permissions and Free-plan headroom are verified; keep the runtime disabled and paused.
+5. Add task handlers only after independent review of read-only scope, side-effect idempotency, kill switch, monitoring, and rollback.
