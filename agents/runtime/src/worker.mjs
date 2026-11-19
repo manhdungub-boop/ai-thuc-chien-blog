@@ -15,6 +15,36 @@ function json(data, status = 200) {
 }
 function isEnabled(value) { return value === "true"; }
 
+async function writeStateStore(env, pathname, payload) {
+  if (!await hasValidStateStoreBearer(
+    new Request("https://state-store.internal/", {
+      headers: { Authorization: "Bearer " + (env.AGENT_STATE_STORE_TOKEN || "") },
+    }),
+    env,
+  )) throw new Error("internal_auth_unavailable");
+  const namespace = env.AGENT_STATE_STORE;
+  if (!namespace || typeof namespace.idFromName !== "function" || typeof namespace.get !== "function") {
+    throw new Error("state_store_binding_unavailable");
+  }
+  const stub = namespace.get(namespace.idFromName("agent-runtime-global"));
+  if (!stub || typeof stub.fetch !== "function") throw new Error("state_store_binding_unavailable");
+  const response = await stub.fetch(new Request("https://state-store.internal" + pathname, {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer " + env.AGENT_STATE_STORE_TOKEN,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  }));
+  const body = await readBoundedJson(response);
+  if (!response.ok || body?.ok !== true) {
+    const allowedStatus = [400, 401, 404, 409, 429, 503];
+    const status = allowedStatus.includes(response.status) ? response.status : 503;
+    throw Object.assign(new Error("state_store_request_failed"), { status });
+  }
+  return body;
+}
+
 async function readBoundedJson(response) {
   const declared = Number(response.headers.get("content-length") || 0);
   if (declared > MAX_INTERNAL_RESPONSE_BYTES) throw new Error("internal_response_too_large");
@@ -90,6 +120,48 @@ export default {
       }
       if (!await hasValidOperatorBearer(request, env)) return json({ ok: false, error: "operator_auth_required" }, 401);
       return json({ ok: false, error: "execution_not_implemented" }, 501);
+    }
+    if (url.pathname === "/internal/control") {
+      if (request.method !== "GET") return json({ ok: false, error: "method_not_allowed" }, 405);
+      if (!await hasValidOperatorBearer(request, env)) return json({ ok: false, error: "operator_auth_required" }, 401);
+      if ([...url.searchParams.keys()].length > 0) return json({ ok: false, error: "request_invalid" }, 400);
+      try {
+        const result = await readStateStore(env, "/control");
+        return json({ ok: true, control: result.control });
+      } catch {
+        return json({ ok: false, error: "state_store_unavailable" }, 503);
+      }
+    }
+    if (url.pathname === "/internal/control/pause" || url.pathname === "/internal/control/resume") {
+      if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
+      if (!await hasValidOperatorBearer(request, env)) return json({ ok: false, error: "operator_auth_required" }, 401);
+      if ([...url.searchParams.keys()].length > 0) return json({ ok: false, error: "request_invalid" }, 400);
+      const actor = env.AGENT_OPERATOR_ID;
+      if (typeof actor !== "string" || !/^[a-zA-Z0-9._:-]{3,64}$/.test(actor)) {
+        return json({ ok: false, error: "operator_identity_unavailable" }, 503);
+      }
+      let body;
+      try { body = await request.json(); } catch { return json({ ok: false, error: "request_invalid" }, 400); }
+      if (body === null || typeof body !== "object" || Array.isArray(body) ||
+          Object.keys(body).some((key) => key !== "reason") ||
+          (body.reason !== undefined && (typeof body.reason !== "string" || body.reason.length > 160 ||
+            [...body.reason].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)))) {
+        return json({ ok: false, error: "request_invalid" }, 400);
+      }
+      const action = url.pathname.endsWith("/pause") ? "pause" : "resume";
+      try {
+        const result = await writeStateStore(env, "/control/" + action, {
+          actor,
+          requestId: crypto.randomUUID(),
+          ...(body.reason === undefined ? {} : { reason: body.reason }),
+        });
+        return json({ ok: true, changed: result.changed, control: result.control });
+      } catch (error) {
+        if ([400, 401, 409, 429, 503].includes(error?.status)) {
+          return json({ ok: false, error: error.status === 429 ? "rate_limited" : "control_unavailable" }, error.status);
+        }
+        return json({ ok: false, error: "control_unavailable" }, 503);
+      }
     }
     if (url.pathname === "/internal/usage" || url.pathname === "/internal/task") {
       if (request.method !== "GET") return json({ ok: false, error: "method_not_allowed" }, 405);
