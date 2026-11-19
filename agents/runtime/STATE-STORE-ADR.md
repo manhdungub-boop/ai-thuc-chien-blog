@@ -47,7 +47,7 @@ Constraints include a unique idempotency key, CHECK constraints for task state/t
 
 ## State transitions
 
-- \`queued -> running\` or \`queued -> cancelled\`
+- \`queued -> running\` only while `AGENT_ENABLED=true` and `AGENT_PAUSED=false`; otherwise the transition is rejected. \`queued -> cancelled\` remains available while paused for operator/recovery cleanup.
 - \`running -> succeeded\`, \`running -> failed\`, or \`running -> cancelled\`
 - Repeating the same terminal transition is idempotent; attempting to reopen or change a terminal state is rejected.
 - In-flight count is derived from durable task rows; terminal transitions do not decrement a separate counter.
