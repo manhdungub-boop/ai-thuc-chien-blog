@@ -27,6 +27,7 @@ const REQUEST_BODY_LIMITS = new Map([
   ["/transition", MAX_STATE_STORE_REQUEST_BYTES],
 ]);
 const TASK_TYPES_SQL = "'content.review','ai_bank.candidate_review','seo.audit'";
+const CIRCUIT_BREAKER = Object.freeze({ threshold: 5, windowMs: 10 * 60 * 1000, reason: "circuit_breaker:5_failures_in_10m" });
 
 function boundedLimit(value, fallback, maximum) {
   if (value === undefined || value === null || value === "") return fallback;
@@ -394,6 +395,11 @@ export class AgentStateStore {
           "SELECT event_type AS eventType, COUNT(*) AS count FROM audit_events WHERE occurred_at>=? GROUP BY event_type ORDER BY count DESC, event_type ASC LIMIT 20",
           now - 24 * 60 * 60 * 1000,
         ).toArray();
+        const failureCountLast10m = readRow(this.sql,
+          "SELECT COUNT(*) AS count FROM tasks WHERE state='failed' AND terminal_at>=?", now - CIRCUIT_BREAKER.windowMs).count;
+        const control = this.controlState();
+        const latestPause = readRow(this.sql,
+          "SELECT reason FROM runtime_control_audit WHERE action='pause' ORDER BY occurred_at DESC,event_id DESC LIMIT 1");
         const acceptedToday = usage?.accepted_count ?? 0;
         const dailyUtilizationPercent = Math.round((acceptedToday / limits.daily) * 10000) / 100;
         const concurrentUtilizationPercent = Math.round(((counts.queued + counts.running) / limits.concurrent) * 10000) / 100;
@@ -414,6 +420,14 @@ export class AgentStateStore {
             failedLast24h: counts.failedLast24h,
             oldestQueuedAgeMs: counts.oldestQueuedAt === null ? null : Math.max(0, now - counts.oldestQueuedAt),
             oldestRunningUpdateAgeMs: counts.oldestRunningAt === null ? null : Math.max(0, now - counts.oldestRunningAt),
+          },
+          circuitBreaker: {
+            state: control.paused && latestPause?.reason === CIRCUIT_BREAKER.reason ? "open" : "closed",
+            autoPaused: control.paused && latestPause?.reason === CIRCUIT_BREAKER.reason,
+            paused: control.paused,
+            failureCountLast10m,
+            threshold: CIRCUIT_BREAKER.threshold,
+            windowMs: CIRCUIT_BREAKER.windowMs,
           },
           quota: {
             acceptedToday,
@@ -518,6 +532,21 @@ export class AgentStateStore {
     } catch {
       return { status: 503, body: { ok: false, error: "runtime_control_unavailable" } };
     }
+  }
+
+  tripCircuitBreaker(now) {
+    const failureCount = readRow(this.sql,
+      "SELECT COUNT(*) AS count FROM tasks WHERE state='failed' AND terminal_at>=?", now - CIRCUIT_BREAKER.windowMs).count;
+    if (failureCount < CIRCUIT_BREAKER.threshold) return false;
+    const current = readRow(this.sql, "SELECT paused, version FROM runtime_control WHERE singleton_id = 1");
+    if (!current || current.paused === 1) return false;
+    const version = current.version + 1;
+    this.sql.exec("UPDATE runtime_control SET paused=1,changed_at=?,version=? WHERE singleton_id=1 AND paused=0 AND version=?", now, version, current.version);
+    const updated = readRow(this.sql, "SELECT paused, version FROM runtime_control WHERE singleton_id = 1");
+    if (!updated || updated.paused !== 1 || updated.version !== version) return false;
+    this.sql.exec("INSERT INTO runtime_control_audit (event_id,action,occurred_at,actor,reason,request_id) VALUES (?,?,?,?,?,?)",
+      crypto.randomUUID(), "pause", now, "system:circuit-breaker", CIRCUIT_BREAKER.reason, crypto.randomUUID());
+    return true;
   }
 
   async reserve(body, now) {
@@ -678,6 +707,7 @@ export class AgentStateStore {
           taskType: row.task_type,
           leaseGeneration: row.lease_generation,
         });
+        if (fields.state === "failed") this.tripCircuitBreaker(now);
         return { status: 200, body: { ok: true, task: safeTask(updated) } };
       });
     } catch {
@@ -725,6 +755,7 @@ export class AgentStateStore {
           attempt: row.attempt_count,
           leaseGeneration: row.lease_generation,
         });
+        if (decision.outcome === "failed") this.tripCircuitBreaker(now);
         return { status: 200, body: { ok: true, outcome: decision.outcome, task: safeTask(updated) } };
       });
     } catch {
