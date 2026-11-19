@@ -256,20 +256,19 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
       excerpt: "Pricing evidence requires human review."
     };
 
-    await runInDurableObject(store, async (_instance, state) => {
+    const token = await writerSessionToken(now);
+    await runInDurableObject(store, async (instance, state) => {
       state.storage.sql.exec(
         "CREATE TRIGGER fail_ai_bank_evidence_audit_insert " +
         "BEFORE INSERT ON ai_bank_evidence_audit_events " +
         "BEGIN SELECT RAISE(ABORT, 'forced_audit_insert_failure'); END"
       );
-    });
 
-    await expect(store.submitAuthorizedReviewEvidence(
-      "github:ollama/ollama", evidence, await writerSessionToken(now),
-      eventId, writerAuthEnv, now
-    )).rejects.toThrow("forced_audit_insert_failure");
+      await expect(instance.submitAuthorizedReviewEvidence(
+        "github:ollama/ollama", evidence, token,
+        eventId, writerAuthEnv, now
+      )).rejects.toThrow("forced_audit_insert_failure");
 
-    await runInDurableObject(store, async (_instance, state) => {
       const evidenceCount = state.storage.sql.exec(
         "SELECT COUNT(*) AS count FROM ai_bank_review_evidence WHERE candidate_id = ?",
         "github:ollama/ollama"
