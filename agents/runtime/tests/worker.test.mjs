@@ -154,6 +154,59 @@ test("usage bridge uses fixed DO identity and sends only the dedicated internal 
   assert.equal(JSON.stringify(body).includes(STATE_TOKEN), false);
 });
 
+test("read-only metrics bridge authenticates, uses a fixed route, and returns only aggregate fields", async () => {
+  const responseBody = {
+    ok: true,
+    observedAt: 1799999999000,
+    dayUtc: "2026-11-20",
+    tasks: { totalRetained: 7, queued: 2, queuedDue: 1, running: 1, succeededRetained: 3, failedRetained: 1, cancelledRetained: 0, failedLast24h: 1, oldestQueuedAgeMs: 1200, oldestRunningUpdateAgeMs: 900, taskIds: ["private-task"] },
+    quota: { acceptedToday: 7, dailyLimit: 100, dailyUtilizationPercent: 7, inFlight: 3, concurrentLimit: 5, concurrentUtilizationPercent: 60, payloadLimitBytes: 8192 },
+    auditLast24h: [{ eventType: "task.failed", count: 1 }],
+    note: "Internal admission guardrails only; not a measurement of provider or Cloudflare account quota.",
+  };
+  const { env, calls } = bridgeEnv({ responseBody });
+  const incoming = new Request("https://agent-runtime-preview.example.workers.dev/internal/metrics", {
+    headers: {
+      Authorization: "Bearer " + OPERATOR_TOKEN,
+      Cookie: "session=must-not-forward",
+      "X-Arbitrary": "must-not-forward",
+    },
+  });
+  const response = await worker.fetch(incoming, env);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.tasks.queuedDue, 1);
+  assert.equal(body.quota.dailyUtilizationPercent, 7);
+  assert.equal(body.auditLast24h[0].eventType, "task.failed");
+  assert.equal("taskIds" in body.tasks, false);
+  assert.equal(JSON.stringify(body).includes("private-task"), false);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "https://state-store.internal/metrics");
+  assert.equal(calls[0].method, "GET");
+  assert.equal(calls[0].headers.get("authorization"), "Bearer " + STATE_TOKEN);
+  assert.equal(calls[0].headers.get("cookie"), null);
+  assert.equal(calls[0].headers.get("x-arbitrary"), null);
+  assert.equal(JSON.stringify(body).includes(STATE_TOKEN), false);
+});
+
+test("metrics bridge rejects unauthenticated requests, query strings, and malformed State Store responses", async () => {
+  const unauthorized = await worker.fetch(request("/internal/metrics"), {});
+  assert.equal(unauthorized.status, 401);
+  const { env, calls } = bridgeEnv();
+  const query = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/metrics?day=2026-11-20", {
+    headers: { Authorization: "Bearer " + OPERATOR_TOKEN },
+  }), env);
+  assert.equal(query.status, 400);
+  assert.equal(calls.length, 0);
+
+  const malformedEnv = bridgeEnv({ responseBody: { ok: true, tasks: {}, quota: {}, auditLast24h: "not-an-array", observedAt: "invalid", note: "x" } }).env;
+  const malformed = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/metrics", {
+    headers: { Authorization: "Bearer " + OPERATOR_TOKEN },
+  }), malformedEnv);
+  assert.equal(malformed.status, 503);
+  assert.equal((await malformed.json()).error, "state_store_response_invalid");
+});
+
 test("task inspection uses a fixed route and strips payload and lease secrets", async () => {
   const { env, calls } = bridgeEnv({
     responseBody: { ok: true, task: {

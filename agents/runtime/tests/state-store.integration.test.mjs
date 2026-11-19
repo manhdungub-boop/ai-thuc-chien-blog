@@ -124,6 +124,7 @@ test("all state-store routes require the distinct internal credential", async ()
       ["/control/resume", {}],
       ["/task?id=missing", undefined],
       ["/usage", undefined],
+      ["/metrics", undefined],
       ["/__test/rollback", {}],
     ]) {
       const missing = await call(stub, pathname, body, { Authorization: "" });
@@ -135,6 +136,33 @@ test("all state-store routes require the distinct internal credential", async ()
       assert.equal(missing.body.error, "state_store_auth_required");
       assert.equal(invalid.body.error, "state_store_auth_required");
     }
+  });
+});
+
+test("read-only metrics report bounded aggregate task, quota, age, and audit data", async () => {
+  await withRuntime({ daily: 10, concurrent: 4 }, async ({ stub }) => {
+    const created = await call(stub, "/reserve", task("metrics-queued"));
+    assert.equal(created.status, 201);
+    const metrics = await call(stub, "/metrics");
+    assert.equal(metrics.status, 200);
+    assert.equal(metrics.body.ok, true);
+    assert.equal(metrics.body.tasks.totalRetained, 1);
+    assert.equal(metrics.body.tasks.queued, 1);
+    assert.equal(metrics.body.tasks.queuedDue, 1);
+    assert.equal(metrics.body.tasks.running, 0);
+    assert.equal(metrics.body.tasks.oldestQueuedAgeMs >= 0, true);
+    assert.equal(metrics.body.tasks.oldestRunningUpdateAgeMs, null);
+    assert.equal(metrics.body.quota.acceptedToday, 1);
+    assert.equal(metrics.body.quota.dailyLimit, 10);
+    assert.equal(metrics.body.quota.dailyUtilizationPercent, 10);
+    assert.equal(metrics.body.quota.inFlight, 1);
+    assert.equal(metrics.body.quota.concurrentLimit, 4);
+    assert.equal(metrics.body.quota.concurrentUtilizationPercent, 25);
+    assert.ok(Array.isArray(metrics.body.auditLast24h));
+    assert.ok(metrics.body.auditLast24h.length <= 20);
+    assert.match(metrics.body.note, /not a measurement of provider or Cloudflare account quota/);
+    assert.equal((await call(stub, "/metrics?day=2026-11-20")).status, 400);
+    assert.equal(JSON.stringify(metrics.body).includes("integration-test-key"), false);
   });
 });
 

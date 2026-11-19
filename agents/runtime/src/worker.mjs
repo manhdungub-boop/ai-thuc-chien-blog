@@ -324,13 +324,13 @@ export default {
         return json({ ok: false, error: "state_store_unavailable" }, 503);
       }
     }
-    if (url.pathname === "/internal/usage" || url.pathname === "/internal/task") {
+    if (url.pathname === "/internal/usage" || url.pathname === "/internal/metrics" || url.pathname === "/internal/task") {
       if (request.method !== "GET") return json({ ok: false, error: "method_not_allowed" }, 405);
       if (!await hasValidOperatorBearer(request, env)) return json({ ok: false, error: "operator_auth_required" }, 401);
       let pathname;
-      if (url.pathname === "/internal/usage") {
+      if (url.pathname === "/internal/usage" || url.pathname === "/internal/metrics") {
         if ([...url.searchParams.keys()].length > 0) return json({ ok: false, error: "request_invalid" }, 400);
-        pathname = "/usage";
+        pathname = url.pathname === "/internal/metrics" ? "/metrics" : "/usage";
       } else {
         const taskId = url.searchParams.get("id");
         if (!taskId || taskId.length > 64 || url.searchParams.getAll("id").length !== 1 || [...url.searchParams.keys()].some((key) => key !== "id")) {
@@ -344,6 +344,35 @@ export default {
           return json({
             ok: true, dayUtc: result.dayUtc,
             acceptedToday: result.acceptedToday, inFlight: result.inFlight,
+          });
+        }
+        if (url.pathname === "/internal/metrics") {
+          const taskFields = ["totalRetained", "queued", "queuedDue", "running", "succeededRetained", "failedRetained", "cancelledRetained", "failedLast24h"];
+          const quotaFields = ["acceptedToday", "dailyLimit", "dailyUtilizationPercent", "inFlight", "concurrentLimit", "concurrentUtilizationPercent", "payloadLimitBytes"];
+          const validCount = (value) => Number.isSafeInteger(value) && value >= 0;
+          const validPercent = (value) => typeof value === "number" && Number.isFinite(value) && value >= 0;
+          const validAge = (value) => value === null || validCount(value);
+          if (!result.tasks || !result.quota || !Array.isArray(result.auditLast24h) ||
+              !Number.isSafeInteger(result.observedAt) ||
+              typeof result.dayUtc !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(result.dayUtc) ||
+              typeof result.note !== "string" ||
+              !taskFields.every((field) => validCount(result.tasks[field])) ||
+              !validAge(result.tasks.oldestQueuedAgeMs) || !validAge(result.tasks.oldestRunningUpdateAgeMs) ||
+              !["dailyUtilizationPercent", "concurrentUtilizationPercent"].every((field) => validPercent(result.quota[field])) ||
+              !["acceptedToday", "dailyLimit", "inFlight", "concurrentLimit", "payloadLimitBytes"].every((field) => validCount(result.quota[field])) ||
+              result.auditLast24h.length > 20 ||
+              !result.auditLast24h.every((event) => event && typeof event.eventType === "string" &&
+                event.eventType.length > 0 && event.eventType.length <= 64 && validCount(event.count))) {
+            return json({ ok: false, error: "state_store_response_invalid" }, 503);
+          }
+          return json({
+            ok: true,
+            observedAt: result.observedAt,
+            dayUtc: result.dayUtc,
+            tasks: Object.fromEntries([...taskFields, "oldestQueuedAgeMs", "oldestRunningUpdateAgeMs"].map((field) => [field, result.tasks[field]])),
+            quota: Object.fromEntries(quotaFields.map((field) => [field, result.quota[field]])),
+            auditLast24h: result.auditLast24h.map((event) => ({ eventType: event.eventType, count: event.count })),
+            note: result.note.slice(0, 240),
           });
         }
         const task = result.task;

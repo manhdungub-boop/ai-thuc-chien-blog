@@ -2,7 +2,7 @@ name: Agent Runtime Preview Shell Validation
 
 on:
   push:
-    branches: [feat/operator-authenticated-task-recovery-20261120-v3]
+    branches: [feat/runtime-readonly-observability-20261120]
     paths:
       - "agents/runtime/**"
       - ".github/workflows/agent-runtime-preview-validation.yml"
