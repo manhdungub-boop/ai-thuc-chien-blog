@@ -119,7 +119,7 @@ export class AgentStateStore {
         return jsonResponse(result.body, result.status);
       }
       if (url.pathname === "/transition" && request.method === "POST") {
-        const result = this.transition(await request.json(), this.requestTime(request));
+        const result = this.transition(await readBoundedJson(request), this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
       if (url.pathname === "/task" && request.method === "GET") {
