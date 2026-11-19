@@ -2,7 +2,8 @@ import { validateTaskRequest } from "./task-contract.mjs";
 import { hasValidOperatorBearer } from "./operator-auth.mjs";
 
 const SCHEMA_VERSION = 1;
-const DEFAULT_LIMITS = Object.freeze({ daily: 1000, concurrent: 100, payloadBytes: 8192 });
+// Conservative Free-tier pilot defaults; hard caps remain enforced below.
+const DEFAULT_LIMITS = Object.freeze({ daily: 100, concurrent: 5, payloadBytes: 8192 });
 const TERMINAL_STATES = new Set(["succeeded", "failed", "cancelled"]);
 const TASK_TYPES_SQL = "'content.review','ai_bank.candidate_review','seo.audit'";
 
