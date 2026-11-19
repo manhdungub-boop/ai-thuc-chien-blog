@@ -35,7 +35,7 @@ Add indexes for `(state, next_attempt_at)` and `(state, lease_expires_at)`. Migr
 - Generic `/transition` can no longer start or finish running work; a valid lease is required.
 - The State Store validates a dedicated `AGENT_STATE_STORE_TOKEN`, distinct from the external `AGENT_OPERATOR_TOKEN`. The Worker-to-DO call path and binding remain intentionally unwired.
 - Migration tests cover a fresh store and a persisted v1-shaped store with task and daily-usage preservation. Lease tests cover concurrent claim, fencing, heartbeat, pause behavior, bounded recovery, and attempt exhaustion.
-- The test-only v1 fixture route is guarded by `RUNTIME_TESTING=true`; the deploy configuration does not set that flag.
+- Schema downgrade, rollback probes, and deterministic clock overrides are isolated in the Miniflare-only test fixture under `tests/fixtures/`; the deployable State Store source contains no test routes, `RUNTIME_TESTING` switch, or `x-test-now` override.
 
 The next implementation step is independent security review and Worker-to-State-Store call-path integration in an isolated, separate Preview config. Do not enable a Durable Object binding, scheduler, or task execution as part of this PR.
 
