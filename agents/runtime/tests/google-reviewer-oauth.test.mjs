@@ -256,6 +256,18 @@ describe("Google reviewer OAuth session flow", () => {
     });
   });
 
+  it("clears the transient login cookie when the OAuth callback is rejected", async () => {
+    const response = await handleGoogleReviewerAuth(
+      new Request(origin + "/auth/google/callback?state=bad&code=bad"),
+      env,
+      { now }
+    );
+    expect(response.status).toBe(400);
+    expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
+    expect(response.headers.get("set-cookie")).toContain("HttpOnly");
+    expect(response.headers.get("set-cookie")).toContain("Secure");
+  });
+
   it("does not authenticate a missing session", async () => {
     const response = await handleGoogleReviewerAuth(
       new Request(origin + "/auth/google/me"),
