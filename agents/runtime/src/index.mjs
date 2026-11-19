@@ -36,7 +36,11 @@ async function readBoundedRequestText(request, maxBytes) {
       if (done) break;
       totalBytes += value.byteLength;
       if (totalBytes > maxBytes) {
-        await reader.cancel("request_body_limit_exceeded");
+        try {
+          await reader.cancel("request_body_limit_exceeded");
+        } catch {
+          // The size limit is already established; cancellation failure must not change the 413 result.
+        }
         return { tooLarge: true, text: null };
       }
       chunks.push(value);
