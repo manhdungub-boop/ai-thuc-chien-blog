@@ -136,7 +136,7 @@ export async function verifyGitHubActionsOidcToken(token, {
       !Number.isSafeInteger(claims.exp) ||
       (claims.nbf !== undefined && !Number.isSafeInteger(claims.nbf)) ||
       claims.iat > now + skew ||
-      claims.exp <= now - skew ||
+      claims.exp <= now ||
       claims.exp <= claims.iat ||
       claims.exp - claims.iat > MAX_TOKEN_LIFETIME_SECONDS ||
       (claims.nbf !== undefined && claims.nbf > now + skew)) {
