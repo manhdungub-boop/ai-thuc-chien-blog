@@ -35,7 +35,7 @@ test("Preview deployment workflow is manual, explicitly confirmed, token-isolate
   assert.match(previewDeployWorkflow, /permissions:\s*\n\s*contents:\s*read/);
   assert.match(previewDeployWorkflow, /confirm_preview_only:[\s\S]*default: false/);
   assert.match(previewDeployWorkflow, /inputs\.confirm_preview_only == true/);
-  assert.match(previewDeployWorkflow, /github\.ref == 'refs\/heads\/feat\/preview-paused-15m-workflow-schedule-20261119'/);
+  assert.match(previewDeployWorkflow, /github\.ref == 'refs\/heads\/fix\/agent-authoring-revision-queue-20261120'/);
   assert.match(previewDeployWorkflow, /secrets\.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN/);
   assert.doesNotMatch(previewDeployWorkflow, /secrets\.CLOUDFLARE_API_TOKEN/);
   assert.match(previewDeployWorkflow, /timeout-minutes:\s*15/);
