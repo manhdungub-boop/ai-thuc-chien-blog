@@ -100,7 +100,7 @@ export default {
         pathname = "/usage";
       } else {
         const taskId = url.searchParams.get("id");
-        if (!taskId || taskId.length > 64 || [...url.searchParams.keys()].some((key) => key !== "id")) {
+        if (!taskId || taskId.length > 64 || url.searchParams.getAll("id").length !== 1 || [...url.searchParams.keys()].some((key) => key !== "id")) {
           return json({ ok: false, error: "task_id_invalid" }, 400);
         }
         pathname = "/task?id=" + encodeURIComponent(taskId);
