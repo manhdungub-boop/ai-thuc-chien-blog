@@ -1,6 +1,6 @@
 # Agent Runtime state store — architecture decision
 
-Status: **SQLite Durable Object implementation added to the isolated branch; local runtime validation is being added; not bound, not deployed, and not connected to task execution**.
+Status: **SQLite Durable Object implementation added to the isolated branch; local Miniflare/workerd integration validation passed; not bound, not deployed, and not connected to task execution**.
 
 Date: 2026-11-19
 
@@ -78,7 +78,7 @@ Crash leases, automatic requeue, retry policy, and external side-effect idempote
 
 ## Implementation gates
 
-1. Review the implementation and run the Miniflare/workerd SQLite integration suite, including rollback, duplicate keys, concurrent admissions, quota boundaries, terminal transitions, UTC day rollover, and restart persistence.
+1. Complete an independent source/security review of the implementation and retain the passing Miniflare/workerd SQLite integration evidence, including rollback, duplicate keys, concurrent admissions, quota boundaries, terminal transitions, UTC day rollover, and restart persistence.
 2. Review Free-plan request and SQL-row budgets against actual expected workload.
 3. Only after those gates pass, add a Durable Object binding and SQLite migration to a separate Runtime Preview config; keep the existing preview config unchanged.
 4. Deploy only after Preview-only permissions are available; keep the runtime disabled and paused.
