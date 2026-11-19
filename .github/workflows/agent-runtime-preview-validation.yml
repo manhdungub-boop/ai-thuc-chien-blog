@@ -85,6 +85,14 @@ jobs:
       - name: Check syntax
         run: node --check agents/runtime/src/worker.mjs && node --check agents/runtime/src/state-store.mjs && node --check agents/runtime/src/lease-policy.mjs && node --check agents/runtime/src/internal-auth.mjs && node --check agents/runtime/src/github-oidc-verify.mjs
 
+      - name: Assert test-only controls are absent from deployable State Store source
+        run: |
+          if grep -nE '__test/(downgrade-v1|rollback)|RUNTIME_TESTING|x-test-now' agents/runtime/src/state-store.mjs; then
+            echo "Test-only routes or clock overrides must remain in the Miniflare fixture only."
+            exit 1
+          fi
+          echo "PASS: deployable State Store source has no test-only routes or clock override."
+
       - name: Run isolated Worker shell and contract tests
         timeout-minutes: 4
         run: timeout --signal=TERM --kill-after=10s 180s node --test agents/runtime/tests/*.test.mjs
