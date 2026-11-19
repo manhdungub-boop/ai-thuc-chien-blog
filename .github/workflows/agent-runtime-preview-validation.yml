@@ -1,0 +1,65 @@
+name: Agent Runtime Preview Shell Validation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "agents/runtime/**"
+      - ".github/workflows/agent-runtime-preview-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-runtime-preview-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+
+      - name: Check syntax
+        run: node --check agents/runtime/src/worker.mjs
+
+      - name: Run isolated Worker shell tests
+        run: node --test agents/runtime/tests/worker.test.mjs
+
+      - name: Verify preview config is isolated and has no execution triggers
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFile } from 'node:fs/promises';
+          const config = JSON.parse(await readFile('agents/runtime/wrangler.jsonc', 'utf8'));
+          assert.equal(config.name, 'ai-thuc-chien-agent-runtime-preview');
+          assert.equal(config.workers_dev, true);
+          assert.equal(config.preview_urls, true);
+          assert.equal(config.vars.AGENT_ENABLED, 'false');
+          assert.equal(config.vars.AGENT_PAUSED, 'true');
+          assert.equal('routes' in config, false);
+          assert.equal('d1_databases' in config, false);
+          assert.equal('triggers' in config, false);
+          assert.equal('queues' in config, false);
+          assert.equal('durable_objects' in config, false);
+          assert.equal('kv_namespaces' in config, false);
+          assert.equal('r2_buckets' in config, false);
+          console.log('PASS: isolated preview configuration; no production bindings, secrets, or schedules.');
+          NODE
+
+      - name: Assert workflow is validation-only
+        run: |
+          if grep -Eiq 'wrangler (deploy|versions upload)|cloudflare.*token|secrets\.' .github/workflows/agent-runtime-preview-validation.yml; then
+            echo "Unexpected deployment or secret reference in validation workflow"
+            exit 1
+          fi
+          echo "PASS: CI workflow contains no deployment command or Cloudflare secret."
