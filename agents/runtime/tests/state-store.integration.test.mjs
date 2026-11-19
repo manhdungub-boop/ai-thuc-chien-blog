@@ -168,7 +168,7 @@ test("durable pause is atomic, survives restart, and resume never dispatches que
 
     await active.mf.dispose();
     active = null;
-    restarted = await createRuntime({ persistDir: directory });
+    restarted = await createRuntime({ persistDir: directory, resumeControl: false });
     const persisted = await call(restarted.stub, "/control");
     assert.equal(persisted.body.control.paused, true);
     assert.equal(persisted.body.control.version, 1);
