@@ -35,7 +35,7 @@ function safeTask(row) {
     payload: JSON.parse(row.payload_json), state: row.state, createdAt: row.created_at,
     updatedAt: row.updated_at, terminalAt: row.terminal_at, errorCode: row.error_code,
     attemptCount: row.attempt_count, maxAttempts: row.max_attempts,
-    leaseGeneration: row.lease_generation, leaseExpiresAt: row.lease_expires_at,
+    leaseGeneration: row.lease_generation, leaseExpiresAt: row.lease_expires_at, leaseMaxExpiresAt: row.lease_max_expires_at,
     nextAttemptAt: row.next_attempt_at, lastErrorCode: row.last_error_code,
   };
 }
@@ -72,6 +72,7 @@ export class AgentStateStore {
             "ALTER TABLE tasks ADD COLUMN lease_generation INTEGER NOT NULL DEFAULT 0 CHECK (lease_generation >= 0)",
             "ALTER TABLE tasks ADD COLUMN lease_owner TEXT CHECK (lease_owner IS NULL OR length(lease_owner) BETWEEN 16 AND 64)",
             "ALTER TABLE tasks ADD COLUMN lease_expires_at INTEGER",
+            "ALTER TABLE tasks ADD COLUMN lease_max_expires_at INTEGER",
             "ALTER TABLE tasks ADD COLUMN next_attempt_at INTEGER",
             "ALTER TABLE tasks ADD COLUMN last_error_code TEXT CHECK (last_error_code IS NULL OR length(last_error_code) BETWEEN 1 AND 64)",
           ];
@@ -248,9 +249,9 @@ export class AgentStateStore {
         }
         const fields = decision.fields;
         this.sql.exec(
-          "UPDATE tasks SET state=?,attempt_count=?,lease_generation=?,lease_owner=?,lease_expires_at=?,next_attempt_at=?,updated_at=? WHERE task_id=? AND state='queued' AND attempt_count=? AND lease_generation=?",
+          "UPDATE tasks SET state=?,attempt_count=?,lease_generation=?,lease_owner=?,lease_expires_at=?,lease_max_expires_at=?,next_attempt_at=?,updated_at=? WHERE task_id=? AND state='queued' AND attempt_count=? AND lease_generation=?",
           fields.state, fields.attempt_count, fields.lease_generation, fields.lease_owner,
-          fields.lease_expires_at, fields.next_attempt_at, fields.updated_at,
+          fields.lease_expires_at, fields.lease_max_expires_at, fields.next_attempt_at, fields.updated_at,
           body.taskId, row.attempt_count, row.lease_generation,
         );
         const updated = readRow(this.sql, "SELECT * FROM tasks WHERE task_id = ?", body.taskId);
@@ -267,7 +268,7 @@ export class AgentStateStore {
           body: {
             ok: true,
             task: safeTask(updated),
-            lease: { owner: updated.lease_owner, generation: updated.lease_generation, expiresAt: updated.lease_expires_at },
+            lease: { owner: updated.lease_owner, generation: updated.lease_generation, expiresAt: updated.lease_expires_at, maxExpiresAt: updated.lease_max_expires_at },
           },
         };
       });
@@ -295,6 +296,7 @@ export class AgentStateStore {
           decision.fields.lease_expires_at, decision.fields.updated_at,
           body.taskId, body.leaseOwner, body.leaseGeneration, now,
         );
+        this.audit(body.taskId, "task.lease_heartbeat", now, { leaseGeneration: row.lease_generation });
         const updated = readRow(this.sql, "SELECT * FROM tasks WHERE task_id = ?", body.taskId);
         if (!updated || updated.lease_expires_at !== decision.fields.lease_expires_at) {
           return { status: 409, body: { ok: false, error: "lease_fencing_conflict" } };
@@ -321,9 +323,10 @@ export class AgentStateStore {
           status: body.status, errorCode: body.errorCode,
         });
         if (!decision.ok) return { status: 409, body: { ok: false, error: decision.error } };
+        if (decision.duplicate) return { status: 200, body: { ok: true, duplicate: true, task: safeTask(row) } };
         const fields = decision.fields;
         this.sql.exec(
-          "UPDATE tasks SET state=?,updated_at=?,terminal_at=?,error_code=?,lease_owner=NULL,lease_expires_at=NULL,next_attempt_at=NULL,last_error_code=? WHERE task_id=? AND state='running' AND lease_owner=? AND lease_generation=? AND lease_expires_at>?",
+          "UPDATE tasks SET state=?,updated_at=?,terminal_at=?,error_code=?,lease_owner=NULL,lease_expires_at=NULL,lease_max_expires_at=NULL,next_attempt_at=NULL,last_error_code=? WHERE task_id=? AND state='running' AND lease_owner=? AND lease_generation=? AND lease_expires_at>?",
           fields.state, fields.updated_at, fields.terminal_at, fields.error_code,
           fields.error_code, body.taskId, body.leaseOwner, body.leaseGeneration, now,
         );
@@ -358,7 +361,7 @@ export class AgentStateStore {
         if (!decision.ok) return { status: 409, body: { ok: false, error: decision.error } };
         const fields = decision.fields;
         this.sql.exec(
-          "UPDATE tasks SET state=?,updated_at=?,terminal_at=?,error_code=?,lease_owner=NULL,lease_expires_at=NULL,next_attempt_at=?,last_error_code=? WHERE task_id=? AND state='running' AND lease_generation=? AND lease_expires_at<=?",
+          "UPDATE tasks SET state=?,updated_at=?,terminal_at=?,error_code=?,lease_owner=NULL,lease_expires_at=NULL,lease_max_expires_at=NULL,next_attempt_at=?,last_error_code=? WHERE task_id=? AND state='running' AND lease_generation=? AND lease_expires_at<=?",
           fields.state, fields.updated_at, fields.terminal_at, fields.error_code,
           fields.next_attempt_at, fields.last_error_code, body.taskId, row.lease_generation, now,
         );
