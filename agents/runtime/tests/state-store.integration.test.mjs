@@ -452,19 +452,19 @@ test("State Store rejects oversized and malformed request bodies before admissio
     const badJson = await stub.fetch(malformed);
     assert.equal(badJson.status, 400);
     assert.equal((await badJson.json()).error, "request_json_invalid");
-    const empty = await stub.fetch(new Request("http://do.local/reserve", {
+    const empty = await stub.fetch("http://do.local/reserve", {
       method: "POST",
       headers: { Authorization: "Bearer " + TEST_STATE_STORE_TOKEN },
       body: "",
-    }));
+    });
     assert.equal(empty.status, 400);
     assert.equal((await empty.json()).error, "request_body_empty");
 
-    const invalidUtf8 = await stub.fetch(new Request("http://do.local/reserve", {
+    const invalidUtf8 = await stub.fetch("http://do.local/reserve", {
       method: "POST",
       headers: { Authorization: "Bearer " + TEST_STATE_STORE_TOKEN },
       body: new Uint8Array([0xc3, 0x28]),
-    }));
+    });
     assert.equal(invalidUtf8.status, 400);
     assert.equal((await invalidUtf8.json()).error, "request_body_invalid_utf8");
 
