@@ -115,6 +115,40 @@ describe("authenticated reviewer evidence HTTP route", () => {
   });
 });
 
+
+  it("does not expose operator-supplied pause reasons through the public health endpoint", async () => {
+    const env = {
+      AGENT_TASK_STORE: {
+        getByName: () => ({
+          async getControl() {
+            return {
+              paused: true,
+              changed_at: 1795118400000,
+              reason: "private operator incident note",
+              failure_count_last_10m: 5,
+              circuit_breaker_threshold: 5,
+              circuit_breaker_window_ms: 600000
+            };
+          },
+          async getDailyAdmissionUsage() {
+            return { day_utc: "2026-11-20", accepted: 3, limit: 100 };
+          }
+        })
+      }
+    };
+    const response = await worker.fetch(new Request(origin + "/health"), env);
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.runtime_control).toEqual({
+      paused: true,
+      changed_at: 1795118400000,
+      failure_count_last_10m: 5,
+      circuit_breaker_threshold: 5,
+      circuit_breaker_window_ms: 600000
+    });
+    expect(JSON.stringify(body)).not.toContain("private operator incident note");
+  });
+
 describe("authenticated reviewer draft read routes", () => {
   const collection = origin + "/api/reviewer/drafts?limit=5";
   const detail = origin + "/api/reviewer/drafts/draft-review-12345678";
