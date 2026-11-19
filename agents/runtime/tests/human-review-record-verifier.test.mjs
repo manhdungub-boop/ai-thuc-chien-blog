@@ -41,6 +41,35 @@ describe("human review record verifier", () => {
     });
   });
 
+  it("surfaces contradictory evidence and keeps the claim out of supported status", async () => {
+    const contradictoryDecisions = [
+      {
+        claim_id: "claim-1",
+        decision: "needs_revision",
+        reviewer_note: "One reviewed source directly contradicts the exact claim wording.",
+        evidence_reviews: [
+          { source_url: sources[0].url, decision: "supports", reviewer_note: "This excerpt supports the exact claim wording." },
+          { source_url: sources[1].url, decision: "contradicts", reviewer_note: "This excerpt directly reports an incompatible result." }
+        ]
+      },
+      decisions[1]
+    ];
+    const record = await recordHumanClaimReview(ledger, contradictoryDecisions, reviewer, { now });
+    const result = await verifyHumanClaimReviewRecord(record, ledger, { now });
+    expect(result).toMatchObject({
+      ok: true,
+      status: "human_review_record_verified",
+      evidence_summary: {
+        claims_with_contradicting_evidence: ["claim-1"],
+        claims_with_insufficient_evidence: ["claim-2"],
+        evidence_decision_counts: { supports: 3, contradicts: 1, insufficient: 0 },
+        contradiction_count: 1,
+        insufficient_count: 0
+      }
+    });
+    expect(record.claims[0].decision).toBe("needs_revision");
+  });
+
   it("detects a changed claim after review", async () => {
     const record = await makeRecord();
     const changed = { ...ledger, claims: ledger.claims.map((claim, i) => i ? claim : ({ ...claim, claim: claim.claim + " Changed." })) };
