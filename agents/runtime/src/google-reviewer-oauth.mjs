@@ -109,8 +109,9 @@ export class AgentReviewerAuthStore extends DurableObject {
     this.ctx.storage.sql.exec("DELETE FROM reviewer_auth_transactions WHERE expires_at <= ?", nowSeconds);
     const active = this.ctx.storage.sql.exec("SELECT COUNT(*) AS total FROM reviewer_auth_transactions WHERE expires_at > ?", nowSeconds).toArray()[0]?.total || 0;
     if (active >= 100) return { created: false, reason: "login_transaction_capacity_reached" };
-    const result = this.ctx.storage.sql.exec("INSERT OR IGNORE INTO reviewer_auth_transactions (state_hash,browser_hash,nonce,code_verifier,created_at,expires_at) VALUES (?,?,?,?,?,?)", stateHash, browserHash, nonce, codeVerifier, nowSeconds, nowSeconds + TX_TTL_SECONDS);
-    return { created: result.rowsWritten === 1 };
+    this.ctx.storage.sql.exec("INSERT OR IGNORE INTO reviewer_auth_transactions (state_hash,browser_hash,nonce,code_verifier,created_at,expires_at) VALUES (?,?,?,?,?,?)", stateHash, browserHash, nonce, codeVerifier, nowSeconds, nowSeconds + TX_TTL_SECONDS);
+    const insertedRows = this.ctx.storage.sql.exec("SELECT changes() AS total").toArray()[0]?.total;
+    return { created: Number(insertedRows) === 1 };
   }
   consumeTransaction(stateHash, browserHash, nowSeconds) {
     const row = this.ctx.storage.sql.exec("SELECT * FROM reviewer_auth_transactions WHERE state_hash = ? AND browser_hash = ? AND expires_at > ?", stateHash, browserHash, nowSeconds).toArray()[0];
