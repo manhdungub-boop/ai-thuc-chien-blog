@@ -11,6 +11,51 @@ describe("AgentReviewerAuthStore Durable Object", () => {
     store = env.AGENT_REVIEWER_AUTH_STORE.getByName("reviewer-auth-store-test-" + Date.now() + "-" + testIndex + "-" + crypto.randomUUID());
   });
 
+  it("creates one valid login transaction, rejects a duplicate state, and expires old rows", async () => {
+    const stateHash = "s".repeat(43);
+    const browserHash = "b".repeat(43);
+    const nonce = "n".repeat(43);
+    const codeVerifier = "v".repeat(64);
+    const nowSeconds = 1_800_000_000;
+
+    const before = await runInDurableObject(store, (_instance, state) =>
+      state.storage.sql.exec(
+        "SELECT COUNT(*) AS total FROM reviewer_auth_transactions WHERE expires_at > ?",
+        nowSeconds
+      ).toArray()[0].total
+    );
+    expect(before).toBe(0);
+
+    await expect(store.createTransaction(stateHash, browserHash, nonce, codeVerifier, nowSeconds))
+      .resolves.toEqual({ created: true });
+    await expect(store.createTransaction(stateHash, browserHash, nonce, codeVerifier, nowSeconds))
+      .resolves.toEqual({ created: false });
+
+    const rows = await runInDurableObject(store, (_instance, state) =>
+      state.storage.sql.exec(
+        "SELECT state_hash, browser_hash, nonce, code_verifier, created_at, expires_at FROM reviewer_auth_transactions WHERE state_hash = ?",
+        stateHash
+      ).toArray()
+    );
+    expect(rows).toEqual([{
+      state_hash: stateHash,
+      browser_hash: browserHash,
+      nonce,
+      code_verifier: codeVerifier,
+      created_at: nowSeconds,
+      expires_at: nowSeconds + 300
+    }]);
+
+    await expect(store.consumeTransaction(stateHash, browserHash, nowSeconds + 301)).resolves.toBeNull();
+    const afterExpiry = await runInDurableObject(store, (_instance, state) =>
+      state.storage.sql.exec(
+        "SELECT COUNT(*) AS total FROM reviewer_auth_transactions WHERE expires_at > ?",
+        nowSeconds + 301
+      ).toArray()[0].total
+    );
+    expect(afterExpiry).toBe(0);
+  });
+
   it("limits Google reviewer login starts to ten per fixed 60-second window", async () => {
     const nowSeconds = 1_800_000_000;
     for (let attempt = 0; attempt < 10; attempt += 1) {
