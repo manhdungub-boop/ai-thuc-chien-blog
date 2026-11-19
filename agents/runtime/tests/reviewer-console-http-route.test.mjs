@@ -36,6 +36,15 @@ describe("read-only reviewer console HTTP routes", () => {
     expect(script).toContain("Chưa có thao tác đánh giá hoặc gửi quyết định");
   });
 
+  it("requires an authenticated reviewer session for the authoring revision queue", async () => {
+    const response = await worker.fetch(
+      new Request(origin + "/api/reviewer/drafts-needing-authoring?limit=20"),
+      {}
+    );
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ error: "reviewer_session_required" });
+  });
+
   it("rejects unsupported methods for console resources", async () => {
     const response = await worker.fetch(new Request(origin + "/reviewer-console", { method: "POST" }), {});
     expect(response.status).toBe(405);
