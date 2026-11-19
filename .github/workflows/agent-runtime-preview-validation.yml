@@ -33,6 +33,34 @@ jobs:
       - name: Install pinned local Cloudflare runtime simulator
         run: npm install --no-save --no-package-lock --ignore-scripts miniflare@4.20260701.0
 
+      - name: Report exact npm dependency advisories
+        if: always()
+        run: |
+          npm audit --json > "$RUNNER_TEMP/agent-runtime-npm-audit.json" || true
+          node --input-type=module <<'NODE'
+          import { readFile } from 'node:fs/promises';
+          const report = JSON.parse(await readFile(process.env.RUNNER_TEMP + '/agent-runtime-npm-audit.json', 'utf8'));
+          const vulnerabilities = report.vulnerabilities ?? {};
+          console.log(JSON.stringify({
+            totals: report.metadata?.vulnerabilities ?? null,
+            packages: Object.entries(vulnerabilities).map(([name, item]) => ({
+              name,
+              severity: item.severity,
+              direct: item.isDirect,
+              range: item.range,
+              fixAvailable: item.fixAvailable,
+              advisories: (item.via ?? []).map(v => typeof v === 'string' ? { dependency: v } : ({
+                title: v.title,
+                url: v.url,
+                range: v.range,
+                source: v.source,
+                cwe: v.cwe,
+                cvss: v.cvss?.score
+              }))
+            }))
+          }, null, 2));
+          NODE
+
       - name: Check syntax
         run: node --check agents/runtime/src/worker.mjs && node --check agents/runtime/src/state-store.mjs
 
