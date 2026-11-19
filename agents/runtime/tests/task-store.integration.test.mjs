@@ -442,7 +442,7 @@ describe("AgentTaskStore Durable Object", () => {
     });
 
     const result = await store.pruneTerminalTasks(now);
-    expect(result).toEqual({ completed_deleted: 1, dead_deleted: 1, budget_days_deleted: 1, limit: 100 });
+    expect(result).toEqual({ completed_deleted: 1, dead_deleted: 1, budget_days_deleted: 1, admission_days_deleted: 0, failures_deleted: 0, audit_deleted: 0, limit: 100 });
     expect(await store.stats()).toEqual({ leased: 1, pending: 1 });
   });
 
@@ -499,15 +499,21 @@ describe("AgentTaskStore Durable Object", () => {
     }
 
     const result = await store.pruneTerminalTasks(now);
-    expect(result).toEqual({ completed_deleted: 0, dead_deleted: 0, budget_days_deleted: 0, limit: 100 });
+    expect(result).toEqual({ completed_deleted: 0, dead_deleted: 0, budget_days_deleted: 0, admission_days_deleted: 0, failures_deleted: 0, audit_deleted: 0, limit: 100 });
     expect(await store.stats()).toEqual({ completed: 1, dead: 1 });
   });
 
   it("enforces the active queue capacity without accepting the 501st task", async () => {
-    for (let index = 0; index < 500; index += 1) {
-      const result = await store.enqueue(task(`task-capacity-${String(index).padStart(4, "0")}`));
-      expect(result.accepted).toBe(true);
-    }
+    const now = Date.now();
+    await runInDurableObject(store, async (_instance, state) => {
+      for (let index = 0; index < 500; index += 1) {
+        const queued = task(`task-capacity-${String(index).padStart(4, "0")}`);
+        state.storage.sql.exec(
+          "INSERT INTO tasks (id, task_type, payload_json, status, attempts, created_at, updated_at) VALUES (?, ?, ?, 'pending', 0, ?, ?)",
+          queued.id, queued.task_type, JSON.stringify(queued.payload), now, now
+        );
+      }
+    });
 
     const overflow = await store.enqueue(task("task-capacity-overflow"));
     expect(overflow).toEqual({ accepted: false, reason: "queue_capacity_reached" });
