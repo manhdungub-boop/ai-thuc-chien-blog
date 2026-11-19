@@ -38,7 +38,7 @@ export async function authorizeOperatorSession(sessionToken, env) {
     ? env.AGENT_OPERATOR_ALLOWED_EMAILS.split(",").map(value => value.trim().toLowerCase()).filter(Boolean)
     : [];
   if (operatorEmails.length !== 1 ||
-      !/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(operatorEmails[0]) ||
+      !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(operatorEmails[0]) ||
       operatorEmails[0].length > 254) {
     return { authorized: false, reason: "operator_allowlist_not_configured" };
   }
