@@ -713,3 +713,92 @@ test("OIDC replay ledger prunes expired entries and permits a later fresh token 
     assert.equal(later.status, 200);
   });
 });
+
+
+test("State Store bounds every mutating POST body before initialization or SQL writes", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const created = await call(stub, "/reserve", task("bounded-request-seed"));
+    assert.equal(created.status, 201);
+    const taskId = created.body.task.taskId;
+    const claimed = await call(stub, "/claim", { taskId });
+    assert.equal(claimed.status, 200);
+    const lease = claimed.body.lease;
+
+    const routes = [
+      ["/control/pause", { actor: "integration-test", requestId: crypto.randomUUID(), reason: "oversize probe" }, 16 * 1024],
+      ["/control/resume", { actor: "integration-test", requestId: crypto.randomUUID(), reason: "oversize probe" }, 16 * 1024],
+      ["/reserve", task("bounded-request-overflow"), 12 * 1024],
+      ["/claim", { taskId }, 12 * 1024],
+      ["/heartbeat", { taskId, leaseOwner: lease.owner, leaseGeneration: lease.generation }, 12 * 1024],
+      ["/complete", { taskId, leaseOwner: lease.owner, leaseGeneration: lease.generation, status: "succeeded" }, 12 * 1024],
+      ["/recover", { taskId }, 12 * 1024],
+      ["/transition", { taskId, status: "succeeded" }, 12 * 1024],
+      ["/oidc/replay/consume", { jti: "github-actions-bounded-body-01", expiresAt: "1799999999" }, 1024],
+    ];
+
+    const before = {
+      usage: (await call(stub, "/usage")).body,
+      task: (await call(stub, "/task?id=" + encodeURIComponent(taskId))).body.task,
+      control: (await call(stub, "/control")).body.control,
+    };
+
+    for (const [pathname, payload, limit] of routes) {
+      const oversized = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(JSON.stringify({ ...payload, padding: "x".repeat(limit + 64) })));
+          controller.close();
+        },
+      });
+      const response = await stub.fetch("http://do.local" + pathname, {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + TEST_STATE_STORE_TOKEN,
+          "Content-Type": "application/json",
+        },
+        body: oversized,
+        duplex: "half",
+      });
+      assert.equal(response.status, 413, pathname + " streamed body must be rejected");
+      assert.equal((await response.json()).error, "request_body_too_large", pathname);
+    }
+
+    const declaredTooLarge = await stub.fetch("http://do.local/reserve", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer " + TEST_STATE_STORE_TOKEN,
+        "Content-Type": "application/json",
+        "Content-Length": String(12 * 1024 + 1),
+      },
+      body: new Uint8Array(12 * 1024 + 1),
+    });
+    assert.equal(declaredTooLarge.status, 413);
+
+    const malformed = await stub.fetch("http://do.local/claim", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + TEST_STATE_STORE_TOKEN, "Content-Type": "application/json" },
+      body: "{",
+    });
+    assert.equal(malformed.status, 400);
+    assert.equal((await malformed.json()).error, "request_invalid");
+
+    const invalidUtf8 = await stub.fetch("http://do.local/heartbeat", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + TEST_STATE_STORE_TOKEN, "Content-Type": "application/json" },
+      body: new Uint8Array([0xc3, 0x28]),
+    });
+    assert.equal(invalidUtf8.status, 400);
+
+    const empty = await stub.fetch("http://do.local/complete", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + TEST_STATE_STORE_TOKEN, "Content-Type": "application/json" },
+    });
+    assert.equal(empty.status, 400);
+
+    const after = {
+      usage: (await call(stub, "/usage")).body,
+      task: (await call(stub, "/task?id=" + encodeURIComponent(taskId))).body.task,
+      control: (await call(stub, "/control")).body.control,
+    };
+    assert.deepEqual(after, before, "rejected requests must not change task, quota, or control state");
+  });
+});
