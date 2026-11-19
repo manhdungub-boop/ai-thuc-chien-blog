@@ -208,7 +208,7 @@ test("task store enforces an allowlist, bounded payloads, and idempotent IDs", (
   assert.match(store, /ai_bank_discovery: \["query"\]/);
   assert.match(store, /content_research: \["topic", "language"\]/);
   assert.match(store, /content_draft: \["topic", "research_task_id"\]/);
-  assert.match(store, /"content_draft",\s*"runtime_health_check"/);
+  assert.match(store, /"content_draft",\s*"quality_review",\s*"runtime_health_check"/);
   assert.match(store, /quality_review: \["artifact_id", "artifact_type"\]/);
   assert.match(store, /runtime_health_check: \[\]/);
   assert.match(store, /MAX_PAYLOAD_BYTES = 8192/);
