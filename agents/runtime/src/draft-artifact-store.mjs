@@ -4,9 +4,12 @@ import { selectProvider } from "./provider-policy.mjs";
 import { assessArticleEvidenceReadiness } from "./article-evidence-readiness.mjs";
 import { verifyGoogleReviewerSessionToken } from "./google-reviewer-oauth.mjs";
 import { buildHumanClaimReviewLedger } from "./human-claim-ledger-builder.mjs";
+import { recordHumanClaimReview } from "./human-claim-review.mjs";
+import { classifyResearchPublisher } from "./research-publisher-policy.mjs";
 
 const MAX_ARTIFACT_BYTES = 48 * 1024;
 const MAX_EVIDENCE_REVIEW_BYTES = 48 * 1024;
+const MAX_RESEARCH_EVIDENCE_BYTES = 12 * 1024;
 const MAX_SOURCES = 20;
 const MAX_CLAIMS = 40;
 const ID_PATTERN = /^[a-zA-Z0-9._:-]{8,128}$/;
@@ -76,6 +79,40 @@ function validateClaimManifest(claims) {
   return { ok: true };
 }
 
+function validateRetrievedEvidence(evidence) {
+  if (!Array.isArray(evidence) || evidence.length > 4) {
+    return { ok: false, reason: "invalid_retrieved_evidence_batch" };
+  }
+  const seen = new Set();
+  for (const item of evidence) {
+    if (!item || typeof item !== "object" || Array.isArray(item) ||
+        item.status !== "source_retrieved_not_fact_checked" ||
+        typeof item.source !== "string" || !item.source.trim() || item.source.length > 80 ||
+        typeof item.title !== "string" || !item.title.trim() || item.title.length > 120 ||
+        typeof item.url !== "string" || item.url.length > 2048 ||
+        typeof item.excerpt !== "string" || item.excerpt.trim().length < 80 || item.excerpt.length > 600 ||
+        typeof item.retrieved_at !== "string" || !Number.isFinite(Date.parse(item.retrieved_at))) {
+      return { ok: false, reason: "invalid_retrieved_evidence_item" };
+    }
+    try {
+      const url = new URL(item.url);
+      if (url.protocol !== "https:" || url.username || url.password ||
+          (url.port && url.port !== "443") || url.search || url.hash || url.href !== item.url ||
+          !classifyResearchPublisher(item.source, url.href).accepted || seen.has(url.href)) {
+        return { ok: false, reason: "retrieved_evidence_url_or_publisher_rejected" };
+      }
+      seen.add(url.href);
+    } catch {
+      return { ok: false, reason: "retrieved_evidence_url_or_publisher_rejected" };
+    }
+  }
+  const json = JSON.stringify(evidence);
+  if (new TextEncoder().encode(json).byteLength > MAX_RESEARCH_EVIDENCE_BYTES) {
+    return { ok: false, reason: "retrieved_evidence_too_large" };
+  }
+  return { ok: true, json };
+}
+
 function validateDraft(draft) {
   if (!draft || typeof draft !== "object" || Array.isArray(draft)) return { ok: false, reason: "draft_must_be_object" };
   if (Object.keys(draft).some(key => !DRAFT_KEYS.has(key)) || REQUIRED_DRAFT_KEYS.some(key => !(key in draft))) {
@@ -121,6 +158,7 @@ function safeArtifact(row) {
   return {
     id: row.id, artifact_type: "article", status: row.status, version: row.version,
     draft: JSON.parse(row.draft_json), quality_review: JSON.parse(row.quality_review_json),
+    research_evidence: row.research_evidence_json ? JSON.parse(row.research_evidence_json) : [],
     evidence_review: parseEvidenceReview(row),
     created_at: row.created_at, updated_at: row.updated_at
   };
@@ -147,19 +185,22 @@ export class AgentDraftStore extends DurableObject {
       "id TEXT PRIMARY KEY, draft_json TEXT NOT NULL, quality_review_json TEXT NOT NULL, " +
       "status TEXT NOT NULL CHECK(status IN ('pending_human_review','needs_revision')), " +
       "version INTEGER NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, " +
-      "ledger_json TEXT, review_record_json TEXT, evidence_readiness_json TEXT)"
+      "ledger_json TEXT, review_record_json TEXT, evidence_readiness_json TEXT, research_evidence_json TEXT)"
     );
     const columns = this.ctx.storage.sql.exec("PRAGMA table_info(draft_artifacts)").toArray();
     if (!columns.some(column => column.name === "ledger_json")) this.ctx.storage.sql.exec("ALTER TABLE draft_artifacts ADD COLUMN ledger_json TEXT");
     if (!columns.some(column => column.name === "review_record_json")) this.ctx.storage.sql.exec("ALTER TABLE draft_artifacts ADD COLUMN review_record_json TEXT");
     if (!columns.some(column => column.name === "evidence_readiness_json")) this.ctx.storage.sql.exec("ALTER TABLE draft_artifacts ADD COLUMN evidence_readiness_json TEXT");
+    if (!columns.some(column => column.name === "research_evidence_json")) this.ctx.storage.sql.exec("ALTER TABLE draft_artifacts ADD COLUMN research_evidence_json TEXT");
     this.ctx.storage.sql.exec("CREATE INDEX IF NOT EXISTS draft_artifacts_status_updated ON draft_artifacts(status, updated_at)");
   }
 
-  createDraft(id, draft) {
+  createDraft(id, draft, retrievedEvidence = []) {
     if (typeof id !== "string" || !ID_PATTERN.test(id)) return { accepted: false, reason: "invalid_artifact_id" };
     const validated = validateDraft(draft);
     if (!validated.ok) return { accepted: false, reason: validated.reason };
+    const evidence = validateRetrievedEvidence(retrievedEvidence);
+    if (!evidence.ok) return { accepted: false, reason: evidence.reason };
     const existing = this.ctx.storage.sql.exec("SELECT * FROM draft_artifacts WHERE id = ?", id).toArray()[0];
     if (existing) {
       if (existing.draft_json !== validated.json) return { accepted: false, reason: "artifact_id_conflict" };
@@ -169,9 +210,9 @@ export class AgentDraftStore extends DurableObject {
     const status = review.ok ? "pending_human_review" : "needs_revision";
     const now = new Date().toISOString();
     const inserted = this.ctx.storage.sql.exec(
-      "INSERT OR IGNORE INTO draft_artifacts (id, draft_json, quality_review_json, status, version, created_at, updated_at, ledger_json, review_record_json, evidence_readiness_json) " +
-      "VALUES (?, ?, ?, ?, 1, ?, ?, NULL, NULL, NULL) RETURNING *",
-      id, validated.json, JSON.stringify(review), status, now, now
+      "INSERT OR IGNORE INTO draft_artifacts (id, draft_json, quality_review_json, status, version, created_at, updated_at, ledger_json, review_record_json, evidence_readiness_json, research_evidence_json) " +
+      "VALUES (?, ?, ?, ?, 1, ?, ?, NULL, NULL, NULL, ?) RETURNING *",
+      id, validated.json, JSON.stringify(review), status, now, now, evidence.json
     ).toArray();
     if (inserted.length !== 1) return { accepted: false, reason: "artifact_create_race" };
     return { accepted: true, duplicate: false, artifact: safeArtifact(inserted[0]) };
@@ -202,7 +243,7 @@ export class AgentDraftStore extends DurableObject {
    * Persist source excerpts retrieved by the trusted Worker research path.
    * This Durable Object method is intentionally not exposed as a public HTTP route.
    */
-  async storeEvidenceLedger(id, expectedVersion, retrievedEvidence) {
+  async storeEvidenceLedger(id, expectedVersion, retrievedEvidence = undefined) {
     if (typeof id !== "string" || !ID_PATTERN.test(id) || !Number.isInteger(expectedVersion) || expectedVersion < 1) {
       return { stored: false, reason: "invalid_evidence_ledger_request" };
     }
@@ -220,7 +261,10 @@ export class AgentDraftStore extends DurableObject {
       claim: claim.claim,
       evidence_urls: claim.evidence_urls
     }));
-    const built = buildHumanClaimReviewLedger(claims, retrievedEvidence);
+    const evidenceSnapshot = retrievedEvidence === undefined
+      ? (current.research_evidence_json ? JSON.parse(current.research_evidence_json) : [])
+      : retrievedEvidence;
+    const built = buildHumanClaimReviewLedger(claims, evidenceSnapshot);
     if (!built.ok) return { stored: false, reason: built.reason, ledger_status: built.status };
     const ledger = { ...built, draft_version: current.version };
     const ledgerJson = JSON.stringify(ledger);
