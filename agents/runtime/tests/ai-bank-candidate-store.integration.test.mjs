@@ -318,12 +318,13 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     );
     expect(blocked).toEqual({ accepted: false, reason: "evidence_audit_daily_limit_reached" });
 
+    const evidenceHistoryBeforeReplay = await store.listReviewEvidence("github:ollama/ollama", 30);
     const replayAfterCap = await store.submitAuthorizedReviewEvidence(
       "github:ollama/ollama", evidence, token,
       "00000000-0000-4000-8000-000000000001", writerAuthEnv, now
     );
     expect(replayAfterCap).toEqual({ accepted: false, reason: "duplicate_audit_event" });
-    expect(await store.listReviewEvidence("github:ollama/ollama")).toHaveLength(1);
+    expect(await store.listReviewEvidence("github:ollama/ollama", 30)).toEqual(evidenceHistoryBeforeReplay);
   });
 
   it("denies an unallowlisted writer without recording evidence or an audit event", async () => {
