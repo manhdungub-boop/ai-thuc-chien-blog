@@ -17,6 +17,8 @@ describe("operator console security and behavior", () => {
   it("uses only same-origin authenticated requests and safe text rendering", () => {
     expect(OPERATOR_CONSOLE_JS).toContain('credentials: "same-origin"');
     expect(OPERATOR_CONSOLE_JS).toContain('requestJson("/api/operator/runtime-control")');
+    expect(OPERATOR_CONSOLE_JS).toContain('["Quality review executor registered", health.quality_review_executor_registered]');
+    expect(OPERATOR_CONSOLE_JS).toContain('["Quality review executor enabled", health.quality_review_executor_enabled]');
     expect(OPERATOR_CONSOLE_JS).toContain('method: "POST"');
     expect(OPERATOR_CONSOLE_JS).toContain('JSON.stringify({ action, reason })');
     expect(OPERATOR_CONSOLE_JS).toContain("window.confirm");
