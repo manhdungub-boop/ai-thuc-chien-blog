@@ -293,6 +293,8 @@ describe("authorized AI Bank reviewer reads", () => {
       headers: { cookie: "__Host-ai_reviewer_session=" + token }
     }), env);
     expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
     expect(requestedLimit).toBe(7);
     expect(await response.json()).toEqual({
       items: [item],
@@ -322,6 +324,8 @@ describe("authorized AI Bank reviewer reads", () => {
       headers: { cookie: "__Host-ai_reviewer_session=" + token }
     }), env);
     expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
     expect(requestedCandidate).toBe("github:ollama/ollama");
     expect(await response.json()).toEqual({
       packet,
