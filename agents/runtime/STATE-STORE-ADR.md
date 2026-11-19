@@ -1,6 +1,6 @@
 # Agent Runtime state store — architecture decision
 
-Status: **SQLite Durable Object implementation with schema v2 migration and transactional lease operations is in Draft PR #297; local Miniflare/workerd validation is running for the latest revision; not bound, not deployed, and not connected to task execution**.
+Status: **SQLite Durable Object implementation with schema v5 migrations, transactional lease operations, and an internal OIDC replay-ledger primitive is in Draft PR #297; local Miniflare/workerd validation is running for the latest revision; not bound, not deployed, and not connected to task execution**.
 
 Date: 2026-11-19
 
@@ -42,8 +42,11 @@ Use Durable Object SQLite \`transactionSync(callback)\`; do not issue SQL \`BEGI
 - `daily_usage`: UTC day primary key and accepted count.
 - `tasks`: opaque task ID, unique idempotency key, allowlisted type, validated minimal payload JSON, payload hash/size, state, timestamps, bounded attempt count, maximum attempts, lease generation/owner/expiry/absolute expiry, next retry time, and bounded error codes.
 - `audit_events`: event ID, task ID, event type, timestamp, and non-sensitive metadata only.
+- `runtime_control` and `runtime_control_audit`: durable fail-closed pause state and operator action audit.
+- `runtime_control_rate_limit`: persistent per-actor control mutation window and request count.
+- `oidc_jti_replay`: SHA-256 hashes of consumed GitHub OIDC `jti` values, retained until 24 hours after JWT expiry, with atomic single-use enforcement.
 
-Schema v2 adds the lease/retry columns through a transactional v1-to-v2 migration while preserving existing task and daily-usage rows. Constraints include a unique idempotency key, CHECK constraints for task state/type and bounded lease fields, bounded payload size, and bounded audit metadata. No credentials, bearer tokens, article body contents, or personal data are stored in audit rows.
+Schema migrations v1-to-v5 are transactional and preserve existing task and daily-usage rows. Constraints include a unique idempotency key, CHECK constraints for task state/type and bounded lease fields, bounded payload size, and bounded audit metadata. No credentials, bearer tokens, article body contents, or personal data are stored in audit rows.
 
 ## State transitions
 
@@ -70,6 +73,12 @@ The implementation does not include an alarm, cron trigger, queue consumer, auto
 - Daily limit reached, concurrency full, or payload too large: reject with a stable machine-readable reason.
 - Store failure must never be represented as successful acceptance.
 - Keep \`AGENT_ENABLED=false\` and \`AGENT_PAUSED=true\` until all independent gates pass.
+
+## OIDC replay ledger — internal primitive only
+
+Schema v5 adds `POST /oidc/replay/consume` inside the State Store. It is protected by the existing distinct Worker-to-State-Store bearer and is not bridged through the Worker. The request accepts only a bounded `jti` and decimal Unix-seconds `expiresAt`; unknown fields, malformed identifiers, expired tokens, and expiries more than 11 minutes ahead are rejected. The store hashes `jti` with SHA-256, checks and inserts the digest in one synchronous SQLite transaction, and returns conflict for duplicate consumption. Expired ledger rows are deleted in batches of at most 100 per call; a consumed digest is retained until 24 hours after JWT expiry.
+
+This primitive does not verify JWT signatures, fetch JWKS, validate claims, or authorize Pause/Resume. A future OIDC caller must verify the token first, then consume `jti`, and only then perform a state-changing action. Both operations must fail closed. If the store is unavailable, the action must not proceed.
 
 ## Operational control-plane gaps
 
