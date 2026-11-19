@@ -6,6 +6,18 @@ const SCHEMA_VERSION = 5;
 // Conservative Free-tier pilot defaults; hard caps remain enforced below.
 const DEFAULT_LIMITS = Object.freeze({ daily: 100, concurrent: 5, payloadBytes: 8192 });
 const TERMINAL_STATES = new Set(["succeeded", "failed", "cancelled"]);
+const MAX_STATE_STORE_REQUEST_BYTES = 12 * 1024;
+const REQUEST_BODY_LIMITS = new Map([
+  ["/oidc/replay/consume", 1024],
+  ["/control/pause", 16 * 1024],
+  ["/control/resume", 16 * 1024],
+  ["/reserve", MAX_STATE_STORE_REQUEST_BYTES],
+  ["/claim", MAX_STATE_STORE_REQUEST_BYTES],
+  ["/heartbeat", MAX_STATE_STORE_REQUEST_BYTES],
+  ["/complete", MAX_STATE_STORE_REQUEST_BYTES],
+  ["/recover", MAX_STATE_STORE_REQUEST_BYTES],
+  ["/transition", MAX_STATE_STORE_REQUEST_BYTES],
+]);
 const TASK_TYPES_SQL = "'content.review','ai_bank.candidate_review','seo.audit'";
 
 function boundedLimit(value, fallback, maximum) {
@@ -93,7 +105,7 @@ function parseControlJson(text) {
   throw new Error("control_json_invalid");
 }
 
-async function readBoundedJsonRequest(request, maxBytes) {
+async function readBoundedJsonRequest(request, maxBytes, parse = JSON.parse) {
   const declared = request.headers.get("content-length");
   if (declared !== null) {
     if (!/^(0|[1-9][0-9]*)$/.test(declared)) return { ok: false, status: 400 };
@@ -123,7 +135,7 @@ async function readBoundedJsonRequest(request, maxBytes) {
   let offset = 0;
   for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
   try {
-    return { ok: true, value: parseControlJson(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) };
+    return { ok: true, value: parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) };
   } catch {
     return { ok: false, status: 400 };
   }
@@ -221,49 +233,51 @@ export class AgentStateStore {
       return jsonResponse({ ok: false, error: "state_store_auth_required" }, 401);
     }
     try {
-      await this.ready;
       const url = new URL(request.url);
+      const bodyLimit = request.method === "POST" ? REQUEST_BODY_LIMITS.get(url.pathname) : undefined;
+      let requestBody;
+      if (bodyLimit !== undefined) {
+        const parser = url.pathname.startsWith("/control/") ? parseControlJson : JSON.parse;
+        const parsedBody = await readBoundedJsonRequest(request, bodyLimit, parser);
+        if (!parsedBody.ok) {
+          return jsonResponse({ ok: false, error: parsedBody.status === 413 ? "request_body_too_large" : "request_invalid" }, parsedBody.status);
+        }
+        requestBody = parsedBody.value;
+      }
+      await this.ready;
       if (url.pathname === "/control" && request.method === "GET") {
         return jsonResponse({ ok: true, control: this.controlState() });
       }
       if (url.pathname === "/oidc/replay/consume" && request.method === "POST") {
-        const parsedBody = await readBoundedJsonRequest(request, 1024);
-        if (!parsedBody.ok) {
-          return jsonResponse({ ok: false, error: parsedBody.status === 413 ? "request_body_too_large" : "request_invalid" }, parsedBody.status);
-        }
-        const result = await this.consumeOidcJti(parsedBody.value, this.requestTime(request));
+        const result = await this.consumeOidcJti(requestBody, this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
       if ((url.pathname === "/control/pause" || url.pathname === "/control/resume") && request.method === "POST") {
-        const parsedBody = await readBoundedJsonRequest(request, 16 * 1024);
-        if (!parsedBody.ok) {
-          return jsonResponse({ ok: false, error: parsedBody.status === 413 ? "request_body_too_large" : "request_invalid" }, parsedBody.status);
-        }
-        const result = this.setPaused(url.pathname.endsWith("/pause"), parsedBody.value, this.requestTime(request));
+        const result = this.setPaused(url.pathname.endsWith("/pause"), requestBody, this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
       if (url.pathname === "/reserve" && request.method === "POST") {
-        const result = await this.reserve(await request.json(), this.requestTime(request));
+        const result = await this.reserve(requestBody, this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
       if (url.pathname === "/claim" && request.method === "POST") {
-        const result = this.claim(await request.json(), this.requestTime(request));
+        const result = this.claim(requestBody, this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
       if (url.pathname === "/heartbeat" && request.method === "POST") {
-        const result = this.heartbeat(await request.json(), this.requestTime(request));
+        const result = this.heartbeat(requestBody, this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
       if (url.pathname === "/complete" && request.method === "POST") {
-        const result = this.complete(await request.json(), this.requestTime(request));
+        const result = this.complete(requestBody, this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
       if (url.pathname === "/recover" && request.method === "POST") {
-        const result = this.recover(await request.json(), this.requestTime(request));
+        const result = this.recover(requestBody, this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
       if (url.pathname === "/transition" && request.method === "POST") {
-        const result = this.transition(await request.json(), this.requestTime(request));
+        const result = this.transition(requestBody, this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
       if (url.pathname === "/task" && request.method === "GET") {
