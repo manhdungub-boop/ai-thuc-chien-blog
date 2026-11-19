@@ -348,8 +348,18 @@ export default {
       const candidateStore = env.AGENT_AI_BANK_CANDIDATE_STORE?.getByName("primary");
       if (!candidateStore) return json({ error: "ai_bank_candidate_store_unavailable" }, 503);
       const candidateId = "github:" + reviewerAIBankEvidenceMatch[1] + "/" + reviewerAIBankEvidenceMatch[2];
+      const writerAuthConfig = {
+        AGENT_REVIEWER_AUTH_ENABLED: env.AGENT_REVIEWER_AUTH_ENABLED,
+        GOOGLE_REVIEWER_CLIENT_ID: env.GOOGLE_REVIEWER_CLIENT_ID,
+        GOOGLE_REVIEWER_CLIENT_SECRET: env.GOOGLE_REVIEWER_CLIENT_SECRET,
+        GOOGLE_REVIEWER_REDIRECT_URI: env.GOOGLE_REVIEWER_REDIRECT_URI,
+        GOOGLE_REVIEWER_ALLOWED_EMAILS: env.GOOGLE_REVIEWER_ALLOWED_EMAILS,
+        GOOGLE_REVIEWER_STATE_SECRET: env.GOOGLE_REVIEWER_STATE_SECRET,
+        GOOGLE_REVIEWER_SESSION_SECRET: env.GOOGLE_REVIEWER_SESSION_SECRET,
+        GOOGLE_REVIEWER_EVIDENCE_WRITER_EMAILS: env.GOOGLE_REVIEWER_EVIDENCE_WRITER_EMAILS
+      };
       const result = await candidateStore.submitAuthorizedReviewEvidence(
-        candidateId, body.evidence, sessionToken, body.audit_event_id, env
+        candidateId, body.evidence, sessionToken, body.audit_event_id, writerAuthConfig
       );
       if (!result.accepted) {
         const status = result.reason === "evidence_writer_not_allowlisted" ? 403 :
