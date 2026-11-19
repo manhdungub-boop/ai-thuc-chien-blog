@@ -50,7 +50,7 @@ function findUnmanifestedQuantitativeCandidates(markdown, reviewedClaims) {
         .trim();
       if (!/\d/u.test(candidate)) continue;
       const normalized = normalizeClaimText(candidate);
-      if (reviewed.some(claim => normalized.includes(claim))) continue;
+      if (reviewed.some(claim => normalized === claim)) continue;
       candidates.push({
         paragraph_index: paragraphIndex + 1,
         excerpt: candidate.slice(0, 280),
