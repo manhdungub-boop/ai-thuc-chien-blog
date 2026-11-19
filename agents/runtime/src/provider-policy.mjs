@@ -10,7 +10,8 @@ const TASK_TYPES = new Set([
 ]);
 
 const LOCAL_PROVIDER_CAPABILITIES = new Map([
-  ["article-quality-gate", new Set(["quality_review"])]
+  ["article-quality-gate", new Set(["quality_review"])],
+  ["article-authoring-brief", new Set(["content_draft"])]
 ]);
 
 // Intentionally empty: no external provider has a trusted, runtime-owned

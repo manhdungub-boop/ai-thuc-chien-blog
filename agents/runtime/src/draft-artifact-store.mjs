@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { reviewArticleDraft } from "./article-quality-gate.mjs";
+import { selectProvider } from "./provider-policy.mjs";
 import { assessArticleEvidenceReadiness } from "./article-evidence-readiness.mjs";
 import { verifyGoogleReviewerSessionToken } from "./google-reviewer-oauth.mjs";
 import { buildHumanClaimReviewLedger } from "./human-claim-ledger-builder.mjs";
@@ -14,6 +15,26 @@ const DRAFT_KEYS = new Set(["title","slug","meta_description","author","language
 const REQUIRED_DRAFT_KEYS = ["title","slug","meta_description","author","language","body_markdown","sources","copyright_notice"];
 const SOURCE_KEYS = new Set(["title","publisher","url","accessed_at"]);
 const CLAIM_KEYS = new Set(["claim_id","claim","evidence_urls","citation_indices"]);
+
+function runPolicyGatedQualityReview(draft) {
+  const admission = selectProvider("quality_review", [{
+    id: "article-quality-gate",
+    status: "ready",
+    execution_surface: "agent_runtime",
+    cost_class: "no_external_execution",
+    capabilities: ["quality_review"]
+  }]);
+  if (admission.action !== "execute" || admission.provider !== "article-quality-gate") {
+    return {
+      ok: false,
+      status: "quality_review_deferred",
+      provider_id: null,
+      issues: [{ code: "quality_review_provider_deferred", detail: admission.reason }],
+      publication_authorized: false
+    };
+  }
+  return { ...reviewArticleDraft(draft), provider_id: admission.provider };
+}
 
 function validateClaimManifest(claims) {
   if (claims === undefined) return { ok: true };
@@ -144,7 +165,7 @@ export class AgentDraftStore extends DurableObject {
       if (existing.draft_json !== validated.json) return { accepted: false, reason: "artifact_id_conflict" };
       return { accepted: true, duplicate: true, artifact: safeArtifact(existing) };
     }
-    const review = reviewArticleDraft(draft);
+    const review = runPolicyGatedQualityReview(draft);
     const status = review.ok ? "pending_human_review" : "needs_revision";
     const now = new Date().toISOString();
     const inserted = this.ctx.storage.sql.exec(
@@ -165,7 +186,7 @@ export class AgentDraftStore extends DurableObject {
     if (current.version !== expectedVersion) return { updated: false, reason: "version_conflict", current_version: current.version };
     const validated = validateDraft(draft);
     if (!validated.ok) return { updated: false, reason: validated.reason };
-    const review = reviewArticleDraft(draft);
+    const review = runPolicyGatedQualityReview(draft);
     const status = review.ok ? "pending_human_review" : "needs_revision";
     const now = new Date().toISOString();
     const updated = this.ctx.storage.sql.exec(

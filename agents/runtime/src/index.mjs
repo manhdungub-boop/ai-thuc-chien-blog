@@ -5,6 +5,7 @@ import { discoverResearchSignals } from "./research-discovery.mjs";
 import { retrieveResearchEvidence } from "./research-evidence.mjs";
 import { assessResearchEvidence } from "./research-evidence-assessment.mjs";
 import { buildArticleAuthoringBrief } from "./article-authoring-brief.mjs";
+import { selectProvider } from "./provider-policy.mjs";
 import { handleGoogleReviewerAuth, readGoogleReviewerSessionCookie, AgentReviewerAuthStore } from "./google-reviewer-oauth.mjs";
 import { REVIEWER_CONSOLE_HTML, REVIEWER_CONSOLE_JS } from "./reviewer-console.mjs";
 export { AgentTaskStore } from "./task-store.mjs";
@@ -205,6 +206,23 @@ export class AgentSupervisorWorkflow extends WorkflowEntrypoint {
             research_task_id: researchTaskId
           },
           async task => {
+            const authoringPolicy = selectProvider("content_draft", [{
+              id: "article-authoring-brief",
+              status: "ready",
+              execution_surface: "agent_runtime",
+              cost_class: "no_external_execution",
+              capabilities: ["content_draft"]
+            }]);
+            if (authoringPolicy.action !== "execute" ||
+                authoringPolicy.provider !== "article-authoring-brief") {
+              return {
+                status: "authoring_provider_deferred",
+                reason: authoringPolicy.reason,
+                artifact_created: false,
+                publication_authorized: false,
+                external_calls: 0
+              };
+            }
             const brief = buildArticleAuthoringBrief({
               topic: task.payload.topic,
               researchEvidence: research.result.evidence_retrieval.evidence,

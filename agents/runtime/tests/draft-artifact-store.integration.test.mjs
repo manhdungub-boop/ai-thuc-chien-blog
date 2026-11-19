@@ -27,6 +27,7 @@ describe("AgentDraftStore Durable Object", () => {
     expect(result.accepted).toBe(true);
     expect(result.artifact.status).toBe("pending_human_review");
     expect(result.artifact.quality_review.publication_authorized).toBe(false);
+    expect(result.artifact.quality_review.provider_id).toBe("article-quality-gate");
     expect(await store.listPendingReviews()).toHaveLength(1);
     expect(await store.stats()).toEqual({ pending_human_review: 1 });
   });

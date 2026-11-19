@@ -27,6 +27,15 @@ Cloudflare's Billable Usage API is documented as Alpha/Restricted and returns da
 
 Daily billable-usage records may later support reconciliation, if access is explicitly granted and the returned records are validated. They must not be treated as real-time quota headroom by themselves.
 
+## Additional cost-control findings (verified 2026-11-19)
+
+- Cloudflare documents 10,000 Workers AI Neurons per day at no charge on Workers Free, resetting at 00:00 UTC. Usage above that allocation requires Workers Paid and is billed at the published rate. Some models separately require a paid billing method. The dashboard is the documented way to monitor Neuron usage; this does not expose a runtime-callable real-time remaining-quota API. See [Workers AI pricing](https://developers.cloudflare.com/workers-ai/platform/pricing/).
+- Cloudflare AI Gateway spend limits can block routed requests when a dollar budget is reached, but enforcement is eventually consistent: concurrent requests can briefly exceed the configured limit. Cost tracking is a best-effort estimate. Therefore this is not a strict zero-cost guarantee. See [AI Gateway spend limits](https://developers.cloudflare.com/ai-gateway/features/spend-limits/).
+- Cloudflare's account spending limits for Workers and Durable Objects explicitly exclude Workers AI. They cannot be used as an account-wide hard stop for model inference. See [Cloudflare spending limits](https://developers.cloudflare.com/billing/manage/spend-management/).
+- Consequently, neither the Workers/Durable Objects spending limit nor AI Gateway's eventually consistent dollar budget is accepted as authoritative proof of zero-cost remaining Workers AI capacity.
+
+**Decision:** Keep external inference disabled. Do not add prepaid credits, enable billing, upgrade plans, or rely on a best-effort cost budget as a zero-cost quota adapter. Reconsider only after a supported, account-authorized control can prove the exact free-plan state and reserve sufficient capacity before every inference request.
+
 ## Failover behavior
 
 - Try another provider only if it independently passes every admission requirement.
