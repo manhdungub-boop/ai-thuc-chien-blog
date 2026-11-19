@@ -98,6 +98,8 @@ export const OPERATOR_CONSOLE_JS = `"use strict";
       ["Environment paused", health.paused],
       ["Scheduler", health.scheduler],
       ["Task execution enabled", health.task_execution_enabled],
+      ["Quality review executor registered", health.quality_review_executor_registered],
+      ["Quality review executor enabled", health.quality_review_executor_enabled],
       ["Durable Task Store paused", control.paused],
       ["Terminal failures in last 10 minutes", control.failure_count_last_10m],
       ["Circuit-breaker threshold", control.circuit_breaker_threshold],
