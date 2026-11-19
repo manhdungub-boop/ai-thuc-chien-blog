@@ -143,6 +143,36 @@ describe("article evidence readiness", () => {
     expect(absentResult.issues[0].code).toBe("claim_inline_citations_invalid");
     expect(duplicateResult.issues[0].code).toBe("claim_inline_citations_invalid");
   });
+  it("surfaces contradictory evidence and blocks article readiness", async () => {
+    const reviewRecord = await recordHumanClaimReview(ledger, [{
+      ...decisions[0],
+      decision: "needs_revision",
+      evidence_reviews: [
+        { source_url: sources[0].url, decision: "supports", reviewer_note: "This excerpt supports the exact claim wording." },
+        { source_url: sources[1].url, decision: "contradicts", reviewer_note: "This excerpt reports an incompatible result." }
+      ]
+    }], reviewer, { now });
+    const result = await assessArticleEvidenceReadiness({
+      draft: makeDraft(),
+      ledger,
+      reviewRecord,
+      authenticatedReviewer: { authenticated: true, reviewer_ref: reviewRecord.reviewer_ref },
+      now
+    });
+    expect(result.status).toBe("article_claim_evidence_not_ready");
+    expect(result.issues).toContainEqual({
+      code: "claim_not_reviewed_as_supported",
+      claim_id: "claim-1",
+      decision: "needs_revision"
+    });
+    expect(result.evidence_summary).toMatchObject({
+      claims_with_contradicting_evidence: ["claim-1"],
+      evidence_decision_counts: { supports: 1, contradicts: 1, insufficient: 0 },
+      contradiction_count: 1
+    });
+    expect(result.publication_authorized).toBe(false);
+  });
+
   it("rejects claims that were not reviewed as supported", async () => {
     const reviewRecord = await makeReview("needs_revision");
     const result = await assessArticleEvidenceReadiness({ draft: makeDraft(), ledger, reviewRecord, now });
