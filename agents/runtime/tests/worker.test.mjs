@@ -93,6 +93,7 @@ function bridgeEnv({ responseBody = { ok: true, dayUtc: "2026-11-19", acceptedTo
   };
   const env = {
     AGENT_OPERATOR_TOKEN: OPERATOR_TOKEN,
+    AGENT_OPERATOR_ID: "project-operator-01",
     AGENT_STATE_STORE_TOKEN: STATE_TOKEN,
     AGENT_STATE_STORE: {
       idFromName(name) {
@@ -187,6 +188,70 @@ test("bridge rejects unknown query parameters and never exposes internal routes 
   assert.equal(calls.length, 0);
   const noAuth = await worker.fetch(request("/internal/usage"), env);
   assert.equal(noAuth.status, 401);
+  assert.equal(calls.length, 0);
+});
+
+test("control status bridge requires operator bearer and strips query parameters", async () => {
+  const { env, calls } = bridgeEnv({ responseBody: { ok: true, control: { paused: true, changedAt: 123, version: 4 } } });
+  const unauthorized = await worker.fetch(request("/internal/control"), env);
+  assert.equal(unauthorized.status, 401);
+  assert.equal(calls.length, 0);
+  const authorized = new Request("https://agent-runtime-preview.example.workers.dev/internal/control", {
+    headers: { Authorization: "Bearer " + OPERATOR_TOKEN },
+  });
+  const response = await worker.fetch(authorized, env);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.control.paused, true);
+  assert.equal(calls[0].url, "https://state-store.internal/control");
+  assert.equal(calls[0].method, "GET");
+  const query = await worker.fetch(new Request(authorized.url + "?extra=1", {
+    headers: { Authorization: "Bearer " + OPERATOR_TOKEN },
+  }), env);
+  assert.equal(query.status, 400);
+});
+
+test("control mutation bridge uses configured actor and dedicated internal credential", async () => {
+  const { env, calls } = bridgeEnv({ responseBody: { ok: true, changed: true, control: { paused: true, changedAt: 456, version: 5 } } });
+  const incoming = new Request("https://agent-runtime-preview.example.workers.dev/internal/control/pause", {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer " + OPERATOR_TOKEN,
+      Cookie: "session=must-not-forward",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ reason: "planned maintenance" }),
+  });
+  const response = await worker.fetch(incoming, env);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.changed, true);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "https://state-store.internal/control/pause");
+  assert.equal(calls[0].method, "POST");
+  assert.equal(calls[0].headers.get("authorization"), "Bearer " + STATE_TOKEN);
+  assert.equal(calls[0].headers.get("cookie"), null);
+  const forwarded = await calls[0].json();
+  assert.equal(forwarded.actor, "project-operator-01");
+  assert.match(forwarded.requestId, /^[a-z0-9-]{16,64}$/i);
+  assert.equal(forwarded.reason, "planned maintenance");
+  assert.equal(JSON.stringify(forwarded).includes(OPERATOR_TOKEN), false);
+  assert.equal(JSON.stringify(forwarded).includes(STATE_TOKEN), false);
+});
+
+test("control mutation bridge rejects missing operator identity and caller-supplied actor", async () => {
+  const { env, calls } = bridgeEnv();
+  delete env.AGENT_OPERATOR_ID;
+  const missingIdentity = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/control/pause", {
+    method: "POST", headers: { Authorization: "Bearer " + OPERATOR_TOKEN, "Content-Type": "application/json" }, body: "{}",
+  }), env);
+  assert.equal(missingIdentity.status, 503);
+  env.AGENT_OPERATOR_ID = "project-operator-01";
+  const spoofed = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/control/resume", {
+    method: "POST", headers: { Authorization: "Bearer " + OPERATOR_TOKEN, "Content-Type": "application/json" },
+    body: JSON.stringify({ actor: "attacker", reason: "spoof" }),
+  }), env);
+  assert.equal(spoofed.status, 400);
   assert.equal(calls.length, 0);
 });
 
