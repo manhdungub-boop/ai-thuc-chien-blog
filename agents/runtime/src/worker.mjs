@@ -374,6 +374,10 @@ export default {
         if (url.pathname === "/internal/dead-letter") {
           const requestedLimit = Number(url.searchParams.get("limit") ?? "25");
           const validNullableCode = (value) => value === null || (typeof value === "string" && value.length > 0 && value.length <= 64);
+          const validClassification = (value) => value &&
+            ["transient", "authentication", "configuration", "data", "unknown"].includes(value.category) &&
+            ["high", "low"].includes(value.confidence) &&
+            ["inspect_provider_or_network_health", "verify_credentials_and_scopes", "review_runtime_configuration", "inspect_input_and_schema", "manual_review"].includes(value.recommendedAction);
           if (!Array.isArray(result.items) || result.items.length > requestedLimit ||
               !(result.nextCursor === null || (result.nextCursor && Number.isSafeInteger(result.nextCursor.terminalAt) &&
                 result.nextCursor.terminalAt >= 0 && typeof result.nextCursor.taskId === "string" &&
@@ -384,6 +388,7 @@ export default {
                 Number.isSafeInteger(item.createdAt) && item.createdAt >= 0 &&
                 Number.isSafeInteger(item.terminalAt) && item.terminalAt >= 0 &&
                 validNullableCode(item.errorCode) && validNullableCode(item.lastErrorCode) &&
+                validClassification(item.classification) &&
                 Number.isSafeInteger(item.attemptCount) && item.attemptCount >= 0 &&
                 Number.isSafeInteger(item.maxAttempts) && item.maxAttempts >= 1 && item.maxAttempts <= 5)) {
             return json({ ok: false, error: "state_store_response_invalid" }, 503);
@@ -391,7 +396,8 @@ export default {
           const items = result.items.map((item) => ({
             taskId: item.taskId, type: item.type, createdAt: item.createdAt,
             terminalAt: item.terminalAt, errorCode: item.errorCode,
-            lastErrorCode: item.lastErrorCode, attemptCount: item.attemptCount,
+            lastErrorCode: item.lastErrorCode, classification: item.classification,
+            attemptCount: item.attemptCount,
             maxAttempts: item.maxAttempts,
           }));
           const last = items[items.length - 1];

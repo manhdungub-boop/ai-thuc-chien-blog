@@ -220,6 +220,7 @@ test("dead-letter bridge authenticates, fixes the State Store route, and allowli
       items: [{
         taskId: "failed-task-01", type: "seo.audit", createdAt: 100, terminalAt: 200,
         errorCode: "lease_expired_max_attempts", lastErrorCode: "lease_expired",
+        classification: { category: "transient", confidence: "high", recommendedAction: "inspect_provider_or_network_health" },
         attemptCount: 3, maxAttempts: 3, payload: { private: "must-not-escape" },
         idempotencyKey: "private-idempotency-key", leaseOwner: "private-owner",
       }],
@@ -238,6 +239,9 @@ test("dead-letter bridge authenticates, fixes the State Store route, and allowli
   assert.equal(calls[0].headers.get("cookie"), null);
   assert.equal(body.items[0].taskId, "failed-task-01");
   assert.equal(body.items[0].attemptCount, 3);
+  assert.deepEqual(body.items[0].classification, {
+    category: "transient", confidence: "high", recommendedAction: "inspect_provider_or_network_health",
+  });
   assert.equal(body.nextCursor.taskId, "failed-task-01");
   assert.equal("payload" in body.items[0], false);
   assert.equal("idempotencyKey" in body.items[0], false);
@@ -269,7 +273,7 @@ test("dead-letter bridge fails closed on malformed State Store items or inconsis
   const { env } = bridgeEnv({
     responseBody: {
       ok: true,
-      items: [{ taskId: "failed-task", type: "seo.audit", createdAt: 1, terminalAt: 2, errorCode: null, lastErrorCode: null, attemptCount: 1, maxAttempts: 3, payload: "private" }],
+      items: [{ taskId: "failed-task", type: "seo.audit", createdAt: 1, terminalAt: 2, errorCode: null, lastErrorCode: null, classification: { category: "not-valid", confidence: "low", recommendedAction: "manual_review" }, attemptCount: 1, maxAttempts: 3, payload: "private" }],
       nextCursor: { terminalAt: 999, taskId: "not-last-item" },
     },
   });

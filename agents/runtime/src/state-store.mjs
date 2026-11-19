@@ -1,6 +1,7 @@
 import { validateTaskRequest } from "./task-contract.mjs";
 import { hasValidStateStoreBearer } from "./internal-auth.mjs";
 import { claimQueuedTask, heartbeatLease, recoverExpiredLease, completeLeasedTask } from "./lease-policy.mjs";
+import { classifyTaskFailure } from "./failure-classification.mjs";
 
 const SCHEMA_VERSION = 5;
 // Conservative Free-tier pilot defaults; hard caps remain enforced below.
@@ -352,6 +353,7 @@ export class AgentStateStore {
           terminalAt: row.terminal_at,
           errorCode: row.error_code,
           lastErrorCode: row.last_error_code,
+          classification: classifyTaskFailure(row.error_code, row.last_error_code),
           attemptCount: row.attempt_count,
           maxAttempts: row.max_attempts,
         }));
