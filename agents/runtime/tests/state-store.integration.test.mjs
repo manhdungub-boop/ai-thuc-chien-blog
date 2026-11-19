@@ -10,7 +10,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const workerPath = path.resolve(here, "../src/worker.mjs");
 const TEST_OPERATOR_TOKEN = "integration-test-operator-token-0123456789abcdef";
 
-async function createRuntime({ daily = 1000, concurrent = 100, persistDir, enabled = "true", paused = "false" } = {}) {
+async function createRuntime({ daily = 100, concurrent = 5, persistDir, enabled = "true", paused = "false" } = {}) {
   const directory = persistDir ?? await mkdtemp(path.join(tmpdir(), "ai-thuc-chien-do-"));
   const mf = new Miniflare({
     modules: true,
