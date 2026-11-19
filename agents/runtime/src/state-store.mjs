@@ -165,6 +165,7 @@ export class AgentStateStore {
           this.sql.exec("ALTER TABLE tasks_v1_fixture RENAME TO tasks");
           this.sql.exec("CREATE INDEX tasks_state_idx ON tasks(state)");
           this.sql.exec("CREATE INDEX tasks_terminal_idx ON tasks(terminal_at)");
+          this.sql.exec("DROP TABLE runtime_control_rate_limit");
           this.sql.exec("DROP TABLE runtime_control_audit");
           this.sql.exec("DROP TABLE runtime_control");
           this.sql.exec("UPDATE runtime_meta SET value = '1' WHERE key = 'schema_version'");
