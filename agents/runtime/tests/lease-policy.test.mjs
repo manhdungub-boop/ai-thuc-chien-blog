@@ -124,6 +124,13 @@ test("completion requires current unexpired lease and a valid terminal state", (
   assert.equal(completed.ok, true);
   assert.equal(completed.fields.state, "succeeded");
   assert.equal(completed.fields.lease_owner, null);
+  const duplicate = completeLeasedTask(running({
+    state: "succeeded", lease_owner: null, lease_expires_at: null, lease_max_expires_at: null,
+  }), {
+    now: 4000, leaseOwner: OWNER_A, leaseGeneration: 1, status: "succeeded",
+  });
+  assert.equal(duplicate.ok, true);
+  assert.equal(duplicate.duplicate, true);
   assert.equal(completeLeasedTask(running(), {
     now: 4000, leaseOwner: OWNER_B, leaseGeneration: 1, status: "succeeded",
   }).error, "lease_fencing_conflict");
