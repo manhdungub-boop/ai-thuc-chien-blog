@@ -20,7 +20,7 @@ Status: **isolated validation scaffold; no Agent Runtime Worker deployment and n
 - \`src/admission-policy.mjs\` remains a pure fail-closed policy helper; it is not the quota authority.
 - \`src/internal-auth.mjs\` validates a dedicated \`AGENT_STATE_STORE_TOKEN\`, separate from the external operator token.
 - \`src/lease-policy.mjs\` defines bounded claim, heartbeat, recovery and completion rules, including a 30-minute absolute lease lifetime and three attempts by default.
-- \`src/state-store.mjs\` implements a SQLite-backed Durable Object class, but the class is **not bound** in the checked-in Preview Worker config. It supports transactional schema v1-to-v2 migration, durable idempotency, UTC daily counters, atomic admission reservations, fenced claims, bounded heartbeats, operator-invoked expiry recovery and terminal completion. Every state-changing lease operation writes an audit event transactionally.
+- \`src/state-store.mjs\` implements a SQLite-backed Durable Object class, but the class is **not bound** in the checked-in Preview Worker config. It supports transactional schema v1-to-v4 migrations, durable idempotency, UTC daily counters, atomic admission reservations, fenced claims, bounded heartbeats, operator-invoked expiry recovery and terminal completion. Every state-changing lease operation writes an audit event transactionally.
 - State Store routes are not connected to \`POST /run\`; no task is enqueued or executed by the Worker shell. \`/recover\` is manually invoked; there is no alarm, cron or background scheduler.
 
 ## Local integration validation
@@ -54,9 +54,12 @@ See [STATE-STORE-ADR.md](./STATE-STORE-ADR.md) for the design decision, Free-tie
 
 ## Operator control-plane status
 
-- The State Store `POST /recover` route is implemented behind the internal Worker-to-DO credential, but the Worker shell does not expose an operator-authenticated recovery bridge. Recovery is therefore not yet callable through the current Worker surface.
-- `AGENT_ENABLED` and `AGENT_PAUSED` are deployment environment flags, not a dynamic remote kill-switch API. Changing them requires a controlled configuration/deployment operation.
-- Do not put `AGENT_STATE_STORE_TOKEN` in browser code or expose a public recovery route with the operator bearer. A server-side authenticated, rate-limited control plane with narrow actions and operator audit identity is a prerequisite for task execution.
+- The Worker shell now exposes a narrow, server-side operator bridge: `GET /internal/control`, `POST /internal/control/pause`, and `POST /internal/control/resume`. All require the configured `AGENT_OPERATOR_TOKEN`; mutations also require a valid deployment-configured `AGENT_OPERATOR_ID`.
+- The Worker generates the request ID and actor field; caller-supplied actor values are rejected. The Worker forwards only the dedicated `AGENT_STATE_STORE_TOKEN` to the fixed Durable Object identity. Caller cookies and arbitrary headers are never forwarded.
+- State Store schema v4 adds a durable per-actor mutation limit of 10 control changes per 60-second window and writes the configured actor, request ID, action, reason, and timestamp to the control audit table transactionally.
+- The actor is a configured service/operator identity, not proof of an individual human identity. The current bearer is a shared secret; there is no browser session, MFA, per-user identity provider, or public admin UI. Do not expose these endpoints to browser clients or distribute the bearer token.
+- The control bridge does not expose `/recover`; recovery remains inaccessible through the Worker surface. `AGENT_ENABLED` and `AGENT_PAUSED` remain independent deployment-level outer gates. A persisted Resume cannot bypass those gates or dispatch queued work.
+- No Worker-to-DO binding or secret is configured in the checked-in Preview config, so these bridge routes cannot operate in a live deployment yet. Local integration tests use Miniflare only.
 ## Remaining gates
 
 1. Independently review the schema migration, lease transactions, auth boundary, and integration-test evidence.
