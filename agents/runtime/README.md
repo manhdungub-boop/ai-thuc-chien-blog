@@ -50,6 +50,7 @@ Test-only schema downgrade, rollback probes, and deterministic clock overrides a
 - Retention cleanup runs in deterministic oldest-first batches within the admission transaction: up to 100 terminal tasks, 250 audit events, 100 runtime-control audit rows, 100 stale operator rate-limit rows, and 100 daily-usage rows per admission. Running/queued tasks are never eligible. Remaining expired rows are handled on later admissions; no background cleanup schedule is enabled.
 - `GET /internal/dead-letter` is an operator-authenticated, read-only, cursor-paginated view of failed tasks. Pages are limited to 1–50 rows (25 by default), ordered by terminal time and task ID, and expose only task ID/type, timestamps, error codes, and attempt counters. Payloads, idempotency keys, lease ownership, and audit metadata are not returned. This endpoint does not retry, requeue, delete, or mutate failed tasks.
 - Storage errors, unsupported schema versions, and invalid limits fail closed. There is no memory fallback.
+- Read-only quota pressure labels are derived from internal admission utilization: `normal` below 80%, `warning` at 80–89.99%, `critical` at 90–99.99%, and `exhausted` at 100% or higher. The overall label is the higher of the daily and concurrent pressure levels. These labels do not measure Cloudflare/provider quota and do not alter admission decisions.
 - These are internal guardrails, not proof of remaining Cloudflare account quota or a guarantee of uninterrupted service.
 
 ## Durable state-store decision
