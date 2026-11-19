@@ -62,6 +62,16 @@ describe("human review record verifier", () => {
       evidence_summary: {
         claims_with_contradicting_evidence: ["claim-1"],
         claims_with_insufficient_evidence: ["claim-2"],
+        contradicting_evidence: [{
+          claim_id: "claim-1",
+          source_url: sources[1].url,
+          reviewer_note: "This excerpt directly reports an incompatible result."
+        }],
+        insufficient_evidence: [{
+          claim_id: "claim-2",
+          source_url: sources[1].url,
+          reviewer_note: "This passage does not provide sufficient support for the exact claim wording."
+        }],
         evidence_decision_counts: { supports: 2, contradicts: 1, insufficient: 1 },
         contradiction_count: 1,
         insufficient_count: 1
