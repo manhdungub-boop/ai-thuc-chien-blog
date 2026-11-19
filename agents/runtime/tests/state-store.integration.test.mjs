@@ -237,3 +237,54 @@ test("SQLite state survives a Miniflare runtime restart", async () => {
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+
+test("fresh State Store initializes schema v2 with conservative lease defaults", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const created = await call(stub, "/reserve", task("schema-v2-fresh"));
+    assert.equal(created.status, 201);
+    assert.equal(created.body.task.attemptCount, 0);
+    assert.equal(created.body.task.maxAttempts, 3);
+    assert.equal(created.body.task.leaseGeneration, 0);
+    assert.equal(created.body.task.leaseExpiresAt, null);
+    assert.equal(created.body.task.nextAttemptAt, null);
+    assert.equal(created.body.task.lastErrorCode, null);
+  });
+});
+
+test("persisted v1 State Store migrates transactionally to v2 without losing task or usage", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "ai-thuc-chien-do-v1-migration-"));
+  let first;
+  let second;
+  try {
+    first = await createRuntime({ persistDir: directory });
+    const created = await call(first.stub, "/reserve", task("schema-v1-migration"));
+    assert.equal(created.status, 201);
+    const taskId = created.body.task.taskId;
+
+    const downgraded = await call(first.stub, "/__test/downgrade-v1", {});
+    assert.equal(downgraded.status, 200);
+    assert.equal(downgraded.body.schemaVersion, 1);
+    await first.mf.dispose();
+    first = null;
+
+    second = await createRuntime({ persistDir: directory });
+    const restored = await call(second.stub, "/task?id=" + encodeURIComponent(taskId));
+    const usage = await call(second.stub, "/usage");
+    assert.equal(restored.status, 200);
+    assert.equal(restored.body.task.state, "queued");
+    assert.equal(restored.body.task.attemptCount, 0);
+    assert.equal(restored.body.task.maxAttempts, 3);
+    assert.equal(restored.body.task.leaseGeneration, 0);
+    assert.equal(restored.body.task.leaseOwner, undefined);
+    assert.equal(restored.body.task.leaseExpiresAt, null);
+    assert.equal(restored.body.task.nextAttemptAt, null);
+    assert.equal(restored.body.task.lastErrorCode, null);
+    assert.equal(usage.body.acceptedToday, 1);
+    assert.equal(usage.body.inFlight, 1);
+  } finally {
+    if (first) await first.mf.dispose();
+    if (second) await second.mf.dispose();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
