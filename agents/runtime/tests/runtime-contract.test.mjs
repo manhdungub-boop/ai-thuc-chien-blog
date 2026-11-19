@@ -182,7 +182,7 @@ test("supervisor executes bounded health and daily read-only discovery tasks", (
   assert.match(source, /research-scan-/);
   assert.match(source, /content_research/);
   assert.match(source, /buildArticleAuthoringBrief/);
-  assert.match(source, /draftStore\.createDraft\(draftTaskId, brief\.draft\)/);
+  assert.match(source, /draftStore\.createDraft\([\s\S]*draftTaskId, brief\.draft, research\.result\.evidence_retrieval\.evidence\.filter/);
   assert.match(source, /research\.result\?\.evidence_retrieval\?\.evidence/);
   assert.match(source, /\["completed", "already_completed"\]\.includes\(research\.status\)/);
   assert.match(source, /artifact_status: persisted\.artifact\.status/);
@@ -397,8 +397,9 @@ test("reviewer evidence endpoint is Google-session-bound and non-publishing", as
   assert.match(runtime, /api\/reviewer\/drafts/);
   assert.match(runtime, /request\.headers\.get\("origin"\) !== url\.origin/);
   assert.match(runtime, /readGoogleReviewerSessionCookie\(request\)/);
-  assert.match(runtime, /recordEvidenceReview\([\s\S]*sessionToken/);
+  assert.match(runtime, /recordReviewerClaimDecisions\([\s\S]*sessionToken/);
   assert.match(draftStore, /verifyGoogleReviewerSessionToken\(reviewerSessionToken, this\.env/);
+  assert.match(draftStore, /recordHumanClaimReview\([\s\S]*session\.reviewer\.reviewer_ref/);
   assert.match(draftStore, /authenticatedReviewer: \{ authenticated: true, reviewer_ref: reviewerSession\.reviewer\.reviewer_ref \}/);
   assert.match(verifier, /authenticatedReviewer\.reviewer_ref === record\.reviewer_ref/);
   assert.match(verifier, /reviewer_identity_authenticated: reviewerIdentityAuthenticated/);
@@ -454,7 +455,7 @@ test("content authoring checks the fail-closed provider policy before building o
   const policyCall = source.indexOf('selectProvider("content_draft"');
   const policyBlock = source.indexOf('authoringPolicy.action !== "execute"', policyCall);
   const briefBuilder = source.indexOf("buildArticleAuthoringBrief({", policyCall);
-  const persistence = source.indexOf("draftStore.createDraft(draftTaskId, brief.draft)", policyCall);
+  const persistence = source.indexOf("draftStore.createDraft(\n              draftTaskId, brief.draft, research.result.evidence_retrieval.evidence.filter(", policyCall);
   assert.ok(policyCall >= 0, "runtime must invoke provider policy for content_draft");
   assert.ok(policyBlock > policyCall, "non-execute policy outcomes must stop the handler");
   assert.ok(briefBuilder > policyBlock, "authoring brief must be built only after policy approval");
