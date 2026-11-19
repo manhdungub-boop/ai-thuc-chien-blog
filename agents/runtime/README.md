@@ -51,8 +51,17 @@ This directory is a separate Cloudflare Worker service. It is not imported by th
 - `AGENT_ENABLED` must be exactly `true` before the supervisor can access the Durable Object queue or make any outbound request. Missing, empty, or any other value leaves the runtime disabled.
 - The default Wrangler config remains unscheduled with `AGENT_ENABLED=false`, `AGENT_PAUSED=true`, and `AGENT_SCHEDULE_MODE=manual_only_no_cron`. The isolated Preview config is also unscheduled and retains `AGENT_ENABLED=false` and `AGENT_PAUSED=true`; no recurring Workflow instances are created. Manual invocation remains disabled by the pause flags.
 - `AGENT_PAUSED=true` is an independent emergency stop and takes precedence even when `AGENT_ENABLED=true`.
-- `GET /health` reports the explicit enable state and reports task execution disabled unless the enable flag is exactly true and the pause flag is not true.
+- `GET /health` reports the explicit enable state, the durable circuit-breaker state, and the daily task-admission counter; task execution remains disabled unless the enable flag is exactly true and the pause flag is not true.
 - Do not enable the service until Preview resource boundaries, current free-tier usage, provider quotas, monitoring, and the deployment plan have been reviewed. Neither switch is connected to the public website Worker. No Production configuration is changed by this PR.
+
+### Authenticated operator control plane (Preview candidate; disabled by default)
+
+- `POST /api/operator/runtime-control` supports only `pause` and `resume`; `GET` returns the durable pause state. Both operations require the Google reviewer session cookie and are independently re-verified inside the Task Store Durable Object.
+- Operator authorization is a separate exact-email allowlist: `AGENT_OPERATOR_ALLOWED_EMAILS` must contain exactly one email, and that identity must also be in the Google reviewer allowlist. The operator control feature is disabled unless `AGENT_OPERATOR_CONTROL_ENABLED=true`. Both flags remain false in checked-in Wrangler configs; the allowlist must be configured only in Preview secret storage after OAuth setup.
+- Mutating requests require the exact same-origin `Origin`, JSON content type, a bounded 2 KiB body, an explicit `pause` or `resume` action, and a meaningful reason. The Durable Object records actor reference, reason, previous state, action, and timestamp in the bounded audit table.
+- Invalid sessions, non-operator reviewers, missing allowlists, disabled control, malformed requests, and cross-origin requests fail closed. No operator email or session token is accepted from the request body.
+- An operator resume changes only the durable Task Store circuit-breaker pause. It does not override `AGENT_ENABLED=false` or `AGENT_PAUSED=true`; deployment-level disable/pause flags remain authoritative. The circuit breaker never auto-resumes.
+- This is an authenticated API candidate, not yet a deployed operator dashboard. No credentials, allowlist, or live login are configured; end-to-end operator authentication remains a Preview release gate.
 
 ## Free-tier guardrails
 
@@ -76,7 +85,7 @@ Do not deploy from this branch until the separate Preview account/resource bound
 3. Add read-only GitHub/public-source adapters with bounded timeouts and rate limits.
 4. Add model execution only after verifying a genuinely no-cost quota; otherwise remain in deterministic planning mode.
 5. Connect the deterministic article quality gate to a controlled draft artifact store and human-review queue after research and drafting specialists are implemented.
-6. Add an authenticated operator control plane, monitoring, alerting and a pause switch.
+6. Complete Preview-only end-to-end verification of the authenticated operator control API, monitoring, alerting and pause/resume controls.
 7. Consider public actions only through the existing owner approval gates.
 
 The Preview configuration is manual-only and installs no recurring Workflow schedule. It is not autonomous task execution. Do not enable task execution or introduce a schedule until the account's free-tier plan and current usage, monitoring, and emergency-pause behavior are verified. Quota exhaustion must fail closed rather than enable billing.
