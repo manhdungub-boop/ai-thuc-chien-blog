@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   preview:
-    if: github.event_name == 'workflow_dispatch' && inputs.confirm_preview_only == true
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/feat/preview-paused-15m-workflow-schedule-20261119' && inputs.confirm_preview_only == true
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
