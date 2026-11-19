@@ -116,20 +116,21 @@ describe("AgentDraftStore Durable Object", () => {
       evidence_urls: [sources[0].url, sources[1].url],
       citation_indices: [1, 2]
     }];
-    const created = await store.createDraft("draft-ledger-0001", draft);
     const retrievedEvidence = [
       {
         source: "OpenAI News", title: "Evidence storage", url: sources[0].url,
-        status: "source_retrieved_not_fact_checked",
+        retrieved_at: "2026-11-19T00:00:00.000Z", status: "source_retrieved_not_fact_checked",
         excerpt: "This retrieved excerpt describes evidence storage, version binding, review snapshots, and the separation between human review and publication."
       },
       {
         source: "Google DeepMind", title: "Review workflow", url: sources[1].url,
-        status: "source_retrieved_not_fact_checked",
+        retrieved_at: "2026-11-19T00:00:00.000Z", status: "source_retrieved_not_fact_checked",
         excerpt: "This second retrieved excerpt describes review workflow controls, evidence traceability, versioned records, and independent human assessment."
       }
     ];
-    const result = await store.storeEvidenceLedger("draft-ledger-0001", created.artifact.version, retrievedEvidence);
+    const created = await store.createDraft("draft-ledger-0001", draft, retrievedEvidence);
+    expect(created.artifact.research_evidence).toHaveLength(2);
+    const result = await store.storeEvidenceLedger("draft-ledger-0001", created.artifact.version);
     expect(result.stored).toBe(true);
     expect(result.artifact.version).toBe(2);
     expect(result.artifact.evidence_review).toMatchObject({
