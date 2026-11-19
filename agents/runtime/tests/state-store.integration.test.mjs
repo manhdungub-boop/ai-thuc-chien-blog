@@ -365,9 +365,18 @@ test("SQLite state survives a Miniflare runtime restart", async () => {
 });
 
 
-test("fresh State Store initializes schema v4 with conservative lease defaults", async () => {
-  await withRuntime({}, async ({ stub }) => {
-    const created = await call(stub, "/reserve", task("schema-v2-fresh"));
+test("fresh State Store initializes schema v4 paused with conservative lease defaults", async () => {
+  await withRuntime({ resumeControl: false }, async ({ stub }) => {
+    const initialControl = await call(stub, "/control");
+    assert.equal(initialControl.body.control.paused, true);
+    assert.equal(initialControl.body.control.version, 0);
+    const opened = await call(stub, "/control/resume", {
+      actor: "integration-test",
+      requestId: crypto.randomUUID(),
+      reason: "explicit test gate opening",
+    });
+    assert.equal(opened.status, 200);
+    const created = await call(stub, "/reserve", task("schema-v4-fresh"));
     assert.equal(created.status, 201);
     assert.equal(created.body.task.attemptCount, 0);
     assert.equal(created.body.task.maxAttempts, 3);
