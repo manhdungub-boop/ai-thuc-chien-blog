@@ -47,8 +47,8 @@ test("Preview deployment workflow is manual, explicitly confirmed, token-isolate
   assert.match(previewDeployWorkflow, /\.paused == true/);
   assert.match(previewDeployWorkflow, /preview_cron_15m_paused/);
   assert.match(previewDeployWorkflow, /production_access == false/);
-  assert.match(previewDeployWorkflow, /content_draft_executor_enabled == true/);
-  assert.doesNotMatch(previewDeployWorkflow, /content_draft_executor_enabled == false/);
+  assert.match(previewDeployWorkflow, /content_draft_executor_registered == true/);
+  assert.match(previewDeployWorkflow, /content_draft_executor_enabled == false/);
   assert.match(source, /handleGoogleReviewerAuth\(request, env\)/);
   assert.ok(previewConfig.durable_objects.bindings.some(binding => binding.name === "AGENT_REVIEWER_AUTH_STORE"));
   assert.ok(previewConfig.migrations.some(migration => migration.tag === "v4-reviewer-auth-store"));
@@ -130,7 +130,8 @@ test("health endpoint is read-only and does not expose task enqueue", () => {
   assert.match(source, /task_enqueue_endpoint_enabled: false/);
   assert.match(source, /scheduler: env.AGENT_SCHEDULE_MODE \|\| "not_configured"/);
   assert.match(source, /ai_inference_enabled: false/);
-  assert.match(source, /content_draft_executor_enabled: true/);
+  assert.match(source, /content_draft_executor_registered: true/);
+  assert.match(source, /content_draft_executor_enabled: env\.AGENT_ENABLED === "true" && env\.AGENT_PAUSED !== "true"/);
   assert.match(source, /quality_review_executor_enabled: false/);
   assert.match(source, /website_publication_enabled: false/);
   assert.match(source, /facebook_publication_enabled: false/);
