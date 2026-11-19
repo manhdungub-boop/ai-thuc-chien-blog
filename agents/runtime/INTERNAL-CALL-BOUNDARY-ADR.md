@@ -1,6 +1,6 @@
 # Agent Runtime — internal Worker-to-State-Store security boundary
 
-Status: **the dedicated State Store bearer validator is implemented and tested separately from operator authentication; Worker-to-DO forwarding, Durable Object binding, secret injection, public operator API, and deployment remain unconfigured.**
+Status: **the dedicated State Store bearer validator and a narrow read-only Worker-to-DO forwarding path are implemented and tested; Durable Object binding, Preview secret injection, rate limiting, operator session/access layer, and deployment remain unconfigured.**
 
 Date: 2026-11-19
 
@@ -19,11 +19,11 @@ Before adding a Durable Object binding, separate external operator authenticatio
 
 - `src/internal-auth.mjs` validates `AGENT_STATE_STORE_TOKEN` with bounded syntax/length and constant-time digest comparison.
 - The State Store rejects the external `AGENT_OPERATOR_TOKEN`; integration tests verify that missing, invalid, and cross-boundary credentials fail closed.
-- The Worker does not yet call the State Store, and the Wrangler shell config still has no Durable Object binding or secret. This is intentional; the credential validator is a tested boundary component, not deployment authorization.
+- The Worker now calls the State Store only through the narrow read-only bridge documented below. The Wrangler shell config still has no Durable Object binding or secret, so the bridge cannot reach a live namespace and fails closed. This code path is not deployment authorization.
 
 ## Request path
 
-1. The Worker authenticates the incoming operator using the approved ingress mechanism. For browser-based administration, use a server-validated session or an access-control layer; never embed a shared bearer secret in browser JavaScript.
+1. The current code authenticates the incoming operator with the server-side operator bearer token. This is suitable only for controlled non-browser/operator testing; before any public browser-based administration, add a server-validated session or an access-control layer and never embed a shared bearer secret in browser JavaScript.
 2. The Worker validates the requested operation and maps it to one of the fixed task-store operations. The caller cannot choose a Durable Object ID, internal URL, path, or arbitrary headers.
 3. The Worker obtains the single configured Durable Object stub using the fixed logical name `agent-runtime-global`.
 4. The Worker creates a new internal request and sets only the dedicated `AGENT_STATE_STORE_TOKEN` bearer credential. It must not forward the caller's Authorization header, cookies, Origin, or arbitrary headers.
@@ -37,7 +37,7 @@ Before adding a Durable Object binding, separate external operator authenticatio
 - Keep the existing `AGENT_ENABLED=false` and `AGENT_PAUSED=true` defaults. The Worker must check these flags before reservation or dispatch; the State Store independently checks them before admitting work or transitioning a queued task to running.
 - A pause may still permit safe terminal bookkeeping (for example, cancellation) but must not permit new reservations or new claims.
 - Apply request-size limits before JSON parsing, strict schemas after parsing, no-store response headers, and bounded error messages.
-- Rate-limit ingress and inspection operations before any public exposure. Record non-sensitive audit metadata only.
+- Rate-limit ingress and inspection operations before any public exposure. This rate limiting is not yet implemented. Record non-sensitive audit metadata only.
 - Use a dedicated Preview-only Wrangler config for the namespace binding. Do not add the binding to the production site Worker or the existing unbound shell config.
 
 ## Required tests before binding
@@ -46,7 +46,7 @@ Before adding a Durable Object binding, separate external operator authenticatio
 2. An external operator token is rejected by the State Store; an internal State Store token is rejected by the Worker ingress.
 3. The Worker never forwards caller Authorization, cookies, Origin, or arbitrary headers.
 4. The Worker can call only the fixed Durable Object identity and allowlisted operations.
-5. Missing binding, missing secret, storage failure, and malformed response all fail closed without memory fallback.
+5. Missing binding, missing secret, storage failure, malformed response, and oversized response all fail closed without memory fallback.
 6. Paused/disabled flags block reservations and queued-to-running transitions while allowing only explicitly safe terminal cleanup.
 7. No secret appears in logs, responses, task rows, audit rows, traces, or CI output.
 8. Preview configuration has no production route, custom domain, D1 binding, production namespace, queue, or schedule.
@@ -70,4 +70,4 @@ The Worker now contains a narrow, operator-authenticated read-only bridge:
 - These endpoints require the external operator token at ingress. The internal token is never accepted as the operator credential.
 - No write/admission/claim/dispatch operation is exposed through this bridge. `/run` remains `execution_not_implemented`.
 
-The bridge is code-only at this stage. The checked-in Wrangler config still has no Durable Object binding or secrets; therefore these endpoints fail closed until an independently reviewed Preview-only configuration and credentials exist. No binding creation, secret injection, Preview deployment, Production change, or Agent enablement is authorized by this code change.
+The bridge is code-only at this stage. The checked-in Wrangler config still has no Durable Object binding or secrets; therefore these endpoints fail closed until an independently reviewed Preview-only configuration and credentials exist. The operator bearer ingress has no rate limiter and is not approved for public browser administration. No binding creation, secret injection, Preview deployment, Production change, or Agent enablement is authorized by this code change.
