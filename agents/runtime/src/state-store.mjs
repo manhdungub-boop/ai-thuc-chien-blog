@@ -85,8 +85,9 @@ export class AgentStateStore {
         if (version.value === "2") {
           this.sql.exec("CREATE TABLE runtime_control (singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1), paused INTEGER NOT NULL CHECK (paused IN (0,1)), changed_at INTEGER NOT NULL, version INTEGER NOT NULL CHECK (version >= 0))");
           this.sql.exec("CREATE TABLE runtime_control_audit (event_id TEXT PRIMARY KEY, action TEXT NOT NULL CHECK (action IN ('pause','resume')), occurred_at INTEGER NOT NULL, actor TEXT NOT NULL, reason TEXT NOT NULL, request_id TEXT NOT NULL)");
-          const initiallyPaused = this.env.AGENT_ENABLED !== "true" || this.env.AGENT_PAUSED !== "false" ? 1 : 0;
-          this.sql.exec("INSERT INTO runtime_control (singleton_id, paused, changed_at, version) VALUES (1, ?, 0, 0)", initiallyPaused);
+          // Durable control starts fail-closed on every fresh/migrated store.
+          // An operator must explicitly resume after the outer deployment gates are reviewed.
+          this.sql.exec("INSERT INTO runtime_control (singleton_id, paused, changed_at, version) VALUES (1, 1, 0, 0)");
           this.sql.exec("CREATE INDEX runtime_control_audit_time_idx ON runtime_control_audit(occurred_at)");
           this.sql.exec("UPDATE runtime_meta SET value = '3' WHERE key = 'schema_version'");
           version = { value: "3" };
