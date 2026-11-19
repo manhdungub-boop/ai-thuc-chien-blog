@@ -153,18 +153,20 @@ export class AgentTaskStore extends DurableObject {
   }
 
   claim(allowedTaskTypes = null, taskId = null) {
-    const now = Date.now();
-    // Expired leases return to the queue; exhausted tasks move to dead-letter state.
-    this.ctx.storage.sql.exec(
-      "UPDATE tasks SET status = CASE WHEN attempts >= ? THEN 'dead' ELSE 'pending' END, lease_until = NULL, lease_token = NULL, updated_at = ? WHERE status = 'leased' AND lease_until <= ?",
-      MAX_ATTEMPTS, now, now
-    );
     if (allowedTaskTypes !== null && (!Array.isArray(allowedTaskTypes) || allowedTaskTypes.length === 0 || allowedTaskTypes.some(type => !EXECUTABLE_TASK_TYPES.has(type)))) {
       throw new TypeError("invalid_claim_task_types");
     }
     if (taskId !== null && (typeof taskId !== "string" || !/^[a-zA-Z0-9._:-]{8,128}$/.test(taskId))) {
       throw new TypeError("invalid_claim_task_id");
     }
+
+    const now = Date.now();
+    // Validate caller input before any recovery mutation. Expired leases return
+    // to the queue; exhausted tasks move to dead-letter state.
+    this.ctx.storage.sql.exec(
+      "UPDATE tasks SET status = CASE WHEN attempts >= ? THEN 'dead' ELSE 'pending' END, lease_until = NULL, lease_token = NULL, updated_at = ? WHERE status = 'leased' AND lease_until <= ?",
+      MAX_ATTEMPTS, now, now
+    );
     // Default and explicit claims share the same code-registered executor allowlist.
     // This also prevents legacy pending rows for unimplemented tasks from leasing.
     const claimableTypes = allowedTaskTypes ?? [...EXECUTABLE_TASK_TYPES];
