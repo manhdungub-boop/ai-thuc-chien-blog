@@ -333,7 +333,7 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
   it("fails closed at the lifetime audit capacity without deleting replay history or adding evidence", async () => {
     const now = Date.parse("2026-11-19T10:00:00.000Z");
     await store.upsertCandidates([candidate()], now);
-    const eventId = "capacity-new-event-000000000001";
+    const eventId = "f4e6d1c2-3b7f-4a91-8c22-1234567890ab";
     await runInDurableObject(store, async (_instance, state) => {
       state.storage.sql.exec(
         "WITH RECURSIVE seq(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM seq WHERE x < 10000) " +
