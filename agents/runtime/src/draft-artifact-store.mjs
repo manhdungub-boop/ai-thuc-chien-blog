@@ -239,6 +239,39 @@ export class AgentDraftStore extends DurableObject {
     return { updated: true, artifact: safeArtifact(updated[0]) };
   }
 
+  async reviseDraftForReviewer(id, expectedVersion, draft, reviewerSessionToken) {
+    const session = await verifyGoogleReviewerSessionToken(reviewerSessionToken, this.env, Date.now());
+    if (!session.authenticated) {
+      return { authorized: false, updated: false, reason: session.status || "reviewer_session_invalid" };
+    }
+    const result = this.reviseDraft(id, expectedVersion, draft);
+    return { authorized: true, reviewer_ref: session.reviewer.reviewer_ref, ...result };
+  }
+
+  async recordReviewerClaimDecisions(id, expectedVersion, decisions, reviewerSessionToken) {
+    const session = await verifyGoogleReviewerSessionToken(reviewerSessionToken, this.env, Date.now());
+    if (!session.authenticated) {
+      return { authorized: false, recorded: false, reason: session.status || "reviewer_session_invalid" };
+    }
+    const current = this.getDraft(id);
+    if (!current) return { authorized: true, recorded: false, reason: "artifact_not_found" };
+    if (current.version !== expectedVersion) {
+      return { authorized: true, recorded: false, reason: "version_conflict", current_version: current.version };
+    }
+    const ledger = current.evidence_review?.ledger;
+    if (!ledger) return { authorized: true, recorded: false, reason: "evidence_ledger_required" };
+    const reviewRecord = await recordHumanClaimReview(
+      ledger,
+      decisions,
+      { reviewer_ref: session.reviewer.reviewer_ref, reviewed_at: new Date().toISOString() }
+    );
+    if (!reviewRecord.ok) {
+      return { authorized: true, recorded: false, reason: reviewRecord.status || "review_decisions_invalid" };
+    }
+    const result = await this.recordEvidenceReview(id, expectedVersion, ledger, reviewRecord, reviewerSessionToken);
+    return { authorized: true, ...result };
+  }
+
   /**
    * Persist source excerpts retrieved by the trusted Worker research path.
    * This Durable Object method is intentionally not exposed as a public HTTP route.
