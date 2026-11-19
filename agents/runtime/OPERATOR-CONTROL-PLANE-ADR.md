@@ -15,6 +15,8 @@ The current branch contains the following Worker-to-State-Store routes:
 
 The control mutation bridge requires the external `AGENT_OPERATOR_TOKEN`, a configured `AGENT_OPERATOR_ID`, and a separate `AGENT_STATE_STORE_TOKEN` for the internal Durable Object call. The Worker creates the actor and request ID; callers cannot supply an actor. The State Store persists pause state, control audit events, and a per-actor rate limit (10 mutations per 60-second window). The Durable Object namespace is not bound in the checked-in Wrangler configuration, so these routes cannot reach a deployed State Store in the current Preview shell.
 
+Control mutation request bodies are bounded before JSON parsing: 1 KiB at Worker ingress and 16 KiB independently at the State Store. Declared lengths and streamed bytes are checked; oversized bodies return 413 and malformed JSON returns 400. The isolated Agent Runtime suite passes 65/65 tests on code commit `5f195da33fe36e822517d1a62a3449241e3f89f3`.
+
 The current operator identity is a static deployment-configured label, **not proof of an authenticated human identity**. The shared bearer token does not provide named-user attribution, MFA, session expiry, revocation per person, or role-based permissions. Do not describe this bridge as a browser-safe operator console or as a verified human identity system.
 
 The State Store and Worker code are covered by isolated tests, but the control routes are not deployment approval. The Runtime remains disabled by default, unbound, and without a task handler or scheduler.
@@ -55,7 +57,7 @@ There is no Worker recovery route. The State Store's `/recover` endpoint is not 
 - **Human identity:** `AGENT_OPERATOR_ID` is static configuration. A shared bearer holder can perform mutations under that label; the audit trail is not person-level attribution.
 - **MFA/session lifecycle:** no MFA, short-lived session, per-user revocation, or role-based authorization is implemented.
 - **Browser protections:** no cookie session, CSRF token, or Origin validation is implemented. Keep the bridge off browser-facing surfaces.
-- **Request body bounds:** the Worker and State Store parse JSON without an explicit streaming body-size cap on the control mutation path. Add a strict small byte limit before parsing and test oversized/chunked bodies before any external exposure.
+- **Request body bounds:** implemented on the current branch. The Worker rejects control mutation bodies above 1 KiB; the State Store independently rejects control mutation bodies above 16 KiB. Both enforce declared `Content-Length` and count streamed bytes before JSON parsing. Targeted tests cover oversized declared bodies, oversized chunked bodies, malformed JSON, and unchanged control state after rejection. These limits reduce memory/parse exposure but do not replace ingress rate limiting or slow-client protection.
 - **Rate limiting:** persistent limit is per configured actor; because the actor is static, it is not a per-human limit. There is no separate global ingress limit, and read routes are not rate-limited.
 - **Audit semantics:** the audit table records state-changing pause/resume events. Idempotent no-op requests and rejected attempts are not represented as completed state-change audit rows. Add access-controlled security-event logging if operational attribution requires those events.
 - **Resume assurance:** current route checks the bearer and configured actor but does not independently verify account plan, resource health, or an approval confirmation.
@@ -65,7 +67,7 @@ There is no Worker recovery route. The State Store's `/recover` endpoint is not 
 
 1. Verify a no-cost identity/session option and actual account entitlement; no paid upgrade, billing activation, or payment setup.
 2. Threat-model operator compromise, replay, token theft, session theft, rate-limit bypass, and internal-token exfiltration.
-3. Add a strict request-body byte cap before JSON parsing; test oversized, chunked, malformed, and duplicate-field requests.
+3. Preserve the implemented 1 KiB Worker and 16 KiB State Store control-body caps; keep regression coverage for declared-length, streamed, and malformed-body rejection.
 4. Implement named human identity, MFA, short sessions, revocation, least-privilege roles, and appropriate browser CSRF/Origin protections before any browser-based administration.
 5. Add global ingress protection and decide how rejected/no-op control attempts are recorded without leaking secrets.
 6. Preserve transactional pause behavior and verify concurrent reserve/claim calls cannot pass the persisted pause state.
