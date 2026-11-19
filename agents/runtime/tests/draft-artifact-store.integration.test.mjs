@@ -148,6 +148,44 @@ describe("AgentDraftStore Durable Object", () => {
     expect(result.publication_authorized).toBe(false);
   });
 
+  it("requires a verified Google reviewer session before authoring revisions or claim decisions", async () => {
+    const created = await store.createDraft("draft-reviewer-auth-01", validDraft());
+    const revised = await store.reviseDraftForReviewer(
+      "draft-reviewer-auth-01", created.artifact.version, validDraft(), undefined
+    );
+    expect(revised).toMatchObject({
+      authorized: false,
+      updated: false,
+      reason: "reviewer_auth_not_configured"
+    });
+    const decision = await store.recordReviewerClaimDecisions(
+      "draft-reviewer-auth-01", created.artifact.version, [], undefined
+    );
+    expect(decision).toMatchObject({
+      authorized: false,
+      recorded: false,
+      reason: "reviewer_auth_not_configured"
+    });
+    expect((await store.getDraft("draft-reviewer-auth-01")).version).toBe(1);
+  });
+
+  it("rejects unverified, duplicate, or oversized research excerpts at artifact creation", async () => {
+    const validEvidence = [{
+      source: "OpenAI News",
+      title: "Research evidence",
+      url: "https://openai.com/index/research-evidence",
+      retrieved_at: "2026-11-19T00:00:00.000Z",
+      status: "source_retrieved_not_fact_checked",
+      excerpt: "A sufficiently long retrieved source excerpt describing the research context, method, limitations and reported observations for a human reviewer to inspect."
+    }];
+    expect(await store.createDraft("draft-evidence-invalid-01", validDraft(), [
+      { ...validEvidence[0], status: "http_403" }
+    ])).toMatchObject({ accepted: false, reason: "invalid_retrieved_evidence_item" });
+    expect(await store.createDraft("draft-evidence-invalid-02", validDraft(), [
+      validEvidence[0], validEvidence[0]
+    ])).toMatchObject({ accepted: false, reason: "retrieved_evidence_url_or_publisher_rejected" });
+  });
+
   it("rejects stale, duplicate, unverified, or incomplete evidence-ledger writes", async () => {
     const draft = validDraft();
     draft.claims = [{
