@@ -30,7 +30,7 @@ export default {
         ok: true,
         service: "ai-thuc-chien-agent-runtime-preview",
         enabled: isEnabled(env.AGENT_ENABLED),
-        paused: !isEnabled(env.AGENT_PAUSED === "false" ? "false" : "true"),
+        paused: env.AGENT_PAUSED !== "false",
         execution: "not_implemented",
       });
     }
