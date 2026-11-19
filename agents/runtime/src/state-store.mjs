@@ -7,6 +7,14 @@ const SCHEMA_VERSION = 5;
 const DEFAULT_LIMITS = Object.freeze({ daily: 100, concurrent: 5, payloadBytes: 8192 });
 const TERMINAL_STATES = new Set(["succeeded", "failed", "cancelled"]);
 const MAX_STATE_STORE_REQUEST_BYTES = 12 * 1024;
+// Retention runs inside admission transactions; keep each cleanup statement bounded.
+const RETENTION_BATCH_LIMITS = Object.freeze({
+  tasks: 100,
+  auditEvents: 250,
+  controlAudit: 100,
+  controlRateLimit: 100,
+  dailyUsage: 100,
+});
 const REQUEST_BODY_LIMITS = new Map([
   ["/oidc/replay/consume", 1024],
   ["/control/pause", 16 * 1024],
@@ -755,10 +763,31 @@ export class AgentStateStore {
   prune(now) {
     const taskCutoff = now - 30 * 24 * 60 * 60 * 1000;
     const auditCutoff = now - 90 * 24 * 60 * 60 * 1000;
-    this.sql.exec("DELETE FROM tasks WHERE state IN ('succeeded','failed','cancelled') AND terminal_at < ?", taskCutoff);
-    this.sql.exec("DELETE FROM audit_events WHERE occurred_at < ?", auditCutoff);
-    this.sql.exec("DELETE FROM runtime_control_audit WHERE occurred_at < ?", auditCutoff);
-    this.sql.exec("DELETE FROM runtime_control_rate_limit WHERE window_started_at < ?", now - 24 * 60 * 60 * 1000);
-    this.sql.exec("DELETE FROM daily_usage WHERE day_utc < ?", utcDay(auditCutoff));
+    this.sql.exec(
+      "DELETE FROM tasks WHERE task_id IN (SELECT task_id FROM tasks " +
+      "WHERE state IN ('succeeded','failed','cancelled') AND terminal_at < ? " +
+      "ORDER BY terminal_at ASC, task_id ASC LIMIT ?)",
+      taskCutoff, RETENTION_BATCH_LIMITS.tasks,
+    );
+    this.sql.exec(
+      "DELETE FROM audit_events WHERE event_id IN (SELECT event_id FROM audit_events " +
+      "WHERE occurred_at < ? ORDER BY occurred_at ASC, event_id ASC LIMIT ?)",
+      auditCutoff, RETENTION_BATCH_LIMITS.auditEvents,
+    );
+    this.sql.exec(
+      "DELETE FROM runtime_control_audit WHERE event_id IN (SELECT event_id FROM runtime_control_audit " +
+      "WHERE occurred_at < ? ORDER BY occurred_at ASC, event_id ASC LIMIT ?)",
+      auditCutoff, RETENTION_BATCH_LIMITS.controlAudit,
+    );
+    this.sql.exec(
+      "DELETE FROM runtime_control_rate_limit WHERE actor IN (SELECT actor FROM runtime_control_rate_limit " +
+      "WHERE window_started_at < ? ORDER BY window_started_at ASC, actor ASC LIMIT ?)",
+      now - 24 * 60 * 60 * 1000, RETENTION_BATCH_LIMITS.controlRateLimit,
+    );
+    this.sql.exec(
+      "DELETE FROM daily_usage WHERE day_utc IN (SELECT day_utc FROM daily_usage " +
+      "WHERE day_utc < ? ORDER BY day_utc ASC LIMIT ?)",
+      utcDay(auditCutoff), RETENTION_BATCH_LIMITS.dailyUsage,
+    );
   }
 }
