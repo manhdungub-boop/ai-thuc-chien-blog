@@ -121,6 +121,10 @@ describe("AgentTaskStore Durable Object", () => {
       );
     });
 
+    expect(await store.claim()).toEqual({ task: null });
+    await runInDurableObject(store, async (_instance, state) => {
+      state.storage.sql.exec("UPDATE tasks SET available_at = 0 WHERE id = ?", "task-fencing-0001");
+    });
     const newClaim = await store.claim();
     expect(newClaim.task.id).toBe("task-fencing-0001");
     expect(newClaim.lease_token).not.toBe(oldClaim.lease_token);
