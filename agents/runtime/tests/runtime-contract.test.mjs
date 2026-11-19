@@ -20,6 +20,7 @@ const googleOAuth = await readFile(new URL("../src/google-reviewer-oauth.mjs", i
 const googleOidc = await readFile(new URL("../src/google-oidc-reviewer-verifier.mjs", import.meta.url), "utf8");
 const previewDeployWorkflow = await readFile(new URL("../../../.github/workflows/deploy-agent-runtime-preview.yml", import.meta.url), "utf8");
 const runtimeReadme = await readFile(new URL("../README.md", import.meta.url), "utf8");
+const reviewerConsole = await readFile(new URL("../src/reviewer-console.mjs", import.meta.url), "utf8");
 
 test("Google OAuth and OIDC upstream JSON responses are byte-bounded", () => {
   assert.match(boundedJson, /getReader\(\)/);
@@ -407,6 +408,38 @@ test("reviewer evidence endpoint is Google-session-bound and non-publishing", as
   assert.match(draftStore, /async getDraftForReviewer/);
   assert.match(runtime, /publication_authorized: false/);
   assert.match(runtime, /social_post_published: false/);
+});
+
+test("reviewer authoring endpoint is Google-session-bound, versioned, and evidence-gated", () => {
+  assert.match(source, /reviewerAuthoringMatch/);
+  assert.match(source, /\/authoring\$/);
+  assert.match(source, /request\.headers\.get\("origin"\) !== url\.origin/);
+  assert.match(source, /authoring_request_too_large/);
+  assert.match(source, /authoring_claim_manifest_required/);
+  assert.match(source, /reviseDraftForReviewer\(/);
+  assert.match(source, /storeEvidenceLedger\([\s\S]*revised\.artifact\.version/);
+  assert.match(draftStoreSource, /async reviseDraftForReviewer\(/);
+  assert.match(draftStoreSource, /verifyGoogleReviewerSessionToken\(reviewerSessionToken, this\.env/);
+  assert.match(draftStoreSource, /research_evidence_json/);
+  assert.match(draftStoreSource, /validateRetrievedEvidence/);
+  assert.match(source, /research\.result\.evidence_retrieval\.evidence\.filter/);
+  assert.match(source, /publication_authorized: false/);
+});
+
+test("reviewer console supports structured authoring and per-source human evidence decisions", () => {
+  assert.match(reviewerConsole, /Claim Manifest/);
+  assert.match(reviewerConsole, /\/authoring/);
+  assert.match(reviewerConsole, /expected_version: artifact\.version/);
+  assert.match(reviewerConsole, /Lưu bản sửa và tạo hồ sơ bằng chứng/);
+  assert.match(reviewerConsole, /Đánh giá từng luận điểm và từng nguồn/);
+  assert.match(reviewerConsole, /supports/);
+  assert.match(reviewerConsole, /contradicts/);
+  assert.match(reviewerConsole, /insufficient/);
+  assert.match(reviewerConsole, /evidence_reviews/);
+  assert.match(reviewerConsole, /\/evidence-review/);
+  assert.match(source, /recordReviewerClaimDecisions\(/);
+  assert.match(draftStoreSource, /recordHumanClaimReview\(/);
+  assert.match(reviewerConsole, /Quyền xuất bản vẫn bị khóa/);
 });
 
 test("daily quota date is derived from the UTC execution time and rejects invalid values", () => {
