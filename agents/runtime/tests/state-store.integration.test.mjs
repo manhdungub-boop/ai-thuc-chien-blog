@@ -355,7 +355,7 @@ test("SQLite state survives a Miniflare runtime restart", async () => {
 });
 
 
-test("fresh State Store initializes schema v3 with conservative lease defaults", async () => {
+test("fresh State Store initializes schema v4 with conservative lease defaults", async () => {
   await withRuntime({}, async ({ stub }) => {
     const created = await call(stub, "/reserve", task("schema-v2-fresh"));
     assert.equal(created.status, 201);
@@ -368,7 +368,7 @@ test("fresh State Store initializes schema v3 with conservative lease defaults",
   });
 });
 
-test("persisted v1 State Store migrates transactionally to v3 without losing task or usage", async () => {
+test("persisted v1 State Store migrates transactionally to v4 without losing task or usage", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "ai-thuc-chien-do-v1-migration-"));
   let first;
   let second;
