@@ -31,6 +31,8 @@ From the repository root:
 npm install --no-save --no-package-lock --ignore-scripts miniflare@4.20260730.0
 node --check agents/runtime/src/worker.mjs
 node --check agents/runtime/src/state-store.mjs
+node --check agents/runtime/src/lease-policy.mjs
+node --check agents/runtime/src/internal-auth.mjs
 node --test agents/runtime/tests/*.test.mjs
 \`\`\`
 
@@ -38,7 +40,7 @@ The GitHub Actions workflow is authoritative for the test dependency tree: it ap
 
 ## Limits and retention
 
-- Hard ceilings: 1,000 accepted tasks/day, 100 in-flight tasks, and 8 KiB serialized task request.
+- Enforced pilot ceilings: 100 accepted tasks/day, 5 in-flight tasks, and 8 KiB serialized task request. These are code limits, not measured provider quota.
 - Daily usage is counted in UTC. In-flight usage is derived from rows in \`queued\` or \`running\`, not an in-memory counter.
 - Completed/failed/cancelled task rows are retained for 30 days; audit events and daily-usage rows are retained for 90 days. Idempotency protection therefore lasts for the task-retention period.
 - Storage errors, unsupported schema versions, and invalid limits fail closed. There is no memory fallback.
@@ -50,11 +52,11 @@ See [STATE-STORE-ADR.md](./STATE-STORE-ADR.md) for the design decision, Free-tie
 
 ## Remaining gates
 
-1. Independently review the state-store implementation and integration-test results.
-2. Review the Free-tier request/SQL-row budget against expected real workload.
-3. Add a Durable Object binding and SQLite migration only to the separate Runtime Preview config after review; do not change the current checked-in Preview config in this step.
-4. Deploy the separate Preview Worker only after the local gates pass and Preview-only permissions are explicitly available.
-5. Add authenticated operator-only enqueue/inspect routes only after a separate security review.
-6. Add execution, alarms, or schedules only after idempotent side-effect handling, kill-switch behavior, recovery, and operational monitoring are proven.
+1. Independently review the schema migration, lease transactions, auth boundary, and integration-test evidence.
+2. Review the Free-tier request/SQL-row budget including heartbeat and recovery audit writes against measured workload.
+3. Integrate the Worker-to-State-Store call path using only the fixed Durable Object identity and dedicated internal token; keep it in a separate Runtime Preview config.
+4. Deploy the separate Preview Worker only after all local gates pass and Preview-only permissions are explicitly available.
+5. Add an execution engine only after read-only task handlers, idempotency, cancellation, kill-switch behavior, and monitoring are independently reviewed.
+6. Add alarms or schedules only after recovery, quota pause behavior, and rollback are proven.
 
 This scaffold makes no claim of 24/7 execution, backup readiness, or production recovery.
