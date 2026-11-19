@@ -48,14 +48,21 @@ describe("AgentTaskStore Durable Object", () => {
     expect(draftTask.accepted).toBe(true);
     expect(draftTask.task.status).toBe("pending");
 
-    await expect(Promise.resolve().then(() => store.enqueue({
-      id: "task-unimplemented-02",
+    const reviewTask = await store.enqueue({
+      id: "task-quality-review-01",
       task_type: "quality_review",
       payload: { artifact_id: "article-0001", artifact_type: "article" }
-    }))).rejects.toThrow("task_type_not_allowed");
+    });
+    expect(reviewTask.accepted).toBe(true);
+    expect(reviewTask.task.status).toBe("pending");
+    await expect(Promise.resolve().then(() => store.enqueue({
+      id: "task-quality-review-invalid-01",
+      task_type: "quality_review",
+      payload: { artifact_id: "tool-0001", artifact_type: "ai_tool" }
+    }))).rejects.toThrow("invalid_payload");
   });
 
-  it("never leases legacy pending rows without a registered executor", async () => {
+  it("leases registered article quality-review tasks and rejects unsupported claim types", async () => {
     const now = Date.now();
     await runInDurableObject(store, async (_instance, state) => {
       state.storage.sql.exec(
@@ -82,9 +89,14 @@ describe("AgentTaskStore Durable Object", () => {
       status: "human_authoring_required",
       publication_authorized: false
     })).toEqual({ updated: true });
-    await expect(Promise.resolve().then(() => store.claim(["quality_review"])))
-      .rejects.toThrow("invalid_claim_task_types");
-    expect(await store.stats()).toEqual({ completed: 1, pending: 1 });
+    const reviewClaim = await store.claim(["quality_review"]);
+    expect(reviewClaim.task.id).toBe("legacy-quality-review");
+    expect(reviewClaim.task.task_type).toBe("quality_review");
+    expect(await store.complete("legacy-quality-review", reviewClaim.lease_token, {
+      status: "needs_revision",
+      publication_authorized: false
+    })).toEqual({ updated: true });
+    expect(await store.stats()).toEqual({ completed: 2 });
   });
 
   it("treats identical idempotency requests as duplicates and rejects conflicts", async () => {
