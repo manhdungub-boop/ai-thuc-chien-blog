@@ -365,6 +365,7 @@ export default {
         const status = result.reason === "evidence_writer_not_allowlisted" ? 403 :
           result.reason === "duplicate_audit_event" || result.reason === "audit_event_id_reused" ? 409 :
           result.reason === "evidence_audit_daily_limit_reached" ? 429 :
+          result.reason === "evidence_audit_capacity_reached" ? 503 :
           result.reason === "reviewer_auth_not_configured" || result.reason === "evidence_writer_not_configured" ? 503 :
           result.reason === "reviewer_session_invalid" || result.reason === "reviewer_session_expired" ? 401 : 400;
         return json({ error: result.reason, evidence_recorded: false }, status);

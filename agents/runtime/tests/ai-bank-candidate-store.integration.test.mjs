@@ -330,6 +330,46 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     expect(await store.listReviewEvidence("github:ollama/ollama")).toHaveLength(1);
   });
 
+  it("fails closed at the lifetime audit capacity without deleting replay history or adding evidence", async () => {
+    const now = Date.parse("2026-11-19T10:00:00.000Z");
+    await store.upsertCandidates([candidate()], now);
+    const eventId = "f4e6d1c2-3b7f-4a91-8c22-1234567890ab";
+    await runInDurableObject(store, async (_instance, state) => {
+      state.storage.sql.exec(
+        "WITH RECURSIVE seq(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM seq WHERE x < 10000) " +
+        "INSERT INTO ai_bank_evidence_audit_events " +
+        "(event_id, actor_subject, actor_email, request_sha256, evidence_id, recorded_at) " +
+        "SELECT 'capacity-' || printf('%012d', x), 'google-subject', 'reviewer@example.com', " +
+        "printf('%064d', 0), 'historical-evidence', '2026-11-19T09:00:00.000Z' FROM seq"
+      );
+      expect(state.storage.sql.exec(
+        "SELECT COUNT(*) AS count FROM ai_bank_evidence_audit_events"
+      ).one().count).toBe(10000);
+    });
+    const evidence = {
+      check_type: "pricing_and_free_limits",
+      source_title: "Official pricing page",
+      source_url: "https://ollama.com/pricing",
+      excerpt: "Pricing evidence requires human review."
+    };
+    const blocked = await store.submitAuthorizedReviewEvidence(
+      "github:ollama/ollama", evidence, await writerSessionToken(now),
+      eventId, writerAuthEnv, now
+    );
+    expect(blocked).toEqual({ accepted: false, reason: "evidence_audit_capacity_reached" });
+    await runInDurableObject(store, async (_instance, state) => {
+      expect(state.storage.sql.exec(
+        "SELECT COUNT(*) AS count FROM ai_bank_evidence_audit_events"
+      ).one().count).toBe(10000);
+      expect(state.storage.sql.exec(
+        "SELECT COUNT(*) AS count FROM ai_bank_review_evidence"
+      ).one().count).toBe(0);
+      expect(state.storage.sql.exec(
+        "SELECT COUNT(*) AS count FROM ai_bank_review_evidence_releases"
+      ).one().count).toBe(0);
+    });
+  });
+
   it("caps accepted audit writes at 100 per UTC day without deleting replay records", async () => {
     const now = Date.parse("2026-11-19T10:00:00.000Z");
     await store.upsertCandidates([candidate()], now);

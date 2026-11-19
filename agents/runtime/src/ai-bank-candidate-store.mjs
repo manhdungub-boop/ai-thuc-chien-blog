@@ -7,6 +7,7 @@ const MAX_CANDIDATES_PER_BATCH = 10;
 const MAX_CANDIDATE_BYTES = 8192;
 const MAX_EVIDENCE_PER_CHECK = 5;
 const MAX_AUDIT_EVENTS_PER_UTC_DAY = 100;
+const MAX_AUDIT_EVENTS_TOTAL = 10000;
 const MAX_EVIDENCE_TITLE_CHARS = 180;
 const MAX_EVIDENCE_EXCERPT_CHARS = 1000;
 const REQUIRED_CHECKS = [
@@ -235,6 +236,12 @@ export class AgentAIBankCandidateStore extends DurableObject {
           accepted: false,
           reason: sameRequest ? "duplicate_audit_event" : "audit_event_id_reused"
         };
+      }
+      const totalAuditCount = this.ctx.storage.sql.exec(
+        "SELECT COUNT(*) AS count FROM ai_bank_evidence_audit_events"
+      ).one().count;
+      if (totalAuditCount >= MAX_AUDIT_EVENTS_TOTAL) {
+        return { accepted: false, reason: "evidence_audit_capacity_reached" };
       }
       const utcDay = authorization.authorized_at.slice(0, 10);
       const dailyAuditCount = this.ctx.storage.sql.exec(
