@@ -351,6 +351,15 @@ export class AgentDraftStore extends DurableObject {
     return rows.map(queueItem);
   }
 
+  listNeedsRevision(limit = 20) {
+    const boundedLimit = Number.isInteger(limit) ? Math.min(20, Math.max(1, limit)) : 20;
+    const rows = this.ctx.storage.sql.exec(
+      "SELECT * FROM draft_artifacts WHERE status = 'needs_revision' ORDER BY updated_at DESC LIMIT ?",
+      boundedLimit
+    ).toArray();
+    return rows.map(queueItem);
+  }
+
   listOwnerReleaseReviews(limit = 20) {
     const boundedLimit = Number.isInteger(limit) ? Math.min(20, Math.max(1, limit)) : 20;
     const rows = this.ctx.storage.sql.exec(
