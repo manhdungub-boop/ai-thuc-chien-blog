@@ -8,6 +8,7 @@ import { Miniflare } from "miniflare";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const workerPath = path.resolve(here, "../src/worker.mjs");
+const testWorkerPath = path.resolve(here, "./state-store-test-worker.mjs");
 const TEST_OPERATOR_TOKEN = "integration-test-operator-token-0123456789abcdef";
 const TEST_STATE_STORE_TOKEN = "integration-test-state-store-token-0123456789abcdef";
 
@@ -15,14 +16,14 @@ async function createRuntime({ daily = 100, concurrent = 5, persistDir, enabled 
   const directory = persistDir ?? await mkdtemp(path.join(tmpdir(), "ai-thuc-chien-do-"));
   const mf = new Miniflare({
     modules: true,
-    scriptPath: workerPath,
+    scriptPath: testWorkerPath,
+    // The test-only Worker subclass injects a deterministic clock and rollback probe.
     // Keep the local simulator date within the pinned workerd build (supports through 2026-07-08).
     // This is test-harness-only; the isolated Preview Worker date remains in wrangler.jsonc.
     compatibilityDate: "2026-07-08",
-    durableObjects: { AGENT_STATE_STORE: { className: "AgentStateStore", useSQLite: true } },
+    durableObjects: { AGENT_STATE_STORE: { className: "TestAgentStateStore", useSQLite: true } },
     durableObjectsPersist: directory,
     bindings: {
-      RUNTIME_TESTING: "true",
       AGENT_ENABLED: enabled,
       AGENT_PAUSED: paused,
       AGENT_OPERATOR_TOKEN: TEST_OPERATOR_TOKEN, AGENT_STATE_STORE_TOKEN: TEST_STATE_STORE_TOKEN,
@@ -149,7 +150,7 @@ test("state-store admission fails closed while disabled or paused", async () => 
     compatibilityDate: "2026-07-08",
     durableObjects: { AGENT_STATE_STORE: { className: "AgentStateStore", useSQLite: true } },
     durableObjectsPersist: directory,
-    bindings: { RUNTIME_TESTING: "true", AGENT_OPERATOR_TOKEN: TEST_OPERATOR_TOKEN, AGENT_STATE_STORE_TOKEN: TEST_STATE_STORE_TOKEN, AGENT_ENABLED: "false", AGENT_PAUSED: "true" },
+    bindings: { AGENT_OPERATOR_TOKEN: TEST_OPERATOR_TOKEN, AGENT_STATE_STORE_TOKEN: TEST_STATE_STORE_TOKEN, AGENT_ENABLED: "false", AGENT_PAUSED: "true" },
   });
   try {
     const namespace = await mf.getDurableObjectNamespace("AGENT_STATE_STORE");
