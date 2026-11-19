@@ -27,7 +27,7 @@ export const OPERATOR_CONSOLE_HTML = `<!doctype html>
       <label for="control-reason">Lý do thao tác (tối thiểu 12 ký tự)</label>
       <textarea id="control-reason" rows="3" maxlength="240" disabled></textarea>
       <p>
-        <button id="pause-button" type="button" disabled>Pause Agent</button>
+        <button id="pause-button" type="button" disabled>Pause task queue</button>
         <button id="resume-button" type="button" disabled>Resume circuit breaker</button>
       </p>
       <p id="action-status" role="status">Chưa có thao tác nào.</p>
@@ -139,7 +139,7 @@ export const OPERATOR_CONSOLE_JS = `"use strict";
       actionStatus.textContent = "Vui lòng nhập lý do từ 12 đến 240 ký tự.";
       return;
     }
-    const verb = action === "pause" ? "tạm dừng Agent" : "xóa trạng thái pause của Task Store";
+    const verb = action === "pause" ? "tạm dừng nhận và claim task" : "xóa trạng thái pause của Task Store";
     if (!window.confirm("Xác nhận " + verb + "?")) return;
     actionInProgress = true;
     setControlsEnabled(true);
