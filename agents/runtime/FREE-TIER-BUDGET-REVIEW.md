@@ -51,7 +51,7 @@ This is a reasoned estimate from the current SQL statements, not a measured Clou
 
 ## Request and storage considerations
 
-- A task normally causes three Durable Object fetches for reserve, running transition and terminal transition: approximately 3,000 DO requests/day at 1,000 completed tasks/day, excluding inspection, usage checks and future scheduler traffic.
+- A task normally causes three Durable Object fetches for reserve, claim and terminal completion: approximately 300 DO requests/day at the current 100 accepted tasks/day pilot ceiling, excluding inspection, usage checks, expiry recovery and any future scheduler traffic.
 - A single global Durable Object serializes admission and is intentionally low-throughput. Do not shard it without a separately reviewed global quota and idempotency design.
 - Retention targets are 30 days for terminal task rows and 90 days for audit and daily-usage rows. Non-terminal tasks are not removed by terminal-task retention; concurrency limits and future stale-task recovery must prevent indefinite accumulation.
 - SQLite storage, index overhead, CPU/duration and real request volume require measurement in an isolated Preview deployment before any claim that the account remains within Free limits.
