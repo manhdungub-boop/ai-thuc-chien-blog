@@ -45,6 +45,7 @@ describe("Google reviewer OAuth session flow", () => {
       AGENT_REVIEWER_AUTH_STORE: {
         getByName() {
           return {
+            consumeStartRateLimit: async () => ({ allowed: true, remaining: 9 }),
             createTransaction: async (...args) => {
               stored = args;
               return { created: true };
@@ -86,6 +87,7 @@ describe("Google reviewer OAuth session flow", () => {
       AGENT_REVIEWER_AUTH_STORE: {
         getByName() {
           return {
+            consumeStartRateLimit: async () => ({ allowed: true, remaining: 9 }),
             createTransaction: async (stateHash, browserHash, nonce, codeVerifier, createdAt) => {
               transaction = { stateHash, browserHash, nonce, code_verifier: codeVerifier, created_at: createdAt, expires_at: createdAt + 300 };
               return { created: true };
@@ -133,6 +135,7 @@ describe("Google reviewer OAuth session flow", () => {
       AGENT_REVIEWER_AUTH_STORE: {
         getByName() {
           return {
+            consumeStartRateLimit: async () => ({ allowed: true, remaining: 9 }),
             createTransaction: async (...args) => {
               stored = args;
               return { created: true };
