@@ -17,8 +17,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - name: Check out isolated lockfile branch
+      - name: Check out isolated lockfile branch without persisting credentials
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Node.js 22
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -51,6 +53,7 @@ jobs:
           node --test tests/runtime-contract.test.mjs
 
       - name: Commit only the verified lockfile
+        id: commit
         shell: bash
         run: |
           set -euo pipefail
@@ -58,6 +61,7 @@ jobs:
           git add agents/runtime/package-lock.json
           if git diff --cached --quiet; then
             echo "No lockfile change to commit."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           test "$(git diff --cached --name-only | wc -l | tr -d ' ')" = "1"
@@ -65,6 +69,15 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "build(agent-runtime): add verified npm lockfile"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Push verified lockfile after all untrusted code has finished
+        if: steps.commit.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh auth setup-git
           git push origin HEAD
 
       - name: Report safety boundary
@@ -75,6 +88,8 @@ jobs:
             echo "- Isolated branch only: fix/runtime-lockfile-generation-20261120"
             echo "- Node.js 22 and npm 10.9.4"
             echo "- npm lifecycle scripts disabled"
+            echo "- Checkout credentials are not persisted during dependency installation or tests"
+            echo "- Repository write token is exposed only to the final push step, after tests and commit"
             echo "- npm ci and targeted Runtime tests required before commit"
             echo "- Only agents/runtime/package-lock.json may be committed"
             echo "- No Cloudflare credentials, deployment, OAuth, Cron, AI inference, publication, Production Worker, D1, or DNS access"
