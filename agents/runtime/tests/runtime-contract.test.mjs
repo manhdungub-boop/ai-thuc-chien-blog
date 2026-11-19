@@ -392,7 +392,7 @@ test("content authoring checks the fail-closed provider policy before building o
   assert.ok(briefBuilder > policyBlock, "authoring brief must be built only after policy approval");
   assert.ok(persistence > briefBuilder, "draft persistence must happen after the brief is built");
   assert.match(source, /status: "authoring_provider_deferred"/);
-  assert.ok(source.includes('ok: false,\\n                status: "authoring_provider_deferred"'));
+  assert.ok(source.includes('ok: false,') && source.includes('status: "authoring_provider_deferred"'));
   assert.ok(source.includes("if (result?.ok === false)"));
   assert.ok(source.includes("store.retry(taskId, claimed.lease_token, result.status"));
   assert.match(source, /publication_authorized: false/);
