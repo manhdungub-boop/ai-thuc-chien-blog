@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       confirm_preview_only:
-        description: "Confirm deployment to the isolated Agent Runtime Preview only (no Production Worker, D1, DNS, or scheduled execution)."
+        description: "Confirm deployment to the isolated Agent Runtime Preview only. A 15-minute Workflow heartbeat is installed, but the Agent remains disabled and paused; no task execution or Production access is enabled."
         required: true
         type: boolean
         default: false
@@ -57,7 +57,7 @@ jobs:
           npm test
           node --test tests/runtime-contract.test.mjs
 
-      - name: Validate the manual-only Preview Worker without deploying
+      - name: Validate the paused Preview Worker and 15-minute Workflow schedule without deploying
         run: |
           npx wrangler types --config wrangler.preview.jsonc
           npx wrangler deploy --dry-run --config wrangler.preview.jsonc
@@ -76,7 +76,7 @@ jobs:
           fi
           printf '%s\n' "$worker_url" > "$RUNNER_TEMP/agent-runtime-preview-url.txt"
 
-      - name: Verify Preview health is paused and has no recurring schedule
+      - name: Verify Preview health is paused and the 15-minute Workflow schedule is configured
         shell: bash
         run: |
           set -euo pipefail
@@ -87,7 +87,7 @@ jobs:
             .service == "ai-thuc-chien-agent-runtime-preview" and
             .enabled == false and
             .paused == true and
-            .scheduler == "manual_only_no_cron" and
+            .scheduler == "preview_cron_15m_paused" and
             .task_execution_enabled == false and
             .ai_inference_enabled == false and
             .content_draft_executor_enabled == true and
@@ -103,7 +103,7 @@ jobs:
             echo "- Preview URL: $worker_url"
             echo "- Health: PASS"
             echo "- Agent execution: disabled and paused"
-            echo "- Recurring schedule: none"
+            echo "- Preview Workflow heartbeat: every 15 minutes (Agent disabled and paused; no task execution)"
             echo "- AI inference and autonomous article generation/publication: disabled"
             echo "- Human-only authoring scaffold code: available but runtime execution remains paused"
             echo "- Production Worker/D1/DNS access: none"
