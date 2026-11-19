@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { handleGoogleReviewerAuth, verifyGoogleReviewerSessionToken } from "../src/google-reviewer-oauth.mjs";
 
 const now = Date.parse("2026-11-19T12:00:00.000Z");
-const origin = "https://ai-thuc-chien-agent-runtime-preview.test-account.workers.dev";
+const origin = "https://ai-thuc-chien-agent-runtime-preview.manhdungub.workers.dev";
 const env = {
   AGENT_REVIEWER_AUTH_ENABLED: "true",
   GOOGLE_REVIEWER_CLIENT_ID: "preview-test-client-id-abcdefghijklmnopqrstuvwxyz.apps.googleusercontent.com",
@@ -302,6 +302,19 @@ describe("Google reviewer OAuth session flow", () => {
     expect(unlisted.authenticated).toBe(false);
   });
 
+
+  it("rejects a Preview-shaped callback on any other Cloudflare account subdomain", async () => {
+    const response = await handleGoogleReviewerAuth(
+      new Request(origin + "/auth/google/start"),
+      {
+        ...env,
+        GOOGLE_REVIEWER_REDIRECT_URI: "https://ai-thuc-chien-agent-runtime-preview.attacker.workers.dev/auth/google/callback"
+      },
+      { now }
+    );
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ error: "reviewer_auth_not_configured" });
+  });
 
   it("rejects a Production Worker callback URL even when all other OAuth settings are valid", async () => {
     const response = await handleGoogleReviewerAuth(
