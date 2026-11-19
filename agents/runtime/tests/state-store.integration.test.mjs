@@ -435,21 +435,19 @@ test("State Store rejects oversized and malformed request bodies before admissio
   await withRuntime({}, async ({ stub }) => {
     const routes = ["/reserve", "/claim", "/heartbeat", "/complete", "/recover", "/transition"];
     for (const route of routes) {
-      const oversized = new Request("http://do.local" + route, {
+      const rejected = await stub.fetch("http://do.local" + route, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + TEST_STATE_STORE_TOKEN },
         body: JSON.stringify({ probe: "x".repeat(13 * 1024) }),
       });
-      const rejected = await stub.fetch(oversized);
       assert.equal(rejected.status, 413, route + " oversized body");
       assert.equal((await rejected.json()).error, "request_body_too_large");
     }
-    const malformed = new Request("http://do.local/reserve", {
+    const badJson = await stub.fetch("http://do.local/reserve", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: "Bearer " + TEST_STATE_STORE_TOKEN },
       body: "{not-json",
     });
-    const badJson = await stub.fetch(malformed);
     assert.equal(badJson.status, 400);
     assert.equal((await badJson.json()).error, "request_json_invalid");
     const empty = await stub.fetch("http://do.local/reserve", {
