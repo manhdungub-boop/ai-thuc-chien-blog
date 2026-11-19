@@ -222,9 +222,29 @@ describe("authenticated read-only AI Bank reviewer routes", () => {
   });
 
   it("rejects unsupported methods without touching the candidate store", async () => {
-    const response = await worker.fetch(new Request(collection, { method: "POST" }), {});
-    expect(response.status).toBe(405);
-    expect(await response.json()).toMatchObject({ error: "method_not_allowed" });
+    let storeAccesses = 0;
+    const env = { AGENT_AI_BANK_CANDIDATE_STORE: { getByName() { storeAccesses += 1; } } };
+    for (const path of [collection, detail]) {
+      for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
+        const response = await worker.fetch(new Request(path, { method }), env);
+        expect(response.status, method + " " + path).toBe(405);
+        expect(await response.json(), method + " " + path).toMatchObject({ error: "method_not_allowed" });
+      }
+    }
+    expect(storeAccesses).toBe(0);
+  });
+
+  it("does not expose an AI Bank evidence-write route", async () => {
+    let storeAccesses = 0;
+    const response = await worker.fetch(new Request(
+      origin + "/api/reviewer/ai-bank/candidates/ollama/ollama/evidence",
+      { method: "POST", headers: { origin, "content-type": "application/json" }, body: JSON.stringify({}) }
+    ), {
+      AGENT_AI_BANK_CANDIDATE_STORE: { getByName() { storeAccesses += 1; } }
+    });
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: "not_found" });
+    expect(storeAccesses).toBe(0);
   });
 });
 
