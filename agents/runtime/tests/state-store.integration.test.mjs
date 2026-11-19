@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { Miniflare } from "miniflare";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const workerPath = path.resolve(here, "../src/worker.mjs");
+const workerPath = path.resolve(here, "fixtures/state-store-test-worker.mjs");
 const TEST_OPERATOR_TOKEN = "integration-test-operator-token-0123456789abcdef";
 const TEST_STATE_STORE_TOKEN = "integration-test-state-store-token-0123456789abcdef";
 
@@ -22,7 +22,6 @@ async function createRuntime({ daily = 100, concurrent = 5, persistDir, enabled 
     durableObjects: { AGENT_STATE_STORE: { className: "AgentStateStore", useSQLite: true } },
     durableObjectsPersist: directory,
     bindings: {
-      RUNTIME_TESTING: "true",
       AGENT_ENABLED: enabled,
       AGENT_PAUSED: paused,
       AGENT_OPERATOR_TOKEN: TEST_OPERATOR_TOKEN,
@@ -89,7 +88,7 @@ test("state-store admission fails closed while disabled or paused", async () => 
     compatibilityDate: "2026-07-08",
     durableObjects: { AGENT_STATE_STORE: { className: "AgentStateStore", useSQLite: true } },
     durableObjectsPersist: directory,
-    bindings: { RUNTIME_TESTING: "true", AGENT_OPERATOR_TOKEN: TEST_OPERATOR_TOKEN, AGENT_STATE_STORE_TOKEN: TEST_STATE_STORE_TOKEN, AGENT_ENABLED: "false", AGENT_PAUSED: "true" },
+    bindings: { AGENT_OPERATOR_TOKEN: TEST_OPERATOR_TOKEN, AGENT_STATE_STORE_TOKEN: TEST_STATE_STORE_TOKEN, AGENT_ENABLED: "false", AGENT_PAUSED: "true" },
   });
   try {
     const namespace = await mf.getDurableObjectNamespace("AGENT_STATE_STORE");
