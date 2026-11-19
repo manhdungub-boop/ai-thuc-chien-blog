@@ -105,9 +105,18 @@ async function sha256Hex(value) {
 
 // Test-only snapshot prototype. All table reads occur inside one synchronous
 // SQLite transaction; hashing happens after the consistent row set is copied.
-async function captureTestSnapshot(state, pageSize = 1) {
+async function captureTestSnapshot(state, pageSize = 100, limits = {}) {
+  const maxRows = limits.maxRows ?? 10000;
+  const maxBytes = limits.maxBytes ?? 16 * 1024 * 1024;
+  if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 500 ||
+      !Number.isSafeInteger(maxRows) || maxRows < 1 || maxRows > 10000 ||
+      !Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > 16 * 1024 * 1024) {
+    throw new TypeError("invalid_snapshot_capture_limits");
+  }
   const rowsByTable = state.storage.transactionSync(() => {
     const result = {};
+    let totalRows = 0;
+    let totalBytes = 0;
     for (const table of SNAPSHOT_TABLES) {
       const rows = [];
       let offset = 0;
@@ -116,6 +125,10 @@ async function captureTestSnapshot(state, pageSize = 1) {
           "SELECT * FROM " + table.name + " ORDER BY " + table.order + " LIMIT ? OFFSET ?",
           pageSize, offset
         ).toArray();
+        totalRows += page.length;
+        totalBytes += new TextEncoder().encode(canonicalSnapshotJson(page)).byteLength;
+        if (totalRows > maxRows) throw new Error("snapshot_row_limit_exceeded");
+        if (totalBytes > maxBytes) throw new Error("snapshot_byte_limit_exceeded");
         rows.push(...page);
         if (page.length < pageSize) break;
         offset += page.length;
@@ -390,6 +403,35 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
         state.storage.sql.exec("SELECT COUNT(*) AS count FROM " + table.name).one().count
       ]));
       expect(finalCounts).toEqual(sourceSnapshot.counts);
+    });
+  });
+
+  it("enforces bounded snapshot capture rows, bytes, and page size", async () => {
+    const now = Date.parse("2026-11-19T10:00:00.000Z");
+    await store.upsertCandidates([candidate()], now);
+    const accepted = await submitEvidence(store, "github:ollama/ollama", {
+      check_type: "pricing_and_free_limits",
+      source_title: "Official pricing page",
+      source_url: "https://ollama.com/pricing",
+      excerpt: "Snapshot limit fixture."
+    }, now, "e4e6d1c2-3b7f-4a91-8c22-1234567890ab");
+    expect(accepted.accepted).toBe(true);
+
+    await runInDurableObject(store, async (_instance, state) => {
+      await expect(captureTestSnapshot(state, 1, { maxRows: 1 }))
+        .rejects.toThrow("snapshot_row_limit_exceeded");
+      await expect(captureTestSnapshot(state, 1, { maxBytes: 1 }))
+        .rejects.toThrow("snapshot_byte_limit_exceeded");
+      await expect(captureTestSnapshot(state, 0))
+        .rejects.toThrow("invalid_snapshot_capture_limits");
+
+      const valid = await captureTestSnapshot(state, 1, {
+        maxRows: 10,
+        maxBytes: 1024 * 1024
+      });
+      expect(valid.counts.ai_bank_candidates).toBe(1);
+      expect(valid.counts.ai_bank_review_evidence).toBe(1);
+      expect(await verifyTestSnapshot(valid)).toBe(true);
     });
   });
 
