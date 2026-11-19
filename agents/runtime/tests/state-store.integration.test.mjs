@@ -10,7 +10,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const workerPath = path.resolve(here, "../src/worker.mjs");
 const TEST_OPERATOR_TOKEN = "integration-test-operator-token-0123456789abcdef";
 
-async function createRuntime({ daily = 1000, concurrent = 100, persistDir } = {}) {
+async function createRuntime({ daily = 1000, concurrent = 100, persistDir, enabled = "true", paused = "false" } = {}) {
   const directory = persistDir ?? await mkdtemp(path.join(tmpdir(), "ai-thuc-chien-do-"));
   const mf = new Miniflare({
     modules: true,
@@ -22,8 +22,8 @@ async function createRuntime({ daily = 1000, concurrent = 100, persistDir } = {}
     durableObjectsPersist: directory,
     bindings: {
       RUNTIME_TESTING: "true",
-      AGENT_ENABLED: "true",
-      AGENT_PAUSED: "false",
+      AGENT_ENABLED: enabled,
+      AGENT_PAUSED: paused,
       AGENT_OPERATOR_TOKEN: TEST_OPERATOR_TOKEN,
       RUNTIME_MAX_TASKS_PER_DAY: String(daily),
       RUNTIME_MAX_CONCURRENT_TASKS: String(concurrent),
@@ -94,6 +94,34 @@ test("state-store admission fails closed while disabled or paused", async () => 
     assert.equal(usage.body.inFlight, 0);
   } finally {
     await mf.dispose();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("pause switch blocks queued-to-running transitions but permits terminal cancellation", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "ai-thuc-chien-do-pause-transition-"));
+  let active;
+  let paused;
+  try {
+    active = await createRuntime({ persistDir: directory });
+    const created = await call(active.stub, "/reserve", task("pause-transition"));
+    assert.equal(created.status, 201);
+    const taskId = created.body.task.taskId;
+    await active.mf.dispose();
+    active = null;
+
+    paused = await createRuntime({ persistDir: directory, enabled: "false", paused: "true" });
+    const blocked = await call(paused.stub, "/transition", { taskId, status: "running" });
+    assert.equal(blocked.status, 503);
+    assert.equal(blocked.body.error, "agent_disabled_or_paused");
+
+    const cancelled = await call(paused.stub, "/transition", { taskId, status: "cancelled" });
+    assert.equal(cancelled.status, 200);
+    assert.equal(cancelled.body.task.state, "cancelled");
+    assert.equal((await call(paused.stub, "/usage")).body.inFlight, 0);
+  } finally {
+    if (active) await active.mf.dispose();
+    if (paused) await paused.mf.dispose();
     await rm(directory, { recursive: true, force: true });
   }
 });
