@@ -342,6 +342,40 @@ export class AgentDraftStore extends DurableObject {
     return row ? safeArtifact(row) : null;
   }
 
+  /**
+   * Re-runs the deterministic article structure/safety gate for an exact
+   * artifact version. This internal RPC does not authenticate a human reviewer,
+   * change article content, create a human decision, or authorize publication.
+   */
+  reviewDraft(id, expectedVersion) {
+    if (typeof id !== "string" || !ID_PATTERN.test(id) ||
+        !Number.isInteger(expectedVersion) || expectedVersion < 1) {
+      return { reviewed: false, reason: "invalid_quality_review_request" };
+    }
+    const current = this.ctx.storage.sql.exec(
+      "SELECT * FROM draft_artifacts WHERE id = ?", id
+    ).toArray()[0];
+    if (!current) return { reviewed: false, reason: "artifact_not_found" };
+    if (current.version !== expectedVersion) {
+      return { reviewed: false, reason: "version_conflict", current_version: current.version };
+    }
+    const draft = JSON.parse(current.draft_json);
+    const review = runPolicyGatedQualityReview(draft);
+    const status = review.ok ? "pending_human_review" : "needs_revision";
+    const updated = this.ctx.storage.sql.exec(
+      "UPDATE draft_artifacts SET quality_review_json = ?, status = ?, updated_at = ? " +
+      "WHERE id = ? AND version = ? RETURNING *",
+      JSON.stringify(review), status, new Date().toISOString(), id, expectedVersion
+    ).toArray();
+    if (updated.length !== 1) return { reviewed: false, reason: "version_conflict" };
+    return {
+      reviewed: true,
+      artifact: safeArtifact(updated[0]),
+      human_review_required: true,
+      publication_authorized: false
+    };
+  }
+
   listPendingReviews(limit = 20) {
     const boundedLimit = Number.isInteger(limit) ? Math.min(20, Math.max(1, limit)) : 20;
     const rows = this.ctx.storage.sql.exec(
