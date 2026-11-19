@@ -27,7 +27,7 @@ describe("research evidence readiness assessment", () => {
       draft_created: false,
       content_published: false
     });
-    expect(result.limitations.join(" ")).toContain("do not prove");
+    expect(result.limitations.join(" ")).toContain("remain unassessed until human review");
   });
 
   it("rejects repeated publisher domains even when article URLs differ", () => {
