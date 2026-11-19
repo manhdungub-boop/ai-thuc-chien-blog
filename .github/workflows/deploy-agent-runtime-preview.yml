@@ -90,7 +90,8 @@ jobs:
             .scheduler == "preview_cron_15m_paused" and
             .task_execution_enabled == false and
             .ai_inference_enabled == false and
-            .content_draft_executor_enabled == true and
+            .content_draft_executor_registered == true and
+            .content_draft_executor_enabled == false and
             .quality_review_executor_enabled == false and
             .website_publication_enabled == false and
             .facebook_publication_enabled == false and
