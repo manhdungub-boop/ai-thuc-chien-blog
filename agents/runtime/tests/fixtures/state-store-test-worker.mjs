@@ -22,7 +22,7 @@ class TestAgentStateStore extends AgentStateStore {
 
   async fetch(request) {
     const url = new URL(request.url);
-    if (url.pathname !== "/__test/downgrade-v1" && url.pathname !== "/__test/rollback") {
+    if (url.pathname !== "/__test/downgrade-v1" && url.pathname !== "/__test/rollback" && url.pathname !== "/__test/snapshot") {
       return super.fetch(request);
     }
     if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
@@ -30,6 +30,10 @@ class TestAgentStateStore extends AgentStateStore {
       return json({ ok: false, error: "state_store_auth_required" }, 401);
     }
     await this.ready;
+    if (url.pathname === "/__test/snapshot") {
+      const row = this.sql.exec("SELECT (SELECT COUNT(*) FROM tasks) AS tasks, (SELECT COUNT(*) FROM daily_usage) AS dailyUsage, (SELECT COUNT(*) FROM audit_events) AS auditEvents, (SELECT COUNT(*) FROM tasks WHERE lease_owner IS NOT NULL OR lease_expires_at IS NOT NULL OR lease_max_expires_at IS NOT NULL) AS leases").toArray()[0];
+      return json({ ok: true, counts: row });
+    }
     if (url.pathname === "/__test/downgrade-v1") {
       this.ctx.storage.transactionSync(() => {
         this.sql.exec("CREATE TABLE tasks_v1_fixture (task_id TEXT PRIMARY KEY, idempotency_key TEXT NOT NULL UNIQUE, task_type TEXT NOT NULL CHECK (task_type IN ('content.review','ai_bank.candidate_review','seo.audit')), payload_json TEXT NOT NULL, payload_hash TEXT NOT NULL, payload_bytes INTEGER NOT NULL CHECK (payload_bytes BETWEEN 1 AND 8192), state TEXT NOT NULL CHECK (state IN ('queued','running','succeeded','failed','cancelled')), created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, terminal_at INTEGER, error_code TEXT)");
