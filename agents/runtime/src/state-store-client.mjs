@@ -39,7 +39,7 @@ function operationUrl(operation, input) {
   const url = new URL(definition.path, STORE_ORIGIN);
   if (operation === "task") {
     if (!isPlainObject(input) || Object.keys(input).length !== 1 ||
-        typeof input.taskId !== "string" || input.taskId.length < 1 || input.taskId.length > 64) {
+        typeof input.taskId !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(input.taskId)) {
       throw new TypeError("state_store_task_id_invalid");
     }
     url.searchParams.set("id", input.taskId);
@@ -49,7 +49,8 @@ function operationUrl(operation, input) {
     }
     if (input.day !== undefined) {
       if (typeof input.day !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(input.day) ||
-          Number.isNaN(Date.parse(input.day + "T00:00:00Z"))) {
+          !Number.isFinite(Date.parse(input.day + "T00:00:00Z")) ||
+          new Date(input.day + "T00:00:00Z").toISOString().slice(0, 10) !== input.day) {
         throw new TypeError("state_store_usage_day_invalid");
       }
       url.searchParams.set("day", input.day);
