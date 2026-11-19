@@ -49,3 +49,27 @@ test("unknown routes do not expose runtime internals", async () => {
   assert.equal(response.status, 404);
   assert.equal((await response.json()).error, "not_found");
 });
+
+test("run requires operator authentication if both safety flags are opened", async () => {
+  const response = await worker.fetch(request("/run", "POST"), {
+    AGENT_ENABLED: "true",
+    AGENT_PAUSED: "false",
+  });
+  assert.equal(response.status, 401);
+  assert.equal((await response.json()).error, "operator_auth_required");
+});
+
+test("run remains unimplemented after valid operator authentication", async () => {
+  const token = "preview-only-test-secret-0123456789abcdef";
+  const authorizedRequest = new Request("https://agent-runtime-preview.example.workers.dev/run", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + token },
+  });
+  const response = await worker.fetch(authorizedRequest, {
+    AGENT_ENABLED: "true",
+    AGENT_PAUSED: "false",
+    AGENT_OPERATOR_TOKEN: token,
+  });
+  assert.equal(response.status, 501);
+  assert.equal((await response.json()).error, "execution_not_implemented");
+});
