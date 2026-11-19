@@ -38,7 +38,7 @@ The GitHub Actions workflow is authoritative for the test dependency tree: it ap
 
 ## Limits and retention
 
-- Hard ceilings: 1,000 accepted tasks/day, 100 in-flight tasks, and 8 KiB serialized task request.
+- Enforced pilot ceilings: 100 accepted tasks/day, 5 in-flight tasks, and 8 KiB serialized task request. The implementation rejects higher configured values; these are code-level limits, not measured account quota.
 - Daily usage is counted in UTC. In-flight usage is derived from rows in \`queued\` or \`running\`, not an in-memory counter.
 - Completed/failed/cancelled task rows are retained for 30 days; audit events and daily-usage rows are retained for 90 days. Idempotency protection therefore lasts for the task-retention period.
 - Storage errors, unsupported schema versions, and invalid limits fail closed. There is no memory fallback.
