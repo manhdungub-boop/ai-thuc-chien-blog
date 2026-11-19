@@ -23,6 +23,62 @@ function jsonResponse(body, status = 200) {
 }
 function isObject(value) { return value !== null && typeof value === "object" && !Array.isArray(value); }
 
+function parseControlJson(text) {
+  let index = 0;
+  const skipWhitespace = () => {
+    while (index < text.length && /[\\t\\n\\r ]/.test(text[index])) index++;
+  };
+  const readString = () => {
+    const start = index;
+    if (text[index] !== '"') throw new Error("control_json_invalid");
+    index++;
+    while (index < text.length) {
+      const code = text.charCodeAt(index);
+      const character = text[index];
+      if (character === '"') {
+        index++;
+        return JSON.parse(text.slice(start, index));
+      }
+      if (character === "\\\\") {
+        index++;
+        if (index >= text.length) throw new Error("control_json_invalid");
+        if (text[index] === "u") {
+          if (!/^[0-9a-fA-F]{4}$/.test(text.slice(index + 1, index + 5))) throw new Error("control_json_invalid");
+          index += 5;
+        } else {
+          if (!/["\\\\/bfnrt]/.test(text[index])) throw new Error("control_json_invalid");
+          index++;
+        }
+        continue;
+      }
+      if (code < 0x20) throw new Error("control_json_invalid");
+      index++;
+    }
+    throw new Error("control_json_invalid");
+  };
+
+  skipWhitespace();
+  if (text[index++] !== "{") throw new Error("control_json_invalid");
+  skipWhitespace();
+  if (text[index] === "}") {
+    index++;
+    skipWhitespace();
+    if (index !== text.length) throw new Error("control_json_invalid");
+    return {};
+  }
+  const key = readString();
+  if (key !== "reason") throw new Error("control_json_invalid");
+  skipWhitespace();
+  if (text[index++] !== ":") throw new Error("control_json_invalid");
+  skipWhitespace();
+  const reason = readString();
+  skipWhitespace();
+  if (text[index++] !== "}") throw new Error("control_json_invalid");
+  skipWhitespace();
+  if (index !== text.length) throw new Error("control_json_invalid");
+  return { reason };
+}
+
 async function readBoundedJsonRequest(request, maxBytes) {
   const declared = request.headers.get("content-length");
   if (declared !== null) {
@@ -53,7 +109,7 @@ async function readBoundedJsonRequest(request, maxBytes) {
   let offset = 0;
   for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
   try {
-    return { ok: true, value: JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) };
+    return { ok: true, value: parseControlJson(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) };
   } catch {
     return { ok: false, status: 400 };
   }
