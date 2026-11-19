@@ -195,3 +195,30 @@ test("bridge fails closed when the internal token is missing", async () => {
   assert.equal(response.status, 503);
   assert.equal(calls.length, 0);
 });
+
+
+test("bridge maps malformed and oversized State Store responses to generic unavailable errors", async () => {
+  const token = OPERATOR_TOKEN;
+  const incoming = new Request("https://agent-runtime-preview.example.workers.dev/internal/usage", {
+    headers: { Authorization: "Bearer " + token },
+  });
+  for (const response of [
+    new Response("not-json", { status: 200 }),
+    new Response("x".repeat(16 * 1024 + 1), { status: 200 }),
+    new Response(JSON.stringify({ ok: false, error: "database_sql_detail" }), { status: 500 }),
+  ]) {
+    const env = {
+      AGENT_OPERATOR_TOKEN: token,
+      AGENT_STATE_STORE_TOKEN: STATE_TOKEN,
+      AGENT_STATE_STORE: {
+        idFromName: () => "fixed-object-id",
+        get: () => ({ fetch: async () => response }),
+      },
+    };
+    const result = await worker.fetch(incoming, env);
+    assert.equal(result.status, 503);
+    const body = await result.json();
+    assert.equal(body.error, "state_store_unavailable");
+    assert.equal(JSON.stringify(body).includes("database_sql_detail"), false);
+  }
+});
