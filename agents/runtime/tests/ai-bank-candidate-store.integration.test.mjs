@@ -177,21 +177,68 @@ async function restoreTestSnapshot(state, snapshot) {
     ai_bank_review_evidence_releases: ["evidence_id", "candidate_release_url", "associated_at"],
     ai_bank_evidence_audit_events: ["event_id", "actor_subject", "actor_email", "request_sha256", "evidence_id", "recorded_at"]
   };
-  state.storage.transactionSync(() => {
-    for (const table of SNAPSHOT_TABLES) {
-      for (const row of snapshot.tables[table.name]) {
+  const keys = {
+    ai_bank_candidates: ["candidate_id"],
+    ai_bank_review_evidence: ["evidence_id"],
+    ai_bank_review_evidence_releases: ["evidence_id", "candidate_release_url"],
+    ai_bank_evidence_audit_events: ["event_id"]
+  };
+  try {
+    state.storage.transactionSync(() => {
+      for (const table of SNAPSHOT_TABLES) {
         const names = columns[table.name];
-        if (Object.keys(row).sort().join("|") !== names.slice().sort().join("|")) {
-          throw new Error("snapshot_row_schema_invalid");
+        const keyNames = keys[table.name];
+        const expectedRows = snapshot.tables[table.name];
+        const expectedByKey = new Map(expectedRows.map(row => [
+          canonicalSnapshotJson(keyNames.map(key => row[key])), row
+        ]));
+
+        // Existing rows must be an exact subset of the snapshot. Any conflicting
+        // row or unrelated destination data aborts the entire SQLite transaction.
+        const existingRows = state.storage.sql.exec(
+          "SELECT * FROM " + table.name
+        ).toArray();
+        for (const existing of existingRows) {
+          const expected = expectedByKey.get(
+            canonicalSnapshotJson(keyNames.map(key => existing[key]))
+          );
+          if (!expected || canonicalSnapshotJson(existing) !== canonicalSnapshotJson(expected)) {
+            throw new Error("snapshot_restore_conflict");
+          }
         }
-        state.storage.sql.exec(
-          "INSERT OR IGNORE INTO " + table.name + " (" + names.join(", ") + ") VALUES (" +
-          names.map(() => "?").join(", ") + ")",
-          ...names.map(name => row[name])
-        );
+
+        for (const row of expectedRows) {
+          if (Object.keys(row).sort().join("|") !== names.slice().sort().join("|")) {
+            throw new Error("snapshot_row_schema_invalid");
+          }
+          const existing = state.storage.sql.exec(
+            "SELECT * FROM " + table.name + " WHERE " +
+            keyNames.map(key => key + " = ?").join(" AND "),
+            ...keyNames.map(key => row[key])
+          ).toArray()[0];
+          if (existing) {
+            if (canonicalSnapshotJson(existing) !== canonicalSnapshotJson(row)) {
+              throw new Error("snapshot_restore_conflict");
+            }
+            continue;
+          }
+          state.storage.sql.exec(
+            "INSERT INTO " + table.name + " (" + names.join(", ") + ") VALUES (" +
+            names.map(() => "?").join(", ") + ")",
+            ...names.map(name => row[name])
+          );
+        }
       }
+    });
+  } catch (error) {
+    if (error?.message === "snapshot_restore_conflict") {
+      return { restored: false, reason: "snapshot_restore_conflict" };
     }
-  });
+    if (error?.message === "snapshot_row_schema_invalid") {
+      return { restored: false, reason: "snapshot_row_schema_invalid" };
+    }
+    throw error;
+  }
   const restored = await captureTestSnapshot(state, 1);
   if (restored.manifest_sha256 !== snapshot.manifest_sha256) {
     return { restored: false, reason: "restored_snapshot_digest_mismatch" };
@@ -248,6 +295,51 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
       captureTestSnapshot(state, 1)
     );
     expect(sourceAfterRestore.manifest_sha256).toBe(sourceSnapshot.manifest_sha256);
+  });
+
+  it("rolls back the entire restore when an existing primary key has conflicting content", async () => {
+    const now = Date.parse("2026-11-19T10:00:00.000Z");
+    await store.upsertCandidates([candidate()], now);
+    const accepted = await submitEvidence(store, "github:ollama/ollama", {
+      check_type: "pricing_and_free_limits",
+      source_title: "Official pricing page",
+      source_url: "https://ollama.com/pricing",
+      excerpt: "Evidence to verify atomic restore rollback."
+    }, now, "f4e6d1c2-3b7f-4a91-8c22-1234567890ab");
+    expect(accepted.accepted).toBe(true);
+    const snapshot = await runInDurableObject(store, async (_instance, state) =>
+      captureTestSnapshot(state, 1)
+    );
+
+    const destination = env.AGENT_AI_BANK_CANDIDATE_STORE.getByName(
+      "agent-ai-bank-candidates-conflict-" + testIndex
+    );
+    await runInDurableObject(destination, async (_instance, state) => {
+      state.storage.sql.exec(
+        "INSERT INTO ai_bank_candidates " +
+        "(candidate_id, repository, candidate_json, release_at, first_seen_at, last_seen_at) " +
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        "github:ollama/ollama", "ollama/ollama", "{\"conflicting\":true}", 1,
+        "2026-11-19T00:00:00.000Z", "2026-11-19T00:00:00.000Z"
+      );
+      const before = Object.fromEntries(SNAPSHOT_TABLES.map(table => [
+        table.name,
+        state.storage.sql.exec("SELECT COUNT(*) AS count FROM " + table.name).one().count
+      ]));
+      expect(await restoreTestSnapshot(state, snapshot)).toEqual({
+        restored: false,
+        reason: "snapshot_restore_conflict"
+      });
+      const after = Object.fromEntries(SNAPSHOT_TABLES.map(table => [
+        table.name,
+        state.storage.sql.exec("SELECT COUNT(*) AS count FROM " + table.name).one().count
+      ]));
+      expect(after).toEqual(before);
+      expect(state.storage.sql.exec(
+        "SELECT candidate_json FROM ai_bank_candidates WHERE candidate_id = ?",
+        "github:ollama/ollama"
+      ).one().candidate_json).toBe("{\"conflicting\":true}");
+    });
   });
 
   it("rejects a tampered snapshot before writing to the destination emulator object", async () => {
