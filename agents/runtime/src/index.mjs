@@ -40,7 +40,13 @@ function createBudgetedFetch(store, day, scope) {
 
 async function executeTask(store, taskType, taskId, payload, handler, getExternalCalls = () => 0) {
   const enqueued = await store.enqueue({ id: taskId, task_type: taskType, payload });
-  if (!enqueued.accepted) throw new Error("task_enqueue_rejected");
+  if (!enqueued.accepted) {
+    return {
+      status: enqueued.reason === "circuit_breaker_open" ? "paused" : "not_admitted",
+      reason: enqueued.reason,
+      external_calls: 0
+    };
+  }
   if (enqueued.task.status === "completed") {
     return { status: "already_completed", result: enqueued.task.result, external_calls: 0 };
   }
@@ -50,7 +56,12 @@ async function executeTask(store, taskType, taskId, payload, handler, getExterna
 
   const claimed = await store.claim([taskType], taskId);
   if (!claimed.task) {
-    return { status: enqueued.task.status === "leased" ? "already_leased" : "not_claimed", external_calls: 0 };
+    return {
+      status: claimed.reason === "circuit_breaker_open" ? "paused" :
+        enqueued.task.status === "leased" ? "already_leased" : "not_claimed",
+      reason: claimed.reason,
+      external_calls: 0
+    };
   }
 
   try {
@@ -271,6 +282,8 @@ export class AgentSupervisorWorkflow extends WorkflowEntrypoint {
         ai_bank_discovery: await store.getExternalRequestBudget(budgetDay, "ai_bank_discovery"),
         content_research: await store.getExternalRequestBudget(budgetDay, "content_research")
       };
+      const taskAdmission = await store.getDailyAdmissionUsage(budgetDay);
+      const circuitBreaker = await store.getControl();
       return {
         cycle_id: cycleId,
         scheduled_at: scheduledAt,
@@ -286,6 +299,8 @@ export class AgentSupervisorWorkflow extends WorkflowEntrypoint {
         ).length,
         external_calls: externalCalls,
         daily_budgets: dailyBudgets,
+        task_admission: taskAdmission,
+        circuit_breaker: circuitBreaker,
         catalog_modified: false,
         public_content_modified: false,
         production_access: false
