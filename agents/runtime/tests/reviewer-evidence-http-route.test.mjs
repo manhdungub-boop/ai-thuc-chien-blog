@@ -5,8 +5,7 @@ const origin = "https://ai-thuc-chien-agent-runtime-preview.test-account.workers
 const path = origin + "/api/reviewer/drafts/draft-review-12345678/evidence-review";
 const body = JSON.stringify({
   expected_version: 1,
-  ledger: { status: "test-ledger" },
-  review_record: { status: "test-review" }
+  decisions: [{ claim_id: "claim-01", decision: "needs_revision", reviewer_note: "The sources require a closer comparison.", evidence_reviews: [] }]
 });
 
 describe("authenticated reviewer evidence HTTP route", () => {
@@ -55,9 +54,9 @@ describe("authenticated reviewer evidence HTTP route", () => {
         getByName(name) {
           expect(name).toBe("primary");
           return {
-            async recordEvidenceReview(...args) {
+            async recordReviewerClaimDecisions(...args) {
               received = args;
-              return { recorded: false, reason: "reviewer_session_invalid" };
+              return { authorized: true, recorded: false, reason: "reviewer_session_invalid" };
             }
           };
         }
@@ -73,9 +72,9 @@ describe("authenticated reviewer evidence HTTP route", () => {
       body
     }), env);
     expect(response.status).toBe(400);
-    expect(received).toHaveLength(5);
+    expect(received).toHaveLength(4);
     expect(received[0]).toBe("draft-review-12345678");
-    expect(received[4]).toBe(sessionToken);
+    expect(received[3]).toBe(sessionToken);
     expect(await response.json()).toMatchObject({ error: "reviewer_session_invalid" });
   });
 
@@ -84,8 +83,9 @@ describe("authenticated reviewer evidence HTTP route", () => {
       AGENT_DRAFT_STORE: {
         getByName() {
           return {
-            async recordEvidenceReview() {
+            async recordReviewerClaimDecisions() {
               return {
+                authorized: true,
                 recorded: true,
                 owner_release_review_eligible: true,
                 readiness: { status: "eligible_for_owner_release_review", publication_authorized: false }
