@@ -440,6 +440,6 @@ test("draft artifact persistence runs deterministic quality review only after pr
   const gate = draftStoreSource.indexOf("reviewArticleDraft(draft)", admission);
   assert.ok(admission >= 0);
   assert.ok(gate > admission, "quality review must run only after provider admission");
-  assert.equal((draftStoreSource.match(/runPolicyGatedQualityReview\(draft\)/g) || []).length, 3,
-    "create and revision paths must both use the same policy gate, plus helper declaration");
+  assert.equal((draftStoreSource.match(/runPolicyGatedQualityReview\(draft\)/g) || []).length, 4,
+    "create, revision, and explicit re-review paths must use the same policy gate, plus helper declaration");
 });
