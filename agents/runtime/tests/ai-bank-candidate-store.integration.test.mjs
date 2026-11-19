@@ -252,17 +252,27 @@ async function restoreTestSnapshotInBatches(state, snapshot, batchSize = 2, inte
   let batchesCommitted = 0;
   for (let offset = 0; offset < orderedRows.length; offset += batchSize) {
     const batch = orderedRows.slice(offset, offset + batchSize);
-    state.storage.transactionSync(() => {
-      for (const item of batch) {
-        const names = RESTORE_COLUMNS[item.table];
-        state.storage.sql.exec(
-          "INSERT OR IGNORE INTO " + item.table + " (" + names.join(", ") + ") VALUES (" +
-          names.map(() => "?").join(", ") + ")",
-          ...names.map(name => item.row[name])
-        );
-      }
+    const missingRows = batch.filter(item => {
+      const names = RESTORE_COLUMNS[item.table];
+      const where = names.map(name => name + " = ?").join(" AND ");
+      return state.storage.sql.exec(
+        "SELECT 1 AS present FROM " + item.table + " WHERE " + where + " LIMIT 1",
+        ...names.map(name => item.row[name])
+      ).toArray().length === 0;
     });
-    batchesCommitted += 1;
+    if (missingRows.length > 0) {
+      state.storage.transactionSync(() => {
+        for (const item of missingRows) {
+          const names = RESTORE_COLUMNS[item.table];
+          state.storage.sql.exec(
+            "INSERT OR IGNORE INTO " + item.table + " (" + names.join(", ") + ") VALUES (" +
+            names.map(() => "?").join(", ") + ")",
+            ...names.map(name => item.row[name])
+          );
+        }
+      });
+      batchesCommitted += 1;
+    }
     if (batchesCommitted >= interruptAfterBatches && offset + batchSize < orderedRows.length) {
       throw new Error("simulated_restore_interruption");
     }
@@ -360,6 +370,14 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
         state.storage.sql.exec("SELECT COUNT(*) AS count FROM " + table.name).one().count
       ]));
       expect(Object.values(partialCounts).reduce((sum, value) => sum + value, 0)).toBe(1);
+
+      await expect(restoreTestSnapshotInBatches(state, sourceSnapshot, 1, 1))
+        .rejects.toThrow("simulated_restore_interruption");
+      const afterSecondInterruption = Object.fromEntries(SNAPSHOT_TABLES.map(table => [
+        table.name,
+        state.storage.sql.exec("SELECT COUNT(*) AS count FROM " + table.name).one().count
+      ]));
+      expect(Object.values(afterSecondInterruption).reduce((sum, value) => sum + value, 0)).toBe(2);
 
       const resumed = await restoreTestSnapshotInBatches(state, sourceSnapshot, 1);
       expect(resumed.restored).toBe(true);
