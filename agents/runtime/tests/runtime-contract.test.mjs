@@ -74,7 +74,8 @@ test("default runtime config is disabled, paused, and has no recurring Workflow 
     AGENT_ENABLED: "false",
     AGENT_PAUSED: "true",
     AGENT_SCHEDULE_MODE: "manual_only_no_cron",
-    AGENT_REVIEWER_AUTH_ENABLED: "false"
+    AGENT_REVIEWER_AUTH_ENABLED: "false",
+    AGENT_OPERATOR_CONTROL_ENABLED: "false"
   });
   assert.equal(config.workflows.length, 1);
   assert.equal(config.workflows[0].schedules, undefined);
@@ -88,7 +89,8 @@ test("manual Preview config has no recurring Workflow schedule and isolated Work
     AGENT_ENABLED: "false",
     AGENT_PAUSED: "true",
     AGENT_SCHEDULE_MODE: "manual_only_no_cron",
-    AGENT_REVIEWER_AUTH_ENABLED: "false"
+    AGENT_REVIEWER_AUTH_ENABLED: "false",
+    AGENT_OPERATOR_CONTROL_ENABLED: "false"
   });
   assert.equal(previewConfig.workflows.length, 1);
   assert.equal(previewConfig.workflows[0].schedules, undefined);
@@ -105,7 +107,8 @@ test("runtime has isolated SQLite storage and no website Production bindings", (
     AGENT_ENABLED: "false",
     AGENT_PAUSED: "true",
     AGENT_SCHEDULE_MODE: "manual_only_no_cron",
-    AGENT_REVIEWER_AUTH_ENABLED: "false"
+    AGENT_REVIEWER_AUTH_ENABLED: "false",
+    AGENT_OPERATOR_CONTROL_ENABLED: "false"
   });
   assert.equal(config.workflows[0].schedules, undefined);
   assert.equal(config.routes, undefined);
@@ -122,6 +125,21 @@ test("runtime has isolated SQLite storage and no website Production bindings", (
     { tag: "v2-agent-draft-store", new_sqlite_classes: ["AgentDraftStore"] },
     { tag: "v3-ai-bank-candidate-store", new_sqlite_classes: ["AgentAIBankCandidateStore"] }
   ]);
+});
+
+test("operator control API is authenticated, same-origin, separately allowlisted, and disabled by default", () => {
+  assert.equal(config.vars.AGENT_OPERATOR_CONTROL_ENABLED, "false");
+  assert.equal(previewConfig.vars.AGENT_OPERATOR_CONTROL_ENABLED, "false");
+  assert.match(source, /api\\/operator\\/runtime-control/);
+  assert.match(source, /request\\.headers\\.get\\("origin"\\) !== url\\.origin/);
+  assert.match(source, /store\\.setOperatorControl/);
+  assert.match(source, /store\\.getOperatorControl/);
+  assert.match(store, /verifyGoogleReviewerSessionToken\\(sessionToken, this\\.env\\)/);
+  assert.match(store, /AGENT_OPERATOR_ALLOWED_EMAILS/);
+  assert.match(store, /operator_control_disabled/);
+  assert.match(store, /operator_resume/);
+  assert.match(runtimeReadme, /Authenticated operator control plane/);
+  assert.match(runtimeReadme, /does not override `AGENT_ENABLED=false` or `AGENT_PAUSED=true`/);
 });
 
 test("health endpoint is read-only and does not expose task enqueue", () => {
