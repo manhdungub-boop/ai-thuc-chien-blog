@@ -105,6 +105,7 @@ test("rejects wrong algorithm, key URL injection, and unknown signing key", asyn
 test("rejects expired, future-issued, and excessively long-lived tokens", async () => {
   assert.equal((await verify(await signedToken({ exp: now - 1 }))).error, "oidc_claims_invalid");
   assert.equal((await verify(await signedToken({ iat: now + 120 }))).error, "oidc_claims_invalid");
+  assert.equal((await verify(await signedToken({ nbf: now + 120 }))).error, "oidc_claims_invalid");
   assert.equal((await verify(await signedToken({ exp: now + 900 }))).error, "oidc_claims_invalid");
 });
 
