@@ -18,7 +18,7 @@ function bodyError(status, code) {
 async function readBoundedJson(request) {
   const declaredLength = request.headers.get("Content-Length");
   if (declaredLength !== null) {
-    if (!/^\\d+$/.test(declaredLength)) throw bodyError(400, "request_content_length_invalid");
+    if (!/^[0-9]+$/.test(declaredLength)) throw bodyError(400, "request_content_length_invalid");
     if (Number(declaredLength) > MAX_REQUEST_BODY_BYTES) throw bodyError(413, "request_body_too_large");
   }
 
