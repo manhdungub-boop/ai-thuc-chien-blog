@@ -114,7 +114,8 @@ describe("AgentTaskStore Durable Object", () => {
 
     await runInDurableObject(store, async (_instance, state) => {
       state.storage.sql.exec(
-        "UPDATE tasks SET lease_until = ? WHERE id = ?",
+        "UPDATE tasks SET lease_until = ?, available_at = ? WHERE id = ?",
+        Date.now() - 1,
         Date.now() - 1,
         "task-fencing-0001"
       );
@@ -148,6 +149,15 @@ describe("AgentTaskStore Durable Object", () => {
       .rejects.toThrow("invalid_claim_task_types");
     expect(await store.stats()).toEqual({ leased: 1 });
 
+    expect(await store.claim(["ai_bank_discovery"], "task-invalid-claim-01"))
+      .toEqual({ task: null });
+    const delayed = await runInDurableObject(store, async (_instance, state) =>
+      state.storage.sql.exec("SELECT available_at FROM tasks WHERE id = ?", "task-invalid-claim-01").one().available_at
+    );
+    expect(delayed).toBeGreaterThan(Date.now());
+    await runInDurableObject(store, async (_instance, state) => {
+      state.storage.sql.exec("UPDATE tasks SET available_at = 0 WHERE id = ?", "task-invalid-claim-01");
+    });
     const recovered = await store.claim(["ai_bank_discovery"], "task-invalid-claim-01");
     expect(recovered.task.status).toBe("leased");
     expect(recovered.task.attempts).toBe(2);
@@ -177,6 +187,31 @@ describe("AgentTaskStore Durable Object", () => {
     expect(await store.stats()).toEqual({ dead: 1 });
   });
 
+  it("applies bounded exponential backoff after retryable failures", async () => {
+    await store.enqueue(task("task-backoff-0001"));
+    const first = await store.claim(["ai_bank_discovery"], "task-backoff-0001");
+    const firstRetry = await store.retry("task-backoff-0001", first.lease_token, "temporary_source_error");
+    expect(firstRetry).toEqual({ updated: true, status: "pending" });
+    const firstAvailableAt = await runInDurableObject(store, async (_instance, state) =>
+      state.storage.sql.exec("SELECT available_at FROM tasks WHERE id = ?", "task-backoff-0001").one().available_at
+    );
+    expect(firstAvailableAt - Date.now()).toBeGreaterThan(29_000);
+    expect(firstAvailableAt - Date.now()).toBeLessThanOrEqual(30_000);
+    expect(await store.claim(["ai_bank_discovery"], "task-backoff-0001")).toEqual({ task: null });
+
+    await runInDurableObject(store, async (_instance, state) => {
+      state.storage.sql.exec("UPDATE tasks SET available_at = 0 WHERE id = ?", "task-backoff-0001");
+    });
+    const second = await store.claim(["ai_bank_discovery"], "task-backoff-0001");
+    expect(second.task.attempts).toBe(2);
+    await store.retry("task-backoff-0001", second.lease_token, "temporary_source_error");
+    const secondAvailableAt = await runInDurableObject(store, async (_instance, state) =>
+      state.storage.sql.exec("SELECT available_at FROM tasks WHERE id = ?", "task-backoff-0001").one().available_at
+    );
+    expect(secondAvailableAt - Date.now()).toBeGreaterThan(119_000);
+    expect(secondAvailableAt - Date.now()).toBeLessThanOrEqual(120_000);
+  });
+
   it("moves a task to dead-letter after the fifth failed attempt", async () => {
     await store.enqueue(task("task-dead-letter-01"));
 
@@ -186,6 +221,11 @@ describe("AgentTaskStore Durable Object", () => {
       const result = await store.retry("task-dead-letter-01", claim.lease_token, "simulated_failure");
       expect(result.updated).toBe(true);
       expect(result.status).toBe(attempt === 5 ? "dead" : "pending");
+      if (attempt < 5) {
+        await runInDurableObject(store, async (_instance, state) => {
+          state.storage.sql.exec("UPDATE tasks SET available_at = 0 WHERE id = ?", "task-dead-letter-01");
+        });
+      }
     }
 
     expect(await store.claim()).toEqual({ task: null });
@@ -364,6 +404,11 @@ describe("AgentTaskStore Durable Object", () => {
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const claim = await store.claim(["ai_bank_discovery"], "retention-dead-old");
       await store.retry("retention-dead-old", claim.lease_token, "test_failure");
+      if (attempt < 4) {
+        await runInDurableObject(store, async (_instance, state) => {
+          state.storage.sql.exec("UPDATE tasks SET available_at = 0 WHERE id = ?", "retention-dead-old");
+        });
+      }
     }
 
     await store.enqueue(task("retention-pending-old"));
@@ -442,6 +487,11 @@ describe("AgentTaskStore Durable Object", () => {
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const claim = await store.claim(["ai_bank_discovery"], "retention-dead-new");
       await store.retry("retention-dead-new", claim.lease_token, "test_failure");
+      if (attempt < 4) {
+        await runInDurableObject(store, async (_instance, state) => {
+          state.storage.sql.exec("UPDATE tasks SET available_at = 0 WHERE id = ?", "retention-dead-new");
+        });
+      }
     }
 
     const result = await store.pruneTerminalTasks(now);
