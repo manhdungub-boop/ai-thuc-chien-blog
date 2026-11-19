@@ -1,4 +1,5 @@
 import { validateTaskRequest } from "./task-contract.mjs";
+import { hasValidOperatorBearer } from "./operator-auth.mjs";
 
 const SCHEMA_VERSION = 1;
 const DEFAULT_LIMITS = Object.freeze({ daily: 1000, concurrent: 100, payloadBytes: 8192 });
@@ -60,6 +61,9 @@ export class AgentStateStore {
   }
 
   async fetch(request) {
+    if (!await hasValidOperatorBearer(request, this.env)) {
+      return jsonResponse({ ok: false, error: "operator_auth_required" }, 401);
+    }
     try {
       await this.ready;
       const url = new URL(request.url);
