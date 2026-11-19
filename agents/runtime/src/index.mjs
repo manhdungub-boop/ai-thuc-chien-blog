@@ -253,7 +253,9 @@ export class AgentSupervisorWorkflow extends WorkflowEntrypoint {
             }
             const draftStore = this.env.AGENT_DRAFT_STORE.getByName("primary");
             const persisted = await draftStore.createDraft(
-              draftTaskId, brief.draft, research.result.evidence_retrieval.evidence
+              draftTaskId, brief.draft, research.result.evidence_retrieval.evidence.filter(
+                item => item.status === "source_retrieved_not_fact_checked"
+              )
             );
             if (!persisted.accepted) {
               return {
