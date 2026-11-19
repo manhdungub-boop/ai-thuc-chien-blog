@@ -56,6 +56,7 @@ test("Preview deployment workflow is manual, explicitly confirmed, token-isolate
   assert.match(previewConfig.vars.AGENT_REVIEWER_AUTH_ENABLED, /^false$/);
   assert.match(runtimeReadme, /implements the Google authorization-code callback flow/);
   assert.match(runtimeReadme, /Both `wrangler\.jsonc` and `wrangler\.preview\.jsonc` are unscheduled/);
+  assert.match(runtimeReadme, /https:\/\/ai-thuc-chien-agent-runtime-preview\.manhdungub\.workers\.dev\/auth\/google\/callback/);
   assert.doesNotMatch(runtimeReadme, /15-minute Workflow heartbeat|schedules `AgentSupervisorWorkflow` every 15 minutes|96 paused Workflow instances/);
   assert.doesNotMatch(runtimeReadme, /preview_cron_15m_paused/);
   assert.match(runtimeReadme, /no Google OAuth client, real Preview redirect registration/);
