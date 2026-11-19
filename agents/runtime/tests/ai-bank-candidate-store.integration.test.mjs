@@ -297,6 +297,52 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     expect(sourceAfterRestore.manifest_sha256).toBe(sourceSnapshot.manifest_sha256);
   });
 
+  it("resumes a partially imported exact snapshot without duplicating rows", async () => {
+    const now = Date.parse("2026-11-19T10:00:00.000Z");
+    await store.upsertCandidates([candidate()], now);
+    const accepted = await submitEvidence(store, "github:ollama/ollama", {
+      check_type: "pricing_and_free_limits",
+      source_title: "Official pricing page",
+      source_url: "https://ollama.com/pricing",
+      excerpt: "Evidence to verify interrupted restore resume."
+    }, now, "f4e6d1c2-3b7f-4a91-8c22-1234567890ac");
+    expect(accepted.accepted).toBe(true);
+    const snapshot = await runInDurableObject(store, async (_instance, state) =>
+      captureTestSnapshot(state, 1)
+    );
+
+    const destination = env.AGENT_AI_BANK_CANDIDATE_STORE.getByName(
+      "agent-ai-bank-candidates-partial-" + testIndex
+    );
+    await runInDurableObject(destination, async (_instance, state) => {
+      // Simulate an interrupted import after the candidate and evidence tables,
+      // before release associations and audit rows were written.
+      for (const tableName of ["ai_bank_candidates", "ai_bank_review_evidence"]) {
+        for (const row of snapshot.tables[tableName]) {
+          const names = Object.keys(row);
+          state.storage.sql.exec(
+            "INSERT INTO " + tableName + " (" + names.join(", ") + ") VALUES (" +
+            names.map(() => "?").join(", ") + ")",
+            ...names.map(name => row[name])
+          );
+        }
+      }
+      expect(await restoreTestSnapshot(state, snapshot)).toEqual({
+        restored: true,
+        manifest_sha256: snapshot.manifest_sha256
+      });
+      expect(await restoreTestSnapshot(state, snapshot)).toEqual({
+        restored: true,
+        manifest_sha256: snapshot.manifest_sha256
+      });
+      const counts = Object.fromEntries(SNAPSHOT_TABLES.map(table => [
+        table.name,
+        state.storage.sql.exec("SELECT COUNT(*) AS count FROM " + table.name).one().count
+      ]));
+      expect(counts).toEqual(snapshot.counts);
+    });
+  });
+
   it("rolls back the entire restore when an existing primary key has conflicting content", async () => {
     const now = Date.parse("2026-11-19T10:00:00.000Z");
     await store.upsertCandidates([candidate()], now);
