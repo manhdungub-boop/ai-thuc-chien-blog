@@ -84,7 +84,8 @@ describe("operator session authorization", () => {
 
   it("rejects a tampered session signature", async () => {
     const token = await createSessionToken(baseEnv);
-    const tampered = token.slice(0, -1) + (token.endsWith("A") ? "B" : "A");
+    const [payload, signature] = token.split(".");
+    const tampered = payload + "." + (signature[0] === "A" ? "B" : "A") + signature.slice(1);
     expect(await authorizeOperatorSession(tampered, baseEnv)).toEqual({
       authorized: false,
       reason: "operator_session_invalid"
