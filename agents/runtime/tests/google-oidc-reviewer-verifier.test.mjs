@@ -115,6 +115,18 @@ describe("Google OIDC reviewer identity verifier", () => {
       .toBe("google_id_token_time_or_nonce_rejected");
   });
 
+  it("rejects an ID token with a nonstandard lifetime longer than one hour", async () => {
+    const pair = await makeKeyPair();
+    const token = await makeToken(pair, {
+      iat: Math.floor(now / 1000) - 1800,
+      exp: Math.floor(now / 1000) + 2400
+    });
+    const result = await verifyGoogleReviewerIdToken(token, options(pair, {
+      fetchImpl: async () => { throw new Error("must_not_fetch"); }
+    }));
+    expect(result.status).toBe("google_id_token_time_or_nonce_rejected");
+  });
+
   it("rejects expired, future-issued, and not-yet-valid tokens", async () => {
     const pair = await makeKeyPair();
     const expired = await makeToken(pair, { exp: Math.floor(now / 1000) - 500 });
