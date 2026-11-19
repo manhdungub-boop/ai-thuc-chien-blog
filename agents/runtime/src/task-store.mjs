@@ -1,4 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
+import { verifyGoogleReviewerSessionToken } from "./google-reviewer-oauth.mjs";
 
 const TASK_TYPES = new Set([
   "ai_bank_discovery",
@@ -74,6 +75,7 @@ function safeTask(row) {
 export class AgentTaskStore extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
+    this.env = env;
     this.ctx.storage.sql.exec(`
       CREATE TABLE IF NOT EXISTS tasks (
         id TEXT PRIMARY KEY,
@@ -326,6 +328,62 @@ export class AgentTaskStore extends DurableObject {
       }
     }
     return { failure_count: count, paused: this.getControl().paused };
+  }
+
+  async authorizeOperator(sessionToken) {
+    if (this.env.AGENT_OPERATOR_CONTROL_ENABLED !== "true") {
+      return { authorized: false, reason: "operator_control_disabled" };
+    }
+    const operatorEmails = typeof this.env.AGENT_OPERATOR_ALLOWED_EMAILS === "string"
+      ? this.env.AGENT_OPERATOR_ALLOWED_EMAILS.split(",").map(value => value.trim().toLowerCase()).filter(Boolean)
+      : [];
+    if (operatorEmails.length !== 1 ||
+        !/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(operatorEmails[0]) ||
+        operatorEmails[0].length > 254) {
+      return { authorized: false, reason: "operator_allowlist_not_configured" };
+    }
+    const verified = await verifyGoogleReviewerSessionToken(sessionToken, this.env);
+    if (!verified.authenticated) return { authorized: false, reason: "operator_session_invalid" };
+    if (verified.reviewer.email !== operatorEmails[0]) {
+      return { authorized: false, reason: "operator_not_allowed" };
+    }
+    return { authorized: true, actor_ref: verified.reviewer.reviewer_ref };
+  }
+
+  async getOperatorControl(sessionToken) {
+    const auth = await this.authorizeOperator(sessionToken);
+    if (!auth.authorized) return auth;
+    return { authorized: true, control: this.getControl() };
+  }
+
+  async setOperatorControl(paused, reason, sessionToken) {
+    if (typeof paused !== "boolean" || typeof reason !== "string" ||
+        reason.trim().length < 12 || reason.trim().length > 240) {
+      return { authorized: false, changed: false, reason: "invalid_operator_control_request" };
+    }
+    const auth = await this.authorizeOperator(sessionToken);
+    if (!auth.authorized) return { ...auth, changed: false };
+    const now = Date.now();
+    const previous = this.getControl();
+    if (previous.paused === paused) {
+      return { authorized: true, changed: false, control: previous };
+    }
+    this.ctx.storage.sql.exec(
+      "UPDATE runtime_control SET paused = ?, changed_at = ?, reason = ? WHERE singleton_id = 1",
+      paused ? 1 : 0, now, reason.trim()
+    );
+    const eventType = paused ? "operator_pause" : "operator_resume";
+    const metadata = {
+      actor_ref: auth.actor_ref,
+      reason: reason.trim(),
+      previous_paused: previous.paused,
+      paused
+    };
+    this.ctx.storage.sql.exec(
+      "INSERT INTO task_store_audit (event_id, event_type, occurred_at, metadata_json) VALUES (?, ?, ?, ?)",
+      crypto.randomUUID(), eventType, now, JSON.stringify(metadata)
+    );
+    return { authorized: true, changed: true, control: this.getControl() };
   }
 
   getControl() {
