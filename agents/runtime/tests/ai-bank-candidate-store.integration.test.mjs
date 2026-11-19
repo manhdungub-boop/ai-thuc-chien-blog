@@ -393,6 +393,43 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     });
   });
 
+  it("handles concurrent retries of the same verified snapshot idempotently", async () => {
+    const now = Date.parse("2026-11-19T10:00:00.000Z");
+    await store.upsertCandidates([candidate()], now);
+    const accepted = await submitEvidence(store, "github:ollama/ollama", {
+      check_type: "pricing_and_free_limits",
+      source_title: "Official pricing page",
+      source_url: "https://ollama.com/pricing",
+      excerpt: "Concurrent restore fixture."
+    }, now, "d4e6d1c2-3b7f-4a91-8c22-1234567890ab");
+    expect(accepted.accepted).toBe(true);
+    const sourceSnapshot = await runInDurableObject(store, async (_instance, state) =>
+      captureTestSnapshot(state, 1)
+    );
+    const destination = env.AGENT_AI_BANK_CANDIDATE_STORE.getByName(
+      "agent-ai-bank-candidates-restore-concurrent-" + testIndex
+    );
+
+    await runInDurableObject(destination, async (_instance, state) => {
+      const results = await Promise.all([
+        restoreTestSnapshotInBatches(state, sourceSnapshot, 1),
+        restoreTestSnapshotInBatches(state, sourceSnapshot, 1)
+      ]);
+      expect(results.every(result => result.restored === true)).toBe(true);
+      expect(results.every(result =>
+        result.manifest_sha256 === sourceSnapshot.manifest_sha256
+      )).toBe(true);
+
+      const counts = Object.fromEntries(SNAPSHOT_TABLES.map(table => [
+        table.name,
+        state.storage.sql.exec("SELECT COUNT(*) AS count FROM " + table.name).one().count
+      ]));
+      expect(counts).toEqual(sourceSnapshot.counts);
+      const restored = await captureTestSnapshot(state, 1);
+      expect(restored.manifest_sha256).toBe(sourceSnapshot.manifest_sha256);
+    });
+  });
+
   it("rejects destination mutation between interrupted restore and resume without writing more rows", async () => {
     const now = Date.parse("2026-11-19T10:00:00.000Z");
     await store.upsertCandidates([candidate()], now);
