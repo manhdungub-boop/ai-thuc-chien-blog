@@ -1,6 +1,6 @@
 # Agent Runtime — internal Worker-to-State-Store security boundary
 
-Status: **partially implemented in source and local tests; no Durable Object binding, secret, public operator API, or deployment is configured.**
+Status: **internal token verification and a fixed-operation Worker client are implemented and tested in source; the client is not wired to a Worker route, and no Durable Object binding, secret, public operator API, or deployment is configured.**
 
 Date: 2026-11-19
 
@@ -8,7 +8,7 @@ Date: 2026-11-19
 
 Keep the SQLite Durable Object reachable only through the Agent Runtime Worker code path. Do not expose a public route that forwards arbitrary caller-supplied paths, headers, or bodies to the Durable Object.
 
-The credential separation is now implemented in source and covered by integration tests: `state-store.mjs` calls `hasValidStateStoreBearer` from `internal-auth.mjs`, and the tests verify that the external `AGENT_OPERATOR_TOKEN` is rejected by every State Store route. The Worker-to-DO call path is not implemented yet. Before adding a Durable Object binding, complete that call path while preserving this separation:
+The credential separation is implemented in source and covered by integration tests: `state-store.mjs` calls `hasValidStateStoreBearer` from `internal-auth.mjs`; tests reject the external `AGENT_OPERATOR_TOKEN` on every State Store route and cover missing/weak/malformed/wrong internal credentials plus rotation. A fixed-operation client now exists in `state-store-client.mjs`; it chooses the fixed object identity, constructs only fixed internal URLs, applies the dedicated internal token, validates bounded operation payloads, and never forwards caller headers. It is not wired into the Worker and has no configured namespace binding. Before adding a Durable Object binding, wire this client only behind reviewed Worker ingress while preserving this separation:
 
 - `AGENT_OPERATOR_TOKEN`: authenticates an authorized operator at the Worker ingress. It must never be forwarded to the Durable Object or exposed to browser code.
 - `AGENT_STATE_STORE_TOKEN`: a distinct high-entropy secret used only by the Worker when calling the Durable Object and by the Durable Object when authenticating that internal call. It must never be accepted as an external operator credential.
@@ -38,8 +38,8 @@ The credential separation is now implemented in source and covered by integratio
 
 1. Missing, invalid, and rotated internal tokens fail closed for every State Store route.
 2. An external operator token is rejected by the State Store; an internal State Store token is rejected by the Worker ingress.
-3. The Worker never forwards caller Authorization, cookies, Origin, or arbitrary headers.
-4. The Worker can call only the fixed Durable Object identity and allowlisted operations.
+3. The client never forwards caller Authorization, cookies, Origin, or arbitrary headers (unit-tested); verify the same invariant when the client is wired to Worker ingress.
+4. The client can call only the fixed Durable Object identity and allowlisted operations (unit-tested); verify integration against the real Preview namespace only after the binding gate.
 5. Missing binding, missing secret, storage failure, and malformed response all fail closed without memory fallback.
 6. Paused/disabled flags block reservations and queued-to-running transitions while allowing only explicitly safe terminal cleanup.
 7. No secret appears in logs, responses, task rows, audit rows, traces, or CI output.
