@@ -91,6 +91,18 @@ export class AgentReviewerAuthStore extends DurableObject {
     super(ctx, env);
     this.ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS reviewer_auth_transactions (state_hash TEXT PRIMARY KEY, browser_hash TEXT NOT NULL, nonce TEXT NOT NULL, code_verifier TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)");
     this.ctx.storage.sql.exec("CREATE INDEX IF NOT EXISTS reviewer_auth_transactions_expiry ON reviewer_auth_transactions(expires_at)");
+    this.ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS reviewer_auth_start_rate_limit (id INTEGER PRIMARY KEY CHECK (id = 1), window_started_at INTEGER NOT NULL, attempts INTEGER NOT NULL)");
+  }
+  consumeStartRateLimit(nowSeconds) {
+    if (!Number.isInteger(nowSeconds) || nowSeconds < 0) return { allowed: false, retry_after_seconds: 60 };
+    const row = this.ctx.storage.sql.exec("SELECT window_started_at, attempts FROM reviewer_auth_start_rate_limit WHERE id = 1").toArray()[0];
+    if (!row || nowSeconds >= row.window_started_at + 60) {
+      this.ctx.storage.sql.exec("INSERT INTO reviewer_auth_start_rate_limit (id, window_started_at, attempts) VALUES (1, ?, 1) ON CONFLICT(id) DO UPDATE SET window_started_at = excluded.window_started_at, attempts = 1", nowSeconds);
+      return { allowed: true, remaining: 9 };
+    }
+    if (row.attempts >= 10) return { allowed: false, retry_after_seconds: Math.max(1, row.window_started_at + 60 - nowSeconds) };
+    this.ctx.storage.sql.exec("UPDATE reviewer_auth_start_rate_limit SET attempts = attempts + 1 WHERE id = 1");
+    return { allowed: true, remaining: 9 - row.attempts };
   }
   createTransaction(stateHash, browserHash, nonce, codeVerifier, nowSeconds) {
     if (![stateHash, browserHash, nonce, codeVerifier].every(x => typeof x === "string" && x.length >= 32 && x.length <= 128) || !Number.isInteger(nowSeconds)) return { created: false };
@@ -157,6 +169,8 @@ export async function handleGoogleReviewerAuth(request, env, { fetchImpl = fetch
 
   if (path === "/auth/google/start") {
     if (url.origin !== cfg.redirectOrigin) return json({ error: "preview_origin_mismatch" }, 400);
+    const rateLimit = await store.consumeStartRateLimit(nowSeconds);
+    if (!rateLimit.allowed) return json({ error: "login_start_rate_limited" }, 429, { "retry-after": String(rateLimit.retry_after_seconds) });
     const state = randomToken();
     const binding = randomToken();
     const nonce = randomToken();
