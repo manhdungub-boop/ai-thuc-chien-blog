@@ -1,3 +1,5 @@
+import { validateTaskRequest } from "./task-contract.mjs";
+
 const INTERNAL_TOKEN_PATTERN = /^Bearer [A-Za-z0-9._~+/-]+=*$/;
 const MAX_TOKEN_LENGTH = 512;
 const MAX_BODY_BYTES = 16 * 1024;
@@ -57,11 +59,17 @@ function operationUrl(operation, input) {
         !Object.hasOwn(input, "task") || !isPlainObject(input.task)) {
       throw new TypeError("state_store_request_invalid");
     }
+    const validation = validateTaskRequest(input.task);
+    if (!validation.ok) throw new TypeError("state_store_task_invalid:" + validation.error);
   } else if (operation === "transition") {
     const keys = isPlainObject(input) ? Object.keys(input) : [];
     if (!isPlainObject(input) || !Object.hasOwn(input, "taskId") ||
         !Object.hasOwn(input, "status") ||
-        keys.some((key) => !["taskId", "status", "errorCode"].includes(key))) {
+        keys.some((key) => !["taskId", "status", "errorCode"].includes(key)) ||
+        typeof input.taskId !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(input.taskId) ||
+        !["running", "succeeded", "failed", "cancelled"].includes(input.status) ||
+        (input.errorCode !== undefined && (input.status !== "failed" ||
+          typeof input.errorCode !== "string" || !/^[a-z0-9_.:-]{1,64}$/.test(input.errorCode)))) {
       throw new TypeError("state_store_request_invalid");
     }
   }
