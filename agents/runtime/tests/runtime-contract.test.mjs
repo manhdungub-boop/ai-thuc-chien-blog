@@ -45,7 +45,7 @@ test("Preview deployment workflow is manual, explicitly confirmed, token-isolate
   assert.match(previewDeployWorkflow, /wrangler deploy --dry-run/);
   assert.match(previewDeployWorkflow, /wrangler deploy --config wrangler\.preview\.jsonc/);
   assert.match(previewDeployWorkflow, /\.paused == true/);
-  assert.match(previewDeployWorkflow, /preview_cron_15m_paused/);
+  assert.match(previewDeployWorkflow, /manual_only_no_cron/);
   assert.match(previewDeployWorkflow, /production_access == false/);
   assert.match(previewDeployWorkflow, /content_draft_executor_registered == true/);
   assert.match(previewDeployWorkflow, /content_draft_executor_enabled == false/);
@@ -76,17 +76,17 @@ test("default runtime config is disabled, paused, and has no recurring Workflow 
   assert.equal(config.workflows[0].concurrency.limit, 1);
 });
 
-test("manual Preview config has a paused 15-minute Workflow schedule and isolated Worker resources", () => {
+test("manual Preview config has no recurring Workflow schedule and isolated Worker resources", () => {
   assert.equal(previewConfig.name, "ai-thuc-chien-agent-runtime-preview");
   assert.equal(previewConfig.workers_dev, true);
   assert.deepEqual(previewConfig.vars, {
     AGENT_ENABLED: "false",
     AGENT_PAUSED: "true",
-    AGENT_SCHEDULE_MODE: "preview_cron_15m_paused",
+    AGENT_SCHEDULE_MODE: "manual_only_no_cron",
     AGENT_REVIEWER_AUTH_ENABLED: "false"
   });
   assert.equal(previewConfig.workflows.length, 1);
-  assert.deepEqual(previewConfig.workflows[0].schedules, ["*/15 * * * *"]);
+  assert.equal(previewConfig.workflows[0].schedules, undefined);
   assert.equal(previewConfig.routes, undefined);
   assert.equal(previewConfig.d1_databases, undefined);
   assert.equal(previewConfig.ai, undefined);
