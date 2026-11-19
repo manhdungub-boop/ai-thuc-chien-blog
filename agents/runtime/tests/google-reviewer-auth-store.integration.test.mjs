@@ -11,7 +11,7 @@ describe("AgentReviewerAuthStore Durable Object", () => {
     store = env.AGENT_REVIEWER_AUTH_STORE.getByName("reviewer-auth-store-test-" + Date.now() + "-" + testIndex + "-" + crypto.randomUUID());
   });
 
-  it("limits Google reviewer login starts to ten per rolling minute and resets the window", async () => {
+  it("limits Google reviewer login starts to ten per fixed 60-second window", async () => {
     const nowSeconds = 1_800_000_000;
     for (let attempt = 0; attempt < 10; attempt += 1) {
       await expect(store.consumeStartRateLimit(nowSeconds)).resolves.toMatchObject({ allowed: true });
