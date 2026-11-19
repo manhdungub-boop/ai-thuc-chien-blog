@@ -134,7 +134,7 @@ test("operator control API is authenticated, same-origin, separately allowlisted
   assert.ok(source.includes('request.headers.get("origin") !== url.origin'));
   assert.ok(source.includes("store.setOperatorControl"));
   assert.ok(source.includes("store.getOperatorControl"));
-  assert.ok(store.includes("verifyGoogleReviewerSessionToken(sessionToken, this.env)"));
+  assert.ok(store.includes("verifyGoogleReviewerSessionToken(sessionToken, env)"));
   assert.ok(store.includes("AGENT_OPERATOR_ALLOWED_EMAILS"));
   assert.ok(store.includes("operator_control_disabled"));
   assert.ok(store.includes("operator_resume"));
