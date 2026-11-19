@@ -23,6 +23,18 @@ Sources:
 
 These are published platform limits, not a measurement of this account's remaining quota. Verify the account's actual plan, usage and billing settings before any live binding or deployment.
 
+## Read-only account check (2026-11-19)
+
+A read-only Cloudflare account endpoint, `GET /accounts/{account_id}/observability/usage/limit`, returned:
+- `plan: free`
+- `status: normal`
+- `sample_rate: 1`
+- `limit: 200,000 events/day`
+
+Cloudflare's API schema defines this endpoint's `plan` field as `free` when the account has no Workers Paid or Enterprise plan. This is positive evidence that the account is currently on Workers Free. The 200,000/day value is an Observability event/telemetry limit, **not** a measurement of Durable Objects requests, SQL rows, GB-seconds, or remaining account quota.
+
+The read-only `billable-usage/info` endpoint returned HTTP 403 (authentication error), and subscription/billing endpoints require Billing Read, which is not available to the connected session. Therefore actual Durable Objects usage/headroom and billing settings remain unverified. Do not infer them from the Observability endpoint.
+
 ## Estimated SQL row writes per task
 
 The current implementation's normal successful lifecycle has this estimated write count:
