@@ -60,6 +60,10 @@ test("all state-store routes require the distinct internal credential", async ()
   await withRuntime({}, async ({ stub }) => {
     for (const [pathname, body] of [
       ["/reserve", task("unauth-reserve")],
+      ["/claim", { taskId: "missing" }],
+      ["/heartbeat", { taskId: "missing", leaseOwner: "a1b2c3d4-e5f6-4711-8123-abcdef012345", leaseGeneration: 1 }],
+      ["/complete", { taskId: "missing", leaseOwner: "a1b2c3d4-e5f6-4711-8123-abcdef012345", leaseGeneration: 1, status: "succeeded" }],
+      ["/recover", { taskId: "missing" }],
       ["/transition", { taskId: "missing", status: "running" }],
       ["/task?id=missing", undefined],
       ["/usage", undefined],
@@ -293,6 +297,7 @@ test("persisted v1 State Store migrates transactionally to v2 without losing tas
     assert.equal(restored.body.task.leaseGeneration, 0);
     assert.equal(restored.body.task.leaseOwner, undefined);
     assert.equal(restored.body.task.leaseExpiresAt, null);
+    assert.equal(restored.body.task.leaseMaxExpiresAt, null);
     assert.equal(restored.body.task.nextAttemptAt, null);
     assert.equal(restored.body.task.lastErrorCode, null);
     assert.equal(usage.body.acceptedToday, 1);
@@ -341,6 +346,12 @@ test("atomic claim admits only one worker and stale lease generations cannot hea
     assert.equal(completed.status, 200);
     assert.equal(completed.body.task.state, "succeeded");
     assert.equal(completed.body.task.leaseExpiresAt, null);
+    assert.equal(completed.body.task.leaseMaxExpiresAt, null);
+    const duplicate = await call(stub, "/complete", {
+      taskId, leaseOwner: lease.owner, leaseGeneration: lease.generation, status: "succeeded",
+    }, { "x-test-now": "2026-11-19T10:03:00.000Z" });
+    assert.equal(duplicate.status, 200);
+    assert.equal(duplicate.body.duplicate, true);
   });
 });
 
@@ -361,6 +372,7 @@ test("expired leases are requeued after bounded delay and fail at the attempt ce
     assert.equal(recovered1.body.task.state, "queued");
     assert.equal(recovered1.body.task.attemptCount, 1);
     assert.equal(recovered1.body.task.nextAttemptAt, Date.parse("2026-11-19T10:05:30.000Z"));
+    assert.equal(recovered1.body.task.leaseMaxExpiresAt, null);
 
     const beforeDue = await call(stub, "/claim", { taskId }, { "x-test-now": "2026-11-19T10:05:29.999Z" });
     assert.equal(beforeDue.status, 409);
