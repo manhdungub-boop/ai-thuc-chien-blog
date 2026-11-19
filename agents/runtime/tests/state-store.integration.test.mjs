@@ -1,0 +1,150 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { Miniflare } from "miniflare";
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const workerPath = path.resolve(here, "../src/worker.mjs");
+
+async function createRuntime({ daily = 1000, concurrent = 100, persistDir } = {}) {
+  const directory = persistDir ?? await mkdtemp(path.join(tmpdir(), "ai-thuc-chien-do-"));
+  const mf = new Miniflare({
+    modules: true,
+    scriptPath: workerPath,
+    compatibilityDate: "2026-11-19",
+    durableObjects: { AGENT_STATE_STORE: { className: "AgentStateStore", useSQLite: true } },
+    durableObjectsPersist: directory,
+    bindings: {
+      RUNTIME_TESTING: "true",
+      RUNTIME_MAX_TASKS_PER_DAY: String(daily),
+      RUNTIME_MAX_CONCURRENT_TASKS: String(concurrent),
+    },
+  });
+  const namespace = await mf.getDurableObjectNamespace("AGENT_STATE_STORE");
+  const stub = namespace.get(namespace.idFromName("agent-runtime-global"));
+  return { mf, stub, directory };
+}
+
+async function withRuntime(options, callback) {
+  const runtime = await createRuntime(options);
+  try { return await callback(runtime); }
+  finally {
+    await runtime.mf.dispose();
+    if (!options?.persistDir) await rm(runtime.directory, { recursive: true, force: true });
+  }
+}
+function task(id, payload = { path: "/guides" }) {
+  return { task: { type: "seo.audit", idempotencyKey: "integration-test-key-" + id.padEnd(16, "x"), payload } };
+}
+async function call(stub, pathname, body, headers = {}) {
+  const response = await stub.fetch("http://do.local" + pathname, {
+    method: body === undefined ? "GET" : "POST",
+    headers: { ...(body === undefined ? {} : { "Content-Type": "application/json" }), ...headers },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+  return { status: response.status, body: await response.json() };
+}
+
+test("SQLite Durable Object reserves once and rejects idempotency payload conflicts", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const input = task("dedupe");
+    const first = await call(stub, "/reserve", input);
+    const duplicate = await call(stub, "/reserve", input);
+    const conflict = await call(stub, "/reserve", { ...input, task: { ...input.task, payload: { path: "/other" } } });
+    assert.equal(first.status, 201);
+    assert.equal(duplicate.status, 200);
+    assert.equal(duplicate.body.duplicate, true);
+    assert.equal(duplicate.body.task.taskId, first.body.task.taskId);
+    assert.equal(conflict.status, 409);
+    const usage = await call(stub, "/usage");
+    assert.equal(usage.body.acceptedToday, 1);
+    assert.equal(usage.body.inFlight, 1);
+  });
+});
+
+test("daily quota is reserved atomically at the boundary", async () => {
+  await withRuntime({ daily: 2 }, async ({ stub }) => {
+    const results = await Promise.all(["quota-a","quota-b","quota-c","quota-d"].map((id) => call(stub, "/reserve", task(id))));
+    assert.equal(results.filter((item) => item.status === 201).length, 2);
+    assert.equal(results.filter((item) => item.body.error === "daily_quota_exhausted").length, 2);
+    const usage = await call(stub, "/usage");
+    assert.equal(usage.body.acceptedToday, 2);
+    assert.equal(usage.body.inFlight, 2);
+  });
+});
+
+test("concurrent admissions respect the in-flight limit and terminal transitions release capacity once", async () => {
+  await withRuntime({ daily: 10, concurrent: 2 }, async ({ stub }) => {
+    const results = await Promise.all(["parallel-a","parallel-b","parallel-c","parallel-d"].map((id) => call(stub, "/reserve", task(id))));
+    const accepted = results.filter((item) => item.status === 201);
+    assert.equal(accepted.length, 2);
+    assert.equal(results.filter((item) => item.body.error === "concurrency_limit_reached").length, 2);
+    const taskId = accepted[0].body.task.taskId;
+    assert.equal((await call(stub, "/transition", { taskId, status: "running" })).status, 200);
+    assert.equal((await call(stub, "/transition", { taskId, status: "succeeded" })).status, 200);
+    const repeated = await call(stub, "/transition", { taskId, status: "succeeded" });
+    assert.equal(repeated.status, 200);
+    assert.equal(repeated.body.duplicate, true);
+    assert.equal((await call(stub, "/reserve", task("after-release"))).status, 201);
+    const usage = await call(stub, "/usage");
+    assert.equal(usage.body.acceptedToday, 3);
+    assert.equal(usage.body.inFlight, 2);
+  });
+});
+
+test("state transitions reject invalid paths and do not reopen terminal tasks", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const created = await call(stub, "/reserve", task("transitions"));
+    const taskId = created.body.task.taskId;
+    assert.equal((await call(stub, "/transition", { taskId, status: "succeeded" })).status, 409);
+    assert.equal((await call(stub, "/transition", { taskId, status: "running" })).status, 200);
+    assert.equal((await call(stub, "/transition", { taskId, status: "failed", errorCode: "review_failed" })).status, 200);
+    assert.equal((await call(stub, "/transition", { taskId, status: "running" })).status, 409);
+    assert.equal((await call(stub, "/usage")).body.inFlight, 0);
+  });
+});
+
+test("UTC day rollover uses separate durable quota buckets", async () => {
+  await withRuntime({ daily: 1 }, async ({ stub }) => {
+    assert.equal((await call(stub, "/reserve", task("utc-before"), { "x-test-now": "2026-11-19T23:59:59.000Z" })).status, 201);
+    assert.equal((await call(stub, "/reserve", task("utc-after"), { "x-test-now": "2026-11-20T00:00:01.000Z" })).status, 201);
+    assert.equal((await call(stub, "/usage?day=2026-11-19")).body.acceptedToday, 1);
+    assert.equal((await call(stub, "/usage?day=2026-11-20")).body.acceptedToday, 1);
+  });
+});
+
+test("transactionSync rolls back all writes when its callback throws", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const result = await call(stub, "/__test/rollback", {});
+    assert.equal(result.status, 200);
+    assert.equal(result.body.rolledBack, true);
+    assert.equal(result.body.acceptedToday, 0);
+  });
+});
+
+test("SQLite state survives a Miniflare runtime restart", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "ai-thuc-chien-do-restart-"));
+  let first;
+  try {
+    first = await createRuntime({ persistDir: directory });
+    const created = await call(first.stub, "/reserve", task("restart"));
+    assert.equal(created.status, 201);
+    const taskId = created.body.task.taskId;
+    await first.mf.dispose();
+    first = null;
+    const second = await createRuntime({ persistDir: directory });
+    const restored = await call(second.stub, "/task?id=" + encodeURIComponent(taskId));
+    const usage = await call(second.stub, "/usage");
+    assert.equal(restored.status, 200);
+    assert.equal(restored.body.task.state, "queued");
+    assert.equal(usage.body.acceptedToday, 1);
+    assert.equal(usage.body.inFlight, 1);
+    await second.mf.dispose();
+  } finally {
+    if (first) await first.mf.dispose();
+    await rm(directory, { recursive: true, force: true });
+  }
+});

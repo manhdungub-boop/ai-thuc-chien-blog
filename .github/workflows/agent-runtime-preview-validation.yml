@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: agent-runtime-preview-validation-${{ github.ref }}
+  group: agent-runtime-preview-validation-\${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -29,10 +29,13 @@ jobs:
         with:
           node-version: 22
 
-      - name: Check syntax
-        run: node --check agents/runtime/src/worker.mjs
+      - name: Install pinned local Cloudflare runtime simulator
+        run: npm install --no-save --no-package-lock --ignore-scripts miniflare@4.20260701.0
 
-      - name: Run isolated Worker shell tests
+      - name: Check syntax
+        run: node --check agents/runtime/src/worker.mjs && node --check agents/runtime/src/state-store.mjs
+
+      - name: Run isolated Worker shell and contract tests
         run: node --test agents/runtime/tests/*.test.mjs
 
       - name: Verify preview config is isolated and has no execution triggers

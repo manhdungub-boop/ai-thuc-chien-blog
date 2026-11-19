@@ -1,45 +1,60 @@
 # AI Thuc Chien Agent Runtime — Preview shell
 
-Status: **scaffold only; not an autonomous agent and not deployed**.
+Status: **isolated validation scaffold; no Agent Runtime Worker deployment and no autonomous task execution**.
 
 ## Safety boundary
 
-- Separate Worker name: `ai-thuc-chien-agent-runtime-preview`.
-- No account ID, production route, custom domain, D1 binding, KV/R2 binding, Durable Object binding, secret, cron trigger, or queue consumer is configured.
-- `AGENT_ENABLED=false` and `AGENT_PAUSED=true` are the checked-in defaults.
-- `POST /run` fails closed while disabled or paused.
-- If both flags are manually opened, `POST /run` requires an `Authorization: Bearer` token matching the externally injected `AGENT_OPERATOR_TOKEN`; missing or invalid credentials fail closed with `401`. A valid token still receives `501 execution_not_implemented`; no task execution exists.
+- Separate intended Worker name: \`ai-thuc-chien-agent-runtime-preview\`.
+- No account ID, production route, custom domain, D1 binding, KV/R2 binding, Durable Object binding, secret, cron trigger, or queue consumer is configured in \`wrangler.jsonc\`.
+- \`AGENT_ENABLED=false\` and \`AGENT_PAUSED=true\` are the checked-in defaults.
+- \`POST /run\` fails closed while disabled or paused.
+- If both flags are manually opened, \`POST /run\` requires an \`Authorization: Bearer\` token matching the externally injected \`AGENT_OPERATOR_TOKEN\`; missing or invalid credentials fail closed with \`401\`. A valid token still receives \`501 execution_not_implemented\`; no task execution exists.
 - Operator bearer validation uses SHA-256 digests with constant-time byte comparison. The secret is never committed, logged, or returned; no secret is configured in this repository.
-- `GET /health` returns only non-sensitive state.
-- No deploy workflow is provided. CI only runs local Node.js tests and syntax checks.
-
-## Local validation
-
-From the repository root:
-
-```sh
-node --check agents/runtime/src/worker.mjs
-node --test agents/runtime/tests/*.test.mjs
-```
+- \`GET /health\` returns only non-sensitive state.
+- No deploy workflow is provided. CI only runs local tests and static configuration checks.
 
 ## Implemented validation-only building blocks
 
-- `src/task-contract.mjs` accepts only `content.review`, `ai_bank.candidate_review`, and `seo.audit`; each has exact payload keys, bounded serialized size, and strict local path/identifier validation.
-- `src/operator-auth.mjs` validates an externally supplied operator bearer token and fails closed when the secret is absent or weak.
-- `src/admission-policy.mjs` makes a pure fail-closed admission decision from explicit limits and trusted usage counters; it rejects missing/invalid values, daily quota exhaustion, concurrency saturation, and oversized payloads. Safety caps are 1,000 tasks/day, 100 concurrent tasks, and 8 KiB per payload.
-- These modules validate requests only. The admission policy does not reserve capacity, count usage, enqueue, persist, execute tasks, or schedule work. There is no trusted durable usage store, so this is not yet real quota enforcement.
+- \`src/task-contract.mjs\` accepts only \`content.review\`, \`ai_bank.candidate_review\`, and \`seo.audit\`; exact payload keys, bounded size, safe local paths, and idempotency-key syntax are enforced.
+- \`src/operator-auth.mjs\` validates an externally supplied operator bearer token and fails closed when the secret is absent or weak.
+- \`src/admission-policy.mjs\` remains a pure fail-closed policy helper; it is not the quota authority.
+- \`src/state-store.mjs\` implements a SQLite-backed Durable Object class, but the class is **not bound** in the checked-in Preview Worker config. It supports durable idempotency, UTC daily counters, derived in-flight counts, atomic admission reservations, constrained state transitions, and bounded retention. It stores only the validated small task payload, its hash, and non-sensitive audit metadata.
+- The state store is not connected to \`POST /run\`; no task is enqueued or executed by the Worker shell.
+
+## Local integration validation
+
+The validation workflow installs the pinned open-source Miniflare simulator and runs the Durable Object against local \`workerd\` with SQLite enabled. Tests cover duplicate keys, payload conflicts, concurrent admission at quota boundaries, terminal transitions, UTC day rollover, transaction rollback, and persistence after a runtime restart.
+
+From the repository root:
+
+\`\`\`sh
+npm install --no-save --no-package-lock --ignore-scripts miniflare@4.20260701.0
+node --check agents/runtime/src/worker.mjs
+node --check agents/runtime/src/state-store.mjs
+node --test agents/runtime/tests/*.test.mjs
+\`\`\`
+
+This is local-runtime evidence, not a live Cloudflare deployment test. Miniflare is a development simulator, not a hardened security boundary.
+
+## Limits and retention
+
+- Hard ceilings: 1,000 accepted tasks/day, 100 in-flight tasks, and 8 KiB serialized task request.
+- Daily usage is counted in UTC. In-flight usage is derived from rows in \`queued\` or \`running\`, not an in-memory counter.
+- Completed/failed/cancelled task rows are retained for 30 days; audit events and daily-usage rows are retained for 90 days. Idempotency protection therefore lasts for the task-retention period.
+- Storage errors, unsupported schema versions, and invalid limits fail closed. There is no memory fallback.
+- These are internal guardrails, not proof of remaining Cloudflare account quota or a guarantee of uninterrupted service.
 
 ## Durable state-store decision
 
-See [STATE-STORE-ADR.md](./STATE-STORE-ADR.md) for the proposed SQLite-backed Durable Object design, Free-tier budget, transaction boundary, failure behavior, and implementation gates. No binding, migration, or deployment is included yet.
+See [STATE-STORE-ADR.md](./STATE-STORE-ADR.md) for the design decision, Free-tier budget, transaction boundary, failure behavior, and remaining gates.
 
-## Next implementation gates
+## Remaining gates
 
-1. Task contract is implemented as validation-only: `content.review`, `ai_bank.candidate_review`, and `seo.audit` have strict payload allowlists, bounded size, path validation, and idempotency-key syntax.
-2. Add authenticated operator-only enqueue and inspect paths; the contract does not enqueue or execute work.
-3. Connect admission decisions to an atomic durable usage/idempotency store; the current policy is not an enforcement mechanism until counters are trusted and updated transactionally.
-4. Add append-only audit events with retention and privacy review.
-5. Add isolated storage only after schema, concurrency, and retention review.
-6. Add a separately reviewed Preview deployment workflow; do not add schedules until kill-switch and budget tests pass.
+1. Independently review the state-store implementation and integration-test results.
+2. Review the Free-tier request/SQL-row budget against expected real workload.
+3. Add a Durable Object binding and SQLite migration only to the separate Runtime Preview config after review; do not change the current checked-in Preview config in this step.
+4. Deploy the separate Preview Worker only after the local gates pass and Preview-only permissions are explicitly available.
+5. Add authenticated operator-only enqueue/inspect routes only after a separate security review.
+6. Add execution, alarms, or schedules only after idempotent side-effect handling, kill-switch behavior, recovery, and operational monitoring are proven.
 
 This scaffold makes no claim of 24/7 execution, backup readiness, or production recovery.
