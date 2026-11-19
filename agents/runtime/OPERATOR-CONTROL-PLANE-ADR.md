@@ -19,7 +19,7 @@ Control mutation request bodies are bounded before JSON parsing: 1 KiB at Worker
 
 The current operator identity is a static deployment-configured label, **not proof of an authenticated human identity**. The shared bearer token does not provide named-user attribution, MFA, session expiry, revocation per person, or role-based permissions. Do not describe this bridge as a browser-safe operator console or as a verified human identity system.
 
-The State Store and Worker code are covered by isolated tests, but the control routes are not deployment approval. The Runtime remains disabled by default, unbound, and without a task handler or scheduler.
+The operator-auth unit tests also verify that replacing the configured operator secret invalidates the previous bearer and that the operator and Worker-to-State-Store credentials cannot authenticate across trust boundaries. This proves code-level rotation semantics only; it does not establish an operational secret-rotation runbook or person-level revocation. The State Store and Worker code are covered by isolated tests, but the control routes are not deployment approval. The Runtime remains disabled by default, unbound, and without a task handler or scheduler.
 
 ## Trust boundaries and limitations
 
@@ -54,7 +54,7 @@ There is no Worker recovery route. The State Store's `/recover` endpoint is not 
 
 ## Security gaps before deployment or broader exposure
 
-- **Human identity:** `AGENT_OPERATOR_ID` is static configuration. A shared bearer holder can perform mutations under that label; the audit trail is not person-level attribution.
+- **Human identity and revocation:** `AGENT_OPERATOR_ID` is static configuration. A shared bearer holder can perform mutations under that label; the audit trail is not person-level attribution. Replacing the configured `AGENT_OPERATOR_TOKEN` invalidates the previous bearer immediately, but this is whole-token rotation—not per-person revocation, session expiry, or named-user identity. Rotation requires a controlled Preview secret update and must never be performed against Production under this ADR.
 - **MFA/session lifecycle:** no MFA, short-lived session, per-user revocation, or role-based authorization is implemented.
 - **Browser protections:** no cookie session, CSRF token, or Origin validation is implemented. Keep the bridge off browser-facing surfaces.
 - **Request body bounds and strict parsing:** implemented on the current branch. The Worker rejects control mutation bodies above 1 KiB; the State Store independently rejects control mutation bodies above 16 KiB. Both enforce declared `Content-Length` and count streamed bytes before JSON parsing. The parser accepts only the expected string fields, rejects unknown and duplicate keys, and does not relax the Worker’s external request schema. Targeted tests cover oversized declared bodies, oversized chunked bodies, malformed JSON, duplicate external/internal fields, and unchanged control state after rejection. These limits reduce memory/parse exposure but do not replace ingress rate limiting or slow-client protection.
