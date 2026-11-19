@@ -92,8 +92,14 @@ export class AgentTaskStore extends DurableObject {
     if (!columns.some(column => column.name === "result_json")) {
       this.ctx.storage.sql.exec("ALTER TABLE tasks ADD COLUMN result_json TEXT");
     }
+    if (!columns.some(column => column.name === "available_at")) {
+      this.ctx.storage.sql.exec("ALTER TABLE tasks ADD COLUMN available_at INTEGER NOT NULL DEFAULT 0");
+    }
     this.ctx.storage.sql.exec(
       "CREATE INDEX IF NOT EXISTS tasks_status_created ON tasks(status, created_at)"
+    );
+    this.ctx.storage.sql.exec(
+      "CREATE INDEX IF NOT EXISTS tasks_status_available_created ON tasks(status, available_at, created_at)"
     );
     this.ctx.storage.sql.exec(`
       CREATE TABLE IF NOT EXISTS external_request_budgets (
