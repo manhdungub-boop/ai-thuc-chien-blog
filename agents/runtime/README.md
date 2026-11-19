@@ -40,7 +40,7 @@ node --test agents/runtime/tests/*.test.mjs
 
 The GitHub Actions workflow is authoritative for the test dependency tree: it applies isolated npm overrides for the patched `sharp` and `undici` versions and fails on remaining High/Critical advisories. This is local-runtime evidence, not a live Cloudflare deployment test. Miniflare is a development simulator, not a hardened security boundary.
 
-Test-only schema downgrade, rollback probes, and deterministic clock overrides are isolated in `tests/fixtures/state-store-test-worker.mjs`, a Miniflare-only Durable Object subclass. The deployable State Store source contains no test routes, test-mode environment switch, or `x-test-now` clock override.
+Test-only schema downgrade, rollback probes, and deterministic clock overrides are isolated in `tests/fixtures/state-store-test-worker.mjs`, a Miniflare-only Durable Object subclass. The deployable State Store source contains no test routes, test-mode environment switch, or `x-test-now` clock override. Integration coverage also instantiates the deployable Worker module with the production State Store class and verifies that the fixture routes return 404 and the test clock header is ignored.
 
 ## Limits and retention
 
