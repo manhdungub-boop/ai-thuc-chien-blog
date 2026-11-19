@@ -324,8 +324,9 @@ export default {
       });
     }
     const reviewerDraftCollection = url.pathname === "/api/reviewer/drafts";
+    const reviewerNeedsRevisionCollection = url.pathname === "/api/reviewer/drafts-needing-authoring";
     const reviewerDraftDetail = url.pathname.match(/^\/api\/reviewer\/drafts\/([a-zA-Z0-9._:-]{8,128})$/);
-    if (reviewerDraftCollection || reviewerDraftDetail) {
+    if (reviewerDraftCollection || reviewerNeedsRevisionCollection || reviewerDraftDetail) {
       if (request.method !== "GET") return json({ error: "method_not_allowed" }, 405);
       const origin = request.headers.get("origin");
       if (origin && origin !== url.origin) return json({ error: "review_request_origin_or_content_type_rejected" }, 403);
