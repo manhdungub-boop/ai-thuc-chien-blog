@@ -102,7 +102,7 @@ export class AgentReviewerAuthStore extends DurableObject {
   }
   consumeTransaction(stateHash, browserHash, nowSeconds) {
     const row = this.ctx.storage.sql.exec("SELECT * FROM reviewer_auth_transactions WHERE state_hash = ? AND browser_hash = ? AND expires_at > ?", stateHash, browserHash, nowSeconds).toArray()[0];
-    this.ctx.storage.sql.exec("DELETE FROM reviewer_auth_transactions WHERE state_hash = ?", stateHash);
+    this.ctx.storage.sql.exec("DELETE FROM reviewer_auth_transactions WHERE state_hash = ? AND browser_hash = ? AND expires_at > ?", stateHash, browserHash, nowSeconds);
     if (!row) return null;
     return { nonce: row.nonce, code_verifier: row.code_verifier, created_at: row.created_at, expires_at: row.expires_at };
   }
