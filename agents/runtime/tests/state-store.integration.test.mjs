@@ -604,6 +604,17 @@ test("State Store control mutation rejects oversized declared and chunked bodies
     assert.equal(duplicateField.status, 400);
     assert.equal((await duplicateField.json()).error, "request_invalid");
 
+    const duplicateInternalActor = await stub.fetch("http://do.local/control/pause", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer " + TEST_STATE_STORE_TOKEN,
+        "Content-Type": "application/json",
+      },
+      body: '{"actor":"first-actor","actor":"second-actor","requestId":"valid-request-1234","reason":"duplicate actor"}',
+    });
+    assert.equal(duplicateInternalActor.status, 400);
+    assert.equal((await duplicateInternalActor.json()).error, "request_invalid");
+
     const after = await call(stub, "/control");
     assert.deepEqual(after.body.control, before.body.control);
   });
