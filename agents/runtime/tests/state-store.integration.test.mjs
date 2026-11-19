@@ -546,3 +546,54 @@ test("pause blocks new claims and expiry recovery but allows safe heartbeat and 
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+
+test("State Store control mutation rejects oversized declared and chunked bodies before parsing", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const before = await call(stub, "/control");
+    assert.equal(before.body.control.paused, false);
+
+    const declaredTooLarge = await stub.fetch("http://do.local/control/pause", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer " + TEST_STATE_STORE_TOKEN,
+        "Content-Type": "application/json",
+        "Content-Length": String(16 * 1024 + 1),
+      },
+      body: "{}",
+    });
+    assert.equal(declaredTooLarge.status, 413);
+    assert.equal((await declaredTooLarge.json()).error, "request_body_too_large");
+
+    const chunkedTooLarge = await stub.fetch("http://do.local/control/pause", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer " + TEST_STATE_STORE_TOKEN,
+        "Content-Type": "application/json",
+      },
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(new Uint8Array(16 * 1024 + 1));
+          controller.close();
+        },
+      }),
+      duplex: "half",
+    });
+    assert.equal(chunkedTooLarge.status, 413);
+    assert.equal((await chunkedTooLarge.json()).error, "request_body_too_large");
+
+    const malformed = await stub.fetch("http://do.local/control/pause", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer " + TEST_STATE_STORE_TOKEN,
+        "Content-Type": "application/json",
+      },
+      body: "{invalid-json",
+    });
+    assert.equal(malformed.status, 400);
+    assert.equal((await malformed.json()).error, "request_invalid");
+
+    const after = await call(stub, "/control");
+    assert.deepEqual(after.body.control, before.body.control);
+  });
+});
