@@ -146,11 +146,11 @@ test("durable pause is atomic, survives restart, and resume never dispatches que
     const created = await call(active.stub, "/reserve", task("durable-control"));
     assert.equal(created.status, 201);
     const taskId = created.body.task.taskId;
-    const paused = await call(active.stub, "/control/pause", { reason: "operator maintenance" });
+    const paused = await call(active.stub, "/control/pause", { actor: "test-operator", requestId: crypto.randomUUID(), reason: "operator maintenance" });
     assert.equal(paused.status, 200);
     assert.equal(paused.body.changed, true);
     assert.equal(paused.body.control.paused, true);
-    const duplicatePause = await call(active.stub, "/control/pause", { reason: "duplicate" });
+    const duplicatePause = await call(active.stub, "/control/pause", { actor: "test-operator", requestId: crypto.randomUUID(), reason: "duplicate" });
     assert.equal(duplicatePause.status, 200);
     assert.equal(duplicatePause.body.changed, false);
     assert.equal((await call(active.stub, "/reserve", task("durable-control-blocked"))).status, 503);
@@ -164,19 +164,35 @@ test("durable pause is atomic, survives restart, and resume never dispatches que
     assert.equal(persisted.body.control.version, 1);
     assert.equal((await call(restarted.stub, "/claim", { taskId })).status, 503);
 
-    const resumed = await call(restarted.stub, "/control/resume", { reason: "maintenance complete" });
+    const resumed = await call(restarted.stub, "/control/resume", { actor: "test-operator", requestId: crypto.randomUUID(), reason: "maintenance complete" });
     assert.equal(resumed.status, 200);
     assert.equal(resumed.body.changed, true);
     assert.equal(resumed.body.control.paused, false);
     assert.equal((await call(restarted.stub, "/task?id=" + encodeURIComponent(taskId))).body.task.state, "queued");
     assert.equal((await call(restarted.stub, "/usage")).body.inFlight, 1);
     assert.equal((await call(restarted.stub, "/claim", { taskId })).status, 200);
-    assert.equal((await call(restarted.stub, "/control/pause", { reason: "bad\nreason" })).status, 400);
+    assert.equal((await call(restarted.stub, "/control/pause", { actor: "test-operator", requestId: crypto.randomUUID(), reason: "bad\nreason" })).status, 400);
   } finally {
     if (active) await active.mf.dispose();
     if (restarted) await restarted.mf.dispose();
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test("control mutations enforce per-operator durable rate limits", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const requests = [];
+    for (let index = 0; index < 11; index += 1) {
+      requests.push(call(stub, "/control/pause", {
+        actor: "rate-limit-test",
+        requestId: crypto.randomUUID(),
+        reason: "rate limit probe",
+      }));
+    }
+    const results = await Promise.all(requests);
+    assert.equal(results.filter((result) => result.status === 200).length, 10);
+    assert.equal(results.filter((result) => result.status === 429).length, 1);
+  });
 });
 
 test("concurrent paused admission and claim attempts remain fail-closed", async () => {
