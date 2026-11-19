@@ -1,6 +1,6 @@
 # Agent Runtime — task lease and recovery architecture decision
 
-Status: **schema v2 migration and transactional claim/heartbeat/completion/expiry-recovery routes are implemented in Draft PR #297, with pure policy helpers and tests. They remain unmerged and unbound. No Durable Object binding, alarm, schedule, or task execution is enabled.**
+Status: **Schema v5 State Store, bounded mutation parsing, and test-fixture isolation are under Draft PRs #297/#302/#303. This follow-up adds operator-authenticated task recovery, durable per-actor rate limiting, and actor/request audit metadata. All changes remain unmerged and unbound. No Durable Object binding, alarm, schedule, or task execution is enabled.**
 
 Date: 2026-11-19
 
@@ -33,11 +33,11 @@ Add indexes for `(state, next_attempt_at)` and `(state, lease_expires_at)`. Migr
 - SQL updates are performed in synchronous SQLite transactions with task state, owner, generation, and expiry predicates. A stale generation cannot heartbeat or complete a newer attempt.
 - Every claim, heartbeat, retry/requeue, expiry failure, and terminal completion appends an audit event in the same transaction. Same-generation repeated terminal completion is idempotent and does not write another event.
 - Generic `/transition` can no longer start or finish running work; a valid lease is required.
-- The State Store validates a dedicated `AGENT_STATE_STORE_TOKEN`, distinct from the external `AGENT_OPERATOR_TOKEN`. The Worker-to-DO call path and binding remain intentionally unwired.
+- The State Store validates a dedicated `AGENT_STATE_STORE_TOKEN`, distinct from the external `AGENT_OPERATOR_TOKEN`. The Draft Worker bridge now permits only an operator-authenticated, fixed-route recovery request; the Durable Object binding and secrets remain absent from the checked-in Preview configuration.
 - Migration tests cover a fresh store and a persisted v1-shaped store with task and daily-usage preservation. Lease tests cover concurrent claim, fencing, heartbeat, pause behavior, bounded recovery, and attempt exhaustion.
 - Schema downgrade, rollback probes, and deterministic clock overrides are isolated in the Miniflare-only test fixture under `tests/fixtures/`; the deployable State Store source contains no test routes, `RUNTIME_TESTING` switch, or `x-test-now` override.
 
-The next implementation step is independent security review and Worker-to-State-Store call-path integration in an isolated, separate Preview config. Do not enable a Durable Object binding, scheduler, or task execution as part of this PR.
+The next implementation step is independent security review of the stacked Draft PRs, followed by a separate Preview-only binding and smoke-test plan. Do not enable a Durable Object binding, scheduler, alarm, or task execution as part of this PR.
 
 ## State machine
 
@@ -82,12 +82,12 @@ A lease cannot guarantee exactly-once execution. A worker can perform an externa
 
 ## Security and audit requirements
 
-- Every State Store route remains operator-authenticated; internal Worker-to-DO calls must use a secret injected only at deployment, never stored in task rows or logs.
+- Every Durable Object route requires the dedicated internal bearer; externally reachable operator mutations additionally require the external operator bearer. Worker-to-DO calls use a secret injected only at deployment, never stored in task rows or logs.
 - Lease owner is an opaque identifier, not an authentication credential.
 - Compare generation and owner on every heartbeat and completion to prevent stale workers from writing after lease expiry.
 - Test-only clock override and rollback route remain unavailable in deployment config.
-- Audit metadata contains only task ID, event type, bounded error code, attempt number, generation, and timestamps; no bearer token, article body, personal data, or provider secret.
-- Rate-limit operator inspection endpoints before any public exposure.
+- Recovery audit metadata contains only configured actor ID, generated request ID, attempt number, lease generation, task ID, event type, and timestamp; no bearer token, article body, personal data, or provider secret.
+- Rate-limit operator mutations and recovery durably per configured actor (10 requests per 60-second window) before any public exposure.
 
 ## Required tests before implementation can be accepted
 

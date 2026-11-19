@@ -295,6 +295,60 @@ export class AgentStateStore {
         const active = readRow(this.sql, "SELECT COUNT(*) AS count FROM tasks WHERE state IN ('queued','running')");
         return jsonResponse({ ok: true, dayUtc: day, acceptedToday: usage?.accepted_count ?? 0, inFlight: active?.count ?? 0 });
       }
+      if (url.pathname === "/metrics" && request.method === "GET") {
+        if ([...url.searchParams.keys()].length > 0) {
+          return jsonResponse({ ok: false, error: "metrics_query_invalid" }, 400);
+        }
+        const now = this.requestTime(request);
+        const day = utcDay(now);
+        const usage = readRow(this.sql, "SELECT accepted_count FROM daily_usage WHERE day_utc = ?", day);
+        const limits = this.limits();
+        const counts = readRow(this.sql,
+          "SELECT COUNT(*) AS total, " +
+          "COALESCE(SUM(CASE WHEN state='queued' THEN 1 ELSE 0 END),0) AS queued, " +
+          "COALESCE(SUM(CASE WHEN state='running' THEN 1 ELSE 0 END),0) AS running, " +
+          "COALESCE(SUM(CASE WHEN state='succeeded' THEN 1 ELSE 0 END),0) AS succeeded, " +
+          "COALESCE(SUM(CASE WHEN state='failed' THEN 1 ELSE 0 END),0) AS failed, " +
+          "COALESCE(SUM(CASE WHEN state='cancelled' THEN 1 ELSE 0 END),0) AS cancelled, " +
+          "COALESCE(SUM(CASE WHEN state='queued' AND (next_attempt_at IS NULL OR next_attempt_at<=?) THEN 1 ELSE 0 END),0) AS queuedDue, " +
+          "MIN(CASE WHEN state='queued' THEN created_at END) AS oldestQueuedAt, " +
+          "MIN(CASE WHEN state='running' THEN updated_at END) AS oldestRunningAt, " +
+          "COALESCE(SUM(CASE WHEN state='failed' AND terminal_at>=? THEN 1 ELSE 0 END),0) AS failedLast24h " +
+          "FROM tasks", now, now - 24 * 60 * 60 * 1000);
+        const audit = this.sql.exec(
+          "SELECT event_type AS eventType, COUNT(*) AS count FROM audit_events WHERE occurred_at>=? GROUP BY event_type ORDER BY count DESC, event_type ASC LIMIT 20",
+          now - 24 * 60 * 60 * 1000,
+        ).toArray();
+        const acceptedToday = usage?.accepted_count ?? 0;
+        return jsonResponse({
+          ok: true,
+          observedAt: now,
+          dayUtc: day,
+          tasks: {
+            totalRetained: counts.total,
+            queued: counts.queued,
+            queuedDue: counts.queuedDue,
+            running: counts.running,
+            succeededRetained: counts.succeeded,
+            failedRetained: counts.failed,
+            cancelledRetained: counts.cancelled,
+            failedLast24h: counts.failedLast24h,
+            oldestQueuedAgeMs: counts.oldestQueuedAt === null ? null : Math.max(0, now - counts.oldestQueuedAt),
+            oldestRunningUpdateAgeMs: counts.oldestRunningAt === null ? null : Math.max(0, now - counts.oldestRunningAt),
+          },
+          quota: {
+            acceptedToday,
+            dailyLimit: limits.daily,
+            dailyUtilizationPercent: Math.round((acceptedToday / limits.daily) * 10000) / 100,
+            inFlight: counts.queued + counts.running,
+            concurrentLimit: limits.concurrent,
+            concurrentUtilizationPercent: Math.round(((counts.queued + counts.running) / limits.concurrent) * 10000) / 100,
+            payloadLimitBytes: limits.payloadBytes,
+          },
+          auditLast24h: audit,
+          note: "Internal admission guardrails only; not a measurement of provider or Cloudflare account quota.",
+        });
+      }
       if (request.method !== "GET" && request.method !== "POST") return jsonResponse({ ok: false, error: "method_not_allowed" }, 405);
       return jsonResponse({ ok: false, error: "not_found" }, 404);
     } catch {
@@ -553,13 +607,22 @@ export class AgentStateStore {
     if (this.env.AGENT_ENABLED !== "true" || this.env.AGENT_PAUSED !== "false") {
       return { status: 503, body: { ok: false, error: "agent_disabled_or_paused" } };
     }
-    if (!isObject(body) || Object.keys(body).length !== 1 ||
-        typeof body.taskId !== "string" || body.taskId.length < 1 || body.taskId.length > 64) {
+    if (!isObject(body) || Object.keys(body).length !== 3 ||
+        Object.keys(body).some((key) => !["taskId", "actor", "requestId"].includes(key)) ||
+        typeof body.taskId !== "string" || body.taskId.length < 1 || body.taskId.length > 64 ||
+        typeof body.actor !== "string" || !/^[a-zA-Z0-9._:-]{3,64}$/.test(body.actor) ||
+        typeof body.requestId !== "string" || !/^[a-zA-Z0-9-]{16,64}$/.test(body.requestId)) {
       return { status: 400, body: { ok: false, error: "recover_request_invalid" } };
     }
     try {
       return this.ctx.storage.transactionSync(() => {
         if (this.controlState().paused) return { status: 503, body: { ok: false, error: "agent_disabled_or_paused" } };
+        const rate = readRow(this.sql, "SELECT window_started_at, request_count FROM runtime_control_rate_limit WHERE actor = ?", body.actor);
+        const windowStart = rate && now - rate.window_started_at < 60_000 ? rate.window_started_at : now;
+        const requestCount = rate && windowStart === rate.window_started_at ? rate.request_count : 0;
+        if (requestCount >= 10) return { status: 429, body: { ok: false, error: "runtime_control_rate_limited" } };
+        this.sql.exec("INSERT INTO runtime_control_rate_limit (actor, window_started_at, request_count) VALUES (?,?,1) ON CONFLICT(actor) DO UPDATE SET window_started_at=excluded.window_started_at, request_count=?",
+          body.actor, windowStart, requestCount + 1);
         const row = readRow(this.sql, "SELECT * FROM tasks WHERE task_id = ?", body.taskId);
         if (!row) return { status: 404, body: { ok: false, error: "task_not_found" } };
         const decision = recoverExpiredLease(row, { now });
@@ -575,6 +638,8 @@ export class AgentStateStore {
           return { status: 409, body: { ok: false, error: "lease_recovery_conflict" } };
         }
         this.audit(body.taskId, decision.outcome === "failed" ? "task.lease_expired_failed" : "task.lease_expired_requeued", now, {
+          actor: body.actor,
+          requestId: body.requestId,
           attempt: row.attempt_count,
           leaseGeneration: row.lease_generation,
         });

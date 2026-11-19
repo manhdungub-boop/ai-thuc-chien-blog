@@ -94,6 +94,8 @@ function bridgeEnv({ responseBody = { ok: true, dayUtc: "2026-11-19", acceptedTo
   const env = {
     AGENT_OPERATOR_TOKEN: OPERATOR_TOKEN,
     AGENT_OPERATOR_ID: "project-operator-01",
+    AGENT_ENABLED: "true",
+    AGENT_PAUSED: "false",
     AGENT_STATE_STORE_TOKEN: STATE_TOKEN,
     AGENT_STATE_STORE: {
       idFromName(name) {
@@ -150,6 +152,59 @@ test("usage bridge uses fixed DO identity and sends only the dedicated internal 
   assert.equal(calls[0].headers.get("origin"), null);
   assert.equal(calls[0].headers.get("x-arbitrary"), null);
   assert.equal(JSON.stringify(body).includes(STATE_TOKEN), false);
+});
+
+test("read-only metrics bridge authenticates, uses a fixed route, and returns only aggregate fields", async () => {
+  const responseBody = {
+    ok: true,
+    observedAt: 1799999999000,
+    dayUtc: "2026-11-20",
+    tasks: { totalRetained: 7, queued: 2, queuedDue: 1, running: 1, succeededRetained: 3, failedRetained: 1, cancelledRetained: 0, failedLast24h: 1, oldestQueuedAgeMs: 1200, oldestRunningUpdateAgeMs: 900, taskIds: ["private-task"] },
+    quota: { acceptedToday: 7, dailyLimit: 100, dailyUtilizationPercent: 7, inFlight: 3, concurrentLimit: 5, concurrentUtilizationPercent: 60, payloadLimitBytes: 8192 },
+    auditLast24h: [{ eventType: "task.failed", count: 1 }],
+    note: "Internal admission guardrails only; not a measurement of provider or Cloudflare account quota.",
+  };
+  const { env, calls } = bridgeEnv({ responseBody });
+  const incoming = new Request("https://agent-runtime-preview.example.workers.dev/internal/metrics", {
+    headers: {
+      Authorization: "Bearer " + OPERATOR_TOKEN,
+      Cookie: "session=must-not-forward",
+      "X-Arbitrary": "must-not-forward",
+    },
+  });
+  const response = await worker.fetch(incoming, env);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.tasks.queuedDue, 1);
+  assert.equal(body.quota.dailyUtilizationPercent, 7);
+  assert.equal(body.auditLast24h[0].eventType, "task.failed");
+  assert.equal("taskIds" in body.tasks, false);
+  assert.equal(JSON.stringify(body).includes("private-task"), false);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "https://state-store.internal/metrics");
+  assert.equal(calls[0].method, "GET");
+  assert.equal(calls[0].headers.get("authorization"), "Bearer " + STATE_TOKEN);
+  assert.equal(calls[0].headers.get("cookie"), null);
+  assert.equal(calls[0].headers.get("x-arbitrary"), null);
+  assert.equal(JSON.stringify(body).includes(STATE_TOKEN), false);
+});
+
+test("metrics bridge rejects unauthenticated requests, query strings, and malformed State Store responses", async () => {
+  const unauthorized = await worker.fetch(request("/internal/metrics"), {});
+  assert.equal(unauthorized.status, 401);
+  const { env, calls } = bridgeEnv();
+  const query = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/metrics?day=2026-11-20", {
+    headers: { Authorization: "Bearer " + OPERATOR_TOKEN },
+  }), env);
+  assert.equal(query.status, 400);
+  assert.equal(calls.length, 0);
+
+  const malformedEnv = bridgeEnv({ responseBody: { ok: true, tasks: {}, quota: {}, auditLast24h: "not-an-array", observedAt: "invalid", note: "x" } }).env;
+  const malformed = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/metrics", {
+    headers: { Authorization: "Bearer " + OPERATOR_TOKEN },
+  }), malformedEnv);
+  assert.equal(malformed.status, 503);
+  assert.equal((await malformed.json()).error, "state_store_response_invalid");
 });
 
 test("task inspection uses a fixed route and strips payload and lease secrets", async () => {
@@ -253,6 +308,103 @@ test("control mutation bridge rejects missing operator identity and caller-suppl
   }), env);
   assert.equal(spoofed.status, 400);
   assert.equal(calls.length, 0);
+});
+
+test("operator recovery bridge authenticates, uses a fixed internal route, and returns a sanitized task", async () => {
+  const { env, calls } = bridgeEnv({ responseBody: { ok: true, outcome: "requeued", task: {
+    taskId: "task-123", state: "queued", attemptCount: 2, maxAttempts: 3,
+    nextAttemptAt: 1799999999000, lastErrorCode: "provider_timeout",
+    payload: { private: "must-not-return" }, leaseOwner: "private-lease",
+  } } });
+  const incoming = new Request("https://agent-runtime-preview.example.workers.dev/internal/task/recover", {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer " + OPERATOR_TOKEN,
+      "Content-Type": "application/json",
+      Cookie: "session=must-not-forward",
+      "X-Arbitrary": "must-not-forward",
+    },
+    body: JSON.stringify({ taskId: "task-123" }),
+  });
+  const response = await worker.fetch(incoming, env);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.outcome, "requeued");
+  assert.equal(body.task.taskId, "task-123");
+  assert.equal("payload" in body.task, false);
+  assert.equal("leaseOwner" in body.task, false);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "https://state-store.internal/recover");
+  assert.equal(calls[0].method, "POST");
+  assert.equal(calls[0].headers.get("authorization"), "Bearer " + STATE_TOKEN);
+  assert.equal(calls[0].headers.get("cookie"), null);
+  assert.equal(calls[0].headers.get("x-arbitrary"), null);
+  const forwarded = await calls[0].json();
+  assert.equal(forwarded.taskId, "task-123");
+  assert.equal(forwarded.actor, "project-operator-01");
+  assert.match(forwarded.requestId, /^[a-z0-9-]{16,64}$/i);
+  assert.equal(JSON.stringify(forwarded).includes(OPERATOR_TOKEN), false);
+  assert.equal(JSON.stringify(forwarded).includes(STATE_TOKEN), false);
+});
+
+test("operator recovery rejects disabled state, missing identity, spoofing, query parameters and malformed bodies", async () => {
+  const { env, calls } = bridgeEnv();
+  const url = "https://agent-runtime-preview.example.workers.dev/internal/task/recover";
+  const authorized = { Authorization: "Bearer " + OPERATOR_TOKEN, "Content-Type": "application/json" };
+
+  const unauthorized = await worker.fetch(new Request(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: '{"taskId":"task-123"}' }), env);
+  assert.equal(unauthorized.status, 401);
+  assert.equal(calls.length, 0);
+
+  const disabled = await worker.fetch(new Request(url, { method: "POST", headers: authorized, body: '{"taskId":"task-123"}' }), {
+    ...env, AGENT_ENABLED: "false", AGENT_PAUSED: "true",
+  });
+  assert.equal(disabled.status, 503);
+  assert.equal((await disabled.json()).error, "agent_disabled_or_paused");
+  assert.equal(calls.length, 0);
+
+  const unsetPaused = await worker.fetch(new Request(url, { method: "POST", headers: authorized, body: '{"taskId":"task-123"}' }), {
+    ...env, AGENT_ENABLED: "true", AGENT_PAUSED: undefined,
+  });
+  assert.equal(unsetPaused.status, 503);
+  assert.equal((await unsetPaused.json()).error, "agent_disabled_or_paused");
+  assert.equal(calls.length, 0);
+
+  delete env.AGENT_OPERATOR_ID;
+  const missingIdentity = await worker.fetch(new Request(url, { method: "POST", headers: authorized, body: '{"taskId":"task-123"}' }), env);
+  assert.equal(missingIdentity.status, 503);
+  env.AGENT_OPERATOR_ID = "project-operator-01";
+
+  for (const [suffix, body] of [
+    ["?unexpected=1", '{"taskId":"task-123"}'],
+    ["", '{"taskId":"task-123","actor":"attacker"}'],
+    ["", '{"taskId":"first","taskId":"second"}'],
+    ["", "{invalid-json"],
+  ]) {
+    const response = await worker.fetch(new Request(url + suffix, { method: "POST", headers: authorized, body }), env);
+    assert.equal(response.status, 400);
+  }
+  assert.equal(calls.length, 0);
+});
+
+test("operator recovery maps pause and rate-limit failures without exposing State Store details", async () => {
+  const url = "https://agent-runtime-preview.example.workers.dev/internal/task/recover";
+  for (const [status, code, expectedStatus, expectedCode] of [
+    [503, "agent_disabled_or_paused", 503, "agent_disabled_or_paused"],
+    [429, "runtime_control_rate_limited", 429, "rate_limited"],
+    [409, "lease_not_expired", 409, "recovery_conflict"],
+    [404, "task_not_found", 404, "task_not_found"],
+  ]) {
+    const { env } = bridgeEnv();
+    env.AGENT_STATE_STORE.get = () => ({ fetch: async () => Response.json({ ok: false, error: code }, { status }) });
+    const response = await worker.fetch(new Request(url, {
+      method: "POST",
+      headers: { Authorization: "Bearer " + OPERATOR_TOKEN, "Content-Type": "application/json" },
+      body: '{"taskId":"task-123"}',
+    }), env);
+    assert.equal(response.status, expectedStatus);
+    assert.equal((await response.json()).error, expectedCode);
+  }
 });
 
 test("bridge fails closed when the internal token is missing", async () => {
