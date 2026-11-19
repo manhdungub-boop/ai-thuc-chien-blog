@@ -251,7 +251,8 @@ function snapshotManifest(snapshot) {
     format_id: snapshot.format_id,
     format_version: snapshot.format_version,
     counts: snapshot.counts,
-    table_sha256: snapshot.table_sha256
+    table_sha256: snapshot.table_sha256,
+    context: snapshot.context ?? null
   };
 }
 
@@ -260,6 +261,7 @@ async function signTestSnapshot(snapshot, keyId, privateKey) {
   const signature = await crypto.subtle.sign({ name: "Ed25519" }, privateKey, manifestBytes);
   return {
     algorithm: "Ed25519",
+    canonicalization: "canonical-json-v1",
     key_id: keyId,
     manifest_sha256: snapshot.manifest_sha256,
     signature: encodeBase64Url(new Uint8Array(signature))
@@ -273,7 +275,10 @@ async function verifyTestSnapshotSignatureWithKeyState(snapshot, envelope, trust
 }
 
 async function verifyTestSnapshotSignature(snapshot, envelope, trustedPublicKeys) {
-  if (!envelope || envelope.algorithm !== "Ed25519" ||
+  if (!snapshot || snapshot.format_id !== "ai-bank-audit-emulator-snapshot" ||
+      snapshot.format_version !== 1 ||
+      !envelope || envelope.algorithm !== "Ed25519" ||
+      envelope.canonicalization !== "canonical-json-v1" ||
       typeof envelope.key_id !== "string" ||
       envelope.manifest_sha256 !== snapshot?.manifest_sha256 ||
       typeof envelope.signature !== "string") return false;
@@ -452,6 +457,63 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
         "SELECT COUNT(*) AS count FROM ai_bank_candidates"
       ).one().count).toBe(0);
     });
+  });
+
+  it("binds environment, schema, snapshot identity, format version, and canonicalization into the signature", async () => {
+    await store.upsertCandidates([candidate()]);
+    const baseSnapshot = await runInDurableObject(store, async (_instance, state) =>
+      captureTestSnapshot(state, 1)
+    );
+    const snapshot = {
+      ...baseSnapshot,
+      context: {
+        dataset_id: "ai-bank-review-evidence",
+        environment_id: "emulator-isolated-test",
+        snapshot_id: "snapshot-20261119-0001",
+        schema_fingerprint: "sha256:emulator-schema-v1",
+        created_at: "2026-11-19T09:00:00.000Z"
+      }
+    };
+    const keyPair = await crypto.subtle.generateKey(
+      { name: "Ed25519" }, true, ["sign", "verify"]
+    );
+    const keys = new Map([["context-binding-key-v1", keyPair.publicKey]]);
+    const envelope = await signTestSnapshot(snapshot, "context-binding-key-v1", keyPair.privateKey);
+    expect(await verifyTestSnapshotSignature(snapshot, envelope, keys)).toBe(true);
+
+    for (const field of ["environment_id", "schema_fingerprint", "snapshot_id", "dataset_id", "created_at"]) {
+      const tampered = structuredClone(snapshot);
+      tampered.context[field] = "tampered-" + field;
+      expect(await verifyTestSnapshotSignature(tampered, envelope, keys)).toBe(false);
+    }
+
+    const unsupportedFormat = structuredClone(snapshot);
+    unsupportedFormat.format_version = 2;
+    const unsupportedFormatEnvelope = await signTestSnapshot(
+      unsupportedFormat, "context-binding-key-v1", keyPair.privateKey
+    );
+    expect(await verifyTestSnapshotSignature(
+      unsupportedFormat, unsupportedFormatEnvelope, keys
+    )).toBe(false);
+
+    const unsupportedFormatId = structuredClone(snapshot);
+    unsupportedFormatId.format_id = "unknown-snapshot-format";
+    const unsupportedFormatIdEnvelope = await signTestSnapshot(
+      unsupportedFormatId, "context-binding-key-v1", keyPair.privateKey
+    );
+    expect(await verifyTestSnapshotSignature(
+      unsupportedFormatId, unsupportedFormatIdEnvelope, keys
+    )).toBe(false);
+
+    const unsupportedCanonicalization = {
+      ...envelope,
+      canonicalization: "unknown-canonicalization-v9"
+    };
+    expect(await verifyTestSnapshotSignature(snapshot, unsupportedCanonicalization, keys)).toBe(false);
+
+    const wrongDataset = structuredClone(snapshot);
+    wrongDataset.context.dataset_id = "another-dataset";
+    expect(await verifyTestSnapshotSignature(wrongDataset, envelope, keys)).toBe(false);
   });
 
   it("verifies raw imported public keys and enforces active, verify-only, and revoked key states", async () => {
