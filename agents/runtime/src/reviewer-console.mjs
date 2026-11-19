@@ -19,6 +19,9 @@ export const REVIEWER_CONSOLE_HTML = `<!doctype html>
     <h2>Bài viết chờ duyệt</h2>
     <p id="queue-status" role="status">Chưa tải hàng chờ.</p>
     <ul id="review-queue"></ul>
+    <h2>Đề cương cần tác giả bổ sung</h2>
+    <p id="authoring-queue-status" role="status">Chưa tải danh sách đề cương.</p>
+    <ul id="authoring-queue"></ul>
     <section id="draft-detail" aria-live="polite">
       <h2>Chi tiết bài viết</h2>
       <p>Chọn một bài trong hàng chờ để xem nội dung và bằng chứng.</p>
