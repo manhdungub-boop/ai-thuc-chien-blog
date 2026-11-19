@@ -134,6 +134,42 @@ test("pause switch blocks queued-to-running transitions but permits terminal can
   }
 });
 
+test("concurrent paused admission and claim attempts remain fail-closed", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "ai-thuc-chien-do-pause-race-"));
+  let active;
+  let paused;
+  try {
+    active = await createRuntime({ persistDir: directory });
+    const created = await call(active.stub, "/reserve", task("pause-race-existing"));
+    assert.equal(created.status, 201);
+    const taskId = created.body.task.taskId;
+    await active.mf.dispose();
+    active = null;
+
+    paused = await createRuntime({ persistDir: directory, enabled: "false", paused: "true" });
+    const attempts = await Promise.all([
+      ...Array.from({ length: 12 }, (_, index) =>
+        call(paused.stub, "/reserve", task("pause-race-new-" + index))),
+      ...Array.from({ length: 12 }, () =>
+        call(paused.stub, "/claim", { taskId })),
+    ]);
+
+    assert.equal(attempts.length, 24);
+    assert.ok(attempts.every((result) =>
+      result.status === 503 && result.body.error === "agent_disabled_or_paused"));
+    const usage = await call(paused.stub, "/usage");
+    assert.equal(usage.body.acceptedToday, 1);
+    assert.equal(usage.body.inFlight, 1);
+    const existing = await call(paused.stub, "/task?id=" + encodeURIComponent(taskId));
+    assert.equal(existing.body.task.state, "queued");
+    assert.equal(existing.body.task.attemptCount, 0);
+  } finally {
+    if (active) await active.mf.dispose();
+    if (paused) await paused.mf.dispose();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("SQLite Durable Object reserves once and rejects idempotency payload conflicts", async () => {
   await withRuntime({}, async ({ stub }) => {
     const input = task("dedupe");
