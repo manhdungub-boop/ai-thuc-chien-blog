@@ -19,6 +19,44 @@ describe("runtime provider policy", () => {
     expect(providerPolicy.localProviderIds).toContain("article-authoring-brief");
   });
 
+  it("rejects an unregistered local provider even when it claims no external execution", () => {
+    const result = selectProvider("content_draft", [{
+      ...localAuthoringProvider,
+      id: "lookalike-local-authoring"
+    }]);
+    expect(result.action).toBe("defer");
+    expect(result.reason).toBe("local_provider_not_allowlisted");
+  });
+
+  it("rejects a registered provider when its execution surface or capability is altered", () => {
+    const wrongSurface = selectProvider("content_draft", [{
+      ...localAuthoringProvider,
+      execution_surface: "connector"
+    }]);
+    expect(wrongSurface.action).toBe("defer");
+    expect(wrongSurface.reason).toBe("connector_not_callable_from_agent_runtime");
+
+    const wrongCapability = selectProvider("content_draft", [{
+      ...localAuthoringProvider,
+      capabilities: ["quality_review"]
+    }]);
+    expect(wrongCapability.action).toBe("defer");
+    expect(wrongCapability.reason).toBe("no_provider_for_task");
+  });
+
+  it("rejects unknown task types and missing provider snapshots without execution", () => {
+    expect(selectProvider("arbitrary_task", [localAuthoringProvider])).toEqual({
+      action: "reject",
+      provider: null,
+      reason: "task_type_not_allowed"
+    });
+    expect(selectProvider("content_draft", null)).toEqual({
+      action: "defer",
+      provider: null,
+      reason: "provider_snapshot_missing"
+    });
+  });
+
   it("defers external authoring inference without a trusted runtime-owned quota adapter", () => {
     const result = selectProvider("content_draft", [{
       ...localAuthoringProvider,
