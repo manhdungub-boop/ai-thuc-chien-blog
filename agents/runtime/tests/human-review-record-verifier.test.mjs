@@ -62,9 +62,9 @@ describe("human review record verifier", () => {
       evidence_summary: {
         claims_with_contradicting_evidence: ["claim-1"],
         claims_with_insufficient_evidence: ["claim-2"],
-        evidence_decision_counts: { supports: 3, contradicts: 1, insufficient: 0 },
+        evidence_decision_counts: { supports: 2, contradicts: 1, insufficient: 1 },
         contradiction_count: 1,
-        insufficient_count: 0
+        insufficient_count: 1
       }
     });
     expect(record.claims[0].decision).toBe("needs_revision");
