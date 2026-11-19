@@ -324,6 +324,18 @@ assert.equal(db.pageViews.length, 0, 'oversized request must not write analytics
 const malformedLength = await callRaw('/analytics/pageview', new TextEncoder().encode('{"path":"/"}'), { 'Content-Length': 'invalid' });
 assert.equal(malformedLength.status, 400, 'malformed Content-Length must fail closed');
 assert.equal(db.pageViews.length, 0, 'malformed length must not write analytics data');
+let declaredOversizePulls = 0;
+const declaredOversizeStream = new ReadableStream({
+  pull(controller) { declaredOversizePulls += 1; controller.enqueue(new TextEncoder().encode('{"path":"/"}')); }
+}, { highWaterMark: 0 });
+const declaredOversize = await callRaw('/analytics/pageview', declaredOversizeStream, { 'Content-Length': '1201' });
+assert.equal(declaredOversize.status, 413, 'declared oversized request must be rejected');
+assert.equal(declaredOversizePulls, 0, 'declared oversized request must be rejected before reading the body');
+assert.equal(db.pageViews.length, 0, 'declared oversized request must not write analytics data');
+const invalidUtf8 = await callRaw('/analytics/pageview', new Uint8Array([0xff, 0xfe]));
+assert.equal(invalidUtf8.status, 400, 'invalid UTF-8 must fail closed');
+assert.equal(db.pageViews.length, 0, 'invalid UTF-8 must not write analytics data');
+
 const pageView = await call('/analytics/pageview', { method: 'POST', body: { path: '/' } }); assert.equal(pageView.status, 202);
 const topicView = await call('/analytics/pageview', { method: 'POST', body: { path: '/', topic: 'tools' } }); assert.equal(topicView.status, 202);
 const analyticsStats = await call('/analytics/stats?topic=tools'); assert.equal(analyticsStats.status, 200); const analyticsPayload = await analyticsStats.json(); assert.equal(analyticsPayload.totalViews, 1); assert.equal(analyticsPayload.topicViews, 1);
