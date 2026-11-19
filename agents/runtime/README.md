@@ -186,3 +186,23 @@ The reviewer console deliberately does not offer a decision form based only on a
 - The Google OAuth token exchange response is parsed as JSON with a strict 32 KiB streamed-byte ceiling; the Google OIDC JWKS response has a 64 KiB ceiling.
 - Both limits are enforced while reading the response stream, not only from the untrusted `Content-Length` header. Non-JSON content types, missing bodies, invalid UTF-8, malformed JSON, and oversized bodies fail closed.
 - This does not enable reviewer OAuth, configure credentials, create a Google client, or make any live Google request during tests. The reviewer authentication feature remains disabled until an isolated Preview deployment and explicit secret configuration are separately approved.
+
+
+### Authenticated read-only AI Bank reviewer API
+
+- `GET /api/reviewer/ai-bank/candidates` returns at most 20 candidate summaries by default; an optional `limit` must be an integer from 1 through 20.
+- `GET /api/reviewer/ai-bank/candidates/{owner}/{repo}` returns the review packet for the exact GitHub owner/repository key.
+- Both routes require the signed Google reviewer session cookie. The Worker verifies the session signature, expiry, provider, reviewer reference, and the single configured email allowlist before reading the candidate Durable Object.
+- Cross-origin requests are rejected. Unsupported methods are rejected. No candidate-store access occurs before session verification.
+- Candidate list and detail responses explicitly keep catalog writes, evidence verification, and public publication unauthorized.
+- The routes remain unavailable while `AGENT_REVIEWER_AUTH_ENABLED=false` or reviewer credentials/session secrets are not configured. No OAuth secrets are included in source control.
+- These endpoints are an API boundary only. They do not create a browser reviewer console, configure Google OAuth, deploy the Preview Worker, or grant any reviewer permission to change AI Bank records.
+- Evidence returned in review packets remains pending human review and marked unverified; viewing it does not make it authoritative.
+
+
+### AI Bank reviewer console view
+
+- The Preview-only `/reviewer-console` now includes a separate AI Bank candidate queue and a detail panel backed by the authenticated read-only endpoints above.
+- Candidate IDs are rendered as text and parsed only when they match the exact `github:owner/repository` form; all packet content is inserted through text nodes, not HTML.
+- The view displays evidence packets as pending material. It has no controls to verify evidence, change catalog records, approve publication, or publish to the website or social networks.
+- The console still depends on a valid Google reviewer session. Since Preview reviewer authentication remains disabled until secrets and the allowlist are configured, the new section is not yet accessible to a signed-in reviewer in a live Preview deployment.
