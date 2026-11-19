@@ -95,14 +95,38 @@ export const REVIEWER_CONSOLE_JS = `"use strict";
     }
   }
 
+  function renderAuthoringQueue(items) {
+    authoringQueue.replaceChildren();
+    if (!items.length) {
+      add(authoringQueue, "li", "Hiện chưa có đề cương cần tác giả bổ sung.");
+      return;
+    }
+    for (const item of items) {
+      const li = node("li");
+      const button = node("button", item.title + " · " + item.word_count + " từ · " + item.issue_count + " vấn đề cần bổ sung");
+      button.type = "button";
+      button.addEventListener("click", () => loadDetail(item.id));
+      li.append(button);
+      add(li, "p", "Phiên bản " + item.version + " · Trạng thái: cần tác giả hoàn thiện; chưa đủ điều kiện duyệt bằng chứng.");
+      authoringQueue.append(li);
+    }
+  }
+
   async function loadQueue() {
     queueStatus.textContent = "Đang tải hàng chờ…";
+    authoringQueueStatus.textContent = "Đang tải đề cương…";
     try {
-      const result = await getJson("/api/reviewer/drafts?limit=20");
-      renderQueue(result.items || []);
-      queueStatus.textContent = "Đã tải " + (result.count || 0) + " bài. Chế độ chỉ đọc; không có quyền xuất bản.";
+      const [reviewResult, authoringResult] = await Promise.all([
+        getJson("/api/reviewer/drafts?limit=20"),
+        getJson("/api/reviewer/drafts-needing-authoring?limit=20")
+      ]);
+      renderQueue(reviewResult.items || []);
+      renderAuthoringQueue(authoringResult.items || []);
+      queueStatus.textContent = "Đã tải " + (reviewResult.count || 0) + " bài chờ duyệt. Chế độ chỉ đọc.";
+      authoringQueueStatus.textContent = "Đã tải " + (authoringResult.count || 0) + " đề cương cần bổ sung. Không được chuyển thẳng sang xuất bản.";
     } catch (error) {
       showError(queueStatus, error);
+      showError(authoringQueueStatus, error);
     }
   }
 
