@@ -30,23 +30,37 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install pinned local Cloudflare runtime simulator
-        run: npm install --no-save --no-package-lock --ignore-scripts miniflare@4.20260730.0
+      - name: Install pinned local Cloudflare runtime simulator with patched transitive dependencies
+        run: |
+          mkdir -p "$RUNNER_TEMP/agent-runtime-audit"
+          cat > "$RUNNER_TEMP/agent-runtime-audit/package.json" <<'JSON'
+          {
+            "private": true,
+            "dependencies": {
+              "miniflare": "4.20260730.0"
+            },
+            "overrides": {
+              "miniflare": {
+                "sharp": "0.35.5",
+                "undici": "7.30.2"
+              }
+            }
+          }
+          JSON
+          npm install --prefix "$RUNNER_TEMP/agent-runtime-audit" --ignore-scripts --no-audit --no-fund
+          ln -s "$RUNNER_TEMP/agent-runtime-audit/node_modules" "$GITHUB_WORKSPACE/node_modules"
 
       - name: Report exact npm dependency advisories
         if: always()
         run: |
-          mkdir -p "$RUNNER_TEMP/agent-runtime-audit"
-          cd "$RUNNER_TEMP/agent-runtime-audit"
-          npm init -y >/dev/null
-          npm install --package-lock-only --ignore-scripts --no-audit --no-fund --save-exact miniflare@4.20260730.0
-          npm audit --json > "$RUNNER_TEMP/agent-runtime-npm-audit.json" || true
+          npm audit --prefix "$RUNNER_TEMP/agent-runtime-audit" --json > "$RUNNER_TEMP/agent-runtime-npm-audit.json" || true
           node --input-type=module <<'NODE'
           import { readFile } from 'node:fs/promises';
           const report = JSON.parse(await readFile(process.env.RUNNER_TEMP + '/agent-runtime-npm-audit.json', 'utf8'));
           const vulnerabilities = report.vulnerabilities ?? {};
+          const totals = report.metadata?.vulnerabilities ?? {};
           console.log(JSON.stringify({
-            totals: report.metadata?.vulnerabilities ?? null,
+            totals,
             packages: Object.entries(vulnerabilities).map(([name, item]) => ({
               name,
               severity: item.severity,
@@ -63,6 +77,9 @@ jobs:
               }))
             }))
           }, null, 2));
+          if ((totals.high ?? 0) > 0 || (totals.critical ?? 0) > 0) {
+            throw new Error('High or critical dependency advisories remain in the isolated test dependency tree.');
+          }
           NODE
 
       - name: Check syntax
