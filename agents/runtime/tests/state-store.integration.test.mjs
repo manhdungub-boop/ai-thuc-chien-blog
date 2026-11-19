@@ -155,6 +155,9 @@ test("read-only metrics report bounded aggregate task, quota, age, and audit dat
     assert.equal(metrics.body.quota.acceptedToday, 1);
     assert.equal(metrics.body.quota.dailyLimit, 10);
     assert.equal(metrics.body.quota.dailyUtilizationPercent, 10);
+    assert.equal(metrics.body.quota.dailyPressure, "normal");
+    assert.equal(metrics.body.quota.concurrentPressure, "normal");
+    assert.equal(metrics.body.quota.overallPressure, "normal");
     assert.equal(metrics.body.quota.inFlight, 1);
     assert.equal(metrics.body.quota.concurrentLimit, 4);
     assert.equal(metrics.body.quota.concurrentUtilizationPercent, 25);
@@ -338,6 +341,42 @@ test("default Free-tier pilot concurrency is capped at five tasks", async () => 
     const usage = await call(stub, "/usage");
     assert.equal(usage.body.acceptedToday, 5);
     assert.equal(usage.body.inFlight, 5);
+  });
+});
+
+test("quota pressure reports 80, 90, and 100 percent boundaries without changing admission policy", async () => {
+  await withRuntime({ daily: 10, concurrent: 20 }, async ({ stub }) => {
+    for (let index = 0; index < 8; index++) assert.equal((await call(stub, "/reserve", task(`daily-pressure-${index}`))).status, 201);
+    let metrics = await call(stub, "/metrics");
+    assert.equal(metrics.body.quota.dailyUtilizationPercent, 80);
+    assert.equal(metrics.body.quota.dailyPressure, "warning");
+    assert.equal((await call(stub, "/reserve", task("daily-pressure-8"))).status, 201);
+    metrics = await call(stub, "/metrics");
+    assert.equal(metrics.body.quota.dailyUtilizationPercent, 90);
+    assert.equal(metrics.body.quota.dailyPressure, "critical");
+    assert.equal(metrics.body.quota.overallPressure, "critical");
+    assert.equal((await call(stub, "/reserve", task("daily-pressure-9"))).status, 201);
+    metrics = await call(stub, "/metrics");
+    assert.equal(metrics.body.quota.dailyUtilizationPercent, 100);
+    assert.equal(metrics.body.quota.dailyPressure, "exhausted");
+    assert.equal(metrics.body.quota.overallPressure, "exhausted");
+    assert.equal((await call(stub, "/reserve", task("daily-pressure-blocked"))).body.error, "daily_quota_exhausted");
+  });
+  await withRuntime({ daily: 20, concurrent: 10 }, async ({ stub }) => {
+    for (let index = 0; index < 8; index++) assert.equal((await call(stub, "/reserve", task(`concurrent-pressure-${index}`))).status, 201);
+    let metrics = await call(stub, "/metrics");
+    assert.equal(metrics.body.quota.concurrentUtilizationPercent, 80);
+    assert.equal(metrics.body.quota.concurrentPressure, "warning");
+    assert.equal(metrics.body.quota.overallPressure, "warning");
+    assert.equal((await call(stub, "/reserve", task("concurrent-pressure-8"))).status, 201);
+    metrics = await call(stub, "/metrics");
+    assert.equal(metrics.body.quota.concurrentPressure, "critical");
+    assert.equal((await call(stub, "/reserve", task("concurrent-pressure-9"))).status, 201);
+    metrics = await call(stub, "/metrics");
+    assert.equal(metrics.body.quota.concurrentUtilizationPercent, 100);
+    assert.equal(metrics.body.quota.concurrentPressure, "exhausted");
+    assert.equal(metrics.body.quota.overallPressure, "exhausted");
+    assert.equal((await call(stub, "/reserve", task("concurrent-pressure-blocked"))).body.error, "concurrency_limit_reached");
   });
 });
 
