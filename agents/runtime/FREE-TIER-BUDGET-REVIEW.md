@@ -36,17 +36,17 @@ The current implementation's normal successful lifecycle has this estimated writ
 | running -> terminal: update task + audit | 2 |
 | **Total for a fully processed task** | **7** |
 
-At the current hard ceiling of 1,000 accepted tasks/day:
-- Normal task-lifecycle writes: up to approximately 7,000 rows/day.
-- At steady-state retention, cleanup can additionally delete up to approximately 1,000 terminal task rows, 3,000 audit rows and one old daily-usage row/day, assuming every accepted task reaches both transitions and the workload is sustained.
-- Illustrative steady-state upper estimate: approximately 11,001 rows written/day, before schema changes, retries, additional audit events, or unexpected cleanup.
-- This is approximately 11% of the published 100,000 rows-written/day allowance.
+At the currently enforced pilot ceiling of 100 accepted tasks/day (and 5 in-flight tasks):
+- Normal task-lifecycle writes: up to approximately 700 rows/day.
+- At steady-state retention, cleanup can additionally delete up to approximately 100 terminal task rows, 300 audit rows and one old daily-usage row/day, assuming every accepted task reaches both transitions and the workload is sustained.
+- Illustrative steady-state upper estimate: approximately 1,101 rows written/day, before schema changes, retries, additional audit events, or unexpected cleanup.
+- This is approximately 1.1% of the published 100,000 rows-written/day allowance.
 
 This is a reasoned estimate from the current SQL statements, not a measured Cloudflare usage report. Deletes count as writes. Re-run the estimate whenever the schema, audit frequency, transition model or retention policy changes.
 
 ## Request and storage considerations
 
-- A task normally causes three Durable Object fetches for reserve, running transition and terminal transition: approximately 3,000 DO requests/day at 1,000 completed tasks/day, excluding inspection, usage checks and future scheduler traffic.
+- A task normally causes three Durable Object fetches for reserve, running transition and terminal transition: approximately 300 DO requests/day at 100 completed tasks/day, excluding inspection, usage checks and future scheduler traffic.
 - A single global Durable Object serializes admission and is intentionally low-throughput. Do not shard it without a separately reviewed global quota and idempotency design.
 - Retention targets are 30 days for terminal task rows and 90 days for audit and daily-usage rows. Non-terminal tasks are not removed by terminal-task retention; concurrency limits and future stale-task recovery must prevent indefinite accumulation.
 - SQLite storage, index overhead, CPU/duration and real request volume require measurement in an isolated Preview deployment before any claim that the account remains within Free limits.
@@ -56,14 +56,14 @@ This is a reasoned estimate from the current SQL statements, not a measured Clou
 1. Keep `AGENT_ENABLED=false` and `AGENT_PAUSED=true`.
 2. Keep the current shell configuration unchanged; do not add a DO binding as part of this budget review.
 3. Before a separate Runtime Preview binding, verify Workers Free plan and actual account usage in Cloudflare dashboard; confirm no paid plan, payment method, spending limit or billing change is being introduced.
-4. Start with a much smaller pilot cap (for example, 100 tasks/day) and increase only after measured request, SQL-row, duration and storage usage remain comfortably below Free limits. This pilot cap is a recommendation, not an applied configuration change.
+4. Keep the enforced pilot cap at 100 tasks/day and 5 in-flight tasks; do not increase it until measured request, SQL-row, duration and storage usage remain comfortably below Free limits.
 5. Pause admissions on quota errors or unavailable metrics; never fall back to in-memory counters or bypass provider limits.
 6. Add alerting/usage sampling and a documented manual pause path before enabling task execution.
 7. No automatic paid upgrade, paid API, paid fallback or billing setup is permitted.
 
 ## Decision and remaining gates
 
-The arithmetic suggests that the current 1,000-task/day design is below the published SQL-row and request ceilings under the stated lifecycle assumptions. It does **not** prove real account headroom, CPU/duration safety, 5 GB storage sufficiency, continuous availability or 24/7 execution.
+The arithmetic suggests that the currently enforced 100-task/day pilot is below the published SQL-row and request ceilings under the stated lifecycle assumptions. It does **not** prove real account headroom, CPU/duration safety, 5 GB storage sufficiency, continuous availability or 24/7 execution.
 
 Before adding a Durable Object binding or deploying this Runtime Preview:
 - independently review this estimate and the implementation;
