@@ -246,6 +246,45 @@ async function restoreTestSnapshot(state, snapshot) {
   return { restored: true, manifest_sha256: restored.manifest_sha256 };
 }
 
+function snapshotManifest(snapshot) {
+  return {
+    format_id: snapshot.format_id,
+    format_version: snapshot.format_version,
+    counts: snapshot.counts,
+    table_sha256: snapshot.table_sha256
+  };
+}
+
+async function signTestSnapshot(snapshot, keyId, privateKey) {
+  const manifestBytes = new TextEncoder().encode(canonicalSnapshotJson(snapshotManifest(snapshot)));
+  const signature = await crypto.subtle.sign({ name: "Ed25519" }, privateKey, manifestBytes);
+  return {
+    algorithm: "Ed25519",
+    key_id: keyId,
+    manifest_sha256: snapshot.manifest_sha256,
+    signature: encodeBase64Url(new Uint8Array(signature))
+  };
+}
+
+async function verifyTestSnapshotSignature(snapshot, envelope, trustedPublicKeys) {
+  if (!envelope || envelope.algorithm !== "Ed25519" ||
+      typeof envelope.key_id !== "string" ||
+      envelope.manifest_sha256 !== snapshot?.manifest_sha256 ||
+      typeof envelope.signature !== "string") return false;
+  const publicKey = trustedPublicKeys.get(envelope.key_id);
+  if (!publicKey) return false;
+  let signature;
+  try {
+    const normalized = envelope.signature.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized + "=".repeat((4 - normalized.length % 4) % 4);
+    signature = Uint8Array.from(atob(padded), char => char.charCodeAt(0));
+  } catch {
+    return false;
+  }
+  const manifestBytes = new TextEncoder().encode(canonicalSnapshotJson(snapshotManifest(snapshot)));
+  return crypto.subtle.verify({ name: "Ed25519" }, publicKey, signature, manifestBytes);
+}
+
 describe("AgentAIBankCandidateStore Durable Object", () => {
   let store;
   let testIndex = 0;
@@ -407,6 +446,40 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
         "SELECT COUNT(*) AS count FROM ai_bank_candidates"
       ).one().count).toBe(0);
     });
+  });
+
+  it("signs and verifies the snapshot manifest with an isolated Ed25519 keypair", async () => {
+    await store.upsertCandidates([candidate()]);
+    const snapshot = await runInDurableObject(store, async (_instance, state) =>
+      captureTestSnapshot(state, 1)
+    );
+    const keyPair = await crypto.subtle.generateKey(
+      { name: "Ed25519" }, true, ["sign", "verify"]
+    );
+    const trustedKeys = new Map([["emulator-signing-key-v1", keyPair.publicKey]]);
+    const envelope = await signTestSnapshot(snapshot, "emulator-signing-key-v1", keyPair.privateKey);
+
+    expect(envelope.algorithm).toBe("Ed25519");
+    expect(envelope.manifest_sha256).toBe(snapshot.manifest_sha256);
+    expect(await verifyTestSnapshotSignature(snapshot, envelope, trustedKeys)).toBe(true);
+
+    const tamperedSnapshot = structuredClone(snapshot);
+    tamperedSnapshot.counts.ai_bank_candidates += 1;
+    expect(await verifyTestSnapshotSignature(tamperedSnapshot, envelope, trustedKeys)).toBe(false);
+
+    const tamperedEnvelope = { ...envelope, signature: envelope.signature.slice(0, -2) + "aa" };
+    expect(await verifyTestSnapshotSignature(snapshot, tamperedEnvelope, trustedKeys)).toBe(false);
+
+    const unknownKey = { ...envelope, key_id: "untrusted-key" };
+    expect(await verifyTestSnapshotSignature(snapshot, unknownKey, trustedKeys)).toBe(false);
+
+    const replacement = await crypto.subtle.generateKey(
+      { name: "Ed25519" }, true, ["sign", "verify"]
+    );
+    const rotatedTrust = new Map([["emulator-signing-key-v2", replacement.publicKey]]);
+    expect(await verifyTestSnapshotSignature(snapshot, envelope, rotatedTrust)).toBe(false);
+    const rotatedEnvelope = await signTestSnapshot(snapshot, "emulator-signing-key-v2", replacement.privateKey);
+    expect(await verifyTestSnapshotSignature(snapshot, rotatedEnvelope, rotatedTrust)).toBe(true);
   });
 
   it("captures a deterministic read-only four-table snapshot in one SQLite transaction", async () => {
