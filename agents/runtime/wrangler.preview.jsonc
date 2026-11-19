@@ -9,7 +9,7 @@
   "vars": {
     "AGENT_ENABLED": "false",
     "AGENT_PAUSED": "true",
-    "AGENT_SCHEDULE_MODE": "manual_only_no_cron",
+    "AGENT_SCHEDULE_MODE": "preview_cron_15m_paused",
     "AGENT_REVIEWER_AUTH_ENABLED": "false"
   },
   "durable_objects": {
@@ -31,6 +31,7 @@
       "name": "ai-thuc-chien-agent-supervisor-preview",
       "binding": "AGENT_SUPERVISOR",
       "class_name": "AgentSupervisorWorkflow",
+      "schedules": ["*/15 * * * *"],
       "concurrency": { "limit": 1 },
       "default_retention": { "success_retention": "1 day", "error_retention": "7 days" }
     }
