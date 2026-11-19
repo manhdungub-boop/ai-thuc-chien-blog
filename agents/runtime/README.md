@@ -61,7 +61,8 @@ This directory is a separate Cloudflare Worker service. It is not imported by th
 - Mutating requests require the exact same-origin `Origin`, JSON content type, a bounded 2 KiB body, an explicit `pause` or `resume` action, and a meaningful reason. The Durable Object records actor reference, reason, previous state, action, and timestamp in the bounded audit table.
 - Invalid sessions, non-operator reviewers, missing allowlists, disabled control, malformed requests, and cross-origin requests fail closed. No operator email or session token is accepted from the request body.
 - An operator resume changes only the durable Task Store circuit-breaker pause. It does not override `AGENT_ENABLED=false` or `AGENT_PAUSED=true`; deployment-level disable/pause flags remain authoritative. The circuit breaker never auto-resumes.
-- This is an authenticated API candidate, not yet a deployed operator dashboard. No credentials, allowlist, or live login are configured; end-to-end operator authentication remains a Preview release gate.
+- `/operator-console` serves a same-origin operator UI with explicit pause/resume confirmation, a mandatory reason, and read-only runtime/admission status. It uses a separate external script, restrictive CSP, `textContent` rendering, and same-origin fetches; it exposes no publishing or deployment actions.
+- This is a Preview code candidate, not a deployed operator dashboard. No credentials, allowlist, or live login are configured; end-to-end operator authentication remains a Preview release gate.
 
 ## Free-tier guardrails
 
