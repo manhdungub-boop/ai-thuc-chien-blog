@@ -68,7 +68,7 @@ This is a reasoned estimate from the current SQL statements, not a measured Clou
 
 ## Decision and remaining gates
 
-The arithmetic suggests that the current 1,000-task/day design is below the published SQL-row and request ceilings under the stated lifecycle assumptions. It does **not** prove real account headroom, CPU/duration safety, 5 GB storage sufficiency, continuous availability or 24/7 execution.
+The arithmetic suggests that the current 100-task/day pilot design is below the published SQL-row and request ceilings under the stated lifecycle assumptions. It does **not** prove real account headroom, CPU/duration safety, 5 GB storage sufficiency, continuous availability or 24/7 execution.
 
 Before adding a Durable Object binding or deploying this Runtime Preview:
 - independently review this estimate and the implementation;
