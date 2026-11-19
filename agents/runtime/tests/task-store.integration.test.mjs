@@ -129,6 +129,29 @@ describe("AgentTaskStore Durable Object", () => {
     expect(await store.stats()).toEqual({ completed: 1 });
   });
 
+  it("recovers an expired fifth-attempt lease into dead-letter without allowing stale completion", async () => {
+    await store.enqueue(task("task-expired-fifth-01"));
+    const claim = await store.claim([ "ai_bank_discovery" ], "task-expired-fifth-01");
+    expect(claim.task.attempts).toBe(1);
+
+    await runInDurableObject(store, async (_instance, state) => {
+      state.storage.sql.exec(
+        "UPDATE tasks SET attempts = 5, lease_until = ?, updated_at = ? WHERE id = ?",
+        Date.now() - 1,
+        Date.now() - 1,
+        "task-expired-fifth-01"
+      );
+    });
+
+    expect(await store.claim([ "ai_bank_discovery" ], "task-expired-fifth-01"))
+      .toEqual({ task: null });
+    expect(await store.complete("task-expired-fifth-01", claim.lease_token, { ok: true }))
+      .toEqual({ updated: false });
+    expect(await store.retry("task-expired-fifth-01", claim.lease_token, "stale_retry"))
+      .toEqual({ updated: false });
+    expect(await store.stats()).toEqual({ dead: 1 });
+  });
+
   it("moves a task to dead-letter after the fifth failed attempt", async () => {
     await store.enqueue(task("task-dead-letter-01"));
 
