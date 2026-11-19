@@ -207,6 +207,48 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     store = env.AGENT_AI_BANK_CANDIDATE_STORE.getByName("agent-ai-bank-candidates-" + testIndex);
   });
 
+  it("rolls back every destination table when restore fails during the final audit-table insert", async () => {
+    const now = Date.parse("2026-11-19T10:00:00.000Z");
+    await store.upsertCandidates([candidate()], now);
+    const accepted = await submitEvidence(store, "github:ollama/ollama", {
+      check_type: "pricing_and_free_limits",
+      source_title: "Official pricing page",
+      source_url: "https://ollama.com/pricing",
+      excerpt: "Restore rollback fixture."
+    }, now, "f4e6d1c2-3b7f-4a91-8c22-1234567890ab");
+    expect(accepted.accepted).toBe(true);
+
+    const sourceSnapshot = await runInDurableObject(store, async (_instance, state) =>
+      captureTestSnapshot(state, 1)
+    );
+    const destination = env.AGENT_AI_BANK_CANDIDATE_STORE.getByName(
+      "agent-ai-bank-candidates-restore-rollback-" + testIndex
+    );
+
+    await runInDurableObject(destination, async (_instance, state) => {
+      state.storage.sql.exec(
+        "CREATE TRIGGER fail_ai_bank_restore_audit_insert " +
+        "BEFORE INSERT ON ai_bank_evidence_audit_events " +
+        "BEGIN SELECT RAISE(ABORT, 'forced_restore_audit_insert_failure'); END"
+      );
+
+      await expect(restoreTestSnapshot(state, sourceSnapshot))
+        .rejects.toThrow("forced_restore_audit_insert_failure");
+
+      const counts = Object.fromEntries(SNAPSHOT_TABLES.map(table => [
+        table.name,
+        state.storage.sql.exec("SELECT COUNT(*) AS count FROM " + table.name).one().count
+      ]));
+      expect(counts).toEqual({
+        ai_bank_candidates: 0,
+        ai_bank_review_evidence: 0,
+        ai_bank_review_evidence_releases: 0,
+        ai_bank_evidence_audit_events: 0
+      });
+      state.storage.sql.exec("DROP TRIGGER fail_ai_bank_restore_audit_insert");
+    });
+  });
+
   it("restores a verified snapshot into a fresh emulator object idempotently and preserves replay protection", async () => {
     const now = Date.parse("2026-11-19T10:00:00.000Z");
     const eventId = "e4e6d1c2-3b7f-4a91-8c22-1234567890ab";
