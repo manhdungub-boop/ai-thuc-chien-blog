@@ -155,7 +155,8 @@ test("health endpoint is read-only and does not expose task enqueue", () => {
   assert.match(source, /ai_inference_enabled: false/);
   assert.match(source, /content_draft_executor_registered: true/);
   assert.match(source, /content_draft_executor_enabled: env\.AGENT_ENABLED === "true" && env\.AGENT_PAUSED !== "true"/);
-  assert.match(source, /quality_review_executor_enabled: false/);
+  assert.match(source, /quality_review_executor_registered: true/);
+  assert.match(source, /quality_review_executor_enabled: env\\.AGENT_ENABLED === "true" && env\\.AGENT_PAUSED !== "true"/);
   assert.match(source, /website_publication_enabled: false/);
   assert.match(source, /facebook_publication_enabled: false/);
   assert.match(source, /reviewer_auth_enabled: env\.AGENT_REVIEWER_AUTH_ENABLED === "true"/);
@@ -184,13 +185,15 @@ test("supervisor executes bounded health and daily read-only discovery tasks", (
   assert.match(source, /artifact_status: persisted\.artifact\.status/);
   assert.match(source, /publication_authorized: false/);
   assert.match(source, /content_draft: contentDraft/);
+  assert.match(source, /quality_review: qualityReview/);
+  assert.match(source, /executeArticleQualityReview/);
   assert.match(source, /ai-bank-scan-/);
   assert.match(source, /ai_bank_discovery/);
   assert.match(source, /catalog_modified: false/);
   assert.match(source, /AGENT_AI_BANK_CANDIDATE_STORE/);
   assert.match(source, /upsertCandidates/);
   assert.match(source, /ai_bank_candidate_store: candidateStore/);
-  assert.match(source, /tasks_considered: 4/);
+  assert.match(source, /tasks_considered: 5/);
   assert.match(source, /external_calls: externalCalls/);
   assert.match(source, /daily_budgets: dailyBudgets/);
   assert.match(source, /getExternalRequestBudget\(budgetDay, "ai_bank_discovery"\)/);
