@@ -49,6 +49,14 @@ describe("AgentDraftStore Durable Object", () => {
     expect(result.artifact.draft.claims).toBeUndefined();
     expect(result.artifact.quality_review.publication_authorized).toBe(false);
     expect(await store.listPendingReviews()).toHaveLength(0);
+    const authoringQueue = await store.listNeedsRevision(20);
+    expect(authoringQueue).toHaveLength(1);
+    expect(authoringQueue[0]).toMatchObject({
+      id: "article-brief-scaffold-01",
+      status: "needs_revision",
+      title: brief.draft.title
+    });
+    expect(authoringQueue[0]).not.toHaveProperty("body_markdown");
   });
 
   it("routes failed quality checks to needs_revision", async () => {
