@@ -556,10 +556,15 @@ test("State Store rejects oversized and malformed POST bodies before any SQL wri
       assert.equal(oversized.status, 413, route + " oversized JSON body");
       assert.equal(oversized.body.error, "request_body_too_large");
     }
+    const declaredBody = JSON.stringify({ data: "x".repeat(12 * 1024 + 64) });
     const declaredTooLarge = await stub.fetch("http://do.local/reserve", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Content-Length": "12289", Authorization: "Bearer " + TEST_STATE_STORE_TOKEN },
-      body: JSON.stringify({ task: { type: "seo.audit", idempotencyKey: "declared-length-test-key", payload: { path: "/" } } }),
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Length": String(new TextEncoder().encode(declaredBody).byteLength),
+        Authorization: "Bearer " + TEST_STATE_STORE_TOKEN,
+      },
+      body: declaredBody,
     });
     assert.equal(declaredTooLarge.status, 413);
 
