@@ -2,7 +2,7 @@ import { validateTaskRequest } from "./task-contract.mjs";
 import { hasValidStateStoreBearer } from "./internal-auth.mjs";
 import { claimQueuedTask, heartbeatLease, recoverExpiredLease, completeLeasedTask } from "./lease-policy.mjs";
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 // Conservative Free-tier pilot defaults; hard caps remain enforced below.
 const DEFAULT_LIMITS = Object.freeze({ daily: 100, concurrent: 5, payloadBytes: 8192 });
 const TERMINAL_STATES = new Set(["succeeded", "failed", "cancelled"]);
@@ -90,6 +90,11 @@ export class AgentStateStore {
           this.sql.exec("CREATE INDEX runtime_control_audit_time_idx ON runtime_control_audit(occurred_at)");
           this.sql.exec("UPDATE runtime_meta SET value = '3' WHERE key = 'schema_version'");
           version = { value: "3" };
+        }
+        if (version.value === "3") {
+          this.sql.exec("CREATE TABLE runtime_control_rate_limit (actor TEXT PRIMARY KEY, window_started_at INTEGER NOT NULL, request_count INTEGER NOT NULL CHECK (request_count >= 0))");
+          this.sql.exec("UPDATE runtime_meta SET value = '4' WHERE key = 'schema_version'");
+          version = { value: "4" };
         }
         if (version.value !== String(SCHEMA_VERSION)) {
           throw new Error("runtime_schema_version_unsupported");
@@ -209,13 +214,21 @@ export class AgentStateStore {
   }
 
   setPaused(paused, body, now) {
-    if (!isObject(body) || Object.keys(body).some((key) => key !== "reason") ||
+    if (!isObject(body) || Object.keys(body).some((key) => !["reason", "actor", "requestId"].includes(key)) ||
+        typeof body.actor !== "string" || !/^[a-zA-Z0-9._:-]{3,64}$/.test(body.actor) ||
+        typeof body.requestId !== "string" || !/^[a-zA-Z0-9-]{16,64}$/.test(body.requestId) ||
         (body.reason !== undefined && (typeof body.reason !== "string" || body.reason.length > 160 ||
           [...body.reason].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)))) {
       return { status: 400, body: { ok: false, error: "runtime_control_request_invalid" } };
     }
     try {
       return this.ctx.storage.transactionSync(() => {
+        const rate = readRow(this.sql, "SELECT window_started_at, request_count FROM runtime_control_rate_limit WHERE actor = ?", body.actor);
+        const windowStart = rate && now - rate.window_started_at < 60_000 ? rate.window_started_at : now;
+        const requestCount = rate && windowStart === rate.window_started_at ? rate.request_count : 0;
+        if (requestCount >= 10) return { status: 429, body: { ok: false, error: "runtime_control_rate_limited" } };
+        this.sql.exec("INSERT INTO runtime_control_rate_limit (actor, window_started_at, request_count) VALUES (?,?,1) ON CONFLICT(actor) DO UPDATE SET window_started_at=excluded.window_started_at, request_count=?",
+          body.actor, windowStart, requestCount + 1);
         const current = readRow(this.sql, "SELECT paused, changed_at, version FROM runtime_control WHERE singleton_id = 1");
         if (!current) return { status: 503, body: { ok: false, error: "runtime_control_unavailable" } };
         if (current.paused === (paused ? 1 : 0)) {
@@ -229,7 +242,7 @@ export class AgentStateStore {
           return { status: 409, body: { ok: false, error: "runtime_control_conflict" } };
         }
         this.sql.exec("INSERT INTO runtime_control_audit (event_id, action, occurred_at, actor, reason, request_id) VALUES (?,?,?,?,?,?)",
-          crypto.randomUUID(), paused ? "pause" : "resume", now, "internal_service", body.reason ?? "", crypto.randomUUID());
+          crypto.randomUUID(), paused ? "pause" : "resume", now, body.actor, body.reason ?? "", body.requestId);
         return { status: 200, body: { ok: true, changed: true, control: updated } };
       });
     } catch {
@@ -489,6 +502,7 @@ export class AgentStateStore {
     this.sql.exec("DELETE FROM tasks WHERE state IN ('succeeded','failed','cancelled') AND terminal_at < ?", taskCutoff);
     this.sql.exec("DELETE FROM audit_events WHERE occurred_at < ?", auditCutoff);
     this.sql.exec("DELETE FROM runtime_control_audit WHERE occurred_at < ?", auditCutoff);
+    this.sql.exec("DELETE FROM runtime_control_rate_limit WHERE window_started_at < ?", now - 24 * 60 * 60 * 1000);
     this.sql.exec("DELETE FROM daily_usage WHERE day_utc < ?", utcDay(auditCutoff));
   }
 }
