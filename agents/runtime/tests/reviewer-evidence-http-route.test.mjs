@@ -230,3 +230,95 @@ describe("authenticated reviewer draft read routes", () => {
     expect(post.status).toBe(405);
   });
 });
+
+describe("authenticated operator runtime-control HTTP route", () => {
+  const path = origin + "/api/operator/runtime-control";
+  const token = "opaque-google-session-token";
+
+  it("requires a Google session before reading operator state", async () => {
+    const response = await worker.fetch(new Request(path), {});
+    expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({ error: "operator_session_required" });
+  });
+
+  it("rejects cross-origin mutations before accessing the Task Store", async () => {
+    const response = await worker.fetch(new Request(path, {
+      method: "POST",
+      headers: {
+        origin: "https://attacker.example",
+        "content-type": "application/json",
+        cookie: "__Host-ai_reviewer_session=" + token
+      },
+      body: JSON.stringify({ action: "pause", reason: "Emergency pause after suspicious activity" })
+    }), {});
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ error: "operator_request_origin_or_content_type_rejected" });
+  });
+
+  it("rejects unsupported actions and extra body fields", async () => {
+    const invalidAction = await worker.fetch(new Request(path, {
+      method: "POST",
+      headers: { origin, "content-type": "application/json", cookie: "__Host-ai_reviewer_session=" + token },
+      body: JSON.stringify({ action: "enable", reason: "Attempt to enable runtime" })
+    }), {});
+    const extraField = await worker.fetch(new Request(path, {
+      method: "POST",
+      headers: { origin, "content-type": "application/json", cookie: "__Host-ai_reviewer_session=" + token },
+      body: JSON.stringify({ action: "pause", reason: "Pause due to suspicious activity", force: true })
+    }), {});
+    expect(invalidAction.status).toBe(400);
+    expect(extraField.status).toBe(400);
+  });
+
+  it("passes the opaque session to the Task Store for independent operator authorization", async () => {
+    let received;
+    const control = { paused: true, reason: "manual emergency stop", failure_count_last_10m: 0 };
+    const env = { AGENT_TASK_STORE: { getByName: name => {
+      expect(name).toBe("primary");
+      return {
+        async setOperatorControl(...args) {
+          received = args;
+          return { authorized: true, changed: true, control };
+        }
+      };
+    } } };
+    const response = await worker.fetch(new Request(path, {
+      method: "POST",
+      headers: { origin, "content-type": "application/json; charset=utf-8", cookie: "__Host-ai_reviewer_session=" + token },
+      body: JSON.stringify({ action: "pause", reason: "Pause due to suspicious activity" })
+    }), env);
+    expect(received).toEqual([true, "Pause due to suspicious activity", token]);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ changed: true, control });
+  });
+
+  it("returns operator state only after the Task Store authorizes the session", async () => {
+    let received;
+    const control = { paused: false, reason: null, failure_count_last_10m: 0 };
+    const env = { AGENT_TASK_STORE: { getByName: () => ({
+      async getOperatorControl(sessionToken) {
+        received = sessionToken;
+        return { authorized: true, control };
+      }
+    }) } };
+    const response = await worker.fetch(new Request(path, {
+      headers: { cookie: "__Host-ai_reviewer_session=" + token }
+    }), env);
+    expect(received).toBe(token);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ control, operator_control_enabled: true });
+  });
+
+  it("maps missing operator configuration to a fail-closed service error", async () => {
+    const env = { AGENT_TASK_STORE: { getByName: () => ({
+      async getOperatorControl() {
+        return { authorized: false, reason: "operator_allowlist_not_configured" };
+      }
+    }) } };
+    const response = await worker.fetch(new Request(path, {
+      headers: { cookie: "__Host-ai_reviewer_session=" + token }
+    }), env);
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ error: "operator_allowlist_not_configured" });
+  });
+});
