@@ -268,6 +268,7 @@ export const REVIEWER_CONSOLE_JS = `"use strict";
               option.value = value;
               select.append(option);
             }
+            select.value = "insufficient";
             const note = add(fieldset, "textarea");
             note.rows = 2;
             note.style.width = "100%";
@@ -287,6 +288,7 @@ export const REVIEWER_CONSOLE_JS = `"use strict";
             option.value = value;
             overall.append(option);
           }
+          overall.value = "needs_revision";
           const overallNote = add(fieldset, "textarea");
           overallNote.rows = 2;
           overallNote.style.width = "100%";
