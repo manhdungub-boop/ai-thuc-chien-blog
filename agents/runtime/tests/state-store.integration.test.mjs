@@ -76,6 +76,7 @@ test("all state-store routes require the distinct internal credential", async ()
       ["/recover", { taskId: "missing" }],
       ["/transition", { taskId: "missing", status: "running" }],
       ["/control", undefined],
+      ["/oidc/replay/consume", { jti: "test-jti-auth-check-001", expiresAt: "1799999999" }],
       ["/control/pause", {}],
       ["/control/resume", {}],
       ["/task?id=missing", undefined],
@@ -618,4 +619,78 @@ test("State Store control mutation rejects oversized declared and chunked bodies
     const after = await call(stub, "/control");
     assert.deepEqual(after.body.control, before.body.control);
   });
+});
+
+
+test("OIDC replay ledger consumes a jti once and rejects duplicate consumption", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const now = Date.parse("2026-11-19T10:00:00.000Z");
+    const expiresAt = String(Math.floor((now + 5 * 60 * 1000) / 1000));
+    const body = { jti: "github-actions-run-jti-000001", expiresAt };
+    const first = await call(stub, "/oidc/replay/consume", body, { "x-test-now": new Date(now).toISOString() });
+    const second = await call(stub, "/oidc/replay/consume", body, { "x-test-now": new Date(now).toISOString() });
+    assert.equal(first.status, 200);
+    assert.deepEqual(first.body, { ok: true, consumed: true });
+    assert.equal(second.status, 409);
+    assert.equal(second.body.error, "oidc_token_replayed");
+  });
+});
+
+test("OIDC replay ledger atomically rejects concurrent duplicate jti submissions", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const now = Date.parse("2026-11-19T10:00:00.000Z");
+    const body = {
+      jti: "github-actions-concurrent-jti-01",
+      expiresAt: String(Math.floor((now + 5 * 60 * 1000) / 1000)),
+    };
+    const results = await Promise.all([
+      call(stub, "/oidc/replay/consume", body, { "x-test-now": new Date(now).toISOString() }),
+      call(stub, "/oidc/replay/consume", body, { "x-test-now": new Date(now).toISOString() }),
+    ]);
+    assert.deepEqual(results.map((result) => result.status).sort(), [200, 409]);
+  });
+});
+
+test("OIDC replay ledger rejects invalid, expired, excessive, and malformed jti inputs", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const now = Date.parse("2026-11-19T10:00:00.000Z");
+    const headers = { "x-test-now": new Date(now).toISOString() };
+    for (const body of [
+      { jti: "short", expiresAt: String(Math.floor((now + 60_000) / 1000)) },
+      { jti: "github-actions-invalid-expiry-001", expiresAt: String(Math.floor(now / 1000)) },
+      { jti: "github-actions-too-far-expiry-01", expiresAt: String(Math.floor((now + 12 * 60 * 1000) / 1000)) },
+      { jti: "github-actions-missing-expiry-01" },
+      { jti: "github-actions-extra-field-0001", expiresAt: String(Math.floor((now + 60_000) / 1000)), actor: "spoofed" },
+    ]) {
+      const result = await call(stub, "/oidc/replay/consume", body, headers);
+      assert.equal(result.status, 400);
+    }
+  });
+});
+
+test("OIDC replay ledger persists across State Store restart", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "ai-thuc-chien-do-oidc-replay-"));
+  let first;
+  let second;
+  try {
+    first = await createRuntime({ persistDir: directory });
+    const now = Date.parse("2026-11-19T10:00:00.000Z");
+    const body = {
+      jti: "github-actions-persisted-jti-01",
+      expiresAt: String(Math.floor((now + 5 * 60 * 1000) / 1000)),
+    };
+    const consumed = await call(first.stub, "/oidc/replay/consume", body, { "x-test-now": new Date(now).toISOString() });
+    assert.equal(consumed.status, 200);
+    await first.mf.dispose();
+    first = null;
+
+    second = await createRuntime({ persistDir: directory });
+    const replay = await call(second.stub, "/oidc/replay/consume", body, { "x-test-now": new Date(now).toISOString() });
+    assert.equal(replay.status, 409);
+    assert.equal(replay.body.error, "oidc_token_replayed");
+  } finally {
+    if (first) await first.mf.dispose();
+    if (second) await second.mf.dispose();
+    await rm(directory, { recursive: true, force: true });
+  }
 });
