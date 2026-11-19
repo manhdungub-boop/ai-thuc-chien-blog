@@ -2,7 +2,7 @@ import { validateTaskRequest } from "./task-contract.mjs";
 import { hasValidStateStoreBearer } from "./internal-auth.mjs";
 import { claimQueuedTask, heartbeatLease, recoverExpiredLease, completeLeasedTask } from "./lease-policy.mjs";
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 // Conservative Free-tier pilot defaults; hard caps remain enforced below.
 const DEFAULT_LIMITS = Object.freeze({ daily: 100, concurrent: 5, payloadBytes: 8192 });
 const TERMINAL_STATES = new Set(["succeeded", "failed", "cancelled"]);
@@ -80,7 +80,18 @@ export class AgentStateStore {
           this.sql.exec("CREATE INDEX IF NOT EXISTS tasks_retry_due_idx ON tasks(state, next_attempt_at)");
           this.sql.exec("CREATE INDEX IF NOT EXISTS tasks_lease_expiry_idx ON tasks(state, lease_expires_at)");
           this.sql.exec("UPDATE runtime_meta SET value = '2' WHERE key = 'schema_version'");
-        } else if (version.value !== String(SCHEMA_VERSION)) {
+          version = { value: "2" };
+        }
+        if (version.value === "2") {
+          this.sql.exec("CREATE TABLE runtime_control (singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1), paused INTEGER NOT NULL CHECK (paused IN (0,1)), changed_at INTEGER NOT NULL, version INTEGER NOT NULL CHECK (version >= 0))");
+          this.sql.exec("CREATE TABLE runtime_control_audit (event_id TEXT PRIMARY KEY, action TEXT NOT NULL CHECK (action IN ('pause','resume')), occurred_at INTEGER NOT NULL, actor TEXT NOT NULL, reason TEXT NOT NULL, request_id TEXT NOT NULL)");
+          const initiallyPaused = this.env.AGENT_ENABLED !== "true" || this.env.AGENT_PAUSED !== "false" ? 1 : 0;
+          this.sql.exec("INSERT INTO runtime_control (singleton_id, paused, changed_at, version) VALUES (1, ?, 0, 0)", initiallyPaused);
+          this.sql.exec("CREATE INDEX runtime_control_audit_time_idx ON runtime_control_audit(occurred_at)");
+          this.sql.exec("UPDATE runtime_meta SET value = '3' WHERE key = 'schema_version'");
+          version = { value: "3" };
+        }
+        if (version.value !== String(SCHEMA_VERSION)) {
           throw new Error("runtime_schema_version_unsupported");
         }
       });
@@ -94,6 +105,13 @@ export class AgentStateStore {
     try {
       await this.ready;
       const url = new URL(request.url);
+      if (url.pathname === "/control" && request.method === "GET") {
+        return jsonResponse({ ok: true, control: this.controlState() });
+      }
+      if ((url.pathname === "/control/pause" || url.pathname === "/control/resume") && request.method === "POST") {
+        const result = this.setPaused(url.pathname.endsWith("/pause"), await request.json(), this.requestTime(request));
+        return jsonResponse(result.body, result.status);
+      }
       if (url.pathname === "/reserve" && request.method === "POST") {
         const result = await this.reserve(await request.json(), this.requestTime(request));
         return jsonResponse(result.body, result.status);
@@ -182,6 +200,41 @@ export class AgentStateStore {
     };
   }
 
+  controlState() {
+    const row = readRow(this.sql, "SELECT paused, changed_at, version FROM runtime_control WHERE singleton_id = 1");
+    if (!row) throw new Error("runtime_control_missing");
+    return { paused: row.paused === 1, changedAt: row.changed_at, version: row.version };
+  }
+
+  setPaused(paused, body, now) {
+    if (!isObject(body) || Object.keys(body).some((key) => key !== "reason") ||
+        (body.reason !== undefined && (typeof body.reason !== "string" || body.reason.length > 160 ||
+          [...body.reason].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)))) {
+      return { status: 400, body: { ok: false, error: "runtime_control_request_invalid" } };
+    }
+    try {
+      return this.ctx.storage.transactionSync(() => {
+        const current = readRow(this.sql, "SELECT paused, changed_at, version FROM runtime_control WHERE singleton_id = 1");
+        if (!current) return { status: 503, body: { ok: false, error: "runtime_control_unavailable" } };
+        if (current.paused === (paused ? 1 : 0)) {
+          return { status: 200, body: { ok: true, changed: false, control: this.controlState() } };
+        }
+        const version = current.version + 1;
+        this.sql.exec("UPDATE runtime_control SET paused = ?, changed_at = ?, version = ? WHERE singleton_id = 1 AND version = ?",
+          paused ? 1 : 0, now, version, current.version);
+        const updated = this.controlState();
+        if (updated.version !== version || updated.paused !== paused) {
+          return { status: 409, body: { ok: false, error: "runtime_control_conflict" } };
+        }
+        this.sql.exec("INSERT INTO runtime_control_audit (event_id, action, occurred_at, actor, reason, request_id) VALUES (?,?,?,?,?,?)",
+          crypto.randomUUID(), paused ? "pause" : "resume", now, "internal_service", body.reason ?? "", crypto.randomUUID());
+        return { status: 200, body: { ok: true, changed: true, control: updated } };
+      });
+    } catch {
+      return { status: 503, body: { ok: false, error: "runtime_control_unavailable" } };
+    }
+  }
+
   async reserve(body, now) {
     // Admission must remain closed unless both runtime controls explicitly allow it.
     if (this.env.AGENT_ENABLED !== "true" || this.env.AGENT_PAUSED !== "false") {
@@ -203,6 +256,7 @@ export class AgentStateStore {
 
     try {
       return this.ctx.storage.transactionSync(() => {
+        if (this.controlState().paused) return { status: 503, body: { ok: false, error: "agent_disabled_or_paused" } };
         const existing = readRow(this.sql, "SELECT * FROM tasks WHERE idempotency_key = ?", task.idempotencyKey);
         if (existing) {
           if (existing.payload_hash !== payloadHash || existing.task_type !== task.type) {
@@ -239,6 +293,7 @@ export class AgentStateStore {
     }
     try {
       return this.ctx.storage.transactionSync(() => {
+        if (this.controlState().paused) return { status: 503, body: { ok: false, error: "agent_disabled_or_paused" } };
         const row = readRow(this.sql, "SELECT * FROM tasks WHERE task_id = ?", body.taskId);
         if (!row) return { status: 404, body: { ok: false, error: "task_not_found" } };
         const leaseOwner = crypto.randomUUID();
@@ -355,6 +410,7 @@ export class AgentStateStore {
     }
     try {
       return this.ctx.storage.transactionSync(() => {
+        if (this.controlState().paused) return { status: 503, body: { ok: false, error: "agent_disabled_or_paused" } };
         const row = readRow(this.sql, "SELECT * FROM tasks WHERE task_id = ?", body.taskId);
         if (!row) return { status: 404, body: { ok: false, error: "task_not_found" } };
         const decision = recoverExpiredLease(row, { now });
@@ -430,6 +486,7 @@ export class AgentStateStore {
     const auditCutoff = now - 90 * 24 * 60 * 60 * 1000;
     this.sql.exec("DELETE FROM tasks WHERE state IN ('succeeded','failed','cancelled') AND terminal_at < ?", taskCutoff);
     this.sql.exec("DELETE FROM audit_events WHERE occurred_at < ?", auditCutoff);
+    this.sql.exec("DELETE FROM runtime_control_audit WHERE occurred_at < ?", auditCutoff);
     this.sql.exec("DELETE FROM daily_usage WHERE day_utc < ?", utcDay(auditCutoff));
   }
 }
