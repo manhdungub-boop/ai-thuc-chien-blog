@@ -196,3 +196,10 @@ The reviewer console deliberately does not offer a decision form based only on a
 - Preview keeps `AGENT_ENABLED=false`, `AGENT_PAUSED=true`, and `AGENT_SCHEDULE_MODE=manual_only_no_cron`. No recurring Workflow invocation is configured; any future manual invocation still checks these flags before `step.do`, queue access, network requests, or task execution and returns `paused` with zero tasks and zero external calls.
 - This is manual-only orchestration configuration, not an active autonomous Agent. It does not create scheduled Workflow instances. Account tier and remaining usage still must be checked before any Preview deployment or execution.
 - Preview deployment remains manual and requires the dedicated least-privilege `CLOUDFLARE_AGENT_PREVIEW_API_TOKEN`. No automatic deployment, recurring schedule, Production Worker, D1, DNS, OAuth secrets, AI inference, content publication, or social posting is enabled.
+
+
+### Daily admission and circuit breaker
+
+- Newly accepted task admission is capped at 100 per UTC day with a persisted counter. Idempotent duplicates do not consume the limit; the cap is independent of external request budgets and the 500-task active queue bound.
+- Five terminal failures within a rolling ten-minute window durably auto-pause new admissions and claims. Non-terminal retries and expected external-request budget exhaustion do not count. The transition is audited and never auto-resumes.
+- The authenticated operator resume route is not yet implemented on this Task Store branch, so the breaker remains fail-closed until a separately reviewed operator-control integration exists.
