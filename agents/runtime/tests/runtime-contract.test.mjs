@@ -57,6 +57,7 @@ test("Preview deployment workflow is manual, explicitly confirmed, token-isolate
   assert.match(runtimeReadme, /implements the Google authorization-code callback flow/);
   assert.match(runtimeReadme, /Both `wrangler\.jsonc` and `wrangler\.preview\.jsonc` are unscheduled/);
   assert.doesNotMatch(runtimeReadme, /15-minute Workflow heartbeat|schedules `AgentSupervisorWorkflow` every 15 minutes|96 paused Workflow instances/);
+  assert.doesNotMatch(runtimeReadme, /preview_cron_15m_paused/);
   assert.match(runtimeReadme, /no Google OAuth client, real Preview redirect registration/);
   assert.doesNotMatch(runtimeReadme, /The module is not yet connected to a login callback/);
 
