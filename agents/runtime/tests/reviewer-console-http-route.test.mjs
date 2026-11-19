@@ -3,7 +3,7 @@ import worker from "../src/index.mjs";
 
 const origin = "https://ai-thuc-chien-agent-runtime-preview.test-account.workers.dev";
 
-describe("read-only reviewer console HTTP routes", () => {
+describe("authenticated authoring and reviewer console HTTP routes", () => {
   it("serves a static console shell with a restrictive content security policy", async () => {
     const response = await worker.fetch(new Request(origin + "/reviewer-console"), {});
     const html = await response.text();
@@ -33,7 +33,11 @@ describe("read-only reviewer console HTTP routes", () => {
     expect(script).toContain('link.referrerPolicy = "no-referrer"');
     expect(script).toContain("CHƯA ĐỦ ĐIỀU KIỆN ĐÁNH GIÁ");
     expect(script).toContain("Danh sách URL hoặc claim manifest không thay thế được bằng chứng gốc");
-    expect(script).toContain("Chưa có thao tác đánh giá hoặc gửi quyết định");
+    expect(script).toContain("Đánh giá từng luận điểm và từng nguồn");
+    expect(script).toContain("Lưu bản sửa và tạo hồ sơ bằng chứng");
+    expect(script).toContain("recorded");
+    expect(script).toContain('select.value = "insufficient"');
+    expect(script).toContain('overall.value = "needs_revision"');
   });
 
   it("requires an authenticated reviewer session for the authoring revision queue", async () => {
