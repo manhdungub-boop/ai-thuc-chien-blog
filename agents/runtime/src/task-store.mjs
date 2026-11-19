@@ -448,7 +448,19 @@ export class AgentTaskStore extends DurableObject {
        RETURNING budget_day`,
       budgetCutoff, limit
     ).toArray().length;
-    return { completed_deleted: completed, dead_deleted: dead, budget_days_deleted: budgets, limit };
+    const admissions = this.ctx.storage.sql.exec(
+      "DELETE FROM task_admission_usage WHERE day_utc IN (SELECT day_utc FROM task_admission_usage WHERE day_utc < ? ORDER BY day_utc ASC LIMIT ?) RETURNING day_utc",
+      budgetCutoff, limit
+    ).toArray().length;
+    const failures = this.ctx.storage.sql.exec(
+      "DELETE FROM terminal_failures WHERE failure_id IN (SELECT failure_id FROM terminal_failures WHERE failed_at < ? ORDER BY failed_at ASC LIMIT ?) RETURNING failure_id",
+      now - 30 * 24 * 60 * 60 * 1000, limit
+    ).toArray().length;
+    const audit = this.ctx.storage.sql.exec(
+      "DELETE FROM task_store_audit WHERE event_id IN (SELECT event_id FROM task_store_audit WHERE occurred_at < ? ORDER BY occurred_at ASC LIMIT ?) RETURNING event_id",
+      now - 90 * 24 * 60 * 60 * 1000, limit
+    ).toArray().length;
+    return { completed_deleted: completed, dead_deleted: dead, budget_days_deleted: budgets, admission_days_deleted: admissions, failures_deleted: failures, audit_deleted: audit, limit };
   }
 
   stats() {
