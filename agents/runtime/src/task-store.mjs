@@ -17,6 +17,8 @@ const EXECUTABLE_TASK_TYPES = new Set([
 ]);
 const MAX_PAYLOAD_BYTES = 8192;
 const MAX_ACTIVE_TASKS = 500;
+const MAX_DAILY_TASK_ADMISSIONS = 100;
+const CIRCUIT_BREAKER = Object.freeze({ threshold: 5, windowMs: 10 * 60 * 1000 });
 const MAX_ATTEMPTS = 5;
 const LEASE_MS = 5 * 60 * 1000;
 // Retry delays after failed attempts 1-4: 30s, 2m, 10m, then 30m.
@@ -102,6 +104,43 @@ export class AgentTaskStore extends DurableObject {
       "CREATE INDEX IF NOT EXISTS tasks_status_available_created ON tasks(status, available_at, created_at)"
     );
     this.ctx.storage.sql.exec(`
+      CREATE TABLE IF NOT EXISTS task_admission_usage (
+        day_utc TEXT PRIMARY KEY,
+        accepted_count INTEGER NOT NULL DEFAULT 0 CHECK (accepted_count >= 0),
+        updated_at INTEGER NOT NULL
+      )
+    `);
+    this.ctx.storage.sql.exec(`
+      CREATE TABLE IF NOT EXISTS runtime_control (
+        singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+        paused INTEGER NOT NULL CHECK (paused IN (0,1)),
+        changed_at INTEGER NOT NULL,
+        reason TEXT
+      )
+    `);
+    this.ctx.storage.sql.exec(
+      "INSERT OR IGNORE INTO runtime_control (singleton_id, paused, changed_at, reason) VALUES (1, 0, 0, NULL)"
+    );
+    this.ctx.storage.sql.exec(`
+      CREATE TABLE IF NOT EXISTS terminal_failures (
+        failure_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        task_id TEXT NOT NULL,
+        error_code TEXT NOT NULL,
+        failed_at INTEGER NOT NULL
+      )
+    `);
+    this.ctx.storage.sql.exec(
+      "CREATE INDEX IF NOT EXISTS terminal_failures_time_idx ON terminal_failures(failed_at)"
+    );
+    this.ctx.storage.sql.exec(`
+      CREATE TABLE IF NOT EXISTS task_store_audit (
+        event_id TEXT PRIMARY KEY,
+        event_type TEXT NOT NULL,
+        occurred_at INTEGER NOT NULL,
+        metadata_json TEXT NOT NULL CHECK (length(metadata_json) <= 1024)
+      )
+    `);
+    this.ctx.storage.sql.exec(`
       CREATE TABLE IF NOT EXISTS external_request_budgets (
         budget_day TEXT NOT NULL,
         scope TEXT NOT NULL,
@@ -142,6 +181,9 @@ export class AgentTaskStore extends DurableObject {
         : { accepted: false, reason: "idempotency_key_conflict" };
     }
 
+    if (this.getControl().paused) {
+      return { accepted: false, reason: "circuit_breaker_open" };
+    }
     const active = this.ctx.storage.sql.exec(
       "SELECT COUNT(*) AS count FROM tasks WHERE status IN ('pending','leased')"
     ).one().count;
@@ -150,6 +192,19 @@ export class AgentTaskStore extends DurableObject {
     }
 
     const now = Date.now();
+    const dayUtc = new Date(now).toISOString().slice(0, 10);
+    const admission = this.ctx.storage.sql.exec(
+      `INSERT INTO task_admission_usage (day_utc, accepted_count, updated_at)
+       VALUES (?, 1, ?)
+       ON CONFLICT (day_utc) DO UPDATE
+       SET accepted_count = accepted_count + 1, updated_at = excluded.updated_at
+       WHERE accepted_count < ?
+       RETURNING accepted_count`,
+      dayUtc, now, MAX_DAILY_TASK_ADMISSIONS
+    ).toArray();
+    if (admission.length !== 1) {
+      return { accepted: false, reason: "daily_task_admission_limit_reached" };
+    }
     const inserted = this.ctx.storage.sql.exec(
       `INSERT OR IGNORE INTO tasks
        (id, task_type, payload_json, status, attempts, created_at, updated_at)
@@ -175,12 +230,17 @@ export class AgentTaskStore extends DurableObject {
     }
 
     const now = Date.now();
+    if (this.getControl().paused) return { task: null, reason: "circuit_breaker_open" };
     // Validate caller input before any recovery mutation. Expired leases return
     // to the queue; exhausted tasks move to dead-letter state.
-    this.ctx.storage.sql.exec(
-      "UPDATE tasks SET status = CASE WHEN attempts >= ? THEN 'dead' ELSE 'pending' END, available_at = CASE WHEN attempts >= ? THEN available_at ELSE ? + CASE attempts WHEN 1 THEN 30000 WHEN 2 THEN 120000 WHEN 3 THEN 600000 ELSE 1800000 END END, lease_until = NULL, lease_token = NULL, updated_at = ? WHERE status = 'leased' AND lease_until <= ?",
+    const recovered = this.ctx.storage.sql.exec(
+      "UPDATE tasks SET status = CASE WHEN attempts >= ? THEN 'dead' ELSE 'pending' END, available_at = CASE WHEN attempts >= ? THEN available_at ELSE ? + CASE attempts WHEN 1 THEN 30000 WHEN 2 THEN 120000 WHEN 3 THEN 600000 ELSE 1800000 END END, lease_until = NULL, lease_token = NULL, updated_at = ? WHERE status = 'leased' AND lease_until <= ? RETURNING id, status, attempts",
       MAX_ATTEMPTS, MAX_ATTEMPTS, now, now, now
-    );
+    ).toArray();
+    for (const row of recovered) {
+      if (row.status === "dead") this.recordTerminalFailure(row.id, "lease_expired_max_attempts", now);
+    }
+    if (this.getControl().paused) return { task: null, reason: "circuit_breaker_open" };
     // Default and explicit claims share the same code-registered executor allowlist.
     // This also prevents legacy pending rows for unimplemented tasks from leasing.
     const claimableTypes = allowedTaskTypes ?? [...EXECUTABLE_TASK_TYPES];
@@ -221,6 +281,9 @@ export class AgentTaskStore extends DurableObject {
       "UPDATE tasks SET status = 'dead', lease_until = NULL, lease_token = NULL, updated_at = ?, last_error = ? WHERE id = ? AND status = 'leased' AND lease_until > ? AND lease_token = ? RETURNING id",
       now, safeError, taskId, now, leaseToken
     ).toArray();
+    if (updated.length === 1 && safeError !== "daily_external_request_budget_exhausted") {
+      this.recordTerminalFailure(taskId, safeError, now);
+    }
     return { updated: updated.length === 1, status: updated.length === 1 ? "dead" : undefined };
   }
 
@@ -234,7 +297,64 @@ export class AgentTaskStore extends DurableObject {
       "UPDATE tasks SET status = ?, available_at = CASE WHEN ? = 'pending' THEN ? ELSE available_at END, lease_until = NULL, lease_token = NULL, updated_at = ?, last_error = ? WHERE id = ? AND status = 'leased' AND lease_until > ? AND lease_token = ? RETURNING id",
       status, status, now + retryDelayMs(row.attempts), now, safeError, taskId, now, leaseToken
     ).toArray();
+    if (updated.length === 1 && status === "dead") {
+      this.recordTerminalFailure(taskId, safeError, now);
+    }
     return { updated: updated.length === 1, status: updated.length === 1 ? status : undefined };
+  }
+
+  recordTerminalFailure(taskId, errorCode, now = Date.now()) {
+    const safeError = String(errorCode).replace(/[^a-zA-Z0-9_.:-]/g, "_").slice(0, 80);
+    this.ctx.storage.sql.exec(
+      "INSERT INTO terminal_failures (task_id, error_code, failed_at) VALUES (?, ?, ?)",
+      taskId, safeError, now
+    );
+    const count = this.ctx.storage.sql.exec(
+      "SELECT COUNT(*) AS count FROM terminal_failures WHERE failed_at >= ?",
+      now - CIRCUIT_BREAKER.windowMs
+    ).one().count;
+    if (count >= CIRCUIT_BREAKER.threshold) {
+      const changed = this.ctx.storage.sql.exec(
+        "UPDATE runtime_control SET paused = 1, changed_at = ?, reason = ? WHERE singleton_id = 1 AND paused = 0 RETURNING singleton_id",
+        now, "circuit_breaker:5_failures_in_10m"
+      ).toArray();
+      if (changed.length === 1) {
+        this.ctx.storage.sql.exec(
+          "INSERT INTO task_store_audit (event_id, event_type, occurred_at, metadata_json) VALUES (?, 'circuit_breaker_auto_pause', ?, ?)",
+          crypto.randomUUID(), now, JSON.stringify({ task_id: taskId, failure_count: count, threshold: CIRCUIT_BREAKER.threshold, window_ms: CIRCUIT_BREAKER.windowMs })
+        );
+      }
+    }
+    return { failure_count: count, paused: this.getControl().paused };
+  }
+
+  getControl() {
+    const row = this.ctx.storage.sql.exec(
+      "SELECT paused, changed_at, reason FROM runtime_control WHERE singleton_id = 1"
+    ).one();
+    const failureCount = this.ctx.storage.sql.exec(
+      "SELECT COUNT(*) AS count FROM terminal_failures WHERE failed_at >= ?",
+      Date.now() - CIRCUIT_BREAKER.windowMs
+    ).one().count;
+    return {
+      paused: row.paused === 1,
+      changed_at: row.changed_at,
+      reason: row.reason,
+      failure_count_last_10m: failureCount,
+      circuit_breaker_threshold: CIRCUIT_BREAKER.threshold,
+      circuit_breaker_window_ms: CIRCUIT_BREAKER.windowMs
+    };
+  }
+
+  getDailyAdmissionUsage(dayUtc = new Date().toISOString().slice(0, 10)) {
+    if (typeof dayUtc !== "string" || !/^\\d{4}-\\d{2}-\\d{2}$/.test(dayUtc) ||
+        new Date(dayUtc + "T00:00:00.000Z").toISOString().slice(0, 10) !== dayUtc) {
+      throw new TypeError("invalid_task_admission_day");
+    }
+    const row = this.ctx.storage.sql.exec(
+      "SELECT accepted_count FROM task_admission_usage WHERE day_utc = ?", dayUtc
+    ).toArray()[0];
+    return { day_utc: dayUtc, accepted: row?.accepted_count ?? 0, limit: MAX_DAILY_TASK_ADMISSIONS };
   }
 
   consumeExternalRequestBudget(day, scope) {
