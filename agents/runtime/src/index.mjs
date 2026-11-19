@@ -5,6 +5,7 @@ import { discoverResearchSignals } from "./research-discovery.mjs";
 import { retrieveResearchEvidence } from "./research-evidence.mjs";
 import { assessResearchEvidence } from "./research-evidence-assessment.mjs";
 import { buildArticleAuthoringBrief } from "./article-authoring-brief.mjs";
+import { executeArticleQualityReview } from "./quality-review-executor.mjs";
 import { selectProvider } from "./provider-policy.mjs";
 import { handleGoogleReviewerAuth, readGoogleReviewerSessionCookie, AgentReviewerAuthStore } from "./google-reviewer-oauth.mjs";
 import { REVIEWER_CONSOLE_HTML, REVIEWER_CONSOLE_JS } from "./reviewer-console.mjs";
@@ -277,7 +278,33 @@ export class AgentSupervisorWorkflow extends WorkflowEntrypoint {
         );
       }
 
-      const externalCalls = discovery.external_calls + research.external_calls + contentDraft.external_calls;
+      let qualityReview = {
+        status: "skipped_artifact_unavailable",
+        artifact_reviewed: false,
+        publication_authorized: false,
+        external_calls: 0
+      };
+      const artifactId = contentDraft.result?.artifact_id;
+      if (typeof artifactId === "string") {
+        const artifactVersion = contentDraft.result?.artifact_version;
+        const qualityTaskId = "quality-review-" + scanDate;
+        qualityReview = await executeTask(
+          store,
+          "quality_review",
+          qualityTaskId,
+          { artifact_id: artifactId, artifact_type: "article" },
+          async task => {
+            const draftStore = this.env.AGENT_DRAFT_STORE.getByName("primary");
+            return executeArticleQualityReview({
+              draftStore,
+              artifactId: task.payload.artifact_id,
+              artifactType: task.payload.artifact_type
+            });
+          }
+        );
+      }
+
+      const externalCalls = discovery.external_calls + research.external_calls + contentDraft.external_calls + qualityReview.external_calls;
       const dailyBudgets = {
         day: budgetDay,
         ai_bank_discovery: await store.getExternalRequestBudget(budgetDay, "ai_bank_discovery"),
@@ -292,10 +319,10 @@ export class AgentSupervisorWorkflow extends WorkflowEntrypoint {
         mode: "bounded_health_ai_bank_research_and_authoring",
         queue: await store.stats(),
         retention,
-        tasks: { health, ai_bank_discovery: discovery, content_research: research, content_draft: contentDraft },
+        tasks: { health, ai_bank_discovery: discovery, content_research: research, content_draft: contentDraft, quality_review: qualityReview },
         ai_bank_candidate_store: candidateStore,
-        tasks_considered: 4,
-        tasks_completed: [health, discovery, research, contentDraft].filter(item =>
+        tasks_considered: 5,
+        tasks_completed: [health, discovery, research, contentDraft, qualityReview].filter(item =>
           item.status === "completed"
         ).length,
         external_calls: externalCalls,
@@ -508,7 +535,7 @@ export default {
         ai_inference_enabled: false,
         content_draft_executor_registered: true,
         content_draft_executor_enabled: env.AGENT_ENABLED === "true" && env.AGENT_PAUSED !== "true",
-        quality_review_executor_enabled: false,
+        quality_review_executor_registered: true,\n        quality_review_executor_enabled: env.AGENT_ENABLED === "true" && env.AGENT_PAUSED !== "true",
         website_publication_enabled: false,
         facebook_publication_enabled: false,
         reviewer_auth_enabled: env.AGENT_REVIEWER_AUTH_ENABLED === "true",
