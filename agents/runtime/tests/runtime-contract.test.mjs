@@ -392,6 +392,9 @@ test("content authoring checks the fail-closed provider policy before building o
   assert.ok(briefBuilder > policyBlock, "authoring brief must be built only after policy approval");
   assert.ok(persistence > briefBuilder, "draft persistence must happen after the brief is built");
   assert.match(source, /status: "authoring_provider_deferred"/);
+  assert.match(source, /ok: false,\\s*status: "authoring_provider_deferred"/);
+  assert.match(source, /if \\(result\\?\\.ok === false\\)/);
+  assert.match(source, /store\\.retry\\(taskId, claimed\\.lease_token, result\\.status/);
   assert.match(source, /publication_authorized: false/);
 });
 test("draft artifact persistence runs deterministic quality review only after provider-policy admission", () => {
