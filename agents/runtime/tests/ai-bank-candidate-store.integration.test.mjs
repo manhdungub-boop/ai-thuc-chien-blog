@@ -287,6 +287,38 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     expect(await store.listReviewEvidence("github:ollama/ollama")).toHaveLength(1);
   });
 
+  it("caps accepted audit writes at 100 per UTC day without deleting replay records", async () => {
+    const now = Date.parse("2026-11-19T10:00:00.000Z");
+    await store.upsertCandidates([candidate()], now);
+    const token = await writerSessionToken(now);
+    const evidence = {
+      check_type: "pricing_and_free_limits",
+      source_title: "Official pricing page",
+      source_url: "https://ollama.com/pricing",
+      excerpt: "Pricing evidence requires human review."
+    };
+    for (let index = 0; index < 100; index += 1) {
+      const publishedAt = new Date(Date.parse("2026-11-19T08:00:00.000Z") + index * 1000).toISOString();
+      const discoveredAt = new Date(Date.parse(publishedAt) + 5 * 60 * 1000).toISOString();
+      const nextCandidate = candidate(sources[0], "v1.2." + (index + 3), publishedAt);
+      nextCandidate.discovered_at = discoveredAt;
+      await store.upsertCandidates([nextCandidate], now);
+      const eventId = "00000000-0000-4000-8000-" + (index + 1).toString(16).padStart(12, "0");
+      const accepted = await store.submitAuthorizedReviewEvidence(
+        "github:ollama/ollama", evidence, token, eventId, writerAuthEnv, now
+      );
+      expect(accepted.accepted, "audit event " + index).toBe(true);
+    }
+    const blockedCandidate = candidate(sources[0], "v1.2.103", "2026-11-19T08:02:00.000Z");
+    blockedCandidate.discovered_at = "2026-11-19T08:07:00.000Z";
+    await store.upsertCandidates([blockedCandidate], now);
+    const blocked = await store.submitAuthorizedReviewEvidence(
+      "github:ollama/ollama", evidence, token,
+      "00000000-0000-4000-8000-000000000065", writerAuthEnv, now
+    );
+    expect(blocked).toEqual({ accepted: false, reason: "evidence_audit_daily_limit_reached" });
+  });
+
   it("denies an unallowlisted writer without recording evidence or an audit event", async () => {
     await store.upsertCandidates([candidate()]);
     const now = Date.parse("2026-11-19T10:00:00.000Z");
