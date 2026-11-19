@@ -334,7 +334,7 @@ export default {
       if (!sessionToken) return json({ error: "reviewer_session_required" }, 401);
       const draftStore = env.AGENT_DRAFT_STORE?.getByName("primary");
       if (!draftStore) return json({ error: "draft_store_unavailable" }, 503);
-      if (reviewerDraftCollection) {
+      if (reviewerDraftCollection || reviewerNeedsRevisionCollection) {
         const values = url.searchParams.getAll("limit");
         if (values.length > 1 || (values.length === 1 && !/^(?:[1-9]|1[0-9]|20)$/.test(values[0]))) {
           return json({ error: "invalid_review_queue_limit" }, 400);
