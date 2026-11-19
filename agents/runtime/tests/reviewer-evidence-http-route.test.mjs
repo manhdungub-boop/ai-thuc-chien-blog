@@ -161,7 +161,7 @@ describe("authenticated reviewer draft read routes", () => {
       headers: { cookie: "__Host-ai_reviewer_session=valid-session" }
     }), env);
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ items: [item], count: 1, publication_authorized: false });
+    expect(await response.json()).toEqual({ items: [item], count: 1, queue: "pending_human_review", publication_authorized: false });
   });
 
   it("requires independent authorization before returning full draft details", async () => {
