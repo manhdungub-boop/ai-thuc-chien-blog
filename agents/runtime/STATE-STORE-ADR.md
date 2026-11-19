@@ -56,7 +56,7 @@ Crash leases, automatic requeue, retry policy, and external side-effect idempote
 
 ## Retention and budgets
 
-- Internal ceilings: 1,000 task reservations/day, 100 in-flight tasks, and 8 KiB per serialized task request.
+- Hard code ceilings: 1,000 task reservations/day, 100 in-flight tasks, and 8 KiB per serialized task request. Conservative Free-tier pilot defaults are 100 reservations/day and 5 in-flight tasks when no lower explicit setting is supplied.
 - Terminal task rows are retained for 30 days; audit and daily-usage rows are retained for 90 days. Idempotency protection is bounded by the 30-day task retention.
 - The state store writes task, daily usage, and audit rows on admission; state transitions update task rows and append audit events. The workflow must measure actual row-write behavior before any live Preview binding.
 - These internal limits are conservative guardrails, not evidence of remaining account quota or guaranteed availability.
