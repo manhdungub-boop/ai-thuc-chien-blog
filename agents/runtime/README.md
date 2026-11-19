@@ -18,13 +18,13 @@ From the repository root:
 
 ```sh
 node --check agents/runtime/src/worker.mjs
-node --test agents/runtime/tests/worker.test.mjs
+node --test agents/runtime/tests/*.test.mjs
 ```
 
 ## Next implementation gates
 
-1. Define a task contract and allowlisted task types.
-2. Add authenticated operator-only enqueue and inspect paths.
+1. Task contract is implemented as validation-only: `content.review`, `ai_bank.candidate_review`, and `seo.audit` have strict payload allowlists, bounded size, path validation, and idempotency-key syntax.
+2. Add authenticated operator-only enqueue and inspect paths; the contract does not enqueue or execute work.
 3. Add idempotency, bounded payloads, quota guard, and audit events.
 4. Add isolated storage only after schema and retention review.
 5. Add a separately reviewed Preview deployment workflow; do not add schedules until kill-switch and budget tests pass.
