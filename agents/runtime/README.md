@@ -18,8 +18,10 @@ Status: **isolated validation scaffold; no Agent Runtime Worker deployment and n
 - \`src/task-contract.mjs\` accepts only \`content.review\`, \`ai_bank.candidate_review\`, and \`seo.audit\`; exact payload keys, bounded size, safe local paths, and idempotency-key syntax are enforced.
 - \`src/operator-auth.mjs\` validates an externally supplied operator bearer token and fails closed when the secret is absent or weak.
 - \`src/admission-policy.mjs\` remains a pure fail-closed policy helper; it is not the quota authority.
-- \`src/state-store.mjs\` implements a SQLite-backed Durable Object class, but the class is **not bound** in the checked-in Preview Worker config. It supports durable idempotency, UTC daily counters, derived in-flight counts, atomic admission reservations, constrained state transitions, and bounded retention. It stores only the validated small task payload, its hash, and non-sensitive audit metadata.
-- The state store is not connected to \`POST /run\`; no task is enqueued or executed by the Worker shell.
+- \`src/internal-auth.mjs\` validates a dedicated \`AGENT_STATE_STORE_TOKEN\`, separate from the external operator token.
+- \`src/lease-policy.mjs\` defines bounded claim, heartbeat, recovery and completion rules, including a 30-minute absolute lease lifetime and three attempts by default.
+- \`src/state-store.mjs\` implements a SQLite-backed Durable Object class, but the class is **not bound** in the checked-in Preview Worker config. It supports transactional schema v1-to-v2 migration, durable idempotency, UTC daily counters, atomic admission reservations, fenced claims, bounded heartbeats, operator-invoked expiry recovery and terminal completion. Every state-changing lease operation writes an audit event transactionally.
+- State Store routes are not connected to \`POST /run\`; no task is enqueued or executed by the Worker shell. \`/recover\` is manually invoked; there is no alarm, cron or background scheduler.
 
 ## Local integration validation
 
