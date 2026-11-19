@@ -15,6 +15,8 @@ describe("read-only reviewer console HTTP routes", () => {
     expect(html).toContain('<script src="/reviewer-console.js" defer></script>');
     expect(html).not.toContain("<script>");
     expect(html).toContain("Không có quyền xuất bản");
+    expect(html).toContain("Đề cương cần tác giả bổ sung");
+    expect(html).toContain('id="authoring-queue"');
   });
 
   it("serves the console script as same-origin JavaScript without HTML injection sinks", async () => {
