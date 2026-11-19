@@ -21,7 +21,12 @@ const googleOidc = await readFile(new URL("../src/google-oidc-reviewer-verifier.
 const previewDeployWorkflow = await readFile(new URL("../../../.github/workflows/deploy-agent-runtime-preview.yml", import.meta.url), "utf8");
 const runtimeReadme = await readFile(new URL("../README.md", import.meta.url), "utf8");
 const reviewerConsole = await readFile(new URL("../src/reviewer-console.mjs", import.meta.url), "utf8");
-const reviewerConsoleJs = reviewerConsole.match(/export const REVIEWER_CONSOLE_JS = `([\\s\\S]*?)`;/)?.[1] || "";
+const reviewerConsolePrefix = "export const REVIEWER_CONSOLE_JS = `";
+const reviewerConsoleStart = reviewerConsole.indexOf(reviewerConsolePrefix);
+const reviewerConsoleEnd = reviewerConsole.lastIndexOf("`;");
+const reviewerConsoleJs = reviewerConsoleStart >= 0 && reviewerConsoleEnd > reviewerConsoleStart
+  ? reviewerConsole.slice(reviewerConsoleStart + reviewerConsolePrefix.length, reviewerConsoleEnd)
+  : "";
 
 test("Google OAuth and OIDC upstream JSON responses are byte-bounded", () => {
   assert.match(boundedJson, /getReader\(\)/);
