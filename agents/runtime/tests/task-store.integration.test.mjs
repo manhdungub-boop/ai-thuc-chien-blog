@@ -161,7 +161,7 @@ describe("AgentTaskStore Durable Object", () => {
       );
     });
 
-    await expect(Promise.resolve().then(() => store.claim(["quality_review"])))
+    await expect(Promise.resolve().then(() => store.claim(["unsupported_task_type"])))
       .rejects.toThrow("invalid_claim_task_types");
     expect(await store.stats()).toEqual({ leased: 1 });
 
