@@ -6,6 +6,52 @@ const SCHEMA_VERSION = 1;
 const DEFAULT_LIMITS = Object.freeze({ daily: 100, concurrent: 5, payloadBytes: 8192 });
 const TERMINAL_STATES = new Set(["succeeded", "failed", "cancelled"]);
 const TASK_TYPES_SQL = "'content.review','ai_bank.candidate_review','seo.audit'";
+const MAX_REQUEST_BODY_BYTES = 16 * 1024;
+
+function bodyError(status, code) {
+  const error = new Error(code);
+  error.status = status;
+  error.code = code;
+  return error;
+}
+
+async function readBoundedJson(request) {
+  const declaredLength = request.headers.get("Content-Length");
+  if (declaredLength !== null) {
+    if (!/^\\d+$/.test(declaredLength)) throw bodyError(400, "request_content_length_invalid");
+    if (Number(declaredLength) > MAX_REQUEST_BODY_BYTES) throw bodyError(413, "request_body_too_large");
+  }
+
+  const reader = request.body?.getReader();
+  if (!reader) throw bodyError(400, "request_json_invalid");
+  const chunks = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > MAX_REQUEST_BODY_BYTES) {
+      await reader.cancel();
+      throw bodyError(413, "request_body_too_large");
+    }
+    chunks.push(value);
+  }
+
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  let decoded;
+  try {
+    decoded = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    return JSON.parse(decoded);
+  } catch {
+    throw bodyError(400, "request_json_invalid");
+  }
+}
 
 function boundedLimit(value, fallback, maximum) {
   if (value === undefined || value === null || value === "") return fallback;
@@ -69,7 +115,7 @@ export class AgentStateStore {
       await this.ready;
       const url = new URL(request.url);
       if (url.pathname === "/reserve" && request.method === "POST") {
-        const result = await this.reserve(await request.json(), this.requestTime(request));
+        const result = await this.reserve(await readBoundedJson(request), this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
       if (url.pathname === "/transition" && request.method === "POST") {
@@ -106,7 +152,10 @@ export class AgentStateStore {
       }
       if (request.method !== "GET" && request.method !== "POST") return jsonResponse({ ok: false, error: "method_not_allowed" }, 405);
       return jsonResponse({ ok: false, error: "not_found" }, 404);
-    } catch {
+    } catch (error) {
+      if (error?.status === 400 || error?.status === 413) {
+        return jsonResponse({ ok: false, error: error.code }, error.status);
+      }
       return jsonResponse({ ok: false, error: "state_store_unavailable" }, 503);
     }
   }
