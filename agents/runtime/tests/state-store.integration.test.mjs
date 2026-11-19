@@ -560,7 +560,7 @@ test("State Store control mutation rejects oversized declared and chunked bodies
         "Content-Type": "application/json",
         "Content-Length": String(16 * 1024 + 1),
       },
-      body: "{}",
+      body: new Uint8Array(16 * 1024 + 1),
     });
     assert.equal(declaredTooLarge.status, 413);
     assert.equal((await declaredTooLarge.json()).error, "request_body_too_large");
