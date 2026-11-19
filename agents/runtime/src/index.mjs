@@ -461,7 +461,14 @@ export default {
     if (request.method !== "GET") return json({ error: "method_not_allowed" }, 405);
     if (url.pathname === "/health") {
       const taskStore = env.AGENT_TASK_STORE?.getByName("primary");
-      const runtimeControl = taskStore ? await taskStore.getControl() : null;
+      const runtimeControlSnapshot = taskStore ? await taskStore.getControl() : null;
+      const runtimeControl = runtimeControlSnapshot ? {
+        paused: runtimeControlSnapshot.paused,
+        changed_at: runtimeControlSnapshot.changed_at,
+        failure_count_last_10m: runtimeControlSnapshot.failure_count_last_10m,
+        circuit_breaker_threshold: runtimeControlSnapshot.circuit_breaker_threshold,
+        circuit_breaker_window_ms: runtimeControlSnapshot.circuit_breaker_window_ms
+      } : null;
       const taskAdmission = taskStore ? await taskStore.getDailyAdmissionUsage() : null;
       return json({
         ok: true,
