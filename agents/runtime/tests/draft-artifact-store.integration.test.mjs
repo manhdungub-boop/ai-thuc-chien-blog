@@ -59,6 +59,22 @@ describe("AgentDraftStore Durable Object", () => {
     expect(authoringQueue[0]).not.toHaveProperty("body_markdown");
   });
 
+  it("re-runs quality review against an exact artifact version without authorizing publication", async () => {
+    const created = await store.createDraft("draft-review-rerun-01", validDraft());
+    const reviewed = await store.reviewDraft("draft-review-rerun-01", created.artifact.version);
+    expect(reviewed.reviewed).toBe(true);
+    expect(reviewed.artifact.version).toBe(created.artifact.version);
+    expect(reviewed.artifact.status).toBe("pending_human_review");
+    expect(reviewed.artifact.quality_review.ok).toBe(true);
+    expect(reviewed.human_review_required).toBe(true);
+    expect(reviewed.publication_authorized).toBe(false);
+
+    const stale = await store.reviewDraft("draft-review-rerun-01", 99);
+    expect(stale).toMatchObject({ reviewed: false, reason: "version_conflict", current_version: 1 });
+    expect(await store.reviewDraft("missing-review-0001", 1))
+      .toEqual({ reviewed: false, reason: "artifact_not_found" });
+  });
+
   it("routes failed quality checks to needs_revision", async () => {
     const draft = validDraft(); draft.author = "Unverified Author";
     const result = await store.createDraft("draft-review-0002", draft);
