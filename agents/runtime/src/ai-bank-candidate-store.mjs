@@ -90,7 +90,6 @@ function safeCandidate(row) {
 export class AgentAIBankCandidateStore extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
-    this.env = env;
     this.ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS ai_bank_candidates (" +
       "candidate_id TEXT PRIMARY KEY, repository TEXT NOT NULL UNIQUE, " +
@@ -201,8 +200,8 @@ export class AgentAIBankCandidateStore extends DurableObject {
     return row ? safeCandidate(row) : null;
   }
 
-  async submitAuthorizedReviewEvidence(candidateId, evidence, sessionToken, eventId, now = Date.now()) {
-    const authorization = await authorizeAIBankEvidenceWriter(sessionToken, this.env, eventId, now);
+  async submitAuthorizedReviewEvidence(candidateId, evidence, sessionToken, eventId, authConfig, now = Date.now()) {
+    const authorization = await authorizeAIBankEvidenceWriter(sessionToken, authConfig, eventId, now);
     if (!authorization.authorized) {
       return { accepted: false, reason: authorization.reason || "evidence_writer_not_authorized" };
     }
