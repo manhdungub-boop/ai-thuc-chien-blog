@@ -96,6 +96,14 @@ test("State Store bounds request bodies before JSON parsing", async () => {
     assert.equal(oversized.status, 413);
     assert.equal((await oversized.json()).error, "request_body_too_large");
 
+    const oversizedTransition = await stub.fetch("http://do.local/transition", {
+      method: "POST",
+      headers,
+      body: " ".repeat(16 * 1024 + 1),
+    });
+    assert.equal(oversizedTransition.status, 413);
+    assert.equal((await oversizedTransition.json()).error, "request_body_too_large");
+
     const malformed = await stub.fetch("http://do.local/reserve", {
       method: "POST",
       headers,
