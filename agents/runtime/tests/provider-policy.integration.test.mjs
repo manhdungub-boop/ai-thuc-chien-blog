@@ -44,6 +44,27 @@ describe("runtime provider policy", () => {
     expect(wrongCapability.reason).toBe("no_provider_for_task");
   });
 
+  it("never admits paid or unknown-cost providers as free fallbacks", () => {
+    const paid = selectProvider("content_draft", [{
+      id: "paid-model",
+      status: "ready",
+      execution_surface: "agent_runtime",
+      cost_class: "paid",
+      capabilities: ["content_draft"]
+    }]);
+    const unknownCost = selectProvider("content_draft", [{
+      id: "unknown-cost-model",
+      status: "ready",
+      execution_surface: "agent_runtime",
+      cost_class: "unknown",
+      capabilities: ["content_draft"]
+    }]);
+    expect(paid.action).toBe("defer");
+    expect(unknownCost.action).toBe("defer");
+    expect(providerPolicy.paidFallbackAllowed).toBe(false);
+    expect(providerPolicy.unknownCostAllowed).toBe(false);
+  });
+
   it("rejects unknown task types and missing provider snapshots without execution", () => {
     expect(selectProvider("arbitrary_task", [localAuthoringProvider])).toEqual({
       action: "reject",
