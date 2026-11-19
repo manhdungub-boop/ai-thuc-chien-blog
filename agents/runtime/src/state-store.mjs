@@ -286,6 +286,63 @@ export class AgentStateStore {
         const row = readRow(this.sql, "SELECT * FROM tasks WHERE task_id = ?", taskId);
         return row ? jsonResponse({ ok: true, task: safeTask(row) }) : jsonResponse({ ok: false, error: "task_not_found" }, 404);
       }
+      if (url.pathname === "/dead-letter" && request.method === "GET") {
+        const allowed = new Set(["limit", "beforeTerminalAt", "beforeTaskId"]);
+        const keys = [...url.searchParams.keys()];
+        if (keys.some((key) => !allowed.has(key)) ||
+            keys.some((key) => url.searchParams.getAll(key).length !== 1) ||
+            (url.searchParams.has("beforeTerminalAt") !== url.searchParams.has("beforeTaskId"))) {
+          return jsonResponse({ ok: false, error: "dead_letter_query_invalid" }, 400);
+        }
+        const limitText = url.searchParams.get("limit") ?? "25";
+        if (!/^\\d{1,2}$/.test(limitText)) return jsonResponse({ ok: false, error: "dead_letter_limit_invalid" }, 400);
+        const limit = Number(limitText);
+        if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50) {
+          return jsonResponse({ ok: false, error: "dead_letter_limit_invalid" }, 400);
+        }
+        let beforeTerminalAt = null;
+        let beforeTaskId = null;
+        if (url.searchParams.has("beforeTerminalAt")) {
+          const timestamp = url.searchParams.get("beforeTerminalAt");
+          beforeTaskId = url.searchParams.get("beforeTaskId");
+          if (!/^\\d{1,16}$/.test(timestamp) || !Number.isSafeInteger(Number(timestamp)) ||
+              Number(timestamp) < 0 || typeof beforeTaskId !== "string" ||
+              beforeTaskId.length < 1 || beforeTaskId.length > 64 ||
+              [...beforeTaskId].some((character) => character.charCodeAt(0) < 33 || character.charCodeAt(0) === 127)) {
+            return jsonResponse({ ok: false, error: "dead_letter_cursor_invalid" }, 400);
+          }
+          beforeTerminalAt = Number(timestamp);
+        }
+        const rows = beforeTerminalAt === null
+          ? this.sql.exec(
+            "SELECT task_id,task_type,created_at,terminal_at,error_code,last_error_code,attempt_count,max_attempts " +
+            "FROM tasks WHERE state='failed' ORDER BY terminal_at DESC,task_id DESC LIMIT ?",
+            limit + 1,
+          ).toArray()
+          : this.sql.exec(
+            "SELECT task_id,task_type,created_at,terminal_at,error_code,last_error_code,attempt_count,max_attempts " +
+            "FROM tasks WHERE state='failed' AND (terminal_at<? OR (terminal_at=? AND task_id<?)) " +
+            "ORDER BY terminal_at DESC,task_id DESC LIMIT ?",
+            beforeTerminalAt, beforeTerminalAt, beforeTaskId, limit + 1,
+          ).toArray();
+        const hasMore = rows.length > limit;
+        const page = rows.slice(0, limit).map((row) => ({
+          taskId: row.task_id,
+          type: row.task_type,
+          createdAt: row.created_at,
+          terminalAt: row.terminal_at,
+          errorCode: row.error_code,
+          lastErrorCode: row.last_error_code,
+          attemptCount: row.attempt_count,
+          maxAttempts: row.max_attempts,
+        }));
+        const last = page[page.length - 1];
+        return jsonResponse({
+          ok: true,
+          items: page,
+          nextCursor: hasMore && last ? { terminalAt: last.terminalAt, taskId: last.taskId } : null,
+        });
+      }
       if (url.pathname === "/usage" && request.method === "GET") {
         const day = url.searchParams.get("day") ?? utcDay(this.requestTime(request));
         if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || Number.isNaN(Date.parse(day + "T00:00:00Z"))) {
