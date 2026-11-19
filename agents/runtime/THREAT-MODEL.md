@@ -52,8 +52,8 @@ Trust boundaries:
 
 ### T5 — Test-only controls accidentally enabled
 **Threat:** a deployed environment accidentally sets `RUNTIME_TESTING=true`, enabling the test clock override and `/__test/rollback` probe.  
-**Current controls:** checked-in Wrangler config contains no `RUNTIME_TESTING`; validation asserts its absence; rollback route still requires the internal token.  
-**Residual risk:** environment configuration can drift independently of the checked-in file. Before binding/deployment, add a deployment gate that inspects the effective Preview environment and rejects `RUNTIME_TESTING`, and consider compile-time/test-harness isolation so the test route is absent from deployable code entirely.
+**Current controls:** the deployable `src/state-store.mjs` no longer contains the rollback route, `RUNTIME_TESTING` branch, or `x-test-now` clock override. Those probes now live only in `tests/state-store-test-worker.mjs`, a Miniflare-only test harness that is not the Wrangler entrypoint. A regression test statically checks their absence from deployable source and verifies the production State Store returns 404 for the test route and ignores the test clock header.  
+**Residual risk:** future build/config changes could accidentally point Wrangler at a test module. Keep the Wrangler `main` fixed to `src/worker.mjs`, retain the regression assertion, and review any entrypoint change before deployment.
 
 ### T6 — Quota bypass, duplicate work, or concurrency race
 **Threat:** parallel or replayed requests exceed task/day limits or create duplicate work.  
@@ -93,7 +93,7 @@ Trust boundaries:
 ## 5. Mandatory gates before a Preview binding or deployment
 
 - [ ] Independent reviewer inspects current source and this threat model; records findings and disposition.
-- [ ] Remove test-only route/clock override from deployable code, or prove effective deployed config cannot enable them.
+- [x] Remove test-only route/clock override from deployable code; verify the production source has no test hook and the production Durable Object returns 404 for the test route.
 - [ ] Implement Worker ingress → fixed-operation client integration with strict operator authorization, request limits, rate limits, response allowlisting, and no credential forwarding.
 - [ ] Add end-to-end negative tests for every unauthenticated route, operator/internal token confusion, arbitrary path/header injection, response leakage, missing binding, missing secret, and rotation.
 - [ ] Keep one operator only, or implement tenant ownership and cross-tenant isolation before multi-user access.
