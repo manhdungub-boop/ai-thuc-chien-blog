@@ -83,7 +83,7 @@ jobs:
           NODE
 
       - name: Check syntax
-        run: node --check agents/runtime/src/worker.mjs && node --check agents/runtime/src/state-store.mjs
+        run: node --check agents/runtime/src/worker.mjs && node --check agents/runtime/src/state-store.mjs && node --check agents/runtime/src/lease-policy.mjs
 
       - name: Run isolated Worker shell and contract tests
         timeout-minutes: 4
