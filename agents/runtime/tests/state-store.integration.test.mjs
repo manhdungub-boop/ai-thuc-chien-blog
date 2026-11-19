@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { Miniflare } from "miniflare";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const workerPath = path.resolve(here, "../src/worker.mjs");
+const workerPath = path.resolve(here, "fixtures/state-store-test-worker.mjs");
 const TEST_OPERATOR_TOKEN = "integration-test-operator-token-0123456789abcdef";
 const TEST_STATE_STORE_TOKEN = "integration-test-state-store-token-0123456789abcdef";
 
@@ -22,7 +22,6 @@ async function createRuntime({ daily = 100, concurrent = 5, persistDir, enabled 
     durableObjects: { AGENT_STATE_STORE: { className: "AgentStateStore", useSQLite: true } },
     durableObjectsPersist: directory,
     bindings: {
-      RUNTIME_TESTING: "true",
       AGENT_ENABLED: enabled,
       AGENT_PAUSED: paused,
       AGENT_OPERATOR_TOKEN: TEST_OPERATOR_TOKEN,
@@ -102,7 +101,7 @@ test("state-store admission fails closed while disabled or paused", async () => 
     compatibilityDate: "2026-07-08",
     durableObjects: { AGENT_STATE_STORE: { className: "AgentStateStore", useSQLite: true } },
     durableObjectsPersist: directory,
-    bindings: { RUNTIME_TESTING: "true", AGENT_OPERATOR_TOKEN: TEST_OPERATOR_TOKEN, AGENT_STATE_STORE_TOKEN: TEST_STATE_STORE_TOKEN, AGENT_ENABLED: "false", AGENT_PAUSED: "true" },
+    bindings: { AGENT_OPERATOR_TOKEN: TEST_OPERATOR_TOKEN, AGENT_STATE_STORE_TOKEN: TEST_STATE_STORE_TOKEN, AGENT_ENABLED: "false", AGENT_PAUSED: "true" },
   });
   try {
     const namespace = await mf.getDurableObjectNamespace("AGENT_STATE_STORE");
@@ -545,4 +544,61 @@ test("pause blocks new claims and expiry recovery but allows safe heartbeat and 
     if (paused) await paused.mf.dispose();
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test("State Store rejects oversized and malformed POST bodies before any SQL writes", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const before = await call(stub, "/__test/snapshot", {});
+    assert.equal(before.status, 200);
+    const routes = ["/control/pause", "/control/resume", "/reserve", "/claim", "/heartbeat", "/complete", "/recover", "/transition"];
+    for (const route of routes) {
+      const oversized = await call(stub, route, { data: "x".repeat(12 * 1024 + 32) });
+      assert.equal(oversized.status, 413, route + " oversized JSON body");
+      assert.equal(oversized.body.error, "request_body_too_large");
+    }
+    const declaredTooLarge = await stub.fetch("http://do.local/reserve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Content-Length": "12289", Authorization: "Bearer " + TEST_STATE_STORE_TOKEN },
+      body: JSON.stringify({ task: { type: "seo.audit", idempotencyKey: "declared-length-test-key", payload: { path: "/" } } }),
+    });
+    assert.equal(declaredTooLarge.status, 413);
+
+    const chunkedTooLarge = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('{"data":"' + "x".repeat(12 * 1024 + 64) + '"}'));
+        controller.close();
+      },
+    });
+    const chunked = await stub.fetch("http://do.local/reserve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + TEST_STATE_STORE_TOKEN },
+      body: chunkedTooLarge,
+      duplex: "half",
+    });
+    assert.equal(chunked.status, 413);
+
+    const malformed = await stub.fetch("http://do.local/reserve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + TEST_STATE_STORE_TOKEN },
+      body: "{",
+    });
+    assert.equal(malformed.status, 400);
+    const empty = await stub.fetch("http://do.local/reserve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + TEST_STATE_STORE_TOKEN },
+    });
+    assert.equal(empty.status, 400);
+    const invalidUtf8 = await stub.fetch("http://do.local/reserve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + TEST_STATE_STORE_TOKEN },
+      body: new Uint8Array([0xc3, 0x28]),
+    });
+    assert.equal(invalidUtf8.status, 400);
+
+    const after = await call(stub, "/__test/snapshot", {});
+    assert.deepEqual(after.body.counts, before.body.counts);
+    const usage = await call(stub, "/usage");
+    assert.equal(usage.body.acceptedToday, 0);
+    assert.equal(usage.body.inFlight, 0);
+  });
 });
