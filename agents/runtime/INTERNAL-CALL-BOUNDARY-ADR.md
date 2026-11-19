@@ -56,3 +56,18 @@ Before adding a Durable Object binding, separate external operator authenticatio
 This ADR does not authorize adding the binding, creating or setting secrets, deploying a Worker, exposing operator routes, enabling the Agent, or changing Production. Those actions require the independent source/security review, verified Free-plan budget, isolated Preview configuration, passing tests, and an explicit operational release gate.
 
 No Production Worker, DNS, D1, live data, billing, or social account is changed by this design.
+
+
+## Read-only Worker bridge (2026-11-19)
+
+The Worker now contains a narrow, operator-authenticated read-only bridge:
+
+- `GET /internal/usage` maps only to the State Store `GET /usage` operation.
+- `GET /internal/task?id=...` maps only to the State Store `GET /task?id=...` operation.
+- The Worker always resolves the Durable Object using the fixed name `agent-runtime-global`; callers cannot supply an object ID, path, method, or headers.
+- The Worker creates a fresh internal GET request and sends only the dedicated `AGENT_STATE_STORE_TOKEN`. Caller Authorization, cookies, Origin, and arbitrary headers are not forwarded.
+- Task inspection omits task payload, lease owner, and other internal-only fields. Internal responses are size-bounded and errors are reduced to generic responses.
+- These endpoints require the external operator token at ingress. The internal token is never accepted as the operator credential.
+- No write/admission/claim/dispatch operation is exposed through this bridge. `/run` remains `execution_not_implemented`.
+
+The bridge is code-only at this stage. The checked-in Wrangler config still has no Durable Object binding or secrets; therefore these endpoints fail closed until an independently reviewed Preview-only configuration and credentials exist. No binding creation, secret injection, Preview deployment, Production change, or Agent enablement is authorized by this code change.
