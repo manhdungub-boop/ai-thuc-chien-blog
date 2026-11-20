@@ -47,11 +47,15 @@ test("required ingress limiter fails closed when the trusted client IP is missin
 });
 
 test("required ingress limiter fails closed when binding is missing or unavailable", async () => {
-  const missing = await worker.fetch(request("/health"), { AGENT_RATE_LIMIT_REQUIRED: "true" });
+  const missing = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/health", {
+    headers: { "cf-connecting-ip": "203.0.113.11" },
+  }), { AGENT_RATE_LIMIT_REQUIRED: "true" });
   assert.equal(missing.status, 503);
   assert.equal((await missing.json()).error, "rate_limit_unavailable");
 
-  const unavailable = await worker.fetch(request("/health"), {
+  const unavailable = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/health", {
+    headers: { "cf-connecting-ip": "203.0.113.12" },
+  }), {
     AGENT_RATE_LIMIT_REQUIRED: "true",
     AGENT_INGRESS_RATE_LIMITER: { limit: async () => { throw new Error("binding unavailable"); } },
   });
