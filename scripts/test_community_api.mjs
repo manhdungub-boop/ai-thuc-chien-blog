@@ -512,7 +512,7 @@ const failedRegister = await worker.fetch(new Request('https://example.test/api/
   method: 'POST',
   headers: { 'Content-Type': 'application/json', Origin: origin, 'CF-Connecting-IP': '198.51.100.78' },
   body: JSON.stringify({ username: 'debug_member', displayName: 'Debug Member', email: 'debug@example.invalid', password: 'TestPassword123!' }),
-}), { DB: failingDb, ASSETS: env.ASSETS });
+}), { ...env, DB: failingDb });
 assert.equal(failedRegister.status, 500);
 const failedPayload = await failedRegister.json();
 assert.equal(failedPayload.errorCode, 'D1_TABLE_MISSING');
