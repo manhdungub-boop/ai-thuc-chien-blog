@@ -129,7 +129,7 @@ jobs:
           assert.equal(preview.vars.AGENT_ENABLED, 'false');
           assert.equal(preview.vars.AGENT_PAUSED, 'true');
           assert.equal(preview.vars.AGENT_SCHEDULER_ENABLED, 'false');
-          assert.deepEqual(preview.triggers?.crons, ['*/30 * * * *']);
+          assert.equal('triggers' in preview, false, 'do not configure recurring invocations until Free-plan headroom is verified and explicitly approved');
           assert.equal(preview.vars.AGENT_OIDC_ENABLED, 'false');
           assert.equal(preview.vars.AGENT_RATE_LIMIT_REQUIRED, 'true');
           assert.deepEqual(preview.ratelimits, [{
@@ -157,7 +157,7 @@ jobs:
           assert.match(workerSource, /AGENT_SCHEDULER_ENABLED !== "true"/);
           assert.match(workerSource, /AGENT_RECOVERY_ALARM_ENABLED !== "true"/);
           assert.match(workerSource, /JSON\.stringify\(\{ maxTasks: 1 \}\)/);
-          console.log('PASS: Preview is isolated, scheduler cron is explicitly disabled by default, and each tick is code-bounded to one task.');
+          console.log('PASS: Preview is isolated and has no recurring trigger; scheduled dispatch remains code-only until cost gates pass.');
           NODE
 
       - name: Assert workflow is validation-only
