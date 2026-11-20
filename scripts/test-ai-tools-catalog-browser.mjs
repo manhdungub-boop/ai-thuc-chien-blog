@@ -86,7 +86,8 @@ try {
   await page.waitForFunction(total => document.querySelector("#bank-count")?.textContent.includes(`Tổng danh mục: ${total}.`), activeTools.length);
   const cards = page.locator("#bank-grid .tool-card");
   assert.equal(await cards.count(), 24, "first page must show 24 active cards");
-  assert.match(await page.locator("#bank-pagination").innerText(), /Trang 1 \/ 2/);
+  const pageCount = Math.ceil(activeTools.length / 24);
+  assert.match(await page.locator("#bank-pagination").innerText(), new RegExp(`Trang 1 \\/ ${pageCount}`));
 
   for (const name of ["Langfuse", "NotebookLM", ...searchNames]) {
     await page.locator("#bank-search").fill(name);
@@ -99,9 +100,12 @@ try {
   await page.waitForFunction(() => document.querySelectorAll("#bank-grid .tool-card").length === 24);
   assert.match(await page.locator("#bank-grid .tool-card h2").first().innerText(), /^Activepieces$/);
 
-  await page.locator("#bank-pagination button").last().click();
-  await page.waitForFunction(count => document.querySelectorAll("#bank-grid .tool-card").length === count, activeTools.length - 24);
-  assert.match(await page.locator("#bank-pagination").innerText(), /Trang 2 \/ 2/);
+  for (let pageNumber = 1; pageNumber < pageCount; pageNumber++) {
+    await page.locator("#bank-pagination button").last().click();
+  }
+  const lastPageCount = activeTools.length - (pageCount - 1) * 24;
+  await page.waitForFunction(count => document.querySelectorAll("#bank-grid .tool-card").length === count, lastPageCount);
+  assert.match(await page.locator("#bank-pagination").innerText(), new RegExp(`Trang ${pageCount} \\/ ${pageCount}`));
   await page.locator("#bank-pagination button").first().click();
   await page.waitForFunction(() => document.querySelectorAll("#bank-grid .tool-card").length === 24);
 
