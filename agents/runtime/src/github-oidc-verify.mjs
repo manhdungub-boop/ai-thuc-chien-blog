@@ -31,6 +31,7 @@ function expectedConfigurationIsValid(expected) {
     isNonEmptyString(expected.repository, 256) &&
     isNonEmptyString(expected.repositoryOwner, 128) &&
     isNonEmptyString(expected.repositoryId, 32) &&
+    isNonEmptyString(expected.repositoryOwnerId, 32) &&
     isNonEmptyString(expected.ref, 256) &&
     isNonEmptyString(expected.workflowRef, 512) &&
     isNonEmptyString(expected.actorId, 32) &&
@@ -124,11 +125,13 @@ export async function verifyGitHubActionsOidcToken(token, {
       claims.repository !== expected.repository ||
       claims.repository_owner !== expected.repositoryOwner ||
       String(claims.repository_id ?? "") !== expected.repositoryId ||
+      String(claims.repository_owner_id ?? "") !== expected.repositoryOwnerId ||
       claims.ref !== expected.ref ||
       claims.workflow_ref !== expected.workflowRef ||
       claims.event_name !== expected.eventName ||
       String(claims.actor_id ?? "") !== expected.actorId ||
-      claims.sub !== "repo:" + expected.repository + ":ref:" + expected.ref ||
+      claims.sub !== "repo:" + expected.repositoryOwner + "@" + expected.repositoryOwnerId + "/" +
+        expected.repository.split("/")[1] + "@" + expected.repositoryId + ":ref:" + expected.ref ||
       !isNonEmptyString(claims.jti, 128) ||
       !/^\d+$/.test(String(claims.run_id ?? "")) ||
       !/^\d+$/.test(String(claims.run_attempt ?? "")) ||
@@ -149,6 +152,7 @@ export async function verifyGitHubActionsOidcToken(token, {
       actorId: expected.actorId,
       repository: expected.repository,
       repositoryId: expected.repositoryId,
+      repositoryOwnerId: expected.repositoryOwnerId,
       ref: expected.ref,
       workflowRef: expected.workflowRef,
       eventName: expected.eventName,
