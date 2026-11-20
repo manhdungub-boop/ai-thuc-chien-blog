@@ -100,7 +100,9 @@ try {
   await page.waitForFunction(() => document.querySelectorAll("#bank-grid .tool-card").length === 24);
   assert.match(await page.locator("#bank-grid .tool-card h2").first().innerText(), /^Activepieces$/);
 
-  await page.locator("#bank-pagination button").last().click();
+  for (let pageNumber = 1; pageNumber < pageCount; pageNumber++) {
+    await page.locator("#bank-pagination button").last().click();
+  }
   const lastPageCount = activeTools.length - (pageCount - 1) * 24;
   await page.waitForFunction(count => document.querySelectorAll("#bank-grid .tool-card").length === count, lastPageCount);
   assert.match(await page.locator("#bank-pagination").innerText(), new RegExp(`Trang ${pageCount} \\/ ${pageCount}`));
