@@ -71,3 +71,8 @@ See [STATE-STORE-ADR.md](./STATE-STORE-ADR.md) for the design decision, Free-tie
 6. Add alarms or schedules only after recovery, quota pause behavior, and rollback are proven.
 
 This scaffold makes no claim of 24/7 execution, backup readiness, or production recovery.
+
+
+## Preview URL and operator exposure
+
+The dedicated Preview config sets `workers_dev=true` and `preview_urls=true`; if deployed, its workers.dev/Preview URL is publicly reachable unless an access-control layer is added. `/health` exposes only non-sensitive gate state. Operator routes require server-side bearer validation, but the current shared token/static actor label do not provide named-human identity, MFA, browser-safe sessions, or global ingress rate limiting. Do not put either secret in browser code. A no-cost Access/session boundary and the actual account Free-plan/usage headroom must be verified before deployment. The separate Preview config remains undeployed until those gates pass.
