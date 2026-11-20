@@ -1,11 +1,11 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-11-18T00:00:00+07:00",
+  "generated_at": "2026-11-20T20:00:00+07:00",
   "catalog_policy": {
     "default_locale": "vi",
     "currency": "USD",
     "new_entry_status": "needs_review",
-    "note": "Candidate intake only. All new records remain needs_review; pricing, license scope, regional availability and public-listing eligibility require editorial approval."
+    "note": "Candidate intake only. PocketPal AI and Draw Things have been removed from this queue and are staged for public catalog promotion in PR #139 after official-source review. All remaining records stay needs_review; pricing, license scope, regional availability and public-listing eligibility require editorial approval."
   },
   "tools": [
     {
@@ -262,100 +262,6 @@
         "voiceover"
       ],
       "project_fit": "Not a direct iPhone installation path: official SDK is Python/ONNX CPU or PyTorch/CUDA GPU for desktop/server hardware. The official docs mention v3 Nano as an ARM/edge-device preview, but do not document a native iOS app. Keep it for a future free local desktop/server experiment only; not a replacement for the existing Supertonic Alex/Male 1 audio sample and not approved for video until actual Vietnamese audio is listened to and export is verified."
-    },
-    {
-      "id": "draw-things",
-      "name": "Draw Things",
-      "vendor": "Draw Things, Inc.",
-      "website": "https://drawthings.ai/",
-      "categories": [
-        "image",
-        "design",
-        "video",
-        "mobile-ai",
-        "local-ai"
-      ],
-      "pricing_model": "freemium",
-      "pricing_status": "App Store Việt Nam niêm yết Free + In-App Purchases. Free Edition hỗ trợ tải model và tạo ảnh bằng local compute; trang chính thức mô tả local creation không cần internet/subscription và không có token limit. Storefront liệt kê Draw Things+ 399.000đ và các Boost Bundle 29.000đ, 149.000đ, 599.000đ nhưng không hiển thị rõ chu kỳ tính phí/điều kiện của từng mục; không mua. Community Cloud Compute là xử lý trên máy chủ, không thuộc quy trình local-only 0 đồng/bảo mật.",
-      "license": "Ứng dụng Draw Things là phần mềm proprietary, không phải mã nguồn mở. License của model và LoRA nhập từ cộng đồng khác nhau; repository community yêu cầu license riêng cho từng entry, và license của repository không tự động áp dụng cho model weights. Kiểm tra từng model/LoRA trước khi dùng thương mại hoặc phân phối.",
-      "platforms": [
-        "ios",
-        "ipados",
-        "macos"
-      ],
-      "description": "Apple-device image creation and editing app with local text-to-image, image-to-image, inpainting/outpainting, ControlNet, local LoRA training and selected local image-to-video workflows. Local generation is distinct from optional Cloud Compute; supported workflows depend on the selected model and device resources.",
-      "free_tier_summary": "App Store Việt Nam hiện hiển thị Free + In-App Purchases; version history liệt kê 26.1020.0 ngày 22/10, dung lượng 342.3 MB, iOS 15.4+, tuổi 18+ và có tiếng Việt trong danh sách ngôn ngữ. App Privacy ghi dữ liệu không liên kết người dùng gồm purchase history, other user content và user ID; đây là khai báo nhà phát triển, chưa được Apple xác minh. Free Edition cho phép tải model và tạo ảnh cục bộ; Cloud Compute cần đăng nhập Apple và gửi tác vụ/LoRA lên hạ tầng máy chủ. Privacy Policy nói LoRA upload được giữ đến khi người dùng xóa hoặc xóa tài khoản; thông tin subscription/transaction được giữ theo nhu cầu vận hành và lưu trữ tài chính. Draw Things+ và Boosts là tùy chọn trả phí; không sử dụng. App proprietary; license từng model/LoRA phải kiểm tra riêng. Chưa benchmark dung lượng, pin, nhiệt độ, tốc độ hoặc độ ổn định trên iPhone cụ thể.",
-      "official_sources": [
-        "https://drawthings.ai/",
-        "https://apps.apple.com/vn/app/draw-things-offline-ai-art/id6444050820",
-        "https://drawthings.ai/policy/",
-        "https://drawthings.ai/downloads/",
-        "https://github.com/drawthingsai/community-models",
-        "https://github.com/drawthingsai/community-docs/blob/main/Documentation.docc/2.Models.md",
-        "https://drawthings.ai/pricing/"
-      ],
-      "last_verified": "2026-11-19",
-      "verification_status": "needs_review",
-      "status": "active",
-      "tags": [
-        "ios",
-        "iphone",
-        "on-device-image-generation",
-        "offline-ai",
-        "image-to-video",
-        "model-license-review",
-        "local-image-generation",
-        "large-model-download",
-        "iphone-performance-unverified",
-        "cloud-compute-excluded"
-      ],
-      "project_fit": "Phù hợp về chức năng để tạo ảnh minh họa cục bộ miễn phí, không cần token hoặc subscription khi chỉ dùng local compute. Tuy nhiên chưa xếp vào nhóm ưu tiên thử trên iPhone 11 Pro Max: model có thể chiếm 0.8–10GB; tài liệu cộng đồng cảnh báo xử lý CoreML trên điện thoại có thể chậm/crash; chưa có benchmark A13. Chỉ cân nhắc thử sau khi kiểm tra dung lượng trống và chọn model nhỏ, không tải model lớn hoặc video. Giữ Cloud Compute, remote API và Draw Things+ ngoài quy trình 0 đồng/bảo mật. App Store listing US có nhãn 18+ và privacy disclosure có thể gồm Purchases, User Content, Identifiers; cần kiểm tra listing VN trực tiếp trước khi cài. Model bên thứ ba phải rà license riêng."
-    },
-    {
-      "id": "pocketpal-ai",
-      "name": "PocketPal AI",
-      "vendor": "Gooya UG (haftungsbeschränkt)",
-      "website": "https://pocketpal.dev/",
-      "categories": [
-        "chat",
-        "local-ai",
-        "mobile-ai",
-        "offline-ai",
-        "speech-to-text",
-        "text-to-speech"
-      ],
-      "pricing_model": "freemium",
-      "pricing_status": "Ứng dụng cơ bản được niêm yết Free trên App Store Việt Nam, có In-App Purchases. Storefront hiện liệt kê nhiều mức PocketPal Plus (119.000đ, 299.000đ, 699.000đ, 1.299.000đ) cùng các gói Pals; trang không giải thích rõ thời hạn hoặc tính năng tương ứng từng mức, vì vậy không khẳng định 699.000đ là giá mua một lần. Chat local cơ bản miễn phí; không mua Plus/Pals và không dùng tính năng online/remote nếu chưa xác minh riêng.",
-      "license": "Ứng dụng PocketPal AI là mã nguồn mở MIT theo điều khoản và repository chính thức. Model weights, voice packs, TTS engines và nội dung PalsHub là tài sản riêng có license/điều khoản khác nhau; phải kiểm tra từng model/voice trước khi dùng hoặc phân phối. MIT của ứng dụng không cấp quyền chung cho mọi model hay nội dung.",
-      "platforms": [
-        "ios",
-        "ipados",
-        "android"
-      ],
-      "description": "Ứng dụng AI cục bộ cho iPhone/iPad/Android: chạy GGUF bằng llama.cpp, chat offline, tải model từ Hugging Face, Whisper nhận dạng giọng nói và TTS neural trên thiết bị gồm Supertonic, Kokoro, Kitten, Phonon trên thiết bị tương thích. Có web search/page reading tùy chọn và remote server; không bật các tính năng này nếu yêu cầu giữ dữ liệu cục bộ.",
-      "free_tier_summary": "App Store Việt Nam hiện niêm yết Free + In-App Purchases; trang hiển thị v1.23.0, 140.3 MB, iOS 15.1+, ngôn ngữ English và tuổi 18+. App Privacy ghi Data Not Collected theo khai báo nhà phát triển, chưa được Apple xác minh. Điều khoản chính thức (17/04/2026) mô tả ứng dụng miễn phí, MIT và chạy model trên thiết bị. Privacy Policy (18/04/2026) mô tả benchmark, feedback và error reports là tùy chọn; khi người dùng chủ động gửi, một số metadata/feedback có thể được xử lý qua Firebase Functions của Google tại Hoa Kỳ. App Store liệt kê nhiều giá PocketPal Plus và Pals; chưa xác minh loại giao dịch/thời hạn của từng mức, không quảng cáo 699.000đ là giá mua một lần. Web search, page reading và remote server có thể gửi truy vấn/ngữ cảnh tới dịch vụ ngoài khi bật. Model weights và voice licenses phải kiểm tra riêng; chưa có kiểm thử hiệu năng hoặc xuất audio trên thiết bị thực.",
-      "official_sources": [
-        "https://github.com/a-ghorbani/pocketpal-ai",
-        "https://github.com/a-ghorbani/pocketpal-ai/blob/main/src/locales/en.json",
-        "https://pocketpal.dev/terms",
-        "https://pocketpal.dev/privacy-policy",
-        "https://apps.apple.com/vn/app/pocketpal-ai/id6502579498",
-        "https://huggingface.co/Supertone/supertonic-3",
-        "https://pocketpal.dev/about"
-      ],
-      "last_verified": "2026-11-19",
-      "verification_status": "needs_review",
-      "status": "active",
-      "tags": [
-        "iphone",
-        "offline-llm",
-        "gguf",
-        "local-tts",
-        "vietnamese-tts",
-        "whisper",
-        "model-license-review"
-      ],
-      "project_fit": "Ưu tiên nghiên cứu nếu cần thử chat AI và TTS cục bộ trên iPhone: App Store changelog xác nhận có Supertonic, Kokoro và Kitten TTS; Supertonic có 31 ngôn ngữ, nhưng chưa chứng minh đúng giọng Alex/Male 1 hoặc xuất WAV/MP3. Chat có thể xuất Markdown, nhưng đó không phải xuất audio. Model/voice cần tải qua mạng và chiếm dung lượng; app có các tính năng online như web search hoặc remote server, phải để tắt. App Store VN niêm yết PocketPal Plus 699.000đ; không mua. Chỉ thử nghiệm bằng dữ liệu giả lập và model nhỏ sau khi được cho phép; chưa cài, chưa tải model hoặc gửi dữ liệu dự án. Hướng dẫn engine trong locale chính thức mô tả Kitten có footprint nhỏ và phù hợp thiết bị cũ; Kokoro chất lượng cao nhưng khởi động chậm; Supertonic khởi động nhanh nhưng dùng RAM nhiều hơn. Vì iPhone đời cũ, nếu được anh cho phép thử thì ưu tiên Kitten trước, sau đó mới thử Supertonic với đoạn văn ngắn. Chưa có xác nhận xuất WAV/MP3."
     },
     {
       "id": "cloudflare-kitesurf",
