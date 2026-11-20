@@ -5,8 +5,9 @@ Status: **isolated validation scaffold with a code-only, opt-in scheduled dispat
 ## Safety boundary
 
 - Separate intended Worker name: \`ai-thuc-chien-agent-runtime-preview\`.
-- `wrangler.jsonc` is the no-binding validation shell. `wrangler.preview.jsonc` is a separate, dedicated Preview deployment config that binds only the SQLite `AgentStateStore` Durable Object; it has no account ID, production route, custom domain, D1/KV/R2/service binding, secret, or queue consumer. Preview declares one `*/30 * * * *` Cron Trigger but sets `AGENT_SCHEDULER_ENABLED=false`, `AGENT_ENABLED=false`, and `AGENT_PAUSED=true`; the config is not deployed.
-- \`AGENT_ENABLED=false\` and \`AGENT_PAUSED=true\` are the checked-in defaults.
+- `wrangler.jsonc` is the no-binding validation shell. `wrangler.preview.jsonc` is a separate, dedicated Preview deployment config that binds only the SQLite `AgentStateStore` Durable Object and the Cloudflare Workers Rate Limiting API; it has no account ID, production route, custom domain, D1/KV/R2/service binding, secret, or queue consumer. Preview declares one `*/30 * * * *` Cron Trigger but sets `AGENT_SCHEDULER_ENABLED=false`, `AGENT_ENABLED=false`, and `AGENT_PAUSED=true`; the config is not deployed.
+- `AGENT_ENABLED=false` and `AGENT_PAUSED=true` are the checked-in defaults.
+- Preview requires the Cloudflare Workers Rate Limiting binding on every route, keyed by the edge-provided client IP, at 60 requests per minute per Cloudflare location. Counters are approximate and location-scoped, not a strict global cap. A missing or unavailable binding fails closed. The no-binding validation config is unchanged.
 - \`POST /run\` fails closed while disabled or paused.
 - If both flags are manually opened, \`POST /run\` requires an \`Authorization: Bearer\` token matching the externally injected \`AGENT_OPERATOR_TOKEN\`; missing or invalid credentials fail closed with \`401\`.
 - `POST /run` performs a bounded, operator-authenticated, synchronous review of at most five tasks per request. Each task is reserved in the SQLite Durable Object State Store, claimed with a fenced lease, reviewed using the fixed public GitHub `main`-branch read-only source adapter, then marked `succeeded` or `failed` through the State Store.
@@ -142,7 +143,7 @@ This scaffold makes no claim of 24/7 execution, backup readiness, or production 
 
 ## Preview URL and operator exposure
 
-The dedicated Preview config sets `workers_dev=true` and `preview_urls=true`; if deployed, its workers.dev/Preview URL is publicly reachable unless an access-control layer is added. `/health` exposes only non-sensitive gate state. Operator routes require server-side bearer validation, but the current shared token/static actor label do not provide named-human identity, MFA, browser-safe sessions, or global ingress rate limiting. Do not put either secret in browser code. A no-cost Access/session boundary and the actual account Free-plan/usage headroom must be verified before deployment. The separate Preview config remains undeployed until those gates pass.
+The dedicated Preview config sets `workers_dev=true` and `preview_urls=true`; if deployed, its workers.dev/Preview URL is publicly reachable unless an access-control layer is added. `/health` exposes only non-sensitive gate state. Operator routes require server-side bearer validation, but the current shared token/static actor label do not provide named-human identity, MFA, or browser-safe sessions. The Preview ingress limiter is approximate and per Cloudflare location, not a strict global cap. Do not put either secret in browser code. A no-cost Access/session boundary and the actual account Free-plan/usage headroom must be verified before deployment. The separate Preview config remains undeployed until those gates pass.
 
 
 ## GitHub Actions OIDC emergency-pause bridge (code-only)
