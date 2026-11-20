@@ -9,21 +9,10 @@ Status: **isolated validation scaffold; no Agent Runtime Worker deployment and n
 - \`AGENT_ENABLED=false\` and \`AGENT_PAUSED=true\` are the checked-in defaults.
 - \`POST /run\` fails closed while disabled or paused.
 - If both flags are manually opened, \`POST /run\` requires an \`Authorization: Bearer\` token matching the externally injected \`AGENT_OPERATOR_TOKEN\`; missing or invalid credentials fail closed with \`401\`.
-- \`POST /run\` now performs a bounded, synchronous, operator-triggered **read-only review** of at most five tasks per request. It accepts only the three existing task contracts, reads article HTML and the AI Bank JSON from fixed public GitHub raw URLs on \`main\`, and returns metadata findings without returning source content.
-- The Preview source adapter has no caller-controlled URL, credential, write API, filesystem access, queue, or persistence. SEO tasks fail closed because trusted live HTTP-status and broken-link evidence is not yet available; the system does not fabricate a clean SEO result.
-- This is not a background executor: there is no task queue, durable result record, scheduler, cron trigger, automatic retry, publishing, or 24/7 execution. \`GET /health\` reports \`operator_triggered_read_only_analysis\` to describe this narrow capability.
-- Operator bearer validation uses SHA-256 digests with constant-time byte comparison. The secret is never committed, logged, or returned; no secret is configured in this repository.
-- \`GET /health\` returns only non-sensitive state.
-- No deploy workflow is provided. CI only runs local tests and static configuration checks.
-
-## Implemented validation-only building blocks
-
-- \`src/task-contract.mjs\` accepts only \`content.review\`, \`ai_bank.candidate_review\`, and \`seo.audit\`; exact payload keys, bounded size, safe local paths, and idempotency-key syntax are enforced.
-- \`src/operator-auth.mjs\` validates an externally supplied operator bearer token and fails closed when the secret is absent or weak.
-- \`src/admission-policy.mjs\` remains a pure fail-closed policy helper; it is not the quota authority.
-- \`src/internal-auth.mjs\` validates a dedicated \`AGENT_STATE_STORE_TOKEN\`, separate from the external operator token.
-- \`src/lease-policy.mjs\` defines bounded claim, heartbeat, recovery and completion rules, including a 30-minute absolute lease lifetime and three attempts by default.
-- `src/state-store.mjs` implements the SQLite-backed Durable Object class with transactional schema v1-to-v5 migrations, durable idempotency, UTC daily counters, atomic admission reservations, fenced claims, bounded heartbeats, operator-invoked expiry recovery and terminal completion. The class is bound only in `wrangler.preview.jsonc`; the validation-only `wrangler.jsonc` remains unbound. Every state-changing lease operation writes an audit event transactionally.
+- `POST /run` performs a bounded, operator-authenticated, synchronous review of at most five tasks per request. Each task is reserved in the SQLite Durable Object State Store, claimed with a fenced lease, reviewed using the fixed public GitHub `main`-branch read-only source adapter, then marked `succeeded` or `failed` through the State Store.
+- Task admission, idempotency keys, queue state, daily accepted count, concurrency limit, leases, and terminal task status are persisted by the State Store. Review findings are returned to the operator in the response and are **not persisted** as task result records.
+- The Preview source adapter has no caller-controlled URL, credential, write API, or filesystem access. SEO tasks fail closed because trusted live HTTP-status and broken-link evidence is not yet available; the system does not fabricate a clean SEO result.
+- This is not a background executor: no scheduler, cron trigger, automatic retry loop, publishing, or 24/7 execution is implemented. A queued task left by an interrupted request remains visible for explicit operator recovery. `GET /health` reports `operator_triggered_read_only_analysis` as the bounded capability; it does not imply background operation.
 - State Store routes are not connected to \`POST /run\`; no task is enqueued or executed by the Worker shell. \`/recover\` is manually invoked; there is no alarm, cron or background scheduler.
 
 ## Local integration validation
