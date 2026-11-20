@@ -19,6 +19,23 @@ function json(data, status = 200) {
 }
 function isEnabled(value) { return value === "true"; }
 
+async function enforceIngressRateLimit(request, env) {
+  if (env.AGENT_RATE_LIMIT_REQUIRED !== "true") return null;
+  const limiter = env.AGENT_INGRESS_RATE_LIMITER;
+  if (!limiter || typeof limiter.limit !== "function") {
+    return json({ ok: false, error: "rate_limit_unavailable" }, 503);
+  }
+  const address = request.headers.get("cf-connecting-ip") || "unknown";
+  const key = address.length <= 64 ? "ip:" + address : "ip:unknown";
+  try {
+    const result = await limiter.limit({ key });
+    if (result?.success !== true) return json({ ok: false, error: "rate_limited" }, 429);
+    return null;
+  } catch {
+    return json({ ok: false, error: "rate_limit_unavailable" }, 503);
+  }
+}
+
 
 
 function parseControlJson(text) {
@@ -279,6 +296,8 @@ async function readStateStore(env, pathname) {
 
 const worker = {
   async fetch(request, env = {}) {
+    const limited = await enforceIngressRateLimit(request, env);
+    if (limited) return limited;
     const url = new URL(request.url);
     if (url.pathname === "/health") {
       if (request.method !== "GET") return json({ ok: false, error: "method_not_allowed" }, 405);
