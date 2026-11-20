@@ -38,13 +38,21 @@ function validControl(control) {
     typeof control.emergencyStopped === "boolean";
 }
 
-function validRow(row) {
-  return isPlainRecord(row) &&
-    exactKeys(row, ROW_FIELDS) &&
-    row.state === "running" &&
+function validRow(row, { allowTerminalDuplicate = false } = {}) {
+  if (!isPlainRecord(row) || !exactKeys(row, ROW_FIELDS) ||
+      !Number.isSafeInteger(row.lease_generation) || row.lease_generation < 1) {
+    return false;
+  }
+
+  if (allowTerminalDuplicate && TERMINAL_STATUSES.includes(row.state)) {
+    return row.lease_owner === null &&
+      row.lease_expires_at === null &&
+      row.lease_max_expires_at === null;
+  }
+
+  return row.state === "running" &&
     typeof row.lease_owner === "string" &&
     /^[a-f0-9-]{16,64}$/i.test(row.lease_owner) &&
-    Number.isSafeInteger(row.lease_generation) && row.lease_generation >= 1 &&
     Number.isSafeInteger(row.lease_expires_at) && row.lease_expires_at >= 0 &&
     Number.isSafeInteger(row.lease_max_expires_at) &&
     row.lease_max_expires_at >= row.lease_expires_at;
@@ -97,7 +105,7 @@ export function planLeaseFenceDecision(input, { controlSnapshot } = {}) {
   if (!Number.isSafeInteger(input.now) || input.now < 0 || input.now > MAX_NOW) {
     return reject("lease_fence_clock_invalid");
   }
-  if (!validRow(input.row) ||
+  if (!validRow(input.row, { allowTerminalDuplicate: operation === "complete" }) ||
       !validLeaseIdentity(input.leaseOwner, input.leaseGeneration)) {
     return reject("lease_fence_identity_or_row_invalid");
   }

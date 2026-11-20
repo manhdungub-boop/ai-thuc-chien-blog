@@ -92,6 +92,40 @@ test("completion is accepted only for the current live fencing identity", () => 
   assert.deepEqual(result.sideEffects, []);
 });
 
+test("same terminal completion is idempotently recognized without persistence", () => {
+  const terminalRow = row({
+    state: "succeeded",
+    lease_owner: null,
+    lease_expires_at: null,
+    lease_max_expires_at: null,
+  });
+  const result = planLeaseFenceDecision(
+    complete({ row: terminalRow }),
+    { controlSnapshot: ACTIVE },
+  );
+  assert.equal(result.ok, true);
+  assert.equal(result.accepted, true);
+  assert.equal(result.reason, "duplicate_terminal_completion");
+  assert.equal(result.plannedState, "succeeded");
+  assert.equal(result.persistence, "not_started");
+  assert.deepEqual(result.sideEffects, []);
+});
+
+test("conflicting terminal completion is rejected", () => {
+  const terminalRow = row({
+    state: "succeeded",
+    lease_owner: null,
+    lease_expires_at: null,
+    lease_max_expires_at: null,
+  });
+  const result = planLeaseFenceDecision(
+    complete({ row: terminalRow, status: "cancelled" }),
+    { controlSnapshot: ACTIVE },
+  );
+  assert.equal(result.accepted, false);
+  assert.equal(result.reason, "terminal_state_conflict");
+});
+
 test("Pause and Emergency Stop block heartbeat and completion decisions", () => {
   for (const controlSnapshot of [
     { paused: true, emergencyStopped: false },
