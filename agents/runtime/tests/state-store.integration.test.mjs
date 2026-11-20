@@ -119,6 +119,7 @@ test("all state-store routes require the distinct internal credential", async ()
     for (const [pathname, body] of [
       ["/reserve", task("unauth-reserve")],
       ["/claim", { taskId: "missing" }],
+      ["/claim-next", {}],
       ["/heartbeat", { taskId: "missing", leaseOwner: "a1b2c3d4-e5f6-4711-8123-abcdef012345", leaseGeneration: 1 }],
       ["/complete", { taskId: "missing", leaseOwner: "a1b2c3d4-e5f6-4711-8123-abcdef012345", leaseGeneration: 1, status: "succeeded" }],
       ["/recover", { taskId: "missing" }],
@@ -475,6 +476,40 @@ test("persisted v1 State Store migrates transactionally to v5 without losing tas
   }
 });
 
+
+test("bounded queue claim atomically selects the oldest due task and stops when empty or paused", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const first = await call(stub, "/reserve", task("dispatch-first"), { "x-test-now": "2026-11-19T10:00:00.000Z" });
+    const second = await call(stub, "/reserve", task("dispatch-second"), { "x-test-now": "2026-11-19T10:00:01.000Z" });
+    assert.equal(first.status, 201);
+    assert.equal(second.status, 201);
+
+    const claimedFirst = await call(stub, "/claim-next", {}, { "x-test-now": "2026-11-19T10:00:02.000Z" });
+    assert.equal(claimedFirst.status, 200);
+    assert.equal(claimedFirst.body.task.taskId, first.body.task.taskId);
+    assert.equal(claimedFirst.body.task.state, "running");
+    assert.equal(typeof claimedFirst.body.lease.owner, "string");
+
+    const claimedSecond = await call(stub, "/claim-next", {}, { "x-test-now": "2026-11-19T10:00:02.000Z" });
+    assert.equal(claimedSecond.status, 200);
+    assert.equal(claimedSecond.body.task.taskId, second.body.task.taskId);
+
+    const empty = await call(stub, "/claim-next", {}, { "x-test-now": "2026-11-19T10:00:02.000Z" });
+    assert.equal(empty.status, 200);
+    assert.equal(empty.body.task, null);
+    assert.equal(empty.body.lease, null);
+
+    const paused = await call(stub, "/control/pause", {
+      actor: "queue-dispatch-test",
+      requestId: crypto.randomUUID(),
+      reason: "verify dispatch stop",
+    });
+    assert.equal(paused.status, 200);
+    const blocked = await call(stub, "/claim-next", {}, { "x-test-now": "2026-11-19T10:00:03.000Z" });
+    assert.equal(blocked.status, 503);
+    assert.equal(blocked.body.error, "agent_disabled_or_paused");
+  });
+});
 
 test("atomic claim admits only one worker and stale lease generations cannot heartbeat or complete", async () => {
   await withRuntime({}, async ({ stub }) => {
