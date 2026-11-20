@@ -418,3 +418,64 @@ test("control mutation rejects oversized declared and chunked request bodies bef
   assert.equal((await duplicateField.json()).error, "request_invalid");
   assert.equal(calls.length, 0);
 });
+
+
+test("OIDC pause endpoint remains disabled by default and does not contact State Store", async () => {
+  let called = false;
+  const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/oidc/pause", {
+    method: "POST",
+    headers: { Authorization: "Bearer not-a-jwt", "Content-Type": "application/json" },
+    body: JSON.stringify({ reason: "test" }),
+  }), {
+    AGENT_OIDC_ENABLED: "false",
+    AGENT_STATE_STORE: { idFromName: () => "unused", get: () => ({ fetch: async () => { called = true; } }) },
+  });
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).error, "oidc_operator_disabled");
+  assert.equal(called, false);
+});
+
+test("OIDC pause endpoint fails closed when the exact actor trust policy is incomplete", async () => {
+  let called = false;
+  const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/oidc/pause", {
+    method: "POST",
+    headers: { Authorization: "Bearer a.b.c", "Content-Type": "application/json" },
+    body: JSON.stringify({ reason: "test" }),
+  }), {
+    AGENT_OIDC_ENABLED: "true",
+    AGENT_OIDC_AUDIENCE: "ai-thuc-chien-agent-runtime-preview",
+    AGENT_OIDC_REPOSITORY: "manhdungub-boop/ai-thuc-chien-blog",
+    AGENT_OIDC_REPOSITORY_OWNER: "manhdungub-boop",
+    AGENT_OIDC_REPOSITORY_ID: "1423636651",
+    AGENT_OIDC_REPOSITORY_OWNER_ID: "342528485",
+    AGENT_OIDC_REF: "refs/heads/main",
+    AGENT_OIDC_WORKFLOW_REF: "manhdungub-boop/ai-thuc-chien-blog/.github/workflows/agent-runtime-operator.yml@refs/heads/main",
+    AGENT_OIDC_ACTOR_ID: "",
+    AGENT_STATE_STORE: { idFromName: () => "unused", get: () => ({ fetch: async () => { called = true; } }) },
+  });
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).error, "github_oidc_policy_unconfigured");
+  assert.equal(called, false);
+});
+
+test("OIDC pause endpoint rejects shared bearer credentials as malformed JWT input", async () => {
+  const shared = "preview-only-test-secret-0123456789abcdef";
+  const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/oidc/pause", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + shared, "Content-Type": "application/json" },
+    body: "{}",
+  }), {
+    AGENT_OIDC_ENABLED: "true",
+    AGENT_OIDC_AUDIENCE: "ai-thuc-chien-agent-runtime-preview",
+    AGENT_OIDC_REPOSITORY: "manhdungub-boop/ai-thuc-chien-blog",
+    AGENT_OIDC_REPOSITORY_OWNER: "manhdungub-boop",
+    AGENT_OIDC_REPOSITORY_ID: "1423636651",
+    AGENT_OIDC_REPOSITORY_OWNER_ID: "342528485",
+    AGENT_OIDC_REF: "refs/heads/main",
+    AGENT_OIDC_WORKFLOW_REF: "manhdungub-boop/ai-thuc-chien-blog/.github/workflows/agent-runtime-operator.yml@refs/heads/main",
+    AGENT_OIDC_ACTOR_ID: "1234567",
+    AGENT_STATE_STORE: { idFromName: () => "unused", get: () => ({ fetch: async () => { throw new Error("must_not_reach_state_store"); } }) },
+  });
+  assert.equal(response.status, 401);
+  assert.equal((await response.json()).error, "github_oidc_token_invalid");
+});
