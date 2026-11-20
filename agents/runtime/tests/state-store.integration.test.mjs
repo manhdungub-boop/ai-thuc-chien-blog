@@ -859,3 +859,33 @@ test("OIDC replay ledger prunes expired entries and permits a later fresh token 
     assert.equal(later.status, 200);
   });
 });
+
+
+test("all seven task mutation routes reject streamed bodies above the 16 KiB ingress cap", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const oversized = " ".repeat(16 * 1024 + 1);
+    for (const pathname of ["/reserve", "/claim", "/claim-next", "/heartbeat", "/complete", "/recover", "/transition"]) {
+      const response = await stub.fetch("http://do.local" + pathname, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + TEST_STATE_STORE_TOKEN },
+        body: oversized,
+      });
+      assert.equal(response.status, 413, pathname);
+      assert.equal((await response.json()).error, "request_body_too_large", pathname);
+    }
+  });
+});
+
+test("all seven task mutation routes reject non-JSON media types before mutation", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    for (const pathname of ["/reserve", "/claim", "/claim-next", "/heartbeat", "/complete", "/recover", "/transition"]) {
+      const response = await stub.fetch("http://do.local" + pathname, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain", Authorization: "Bearer " + TEST_STATE_STORE_TOKEN },
+        body: "{}",
+      });
+      assert.equal(response.status, 400, pathname);
+      assert.equal((await response.json()).error, "request_invalid", pathname);
+    }
+  });
+});
