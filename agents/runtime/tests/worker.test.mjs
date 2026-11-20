@@ -579,7 +579,9 @@ test("run reserves, claims, reviews, and completes durable read-only tasks", asy
       { state: "succeeded", duplicate: true },
       { state: "succeeded", duplicate: true },
     ]);
-    assert.equal(calls.length, 6, "completed idempotent tasks must not be claimed or executed again");
+    assert.equal(calls.length, 8);
+    assert.deepEqual(calls.slice(6).map((call) => new URL(call.url).pathname), ["/reserve", "/reserve"],
+      "completed idempotent tasks must not be claimed or executed again");
   } finally {
     globalThis.fetch = originalFetch;
   }
