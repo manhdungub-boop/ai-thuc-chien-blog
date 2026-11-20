@@ -677,7 +677,14 @@ if (url.pathname === "/task" && request.method === "GET") {
           status: body.status, errorCode: body.errorCode,
         });
         if (!decision.ok) return { status: 409, body: { ok: false, error: decision.error } };
-        if (decision.duplicate) return { status: 200, body: { ok: true, duplicate: true, task: safeTask(row) } };
+        if (decision.duplicate) {
+          const resultConflict = resultJson !== null && resultJson !== row.result_json;
+          const errorConflict = Object.hasOwn(body, "errorCode") && body.errorCode !== row.error_code;
+          if (resultConflict || errorConflict) {
+            return { status: 409, body: { ok: false, error: "completion_conflict" } };
+          }
+          return { status: 200, body: { ok: true, duplicate: true, task: safeTask(row) } };
+        }
         const fields = decision.fields;
         this.sql.exec(
           "UPDATE tasks SET state=?,updated_at=?,terminal_at=?,error_code=?,lease_owner=NULL,lease_expires_at=NULL,lease_max_expires_at=NULL,next_attempt_at=NULL,last_error_code=?,result_json=? WHERE task_id=? AND state='running' AND lease_owner=? AND lease_generation=? AND lease_expires_at>?",

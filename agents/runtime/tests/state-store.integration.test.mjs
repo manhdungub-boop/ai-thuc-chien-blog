@@ -631,6 +631,18 @@ test("atomic claim admits only one worker and stale lease generations cannot hea
     }, { "x-test-now": "2026-11-19T10:03:00.000Z" });
     assert.equal(duplicate.status, 200);
     assert.equal(duplicate.body.duplicate, true);
+
+    const conflictingDuplicate = await call(stub, "/complete", {
+      taskId, leaseOwner: lease.owner, leaseGeneration: lease.generation, status: "succeeded",
+      result: {
+        taskType: "seo.audit", status: "pass", findingCount: 0, findings: [],
+      },
+    }, { "x-test-now": "2026-11-19T10:04:00.000Z" });
+    assert.equal(conflictingDuplicate.status, 409);
+    assert.equal(conflictingDuplicate.body.error, "completion_conflict");
+    const unchanged = await call(stub, "/task?id=" + encodeURIComponent(taskId));
+    assert.deepEqual(unchanged.body.task.result, completed.body.task.result,
+      "a conflicting retry must not overwrite the original terminal result");
   });
 });
 
