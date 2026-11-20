@@ -104,3 +104,11 @@ A second read-only Cloudflare API check confirmed:
 - The prior Billing Read permission gap remains unresolved; the actual Workers plan, billing state, and remaining usage headroom are still unverified.
 
 **Decision unchanged:** keep `wrangler.preview.jsonc` as code-only. Do not create a namespace, inject secrets, or deploy until a read-only Free-plan/usage verification is available. Do not upgrade or enable billing to clear this gate.
+
+
+## OIDC pause path — additional resource/security notes (2026-11-20)
+
+- GitHub OIDC verification performs two fixed-host HTTPS GETs (issuer discovery and JWKS) per accepted token; no custom URL, redirect, or caller credential is allowed. This adds no paid AI provider dependency, but request latency and Worker CPU must be measured in Preview before operational use.
+- A successful token consumes one State Store replay-ledger write and one durable Pause control mutation/audit write. Invalid tokens should fail before State Store access; replayed tokens return conflict without a second Pause.
+- The manual workflow is disabled from operational use until the Preview URL repository variable and actor allowlist ID are confirmed. The Worker config feature flag remains false.
+- This is not evidence of Cloudflare Free-tier entitlement. Namespace, Worker, secret, and deploy steps remain blocked until Billing Read or equivalent authoritative usage evidence is available. No paid upgrade or billing activation is permitted.
