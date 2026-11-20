@@ -811,6 +811,8 @@ test("scheduled dispatcher processes at most one queued read-only task per confi
   const { env, records, calls } = durableRunEnv();
   env.AGENT_SCHEDULER_ENABLED = "true";
   env.AGENT_RECOVERY_ALARM_ENABLED = "true";
+  env.AGENT_RATE_LIMIT_REQUIRED = "true";
+  // A scheduled event has no end-user IP; only its private in-process dispatch may bypass ingress IP limiting.
   for (const taskId of ["scheduled-1", "scheduled-2"]) {
     records.set(taskId, {
       taskId, type: "content.review",
