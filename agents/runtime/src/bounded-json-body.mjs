@@ -1,7 +1,7 @@
 export async function readBoundedText(request, maxBytes) {
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) throw new TypeError("invalid_body_limit");
   const contentType = request.headers.get("content-type");
-  if (!contentType || !/^application\\/json(?:\\s*;|$)/i.test(contentType.trim())) {
+  if (!contentType || !/^application\/json(?:\s*;|$)/i.test(contentType.trim())) {
     try { await request.body?.cancel("invalid_content_type"); } catch {}
     return { ok: false, status: 400, error: "invalid_content_type" };
   }
