@@ -1,6 +1,6 @@
-# Thẩm định biên tập — 9 ứng viên AI Bank còn lại (18/11/2026)
+# Thẩm định biên tập — 9 ứng viên ngoài nhóm iOS còn lại (20/11/2026)
 
-Phạm vi: đối chiếu hồ sơ ứng viên trong PR #186 với tài liệu nhà cung cấp và trang App Store chính thức. Báo cáo này là đánh giá phù hợp với quy trình 0 đồng, iPhone-first và bảo mật của dự án; không phải phê duyệt tích hợp hay phát hành công khai.
+Phạm vi: đối chiếu 9 hồ sơ ngoài nhóm iOS trong PR #186 với tài liệu nhà cung cấp. PocketPal AI và Draw Things đã được tách khỏi candidate queue để chuyển sang public catalog trong PR #139; Noema và Loci vẫn nằm trong báo cáo iOS riêng. Đây là đánh giá phù hợp với quy trình 0 đồng, iPhone-first và bảo mật; không phải phê duyệt tích hợp.
 
 ## Kết luận điều hành
 
