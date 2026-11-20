@@ -477,5 +477,5 @@ test("OIDC pause endpoint rejects shared bearer credentials as malformed JWT inp
     AGENT_STATE_STORE: { idFromName: () => "unused", get: () => ({ fetch: async () => { throw new Error("must_not_reach_state_store"); } }) },
   });
   assert.equal(response.status, 401);
-  assert.equal((await response.json()).error, "github_oidc_token_invalid");
+  assert.equal((await response.json()).error, "github_oidc_token_required");
 });
