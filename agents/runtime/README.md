@@ -74,6 +74,10 @@ See [STATE-STORE-ADR.md](./STATE-STORE-ADR.md) for the design decision, Free-tie
 - All reports explicitly say `execution: not_started` and `sideEffects: []`. A finding is a review signal, not permission to auto-correct or publish.
 
 
+- `src/repository-readers.mjs` is a Node-only, read-only CI/build adapter for the checked-out repository. It reads only allowlisted article HTML, `data/ai-tools.json`, and sitemap entries; resolves real paths and rejects traversal/symlink escapes; enforces byte limits; and never writes. It is deliberately not imported by the Cloudflare Worker entrypoint.
+- SEO HTTP status and broken-link counts are not inferred from local files. The repository reader requires an explicit `seoEvidenceReader` provider for those facts; sitemap membership is independently derived from the checked-out `sitemap.xml`.
+- Integration tests now inspect the real article, AI Bank catalog and sitemap in the checked-out repository. This validates local source reading, not a live website HTTP crawl or a deployed agent.
+
 ## Read-only source snapshot adapters
 
 - `src/task-snapshot-adapters.mjs` converts an already-authorized source read into a bounded metadata snapshot for the pure task handlers.
