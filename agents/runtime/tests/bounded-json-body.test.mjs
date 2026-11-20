@@ -21,7 +21,7 @@ describe("bounded streaming JSON request reader", () => {
         controller.enqueue(new TextEncoder().encode("{}"));
         controller.close();
       }
-    });
+    }, { highWaterMark: 0 });
     const result = await readBoundedJson(request(stream, { "content-length": "2x" }), 32);
     expect(result).toEqual({ ok: false, status: 400, error: "invalid_content_length" });
     expect(pulled).toBe(false);
@@ -35,7 +35,7 @@ describe("bounded streaming JSON request reader", () => {
         controller.enqueue(new TextEncoder().encode("12345"));
         controller.close();
       }
-    });
+    }, { highWaterMark: 0 });
     const result = await readBoundedJson(request(stream, { "content-length": "33" }), 32);
     expect(result).toEqual({ ok: false, status: 413, error: "request_body_too_large" });
     expect(pulled).toBe(false);
