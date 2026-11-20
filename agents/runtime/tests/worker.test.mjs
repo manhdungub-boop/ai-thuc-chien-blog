@@ -903,6 +903,35 @@ test("operator queue dispatcher processes only a bounded number of already-queue
   }
 });
 
+test("operator queue dispatcher sanitizes failed review results and durably marks them failed", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => { throw new Error("private_source_adapter_failure"); };
+  const { env, records } = durableRunEnv();
+  records.set("dispatch-failed-1", {
+    taskId: "dispatch-failed-1", type: "content.review",
+    payload: { articlePath: "articles/demo-article.html" },
+    idempotencyKey: "dispatch-content-review-failed-0001", state: "queued",
+  });
+  try {
+    const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/dispatch", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + RUN_TOKEN, "Content-Type": "application/json" },
+      body: JSON.stringify({ maxTasks: 1 }),
+    }), env);
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, false);
+    assert.equal(body.summary.failed, 1);
+    assert.equal(body.items[0].ok, false);
+    assert.equal(body.items[0].state, "failed");
+    assert.deepEqual(body.items[0].result, { ok: false, errorCode: "read_only_review_failed" });
+    assert.equal(records.get("dispatch-failed-1").state, "failed");
+    assert.equal(JSON.stringify(body).includes("private_source_adapter_failure"), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("operator queue dispatcher requires authentication, explicit gates, and strict bounded input", async () => {
   const { env } = durableRunEnv();
   const url = "https://agent-runtime-preview.example.workers.dev/internal/dispatch";
