@@ -274,6 +274,8 @@ test("operator recovery bridge requires auth, explicit runtime gates, and strict
     taskId: "task-recover-01", type: "seo.audit", state: "queued",
     attemptCount: 1, maxAttempts: 3, nextAttemptAt: 200, lastErrorCode: "lease_expired",
   } } });
+  env.AGENT_ENABLED = "true";
+  env.AGENT_PAUSED = "false";
   const url = "https://agent-runtime-preview.example.workers.dev/internal/recover";
   assert.equal((await worker.fetch(new Request(url, { method: "POST" }), env)).status, 401);
   const authHeaders = { Authorization: "Bearer " + OPERATOR_TOKEN, "Content-Type": "application/json" };
