@@ -99,7 +99,8 @@ export function simulateRuntimeTick(queueEntries, options = {}) {
 
   const items = scheduled.items.map((scheduledItem) => {
     const queueEntry = queueEntries[scheduledItem.queueIndex];
-    if (!scheduledItem.ok || !queueEntry || !isPlainRecord(queueEntry.task)) {
+    if (!scheduledItem.ok || scheduledItem.blocked ||
+        !queueEntry || !isPlainRecord(queueEntry.task)) {
       return {
         queueIndex: scheduledItem.queueIndex,
         taskType: scheduledItem.taskType ?? null,
