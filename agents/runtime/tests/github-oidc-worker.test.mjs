@@ -19,7 +19,7 @@ const STATE_TOKEN = "oidc-worker-state-store-token-034252848589abcdef";
 function encodeBase64Url(bytes) {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/=/g, "").replace(/\\+/g, "-").replace(/\\//g, "_");
+  return btoa(binary).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
 }
 function encodeJson(value) {
   return encodeBase64Url(new TextEncoder().encode(JSON.stringify(value)));
