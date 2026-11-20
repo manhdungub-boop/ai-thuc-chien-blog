@@ -455,14 +455,67 @@ test("OIDC pause endpoint rejects shared bearer credentials as malformed JWT inp
 });
 
 const RUN_TOKEN = "preview-read-only-run-token-034252848589abcdef";
+const RUN_STATE_TOKEN = "preview-read-only-state-token-034252848589abcdef";
 const RUN_URL = "https://agent-runtime-preview.example.workers.dev/run";
-const RUN_ENV = {
-  AGENT_ENABLED: "true",
-  AGENT_PAUSED: "false",
-  AGENT_OPERATOR_TOKEN: RUN_TOKEN,
-};
 
-test("run performs bounded operator-triggered read-only content and AI Bank reviews", async () => {
+function durableRunEnv() {
+  const records = new Map();
+  const idempotency = new Map();
+  const calls = [];
+  let sequence = 0;
+  const stub = {
+    async fetch(internalRequest) {
+      calls.push(internalRequest);
+      const url = new URL(internalRequest.url);
+      const body = internalRequest.method === "POST" ? await internalRequest.json() : null;
+      if (url.pathname === "/reserve") {
+        const existingId = idempotency.get(body.task.idempotencyKey);
+        if (existingId) return Response.json({ ok: true, duplicate: true, task: records.get(existingId) });
+        const task = {
+          taskId: "task-" + (++sequence),
+          type: body.task.type,
+          payload: body.task.payload,
+          idempotencyKey: body.task.idempotencyKey,
+          state: "queued",
+        };
+        records.set(task.taskId, task);
+        idempotency.set(task.idempotencyKey, task.taskId);
+        return Response.json({ ok: true, duplicate: false, task }, { status: 201 });
+      }
+      if (url.pathname === "/claim") {
+        const task = records.get(body.taskId);
+        if (!task || task.state !== "queued") return Response.json({ ok: false, error: "task_not_claimable" }, { status: 409 });
+        task.state = "running";
+        task.lease = { owner: "lease-owner-" + task.taskId, generation: 1 };
+        return Response.json({ ok: true, task, lease: task.lease });
+      }
+      if (url.pathname === "/complete") {
+        const task = records.get(body.taskId);
+        if (!task || task.state !== "running" || task.lease.owner !== body.leaseOwner ||
+            task.lease.generation !== body.leaseGeneration) {
+          return Response.json({ ok: false, error: "lease_fencing_conflict" }, { status: 409 });
+        }
+        task.state = body.status;
+        delete task.lease;
+        return Response.json({ ok: true, task });
+      }
+      return Response.json({ ok: false, error: "not_found" }, { status: 404 });
+    },
+  };
+  const env = {
+    AGENT_ENABLED: "true",
+    AGENT_PAUSED: "false",
+    AGENT_OPERATOR_TOKEN: RUN_TOKEN,
+    AGENT_STATE_STORE_TOKEN: RUN_STATE_TOKEN,
+    AGENT_STATE_STORE: {
+      idFromName(name) { assert.equal(name, "agent-runtime-global"); return "fixed-object-id"; },
+      get(id) { assert.equal(id, "fixed-object-id"); return stub; },
+    },
+  };
+  return { env, records, calls };
+}
+
+test("run reserves, claims, reviews, and completes durable read-only tasks", async () => {
   const originalFetch = globalThis.fetch;
   const articleHtml = `<!doctype html><html><head>
     <title>Demo article</title>
@@ -487,6 +540,7 @@ test("run performs bounded operator-triggered read-only content and AI Bank revi
     if (url.endsWith("/data/ai-tools.json")) return new Response(JSON.stringify(catalog), { status: 200 });
     throw new Error("unexpected_source_url");
   };
+  const { env, records, calls } = durableRunEnv();
   try {
     const response = await worker.fetch(new Request(RUN_URL, {
       method: "POST",
@@ -495,24 +549,31 @@ test("run performs bounded operator-triggered read-only content and AI Bank revi
         { type: "content.review", idempotencyKey: "content-review-demo-0001", payload: { articlePath: "articles/demo-article.html" } },
         { type: "ai_bank.candidate_review", idempotencyKey: "ai-bank-review-demo-0001", payload: { candidateId: "chatgpt" } },
       ] }),
-    }), RUN_ENV);
+    }), env);
     const body = await response.json();
     assert.equal(response.status, 200);
     assert.equal(body.ok, true);
-    assert.equal(body.execution, "read_only_analysis");
-    assert.equal(body.result.items.length, 2);
-    assert.equal(body.result.items[0].status, "pass");
-    assert.equal(body.result.items[1].status, "pass");
-    assert.deepEqual(body.result.sideEffects, []);
+    assert.equal(body.execution, "synchronous_leased_read_only_review");
+    assert.equal(body.items.length, 2);
+    assert.equal(body.items[0].result.status, "pass");
+    assert.equal(body.items[1].result.status, "pass");
+    assert.equal(body.summary.succeeded, 2);
+    assert.equal(records.size, 2);
+    assert.deepEqual([...records.values()].map((task) => task.state), ["succeeded", "succeeded"]);
+    assert.deepEqual(calls.map((call) => new URL(call.url).pathname),
+      ["/reserve", "/claim", "/complete", "/reserve", "/claim", "/complete"]);
+    assert.equal(calls.every((call) => call.headers.get("authorization") === "Bearer " + RUN_STATE_TOKEN), true);
+    assert.equal(JSON.stringify(body).includes(RUN_STATE_TOKEN), false);
     assert.equal(body.limitations.includes("no_scheduler_or_background_execution"), true);
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
 
-test("run blocks SEO audits when trusted live HTTP and broken-link evidence is unavailable", async () => {
+test("run durably marks unavailable SEO evidence as failed without inventing a pass", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => { throw new Error("SEO source should not be fetched"); };
+  const { env, records } = durableRunEnv();
   try {
     const response = await worker.fetch(new Request(RUN_URL, {
       method: "POST",
@@ -520,33 +581,53 @@ test("run blocks SEO audits when trusted live HTTP and broken-link evidence is u
       body: JSON.stringify({ tasks: [
         { type: "seo.audit", idempotencyKey: "seo-review-demo-0001", payload: { path: "/" } },
       ] }),
-    }), RUN_ENV);
+    }), env);
     const body = await response.json();
     assert.equal(response.status, 200);
-    assert.equal(body.result.items[0].ok, false);
-    assert.equal(body.result.items[0].error, "read_only_source_error");
-    assert.equal(body.result.status, "review_required");
+    assert.equal(body.ok, false);
+    assert.equal(body.items[0].result.error, "read_only_source_error");
+    assert.equal(body.items[0].state, "failed");
+    assert.equal([...records.values()][0].state, "failed");
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
 
+test("run rejects missing durable State Store binding before any source read", async () => {
+  const env = {
+    AGENT_ENABLED: "true",
+    AGENT_PAUSED: "false",
+    AGENT_OPERATOR_TOKEN: RUN_TOKEN,
+    AGENT_STATE_STORE_TOKEN: RUN_STATE_TOKEN,
+  };
+  const response = await worker.fetch(new Request(RUN_URL, {
+    method: "POST",
+    headers: { Authorization: "Bearer " + RUN_TOKEN, "Content-Type": "application/json" },
+    body: JSON.stringify({ tasks: [
+      { type: "content.review", idempotencyKey: "content-review-demo-0002", payload: { articlePath: "articles/demo-article.html" } },
+    ] }),
+  }), env);
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).error, "durable_review_unavailable");
+});
+
 test("run rejects oversized batches, malformed JSON, and unexpected query parameters", async () => {
   const headers = { Authorization: "Bearer " + RUN_TOKEN, "Content-Type": "application/json" };
+  const { env } = durableRunEnv();
   const tooMany = await worker.fetch(new Request(RUN_URL, {
     method: "POST", headers,
     body: JSON.stringify({ tasks: Array.from({ length: 6 }, (_, i) => ({
       type: "seo.audit", idempotencyKey: "seo-review-" + String(i).padStart(8, "0"),
       payload: { path: "/" },
     })) }),
-  }), RUN_ENV);
+  }), env);
   assert.equal(tooMany.status, 400);
   const malformed = await worker.fetch(new Request(RUN_URL, {
     method: "POST", headers, body: "{bad",
-  }), RUN_ENV);
+  }), env);
   assert.equal(malformed.status, 400);
   const query = await worker.fetch(new Request(RUN_URL + "?url=https://evil.example", {
     method: "POST", headers, body: JSON.stringify({ tasks: [] }),
-  }), RUN_ENV);
+  }), env);
   assert.equal(query.status, 400);
 });
