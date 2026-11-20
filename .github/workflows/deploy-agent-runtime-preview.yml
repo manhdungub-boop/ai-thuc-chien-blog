@@ -23,6 +23,12 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.confirm_preview_only == true }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Deployment must pass through a dedicated GitHub Environment.
+    # Configure this Environment with a required reviewer and store the
+    # Preview-only CLOUDFLARE_AGENT_PREVIEW_API_TOKEN as an environment secret.
+    # If approval or the secret is missing, deployment remains blocked.
+    environment:
+      name: agent-runtime-preview
     env:
       CLOUDFLARE_ACCOUNT_ID: "92cf091bbac8b4879ec65feb30b4715b"
     steps:
