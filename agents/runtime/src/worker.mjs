@@ -378,7 +378,14 @@ export default {
             leaseOwner: lease.owner,
             leaseGeneration: lease.generation,
             status: item?.ok === true ? "succeeded" : "failed",
-            ...(item?.ok === true ? {} : { errorCode: "read_only_review_failed" }),
+            ...(item?.ok === true ? {
+              result: {
+                taskType: item.taskType,
+                status: item.status,
+                findingCount: item.findingCount,
+                findings: item.findings,
+              },
+            } : { errorCode: "read_only_review_failed" }),
           });
           items.push({
             ok: item?.ok === true,
@@ -401,7 +408,6 @@ export default {
           items,
           summary,
           limitations: [
-            "results_are_returned_to_operator_and_not_persisted",
             "no_scheduler_or_background_execution",
             "seo_live_evidence_unavailable",
             "repository_source_is_public_main_branch",
@@ -512,7 +518,14 @@ export default {
             leaseOwner: lease.owner,
             leaseGeneration: lease.generation,
             status: item?.ok === true ? "succeeded" : "failed",
-            ...(item?.ok === true ? {} : { errorCode: "read_only_review_failed" }),
+            ...(item?.ok === true ? {
+              result: {
+                taskType: item.taskType,
+                status: item.status,
+                findingCount: item.findingCount,
+                findings: item.findings,
+              },
+            } : { errorCode: "read_only_review_failed" }),
           });
           items.push({
             ok: item?.ok === true,
@@ -536,7 +549,6 @@ export default {
           limitations: [
             "manual_operator_trigger_only",
             "no_scheduler_or_background_execution",
-            "results_are_returned_to_operator_and_not_persisted",
             "seo_live_evidence_unavailable",
           ],
         });
