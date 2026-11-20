@@ -29,10 +29,12 @@ export class TestAgentStateStore extends AgentStateStore {
 
   async fetch(request) {
     const url = new URL(request.url);
-    if (url.pathname !== "/__test/rollback" && url.pathname !== "/__test/downgrade-v1") {
+    if (!["/__test/rollback", "/__test/downgrade-v1", "/__test/alarm-state", "/__test/expire-and-fire", "/__test/fire-alarm"].includes(url.pathname)) {
       return super.fetch(request);
     }
-    if (request.method !== "POST") return jsonResponse({ ok: false, error: "method_not_allowed" }, 405);
+    if (url.pathname === "/__test/alarm-state" ? request.method !== "GET" : request.method !== "POST") {
+      return jsonResponse({ ok: false, error: "method_not_allowed" }, 405);
+    }
     if (!await hasValidStateStoreBearer(request, this.env)) {
       return jsonResponse({ ok: false, error: "state_store_auth_required" }, 401);
     }
