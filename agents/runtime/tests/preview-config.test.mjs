@@ -29,7 +29,7 @@ test("dedicated Agent Runtime Preview config binds its isolated State Store and 
     AGENT_OIDC_WORKFLOW_REF: "manhdungub-boop/ai-thuc-chien-blog/.github/workflows/agent-runtime-operator.yml@refs/heads/main",
     AGENT_OIDC_ACTOR_ID: "342528485",
   });
-  assert.deepEqual(config.triggers, { crons: ["*/30 * * * *"] });
+  assert.equal(Object.hasOwn(config, "triggers"), false, "recurring triggers stay absent until Free-plan headroom is independently verified and approved");
   assert.deepEqual(config.ratelimits, [{
     name: "AGENT_INGRESS_RATE_LIMITER",
     namespace_id: "20261121",
