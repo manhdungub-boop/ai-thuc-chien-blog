@@ -26,7 +26,8 @@ test("scheduler simulation orders due entries stably and leaves future entries q
   assert.deepEqual(result.sideEffects, []);
   assert.ok(Object.isFrozen(result));
   assert.ok(Object.isFrozen(result.items));
-  assert.ok(result.items.every((item) => Object.isFrozen(item) && Object.isFrozen(item.steps)));
+  assert.ok(Object.isFrozen(result.sideEffects));
+  assert.ok(result.items.every((item) => Object.isFrozen(item) && Object.isFrozen(item.steps) && Object.isFrozen(item.sideEffects)));
 });
 
 test("scheduler simulation enforces per-tick dispatch budget and reports deferred due work", () => {
@@ -41,6 +42,20 @@ test("scheduler simulation enforces per-tick dispatch budget and reports deferre
   assert.equal(result.deferredDueCount, 4);
   assert.equal(result.futureCount, 0);
   assert.equal(SCHEDULER_SIMULATION_LIMITS.maxDispatchPerTick, 5);
+});
+
+test("scheduler simulation reports an empty due set without creating work", () => {
+  const result = planSchedulerTick(
+    [{ task: TASKS[0], scheduledAt: 500 }],
+    { now: 100, controlSnapshot: ACTIVE },
+  );
+  assert.equal(result.ok, true);
+  assert.equal(result.execution, "not_started");
+  assert.equal(result.dueCount, 0);
+  assert.equal(result.futureCount, 1);
+  assert.equal(result.plannedCount, 0);
+  assert.deepEqual(result.items, []);
+  assert.ok(Object.isFrozen(result.sideEffects));
 });
 
 test("scheduler simulation propagates Pause and Emergency Stop without planning steps", () => {

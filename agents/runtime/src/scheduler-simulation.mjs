@@ -29,6 +29,7 @@ function frozenResult(result) {
     }
     Object.freeze(result.items);
   }
+  if (Array.isArray(result.sideEffects)) Object.freeze(result.sideEffects);
   return Object.freeze(result);
 }
 
