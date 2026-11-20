@@ -621,6 +621,57 @@ test("run reserves, claims, reviews, and completes durable read-only tasks", asy
   }
 });
 
+test("operator queue admission stores bounded idempotent tasks without executing them", async () => {
+  const { env, records, calls } = durableRunEnv();
+  const tasks = [
+    { type: "content.review", idempotencyKey: "content-review-queued-0001", payload: { articlePath: "articles/demo-article.html" } },
+    { type: "ai_bank.candidate_review", idempotencyKey: "ai-bank-review-queued-0001", payload: { candidateId: "chatgpt" } },
+  ];
+  const url = "https://agent-runtime-preview.example.workers.dev/internal/enqueue";
+  const request = () => new Request(url, {
+    method: "POST",
+    headers: { Authorization: "Bearer " + RUN_TOKEN, "Content-Type": "application/json" },
+    body: JSON.stringify({ tasks }),
+  });
+  const first = await worker.fetch(request(), env);
+  const firstBody = await first.json();
+  assert.equal(first.status, 200);
+  assert.equal(firstBody.mode, "operator_triggered_queue_admission");
+  assert.equal(firstBody.execution, "not_started");
+  assert.equal(firstBody.summary.newlyQueued, 2);
+  assert.deepEqual([...records.values()].map((task) => task.state), ["queued", "queued"]);
+  assert.deepEqual(calls.map((call) => new URL(call.url).pathname), ["/reserve", "/reserve"]);
+
+  const repeated = await worker.fetch(request(), env);
+  const repeatedBody = await repeated.json();
+  assert.equal(repeated.status, 200);
+  assert.equal(repeatedBody.summary.duplicates, 2);
+  assert.deepEqual([...records.values()].map((task) => task.state), ["queued", "queued"]);
+  assert.equal(calls.some((call) => ["/claim", "/claim-next", "/complete"].includes(new URL(call.url).pathname)), false);
+});
+
+test("operator queue admission requires authentication, gates, and valid bounded tasks", async () => {
+  const { env } = durableRunEnv();
+  const url = "https://agent-runtime-preview.example.workers.dev/internal/enqueue";
+  const unauthorized = await worker.fetch(new Request(url, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tasks: [{ type: "seo.audit", idempotencyKey: "seo-audit-queued-0001", payload: { path: "/" } }] }),
+  }), env);
+  assert.equal(unauthorized.status, 401);
+  const paused = await worker.fetch(new Request(url, {
+    method: "POST",
+    headers: { Authorization: "Bearer " + RUN_TOKEN, "Content-Type": "application/json" },
+    body: JSON.stringify({ tasks: [{ type: "seo.audit", idempotencyKey: "seo-audit-queued-0001", payload: { path: "/" } }] }),
+  }), { ...env, AGENT_PAUSED: "true" });
+  assert.equal(paused.status, 503);
+  const invalid = await worker.fetch(new Request(url, {
+    method: "POST",
+    headers: { Authorization: "Bearer " + RUN_TOKEN, "Content-Type": "application/json" },
+    body: JSON.stringify({ tasks: [{ type: "unknown.task", idempotencyKey: "bad-task-key-00000001", payload: {} }] }),
+  }), env);
+  assert.equal(invalid.status, 400);
+});
+
 test("operator queue dispatcher processes only a bounded number of already-queued read-only tasks", async () => {
   const originalFetch = globalThis.fetch;
   const articleHtml = `<!doctype html><html><head>
