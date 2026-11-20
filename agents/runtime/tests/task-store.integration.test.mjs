@@ -12,6 +12,30 @@ function storeFor(name) {
   return env.AGENT_TASK_STORE.getByName(name);
 }
 
+function base64url(bytes) {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/=/g, "").replace(/\\+/g, "-").replace(/\\//g, "_");
+}
+
+async function signOperatorSession(secret, payload) {
+  const encoded = base64url(new TextEncoder().encode(JSON.stringify(payload)));
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const signature = new Uint8Array(await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(encoded)
+  ));
+  return encoded + "." + base64url(signature);
+}
+
+
 describe("AgentTaskStore Durable Object", () => {
   let store;
   let testIndex = 0;
@@ -589,6 +613,78 @@ describe("AgentTaskStore Durable Object", () => {
     const retried = await store.retry("breaker-retry-0001", claim.lease_token, "temporary_source_error");
     expect(retried).toMatchObject({ updated: true, status: "pending" });
     expect(await store.getControl()).toMatchObject({ paused: false, failure_count_last_10m: 0 });
+  });
+
+  it("persists authenticated operator Pause and Resume transitions with actor-bound audit events", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const sessionSecret = "operator-session-secret-for-tests-only-abcdefghijklmnopqrstuvwxyz";
+    const testEnv = {
+      AGENT_REVIEWER_AUTH_ENABLED: "true",
+      AGENT_OPERATOR_CONTROL_ENABLED: "true",
+      AGENT_OPERATOR_ALLOWED_EMAILS: "operator@example.com",
+      GOOGLE_REVIEWER_CLIENT_ID: "operator-test-client-id",
+      GOOGLE_REVIEWER_CLIENT_SECRET: "operator-test-client-secret",
+      GOOGLE_REVIEWER_REDIRECT_URI: "https://ai-thuc-chien-agent-runtime-preview.manhdungub.workers.dev/auth/google/callback",
+      GOOGLE_REVIEWER_STATE_SECRET: "operator-state-secret-for-tests-only-abcdefghijklmnopqrstuvwxyz",
+      GOOGLE_REVIEWER_SESSION_SECRET: sessionSecret
+    };
+    const token = await signOperatorSession(sessionSecret, {
+      provider: "google",
+      sub: "operator-test-subject",
+      email: "operator@example.com",
+      reviewer_ref: "google:operator-test-subject",
+      iat: now,
+      exp: now + 1800
+    });
+    const pauseReason = "Pause after a controlled operator review";
+    const resumeReason = "Resume after the operator review is complete";
+
+    const result = await runInDurableObject(store, async (instance, state) => {
+      // Override only this isolated emulator instance; no deployed Worker config is touched.
+      instance.env = testEnv;
+      const paused = await instance.setOperatorControl(true, pauseReason, token);
+      const pausedRead = await instance.getOperatorControl(token);
+      const resumed = await instance.setOperatorControl(false, resumeReason, token);
+      const resumedRead = await instance.getOperatorControl(token);
+      const audit = state.storage.sql.exec(
+        "SELECT event_type, metadata_json FROM task_store_audit ORDER BY occurred_at ASC, event_id ASC"
+      ).toArray();
+      return { paused, pausedRead, resumed, resumedRead, audit };
+    });
+
+    expect(result.paused).toMatchObject({
+      authorized: true,
+      changed: true,
+      control: { paused: true, reason: pauseReason }
+    });
+    expect(result.pausedRead).toMatchObject({
+      authorized: true,
+      control: { paused: true, reason: pauseReason }
+    });
+    expect(result.resumed).toMatchObject({
+      authorized: true,
+      changed: true,
+      control: { paused: false, reason: resumeReason }
+    });
+    expect(result.resumedRead).toMatchObject({
+      authorized: true,
+      control: { paused: false, reason: resumeReason }
+    });
+    expect(result.audit.map(row => row.event_type)).toEqual(["operator_pause", "operator_resume"]);
+    expect(result.audit.map(row => JSON.parse(row.metadata_json))).toEqual([
+      {
+        actor_ref: "google:operator-test-subject",
+        reason: pauseReason,
+        previous_paused: false,
+        paused: true
+      },
+      {
+        actor_ref: "google:operator-test-subject",
+        reason: resumeReason,
+        previous_paused: true,
+        paused: false
+      }
+    ]);
   });
 
   it("fails closed for operator controls until a dedicated authenticated operator is configured", async () => {
