@@ -571,6 +571,49 @@ describe("AgentTaskStore Durable Object", () => {
     expect(audit).toEqual([{ event_type: "circuit_breaker_auto_pause", count: 1 }]);
   });
 
+  it("includes a terminal failure exactly on the ten-minute circuit-breaker boundary", async () => {
+    const windowStart = Date.parse("2026-11-20T00:00:00.000Z");
+    for (let index = 1; index <= 4; index += 1) {
+      await store.recordTerminalFailure(`breaker-boundary-${String(index).padStart(4, "0")}`, "seed_failure", windowStart);
+    }
+
+    const boundary = await store.recordTerminalFailure(
+      "breaker-boundary-0005",
+      "boundary_failure",
+      windowStart + 10 * 60 * 1000
+    );
+
+    expect(boundary).toEqual({ failure_count: 5, paused: true });
+    expect(await store.getControl()).toMatchObject({ paused: true, reason: "circuit_breaker:5_failures_in_10m" });
+  });
+
+  it("expires failures older than the rolling ten-minute window before counting new failures", async () => {
+    const windowStart = Date.parse("2026-11-20T00:00:00.000Z");
+    for (let index = 1; index <= 4; index += 1) {
+      await store.recordTerminalFailure(`breaker-expiry-old-${String(index).padStart(4, "0")}`, "old_failure", windowStart);
+    }
+
+    const afterExpiry = windowStart + 10 * 60 * 1000 + 1;
+    const firstNewFailure = await store.recordTerminalFailure("breaker-expiry-new-0001", "new_failure", afterExpiry);
+    expect(firstNewFailure).toEqual({ failure_count: 1, paused: false });
+
+    for (let index = 2; index <= 4; index += 1) {
+      const result = await store.recordTerminalFailure(
+        `breaker-expiry-new-${String(index).padStart(4, "0")}`,
+        "new_failure",
+        afterExpiry + index
+      );
+      expect(result).toMatchObject({ failure_count: index, paused: false });
+    }
+
+    const fifthNewFailure = await store.recordTerminalFailure(
+      "breaker-expiry-new-0005",
+      "new_failure",
+      afterExpiry + 5
+    );
+    expect(fifthNewFailure).toEqual({ failure_count: 5, paused: true });
+  });
+
   it("does not trip the circuit breaker for non-terminal retries", async () => {
     await store.enqueue(task("breaker-retry-0001"));
     const claim = await store.claim(["ai_bank_discovery"], "breaker-retry-0001");
