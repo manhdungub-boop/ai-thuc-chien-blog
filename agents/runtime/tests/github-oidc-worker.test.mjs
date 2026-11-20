@@ -39,7 +39,14 @@ async function makeToken() {
     iss: ISSUER,
     aud: AUDIENCE,
     sub: "repo:manhdungub-boop@342528485/ai-thuc-chien-blog@1423636651:ref:refs/heads/main",
-    ...EXPECTED,
+    repository: EXPECTED.repository,
+    repository_owner: EXPECTED.repositoryOwner,
+    repository_id: EXPECTED.repositoryId,
+    repository_owner_id: EXPECTED.repositoryOwnerId,
+    ref: EXPECTED.ref,
+    workflow_ref: EXPECTED.workflowRef,
+    actor_id: EXPECTED.actorId,
+    event_name: EXPECTED.eventName,
     jti: "worker-oidc-pause-jti-000001",
     run_id: "99887766",
     run_attempt: "1",
@@ -49,11 +56,11 @@ async function makeToken() {
   };
   const input = header + "." + encodeJson(claims);
   const signature = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", keyPair.privateKey, new TextEncoder().encode(input));
-  return { token: input + "." + encodeBase64Url(new Uint8Array(signature)), jwks };
+  return { token: input + "." + encodeBase64Url(new Uint8Array(signature)), jwks, expiresAt: claims.exp };
 }
 
 test("OIDC pause verifies GitHub signature, consumes jti, and records only the verified actor", async (t) => {
-  const { token, jwks } = await makeToken();
+  const { token, jwks, expiresAt } = await makeToken();
   const fetchCalls = [];
   t.mock.method(globalThis, "fetch", async (url, options) => {
     fetchCalls.push({ url: String(url), options });
@@ -88,7 +95,7 @@ test("OIDC pause verifies GitHub signature, consumes jti, and records only the v
             if (new URL(internalRequest.url).pathname === "/oidc/replay/consume") {
               assert.deepEqual(await internalRequest.json(), {
                 jti: "worker-oidc-pause-jti-000001",
-                expiresAt: String(Math.floor(Date.now() / 1000) + 300),
+                expiresAt: String(expiresAt),
               });
               return Response.json({ ok: true, consumed: true });
             }
