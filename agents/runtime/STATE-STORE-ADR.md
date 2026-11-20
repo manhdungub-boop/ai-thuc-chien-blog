@@ -66,6 +66,7 @@ The implementation does not include an alarm, cron trigger, queue consumer, auto
 - Admission, claim, heartbeat, recovery and terminal completion update task rows and append audit events in the same SQLite transaction. Heartbeats add two row writes apiece; actual heartbeat cadence and recovery rates must be measured before any live Preview binding.
 - These internal limits are conservative guardrails, not evidence of remaining account quota or guaranteed availability.
 - Alarm cost implication for a future scheduler: every `setAlarm()` consumes one SQL row write and every alarm invocation consumes one Durable Object request. Alarm cadence, task retries, heartbeat writes, and retention deletes must be included in the account-wide daily budget before any alarm is implemented or enabled. Do not treat the published Free ceiling as available project headroom.
+- A bounded lease-recovery alarm handler is now implemented in the isolated source branch. It is gated by `AGENT_RECOVERY_ALARM_ENABLED=true`, the existing outer enabled/unpaused flags, and the durable pause control. The checked-in Preview value is `false`. The handler uses one shared alarm with a five-minute minimum cadence, processes at most five expired leases per invocation, audits each recovery, and clears itself while disabled or paused. It only requeues/fails expired leases; it does not claim or execute queued tasks. This is not a scheduler or 24/7 execution path. It has not been deployed or enabled.
 
 ## Failure behavior
 
