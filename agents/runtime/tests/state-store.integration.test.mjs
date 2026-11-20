@@ -601,6 +601,47 @@ test("completion rejects malformed or oversized persisted review results", async
   });
 });
 
+test("a worker from an expired lease cannot heartbeat or complete after the task is reclaimed", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const created = await call(stub, "/reserve", task("stale-worker-after-reclaim"));
+    const taskId = created.body.task.taskId;
+    const first = await call(stub, "/claim", { taskId }, { "x-test-now": "2026-11-19T10:00:00.000Z" });
+    assert.equal(first.status, 200);
+    const staleLease = first.body.lease;
+
+    const recovered = await call(stub, "/recover", {
+      taskId, actor: "integration-test", requestId: crypto.randomUUID(),
+    }, { "x-test-now": "2026-11-19T10:05:00.000Z" });
+    assert.equal(recovered.status, 200);
+    assert.equal(recovered.body.outcome, "requeued");
+
+    const reclaimed = await call(stub, "/claim", { taskId }, { "x-test-now": "2026-11-19T10:05:30.000Z" });
+    assert.equal(reclaimed.status, 200);
+    const currentLease = reclaimed.body.lease;
+    assert.equal(currentLease.generation, staleLease.generation + 1);
+    assert.notEqual(currentLease.owner, staleLease.owner);
+
+    const staleHeartbeat = await call(stub, "/heartbeat", {
+      taskId, leaseOwner: staleLease.owner, leaseGeneration: staleLease.generation,
+    }, { "x-test-now": "2026-11-19T10:06:00.000Z" });
+    assert.equal(staleHeartbeat.status, 409);
+    assert.equal(staleHeartbeat.body.error, "lease_fencing_conflict");
+
+    const staleCompletion = await call(stub, "/complete", {
+      taskId, leaseOwner: staleLease.owner, leaseGeneration: staleLease.generation, status: "succeeded",
+    }, { "x-test-now": "2026-11-19T10:06:01.000Z" });
+    assert.equal(staleCompletion.status, 409);
+    assert.equal(staleCompletion.body.error, "lease_fencing_conflict");
+
+    const stored = await call(stub, "/task?id=" + encodeURIComponent(taskId));
+    assert.equal(stored.status, 200);
+    assert.equal(stored.body.task.state, "running");
+    assert.equal(stored.body.task.leaseGeneration, currentLease.generation);
+    assert.equal(stored.body.task.leaseOwner, undefined);
+    assert.equal(stored.body.task.attemptCount, 2);
+  });
+});
+
 test("expired leases are requeued after bounded delay and fail at the attempt ceiling", async () => {
   await withRuntime({}, async ({ stub }) => {
     const created = await call(stub, "/reserve", task("lease-retry"));
