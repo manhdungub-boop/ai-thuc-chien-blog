@@ -221,7 +221,7 @@ export default {
     }
     if (url.pathname === "/run") {
       if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
-      if (!isEnabled(env.AGENT_ENABLED) || isEnabled(env.AGENT_PAUSED)) {
+      if (!isEnabled(env.AGENT_ENABLED) || env.AGENT_PAUSED !== "false") {
         return json({ ok: false, error: "agent_disabled_or_paused" }, 503);
       }
       if (!await hasValidOperatorBearer(request, env)) return json({ ok: false, error: "operator_auth_required" }, 401);

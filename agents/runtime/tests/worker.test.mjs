@@ -30,6 +30,20 @@ test("run is rejected while disabled", async () => {
   assert.equal((await response.json()).error, "agent_disabled_or_paused");
 });
 
+test("run fails closed when the pause flag is missing or malformed", async () => {
+  const token = "preview-only-test-secret-0123456789abcdef";
+  for (const paused of [undefined, "true", "1", "yes"]) {
+    const env = { AGENT_ENABLED: "true", AGENT_OPERATOR_TOKEN: token };
+    if (paused !== undefined) env.AGENT_PAUSED = paused;
+    const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/run", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + token },
+    }), env);
+    assert.equal(response.status, 503, "AGENT_PAUSED=" + String(paused));
+    assert.equal((await response.json()).error, "agent_disabled_or_paused");
+  }
+});
+
 test("run remains unavailable after flags and operator authentication are opened", async () => {
   const token = "preview-only-test-secret-0123456789abcdef";
   const authorizedRequest = new Request("https://agent-runtime-preview.example.workers.dev/run", {
