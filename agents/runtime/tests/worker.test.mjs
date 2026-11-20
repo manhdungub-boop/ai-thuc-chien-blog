@@ -681,7 +681,13 @@ test("scheduled dispatcher remains inert unless its exact cron and all runtime g
   assert.equal(calls.length, 0);
   env.AGENT_SCHEDULER_ENABLED = "true";
   env.AGENT_ENABLED = "false";
+  env.AGENT_RECOVERY_ALARM_ENABLED = "true";
   await worker.scheduled({ cron: "*/30 * * * *" }, env, {});
+  env.AGENT_ENABLED = "true";
+  env.AGENT_PAUSED = "false";
+  env.AGENT_RECOVERY_ALARM_ENABLED = "false";
+  await worker.scheduled({ cron: "*/30 * * * *" }, env, {});
+  env.AGENT_RECOVERY_ALARM_ENABLED = "true";
   await worker.scheduled({ cron: "*/15 * * * *" }, env, {});
   assert.equal(calls.length, 0);
 });
@@ -702,6 +708,7 @@ test("scheduled dispatcher processes at most one queued read-only task per confi
   };
   const { env, records, calls } = durableRunEnv();
   env.AGENT_SCHEDULER_ENABLED = "true";
+  env.AGENT_RECOVERY_ALARM_ENABLED = "true";
   for (const taskId of ["scheduled-1", "scheduled-2"]) {
     records.set(taskId, {
       taskId, type: "content.review",
