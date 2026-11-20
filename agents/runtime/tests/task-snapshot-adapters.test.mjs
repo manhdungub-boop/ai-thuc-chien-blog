@@ -35,7 +35,8 @@ test("article adapter reads only the validated article path and builds a reviewa
   assert.equal(result.ok, true);
   assert.deepEqual(calls, [["article", "articles/example.html"]]);
   const report = handleReadOnlyTask(contentTask, result.snapshot);
-  assert.equal(report.status, "pass");
+  assert.equal(report.status, "attention");
+  assert.equal(report.findings[0].code, "article_content_short");
   assert.deepEqual(result.sideEffects, []);
   assert.equal(result.execution, "not_started");
 });
