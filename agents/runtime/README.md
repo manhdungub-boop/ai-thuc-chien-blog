@@ -155,3 +155,8 @@ The dedicated Preview config sets `AGENT_OIDC_ENABLED=false`. It includes the ex
 The repository was created on 2026-10-17. GitHub's current documentation says repositories created after 2026-07-15 use immutable default OIDC subjects containing owner and repository IDs; the verifier's expected subject is pinned to that immutable format. This is verified against GitHub's OIDC reference, but the actual workflow token has not yet been obtained or tested against a live Worker.
 
 This is a code-level emergency-pause path only. It is not human MFA, it cannot resume the runtime, and it does not establish that the Preview Worker is deployed. Keep it disabled until the Preview URL, Free-tier headroom, and dedicated Preview access boundary are verified.
+
+
+### Operator response minimization
+
+Read-only review results returned by `/run` and `/internal/dispatch` are explicitly allowlisted. Failed or malformed result objects return only the fixed `read_only_review_failed` error code; raw adapter/internal error strings and unrecognized fields are not reflected in the operator response.
