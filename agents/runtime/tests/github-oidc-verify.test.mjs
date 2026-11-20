@@ -8,6 +8,7 @@ const expected = Object.freeze({
   repository: "manhdungub-boop/ai-thuc-chien-blog",
   repositoryOwner: "manhdungub-boop",
   repositoryId: "1423636651",
+  repositoryOwnerId: "342528485",
   ref: "refs/heads/main",
   workflowRef: "manhdungub-boop/ai-thuc-chien-blog/.github/workflows/agent-runtime-operator.yml@refs/heads/main",
   actorId: "1234567",
@@ -37,9 +38,11 @@ async function signedToken(overrides = {}, headerOverrides = {}) {
   const claims = {
     iss: "https://token.actions.githubusercontent.com",
     aud: expected.audience,
-    sub: "repo:" + expected.repository + ":ref:" + expected.ref,
+    sub: "repo:" + expected.repositoryOwner + "@" + expected.repositoryOwnerId + "/" +
+      expected.repository.split("/")[1] + "@" + expected.repositoryId + ":ref:" + expected.ref,
     repository: expected.repository,
     repository_owner: expected.repositoryOwner,
+    repository_owner_id: expected.repositoryOwnerId,
     repository_id: expected.repositoryId,
     ref: expected.ref,
     workflow_ref: expected.workflowRef,
@@ -114,6 +117,7 @@ test("rejects audience, repository, repository ID, branch, workflow, actor, and 
     { aud: "unexpected-audience" },
     { repository: "attacker/other-repo" },
     { repository_id: "999" },
+    { repository_owner_id: "999" },
     { ref: "refs/heads/attacker" },
     { workflow_ref: "attacker/other-repo/.github/workflows/evil.yml@refs/heads/main" },
     { actor_id: "999" },
