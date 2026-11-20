@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - audit/oidc-real-token-probe-20261120
+  workflow_dispatch:
 
 permissions:
   contents: read
