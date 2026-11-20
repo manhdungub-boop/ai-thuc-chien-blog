@@ -945,7 +945,10 @@ test("run durably marks unavailable SEO evidence as failed without inventing a p
     const body = await response.json();
     assert.equal(response.status, 200);
     assert.equal(body.ok, false);
-    assert.equal(body.items[0].result.error, "read_only_source_error");
+    assert.equal(body.items[0].result.ok, false);
+    assert.equal(body.items[0].result.errorCode, "read_only_review_failed");
+    assert.equal(Object.hasOwn(body.items[0].result, "error"), false);
+    assert.equal(JSON.stringify(body).includes("read_only_source_error"), false);
     assert.equal(body.items[0].state, "failed");
     assert.equal([...records.values()][0].state, "failed");
   } finally {
