@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - fix/runtime-lockfile-generation-20261120
+      - security/scope-lockfile-write-permission-20261120
   pull_request:
     branches:
       - fix/runtime-lockfile-generation-20261120
+      - security/harden-lockfile-workflow-20261120
     paths:
       - ".github/workflows/agent-runtime-lockfile-generation.yml"
       - "agents/runtime/package.json"
