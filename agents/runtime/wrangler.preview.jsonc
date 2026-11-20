@@ -7,6 +7,16 @@
   "triggers": {
     "crons": ["*/30 * * * *"]
   },
+  "ratelimits": [
+    {
+      "name": "AGENT_INGRESS_RATE_LIMITER",
+      "namespace_id": "20261121",
+      "simple": {
+        "limit": 60,
+        "period": 60
+      }
+    }
+  ],
   "durable_objects": {
     "bindings": [
       {
@@ -29,6 +39,7 @@
     "AGENT_PAUSED": "true",
     "AGENT_RECOVERY_ALARM_ENABLED": "false",
     "AGENT_OIDC_ENABLED": "false",
+    "AGENT_RATE_LIMIT_REQUIRED": "true",
     "AGENT_OIDC_AUDIENCE": "ai-thuc-chien-agent-runtime-preview",
     "AGENT_OIDC_REPOSITORY": "manhdungub-boop/ai-thuc-chien-blog",
     "AGENT_OIDC_REPOSITORY_OWNER": "manhdungub-boop",
