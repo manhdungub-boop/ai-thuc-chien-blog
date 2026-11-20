@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-11-20T20:00:00+07:00",
+  "generated_at": "2026-11-20T22:15:00+07:00",
   "catalog_policy": {
     "default_locale": "vi",
     "currency": "USD",
@@ -1755,6 +1755,129 @@
         "offline",
         "local-compute",
         "lora"
+      ]
+    },
+    {
+      "id": "cline",
+      "name": "Cline",
+      "vendor": "Cline Bot Inc.",
+      "website": "https://cline.bot/",
+      "categories": [
+        "coding",
+        "developer",
+        "agents",
+        "automation"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "limited_credits",
+      "license": "Apache-2.0 for the Cline core repository; the repository notes that its JetBrains plugin is not open-sourced. Hosted model/provider services have separate terms.",
+      "platforms": [
+        "vscode",
+        "jetbrains",
+        "windows",
+        "macos",
+        "linux",
+        "cli"
+      ],
+      "description": "AI coding agent hoạt động trong IDE, terminal và desktop; có thể đọc dự án, lập kế hoạch, sửa mã, chạy lệnh, kết nối MCP và hỗ trợ quy trình headless/CI.",
+      "free_tier_summary": "Có thể cài phần mềm miễn phí. Cline cung cấp một số model FREE theo chương trình giới hạn và thay đổi theo thời gian; sau hạn mức có thể cần credits hoặc nhà cung cấp trả phí. Có thể kết nối model cục bộ qua Ollama/LM Studio để tránh phí inference theo request, nhưng vẫn cần phần cứng phù hợp.",
+      "official_sources": [
+        "https://cline.bot/",
+        "https://github.com/cline/cline",
+        "https://docs.cline.bot/getting-started/free-models",
+        "https://docs.cline.bot/getting-started/authorizing-with-cline"
+      ],
+      "last_verified": "2026-11-20",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "coding-agent",
+        "ide",
+        "cli",
+        "mcp",
+        "local-models",
+        "human-in-the-loop"
+      ]
+    },
+    {
+      "id": "jan",
+      "name": "Jan",
+      "vendor": "Menlo Research",
+      "website": "https://jan.ai/",
+      "categories": [
+        "assistant",
+        "local-llm",
+        "writing",
+        "research",
+        "privacy"
+      ],
+      "pricing_model": "self_hosted_free_and_cloud_paid",
+      "pricing_status": "self_hosted_free",
+      "license": "Apache-2.0 for the Jan repository; individual downloaded model weights may carry separate licenses and usage restrictions.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux",
+        "desktop"
+      ],
+      "description": "Ứng dụng desktop mã nguồn mở để tải và chạy mô hình AI cục bộ, tổ chức hội thoại/dự án và kết nối model hoặc nhà cung cấp bên ngoài khi cần.",
+      "free_tier_summary": "Ứng dụng Jan được phát hành theo Apache-2.0 và có thể chạy model cục bộ mà không trả phí inference theo request. Người dùng vẫn cần máy tính đủ cấu hình, điện/nơi lưu trữ; model tải về có giấy phép riêng. Kết nối API cloud có thể phát sinh phí của nhà cung cấp.",
+      "official_sources": [
+        "https://jan.ai/",
+        "https://github.com/janhq/jan",
+        "https://github.com/janhq/jan/blob/main/LICENSE",
+        "https://dev.jan.ai/terms"
+      ],
+      "last_verified": "2026-11-20",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "local-ai",
+        "offline",
+        "desktop",
+        "privacy",
+        "open-source"
+      ]
+    },
+    {
+      "id": "librechat",
+      "name": "LibreChat",
+      "vendor": "LibreChat",
+      "website": "https://www.librechat.ai/",
+      "categories": [
+        "assistant",
+        "agents",
+        "developer",
+        "documents",
+        "automation"
+      ],
+      "pricing_model": "free",
+      "pricing_status": "self_hosted_free",
+      "license": "MIT for the LibreChat repository; hosted model providers, model weights, plugins and deployment infrastructure have separate terms and costs.",
+      "platforms": [
+        "web",
+        "self_hosted",
+        "docker",
+        "api"
+      ],
+      "description": "Giao diện trò chuyện AI tự lưu trữ, hợp nhất nhiều nhà cung cấp model và hỗ trợ Agents, MCP, Skills, Artifacts, Code Interpreter cùng xác thực nhiều người dùng.",
+      "free_tier_summary": "Phần mềm tự lưu trữ có giấy phép MIT và không thu phí bản quyền phần mềm. Demo công khai chỉ dành cho đánh giá, không dùng cho dữ liệu riêng tư hoặc sản xuất. Máy chủ, lưu trữ và API model cloud có thể phát sinh chi phí; model local giúp tránh phí inference cloud nhưng vẫn cần phần cứng.",
+      "official_sources": [
+        "https://www.librechat.ai/",
+        "https://github.com/LibreChat-AI/LibreChat",
+        "https://github.com/LibreChat-AI/LibreChat/blob/main/LICENSE",
+        "https://www.librechat.ai/docs/local"
+      ],
+      "last_verified": "2026-11-20",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "self-hosted",
+        "multi-provider",
+        "agents",
+        "mcp",
+        "rag",
+        "privacy"
       ]
     }
   ]
