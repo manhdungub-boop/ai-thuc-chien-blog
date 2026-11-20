@@ -158,3 +158,11 @@ The reviewer console deliberately does not offer a decision form based only on a
 - A complete retrieval is persisted through the version-checked Durable Object method using the draft version read at the start. Stale writes remain blocked.
 - This helper is not yet called by the supervisor because there is still no content-draft executor or approved draft-creation workflow. It is a tested Research → evidence-persistence building block, not proof of autonomous article production.
 - All excerpts remain `source_retrieved_not_fact_checked`; the helper does not create claims, assess semantic support, authorize release, publish content, or post to social networks.
+
+
+### Human article-authoring brief boundary
+
+- `buildArticleAuthoringBrief({ topic, researchEvidence })` creates a Vietnamese editorial scaffold only when at least three distinct source URLs pass the fixed publisher-label/host/path policy and carry successful retrieval metadata.
+- It does not copy source excerpts into article prose, generate factual claims, or create a stored draft. Every article section remains an explicit human-authoring placeholder.
+- The deterministic article quality gate is run against the scaffold and is expected to return `needs_revision`; this is intentional and is not a publication-ready article.
+- The helper is not registered as a `content_draft` task executor and does not change task queue executability. No automatic article generation is claimed.

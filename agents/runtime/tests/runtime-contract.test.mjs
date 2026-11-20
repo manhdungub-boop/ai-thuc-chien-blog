@@ -240,6 +240,19 @@ test("research evidence retrieval is HTTPS allowlisted, bounded, and never publi
   assert.match(evidence, /content_published: false/);
 });
 
+test("article authoring brief remains human-authored and never creates a draft or claims", async () => {
+  const brief = await readFile(new URL("../src/article-authoring-brief.mjs", import.meta.url), "utf8");
+  assert.match(brief, /classifyResearchPublisher/);
+  assert.match(brief, /unique\.size < 3/);
+  assert.match(brief, /human_authoring_required/);
+  assert.match(brief, /draft_created: false/);
+  assert.match(brief, /claims_generated: false/);
+  assert.match(brief, /publication_authorized: false/);
+  assert.match(brief, /reviewArticleDraft\(draft\)/);
+  assert.doesNotMatch(brief, /createDraft\(/);
+  assert.doesNotMatch(brief, /fetch\(/);
+});
+
 test("draft evidence preparation requires the runtime budgeted fetch and exact stored source URLs", async () => {
   const preparation = await readFile(new URL("../src/prepare-draft-evidence-ledger.mjs", import.meta.url), "utf8");
   assert.match(preparation, /fetchImpl is mandatory/);
