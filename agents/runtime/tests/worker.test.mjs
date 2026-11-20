@@ -667,7 +667,7 @@ test("operator queue admission requires authentication, gates, and valid bounded
   const invalid = await worker.fetch(new Request(url, {
     method: "POST",
     headers: { Authorization: "Bearer " + RUN_TOKEN, "Content-Type": "application/json" },
-    body: JSON.stringify({ tasks: [{ type: "unknown.task", idempotencyKey: "bad-task-key-00000001", payload: {} }] }),
+    body: JSON.stringify({ tasks: [] }),
   }), env);
   assert.equal(invalid.status, 400);
 });
