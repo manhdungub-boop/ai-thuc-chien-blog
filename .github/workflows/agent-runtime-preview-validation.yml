@@ -131,6 +131,12 @@ jobs:
           assert.equal(preview.vars.AGENT_SCHEDULER_ENABLED, 'false');
           assert.deepEqual(preview.triggers?.crons, ['*/30 * * * *']);
           assert.equal(preview.vars.AGENT_OIDC_ENABLED, 'false');
+          assert.equal(preview.vars.AGENT_RATE_LIMIT_REQUIRED, 'true');
+          assert.deepEqual(preview.ratelimits, [{
+            name: 'AGENT_INGRESS_RATE_LIMITER',
+            namespace_id: '20261121',
+            simple: { limit: 60, period: 60 }
+          }]);
           assert.equal(preview.durable_objects?.bindings?.length, 1);
           assert.deepEqual(preview.durable_objects.bindings[0], {
             name: 'AGENT_STATE_STORE',
