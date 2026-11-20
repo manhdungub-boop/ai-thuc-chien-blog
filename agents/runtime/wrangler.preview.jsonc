@@ -15,11 +15,22 @@
   "migrations": [
     {
       "tag": "v1",
-      "new_sqlite_classes": ["AgentStateStore"]
+      "new_sqlite_classes": [
+        "AgentStateStore"
+      ]
     }
   ],
   "vars": {
     "AGENT_ENABLED": "false",
-    "AGENT_PAUSED": "true"
+    "AGENT_PAUSED": "true",
+    "AGENT_OIDC_ENABLED": "false",
+    "AGENT_OIDC_AUDIENCE": "ai-thuc-chien-agent-runtime-preview",
+    "AGENT_OIDC_REPOSITORY": "manhdungub-boop/ai-thuc-chien-blog",
+    "AGENT_OIDC_REPOSITORY_OWNER": "manhdungub-boop",
+    "AGENT_OIDC_REPOSITORY_ID": "1423636651",
+    "AGENT_OIDC_REPOSITORY_OWNER_ID": "342528485",
+    "AGENT_OIDC_REF": "refs/heads/main",
+    "AGENT_OIDC_WORKFLOW_REF": "manhdungub-boop/ai-thuc-chien-blog/.github/workflows/agent-runtime-operator.yml@refs/heads/main",
+    "AGENT_OIDC_ACTOR_ID": ""
   }
 }
