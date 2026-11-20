@@ -78,6 +78,13 @@ See [STATE-STORE-ADR.md](./STATE-STORE-ADR.md) for the design decision, Free-tie
 - SEO HTTP status and broken-link counts are not inferred from local files. The repository reader requires an explicit `seoEvidenceReader` provider for those facts; sitemap membership is independently derived from the checked-out `sitemap.xml`.
 - Integration tests now inspect the real article, AI Bank catalog and sitemap in the checked-out repository. This validates local source reading, not a live website HTTP crawl or a deployed agent.
 
+## Usage Evidence Collector and Runtime Admission Controller
+
+- `src/usage-evidence-collector.mjs` validates a caller-supplied Cloudflare usage snapshot: source label, redacted account reference, observation timestamp, freshness, resource names, used values and limits. It performs no network call and does not authenticate the source.
+- A `valid_free_plan_claim` is only a structurally valid, caller-supplied claim. It is not independent proof of Free plan status, remaining quota, or future headroom. The prior Cloudflare billing-read inspection was denied (403), so actual plan and account headroom remain unverified.
+- `src/runtime-admission-controller.mjs` composes safety, usage-evidence and abstract internal-budget checks into a dry-run decision. It blocks unknown/paid/stale usage evidence and unsafe runtime snapshots.
+- Even an eligible dry-run result means only "eligible for separate release review"; it never authorizes deployment, task enqueue, reservation persistence, or execution. No Agent Runtime Worker is deployed or enabled.
+
 ## Read-only Budget Guard and Priority Engine
 
 - `src/agent-priority-engine.mjs` assigns fixed deterministic weights to the allowlisted task families and preserves input order for ties. It does not mutate or execute tasks.
