@@ -11,10 +11,10 @@ const EXPECTED = Object.freeze({
   repositoryOwnerId: "342528485",
   ref: "refs/heads/main",
   workflowRef: "manhdungub-boop/ai-thuc-chien-blog/.github/workflows/agent-runtime-operator.yml@refs/heads/main",
-  actorId: "1234567",
+  actorId: "342528485",
   eventName: "workflow_dispatch",
 });
-const STATE_TOKEN = "oidc-worker-state-store-token-0123456789abcdef";
+const STATE_TOKEN = "oidc-worker-state-store-token-034252848589abcdef";
 
 function encodeBase64Url(bytes) {
   let binary = "";
@@ -101,7 +101,7 @@ test("OIDC pause verifies GitHub signature, consumes jti, and records only the v
             }
             assert.equal(new URL(internalRequest.url).pathname, "/control/pause");
             const payload = await internalRequest.json();
-            assert.equal(payload.actor, "github-actions:1234567");
+            assert.equal(payload.actor, "github-actions:342528485");
             assert.equal(typeof payload.requestId, "string");
             assert.equal(payload.reason, "manual safety test");
             return Response.json({ ok: true, changed: true, control: { paused: true, changedAt: Date.now(), version: 1 } });
