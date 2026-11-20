@@ -1,4 +1,5 @@
 import { WorkflowEntrypoint } from "cloudflare:workers";
+import { readBoundedJson } from "./bounded-json-body.mjs";
 import { currentUtcBudgetDay } from "./utc-budget-day.mjs";
 import { discoverAiBankReleaseSignals } from "./ai-bank-discovery.mjs";
 import { discoverResearchSignals } from "./research-discovery.mjs";
@@ -392,16 +393,15 @@ export default {
           (request.headers.get("content-type") || "").split(";")[0].trim().toLowerCase() !== "application/json") {
         return json({ error: "operator_request_origin_or_content_type_rejected" }, 403);
       }
-      const contentLength = Number(request.headers.get("content-length") || 0);
-      if (contentLength > 2048) return json({ error: "operator_request_too_large" }, 413);
       const sessionToken = readGoogleReviewerSessionCookie(request);
       if (!sessionToken) return json({ error: "operator_session_required" }, 401);
-      let body;
-      try {
-        const raw = await request.text();
-        if (new TextEncoder().encode(raw).byteLength > 2048) return json({ error: "operator_request_too_large" }, 413);
-        body = JSON.parse(raw);
-      } catch { return json({ error: "invalid_operator_request_json" }, 400); }
+      const parsedBody = await readBoundedJson(request, 2048);
+      if (!parsedBody.ok) {
+        const error = parsedBody.error === "request_body_too_large" ? "operator_request_too_large" :
+          parsedBody.error === "invalid_json" || parsedBody.error === "invalid_json_encoding" ? "invalid_operator_request_json" : parsedBody.error;
+        return json({ error }, parsedBody.status);
+      }
+      const body = parsedBody.value;
       if (!body || typeof body !== "object" || Array.isArray(body) ||
           Object.keys(body).some(key => !["action", "reason"].includes(key)) ||
           !["pause", "resume"].includes(body.action) ||
@@ -449,16 +449,15 @@ export default {
           (request.headers.get("content-type") || "").split(";")[0].trim().toLowerCase() !== "application/json") {
         return json({ error: "review_request_origin_or_content_type_rejected" }, 403);
       }
-      const contentLength = Number(request.headers.get("content-length") || 0);
-      if (contentLength > 48 * 1024) return json({ error: "authoring_request_too_large" }, 413);
       const sessionToken = readGoogleReviewerSessionCookie(request);
       if (!sessionToken) return json({ error: "reviewer_session_required" }, 401);
-      let body;
-      try {
-        const raw = await request.text();
-        if (new TextEncoder().encode(raw).byteLength > 48 * 1024) return json({ error: "authoring_request_too_large" }, 413);
-        body = JSON.parse(raw);
-      } catch { return json({ error: "invalid_authoring_request_json" }, 400); }
+      const parsedBody = await readBoundedJson(request, 48 * 1024);
+      if (!parsedBody.ok) {
+        const error = parsedBody.error === "request_body_too_large" ? "authoring_request_too_large" :
+          parsedBody.error === "invalid_json" || parsedBody.error === "invalid_json_encoding" ? "invalid_authoring_request_json" : parsedBody.error;
+        return json({ error }, parsedBody.status);
+      }
+      const body = parsedBody.value;
       if (!body || typeof body !== "object" || Array.isArray(body) ||
           Object.keys(body).some(key => !["expected_version", "draft"].includes(key)) ||
           !Number.isInteger(body.expected_version) || !body.draft ||
@@ -533,16 +532,15 @@ export default {
           (request.headers.get("content-type") || "").split(";")[0].trim().toLowerCase() !== "application/json") {
         return json({ error: "review_request_origin_or_content_type_rejected" }, 403);
       }
-      const contentLength = Number(request.headers.get("content-length") || 0);
-      if (contentLength > 96 * 1024) return json({ error: "review_request_too_large" }, 413);
       const sessionToken = readGoogleReviewerSessionCookie(request);
       if (!sessionToken) return json({ error: "reviewer_session_required" }, 401);
-      let body;
-      try {
-        const raw = await request.text();
-        if (new TextEncoder().encode(raw).byteLength > 96 * 1024) return json({ error: "review_request_too_large" }, 413);
-        body = JSON.parse(raw);
-      } catch { return json({ error: "invalid_review_request_json" }, 400); }
+      const parsedBody = await readBoundedJson(request, 96 * 1024);
+      if (!parsedBody.ok) {
+        const error = parsedBody.error === "request_body_too_large" ? "review_request_too_large" :
+          parsedBody.error === "invalid_json" || parsedBody.error === "invalid_json_encoding" ? "invalid_review_request_json" : parsedBody.error;
+        return json({ error }, parsedBody.status);
+      }
+      const body = parsedBody.value;
       if (!body || typeof body !== "object" || Array.isArray(body) ||
           Object.keys(body).some(key => !["expected_version", "decisions"].includes(key)) ||
           !Number.isInteger(body.expected_version) || !Array.isArray(body.decisions)) {
