@@ -674,6 +674,52 @@ test("operator queue admission requires authentication, gates, and valid bounded
   assert.equal(invalid.status, 400);
 });
 
+test("scheduled dispatcher remains inert unless its exact cron and all runtime gates are enabled", async () => {
+  const { env, calls } = durableRunEnv();
+  env.AGENT_SCHEDULER_ENABLED = "false";
+  await worker.scheduled({ cron: "*/30 * * * *" }, env, {});
+  assert.equal(calls.length, 0);
+  env.AGENT_SCHEDULER_ENABLED = "true";
+  env.AGENT_ENABLED = "false";
+  await worker.scheduled({ cron: "*/30 * * * *" }, env, {});
+  await worker.scheduled({ cron: "*/15 * * * *" }, env, {});
+  assert.equal(calls.length, 0);
+});
+
+test("scheduled dispatcher processes at most one queued read-only task per configured tick", async () => {
+  const originalFetch = globalThis.fetch;
+  const articleHtml = `<!doctype html><html><head>
+    <title>Demo article</title>
+    <meta name="description" content="This is a sufficiently detailed description for a content quality review.">
+    <meta name="author" content="DUNG - AI">
+    <link rel="canonical" href="https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/demo-article">
+    <script type="application/ld+json">{"@type":"BlogPosting"}</script>
+    </head><body><section class="article-author-note">Bài viết gốc DUNG - AI; vui lòng ghi công và dẫn liên kết về bài viết.</section>
+    <a href="/thu-vien.html">Library</a><main>${"useful content ".repeat(270)}</main></body></html>`;
+  globalThis.fetch = async (input) => {
+    if (String(input).endsWith("/articles/demo-article.html")) return new Response(articleHtml, { status: 200 });
+    throw new Error("unexpected_source_url");
+  };
+  const { env, records, calls } = durableRunEnv();
+  env.AGENT_SCHEDULER_ENABLED = "true";
+  for (const taskId of ["scheduled-1", "scheduled-2"]) {
+    records.set(taskId, {
+      taskId, type: "content.review",
+      payload: { articlePath: "articles/demo-article.html" },
+      idempotencyKey: "scheduled-content-review-" + taskId,
+      state: "queued",
+    });
+  }
+  try {
+    await worker.scheduled({ cron: "*/30 * * * *" }, env, {});
+    assert.equal(records.get("scheduled-1").state, "succeeded");
+    assert.equal(records.get("scheduled-2").state, "queued");
+    assert.deepEqual(calls.map((call) => new URL(call.url).pathname), ["/claim-next", "/complete"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("operator queue dispatcher processes only a bounded number of already-queued read-only tasks", async () => {
   const originalFetch = globalThis.fetch;
   const articleHtml = `<!doctype html><html><head>
