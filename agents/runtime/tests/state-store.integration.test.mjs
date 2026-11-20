@@ -336,6 +336,32 @@ test("SQLite Durable Object reserves once and rejects idempotency payload confli
   });
 });
 
+test("concurrent duplicate reservations admit one task and reject conflicting payloads", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const input = task("parallel-dedupe");
+    const duplicates = await Promise.all([
+      call(stub, "/reserve", input),
+      call(stub, "/reserve", input),
+      call(stub, "/reserve", input),
+    ]);
+    assert.equal(duplicates.filter((item) => item.status === 201).length, 1);
+    assert.equal(duplicates.filter((item) => item.status === 200 && item.body.duplicate === true).length, 2);
+    assert.equal(new Set(duplicates.map((item) => item.body.task.taskId)).size, 1);
+
+    const conflict = await call(stub, "/reserve", {
+      ...input,
+      task: { ...input.task, payload: { path: "/different-payload" } },
+    });
+    assert.equal(conflict.status, 409);
+    assert.equal(conflict.body.error, "idempotency_key_conflict");
+
+    const usage = await call(stub, "/usage");
+    assert.equal(usage.body.acceptedToday, 1,
+      "concurrent retries must consume exactly one daily admission slot");
+    assert.equal(usage.body.inFlight, 1);
+  });
+});
+
 test("default Free-tier pilot concurrency is capped at five tasks", async () => {
   await withRuntime({}, async ({ stub }) => {
     const results = await Promise.all(["default-a","default-b","default-c","default-d","default-e","default-f"].map((id) => call(stub, "/reserve", task(id))));
