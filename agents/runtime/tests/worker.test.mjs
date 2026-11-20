@@ -71,12 +71,12 @@ test("run requires operator authentication if both safety flags are opened", asy
 
 const OPERATOR_TOKEN = "worker-bridge-operator-token-034252848589abcdef";
 const STATE_TOKEN = "worker-bridge-state-store-token-034252848589abcdef";
-function bridgeEnv({ responseBody = { ok: true, dayUtc: "2026-11-19", acceptedToday: 2, inFlight: 1 } } = {}) {
+function bridgeEnv({ responseBody = { ok: true, dayUtc: "2026-11-19", acceptedToday: 2, inFlight: 1 }, responseStatus = 200 } = {}) {
   const calls = [];
   const stub = {
     async fetch(internalRequest) {
       calls.push(internalRequest);
-      return Response.json(responseBody);
+      return Response.json(responseBody, { status: responseStatus });
     },
   };
   const env = {
@@ -296,6 +296,33 @@ test("operator recovery bridge uses fixed State Store identity and records serve
   assert.match(forwarded.requestId, /^[a-z0-9-]{16,64}$/i);
   assert.equal(JSON.stringify(forwarded).includes(OPERATOR_TOKEN), false);
   assert.equal(JSON.stringify(forwarded).includes(STATE_TOKEN), false);
+});
+
+test("operator recovery bridge maps State Store errors to safe public responses", async () => {
+  const url = "https://agent-runtime-preview.example.workers.dev/internal/recover";
+  const headers = { Authorization: "Bearer " + OPERATOR_TOKEN, "Content-Type": "application/json" };
+  for (const [responseStatus, expectedStatus, expectedError] of [
+    [404, 404, "task_not_found"],
+    [409, 409, "task_recovery_conflict"],
+    [429, 429, "rate_limited"],
+    [500, 503, "state_store_unavailable"],
+  ]) {
+    const { env, calls } = bridgeEnv({
+      responseBody: { ok: false, error: "sensitive_internal_detail", token: STATE_TOKEN },
+      responseStatus,
+    });
+    env.AGENT_ENABLED = "true";
+    env.AGENT_PAUSED = "false";
+    const response = await worker.fetch(new Request(url, {
+      method: "POST", headers, body: JSON.stringify({ taskId: "task-recover-01" }),
+    }), env);
+    const body = await response.json();
+    assert.equal(response.status, expectedStatus);
+    assert.equal(body.error, expectedError);
+    assert.equal(JSON.stringify(body).includes("sensitive_internal_detail"), false);
+    assert.equal(JSON.stringify(body).includes(STATE_TOKEN), false);
+    assert.equal(calls.length, 1);
+  }
 });
 
 test("operator recovery bridge rejects malformed, oversized, and missing-identity requests", async () => {
