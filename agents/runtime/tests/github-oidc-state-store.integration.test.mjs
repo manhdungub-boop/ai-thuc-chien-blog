@@ -138,7 +138,7 @@ async function withStateStore(callback) {
     await rm(directory, { recursive: true, force: true });
   }
 }
-function callRealStateStore(env, operation, input) {
+function callRealStateStore(env, operation, input, diagnostics) {
   assert.equal(operation, "oidcReplayConsume");
   const namespace = env.AGENT_STATE_STORE;
   const stub = namespace.get(namespace.idFromName("agent-runtime-global"));
@@ -149,27 +149,35 @@ function callRealStateStore(env, operation, input) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify(input),
-  }));
+  })).then(async (response) => {
+    diagnostics.push({
+      status: response.status,
+      contentType: response.headers.get("content-type"),
+      body: await response.clone().text(),
+    });
+    return response;
+  });
 }
-function authorize(token, fixture, env) {
+function authorize(token, fixture, env, diagnostics) {
   return authorizeGitHubActionsOperator(token, {
     env,
     expected: EXPECTED,
     nowSeconds: fixture.now,
     fetchImpl: makeGitHubFetch(fixture.jwks),
-    callStateStoreImpl: callRealStateStore,
+    callStateStoreImpl: (e, op, input) => callRealStateStore(e, op, input, diagnostics),
   });
 }
 
 test("verified GitHub OIDC token is consumed by the real SQLite State Store and cannot be replayed", async () => {
   await withStateStore(async ({ env }) => {
     const fixture = await makeSignedFixture("github-actions-oidc-e2e-jti-0001");
-    const first = await authorize(fixture.token, fixture, env);
-    assert.equal(first.ok, true, "first authorization failed: " + JSON.stringify(first));
+    const diagnostics = [];
+    const first = await authorize(fixture.token, fixture, env, diagnostics);
+    assert.equal(first.ok, true, "first authorization failed: " + JSON.stringify(first) + "; State Store: " + JSON.stringify(diagnostics));
     assert.equal(first.replayConsumed, true);
     assert.equal(first.identity.jti, "github-actions-oidc-e2e-jti-0001");
 
-    const replay = await authorize(fixture.token, fixture, env);
+    const replay = await authorize(fixture.token, fixture, env, diagnostics);
     assert.deepEqual(replay, { ok: false, error: "oidc_token_replayed" });
   });
 });
@@ -177,14 +185,15 @@ test("verified GitHub OIDC token is consumed by the real SQLite State Store and 
 test("concurrent authorization attempts for one signed jti yield exactly one winner", async () => {
   await withStateStore(async ({ env }) => {
     const fixture = await makeSignedFixture("github-actions-oidc-e2e-race-0001");
+    const diagnostics = [];
     const results = await Promise.all([
-      authorize(fixture.token, fixture, env),
-      authorize(fixture.token, fixture, env),
+      authorize(fixture.token, fixture, env, diagnostics),
+      authorize(fixture.token, fixture, env, diagnostics),
     ]);
     assert.deepEqual(
       results.map((result) => result.ok ? "ok" : result.error).sort(),
       ["ok", "oidc_token_replayed"],
-      "unexpected concurrent authorization results: " + JSON.stringify(results),
+      "unexpected concurrent authorization results: " + JSON.stringify(results) + "; State Store: " + JSON.stringify(diagnostics),
     );
   });
 });
