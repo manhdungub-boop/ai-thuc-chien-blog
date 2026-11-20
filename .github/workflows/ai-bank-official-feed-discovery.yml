@@ -1,0 +1,87 @@
+name: AI Bank official-feed discovery
+
+on:
+  pull_request:
+    paths:
+      - "scripts/ai-bank-feed-discovery.mjs"
+      - "scripts/ai-bank-lead-triage.mjs"
+      - "scripts/ai-bank-editorial-briefs.mjs"
+      - "data/ai-tools.json"
+      - ".github/workflows/ai-bank-official-feed-discovery.yml"
+  push:
+    branches:
+      - "automation/ai-bank-feed-discovery-20261115"
+      - "automation/ai-bank-lead-triage-20261115"
+    paths:
+      - "scripts/ai-bank-feed-discovery.mjs"
+      - "scripts/ai-bank-lead-triage.mjs"
+      - "data/ai-tools.json"
+      - ".github/workflows/ai-bank-official-feed-discovery.yml"
+  schedule:
+    # Wednesday 09:30 Asia/Ho_Chi_Minh
+    - cron: "30 2 * * 3"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-bank-official-feed-discovery
+  cancel-in-progress: false
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+
+      - name: Check JavaScript syntax
+        run: |
+          node --check scripts/ai-bank-feed-discovery.mjs
+          node --check scripts/ai-bank-lead-triage.mjs
+          node --check scripts/ai-bank-editorial-briefs.mjs
+
+      - name: Run offline RSS parser and size-limit fixtures
+        run: node scripts/ai-bank-feed-discovery.mjs --self-test
+
+      - name: Run AI Bank triage classification fixtures
+        run: node scripts/ai-bank-lead-triage.mjs --self-test
+
+      - name: Collect discovery leads from official feeds
+        run: node scripts/ai-bank-feed-discovery.mjs
+
+      - name: Compare leads with the existing AI Bank
+        run: node scripts/ai-bank-lead-triage.mjs
+
+      - name: Create weekly editorial research briefs
+        run: node scripts/ai-bank-editorial-briefs.mjs
+
+      - name: Add discovery, triage and editorial reports to workflow summary
+        if: always()
+        run: |
+          for report in reports/ai-bank/discovery.md reports/ai-bank/triage.md reports/editorial/weekly-topic-research-briefs.md; do
+            if [ -f "$report" ]; then
+              cat "$report" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "Report not generated: $report" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+
+      - name: Preserve discovery, triage and editorial reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: ai-bank-editorial-research-${{ github.run_id }}
+          path: reports/
+          if-no-files-found: warn
+          retention-days: 30
