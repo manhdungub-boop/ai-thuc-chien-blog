@@ -61,6 +61,18 @@ See [STATE-STORE-ADR.md](./STATE-STORE-ADR.md) for the design decision, Free-tie
 - The Worker now contains an operator-authenticated `POST /internal/recover` bridge. It requires both outer runtime gates to be explicitly open, injects the configured operator identity and a server-generated request ID, and forwards only the dedicated internal State Store credential. The State Store enforces a per-actor rate limit and records actor/request ID in the recovery audit event. This bridge is code-only pending Preview binding and independent review. `AGENT_ENABLED` and `AGENT_PAUSED` remain independent deployment-level outer gates. A persisted Resume cannot bypass those gates or dispatch queued work.
 - The dedicated `wrangler.preview.jsonc` now declares the isolated SQLite State Store binding and migration, but it has not been deployed. The required `AGENT_STATE_STORE_TOKEN` and `AGENT_OPERATOR_TOKEN` remain external secrets and must be provisioned only in the dedicated Preview Worker after permission review. Until then, the bridge routes cannot operate in a live deployment. Local integration tests use Miniflare only.
 - The State Store's internal `POST /oidc/replay/consume` route is protected by the distinct Worker-to-State-Store bearer and is not exposed as a public Worker route. The dedicated `POST /internal/oidc/pause` Worker handler verifies GitHub JWT signature and pinned claims before calling it. It accepts only `jti` plus verified-token expiry metadata, hashes the identifier before storage, enforces single use transactionally, and fails closed when storage is unavailable. This code path remains disabled in Preview config and undeployed.
+
+
+## Read-only task handlers (pure analysis only)
+
+- `src/task-handlers.mjs` accepts an already-read, normalized metadata snapshot and returns a deterministic report for the three allowlisted task types.
+- `content.review` checks the article reference, title/description, canonical URL, DUNG - AI author, BlogPosting JSON-LD, attribution note, word count and internal-link count.
+- `ai_bank.candidate_review` checks candidate identity, HTTPS website/source URLs, pricing metadata, verification date/status and a duplicate-record signal.
+- `seo.audit` checks HTTP status, title/description, HTTPS canonical, indexability, JSON-LD, sitemap presence and internal-link counts.
+- Snapshots are exact-schema, bounded to 16 KiB, and reports are bounded to 20 findings. Results contain only finding codes/messages and no copied source text.
+- This module is deliberately pure: it does not fetch files, access the State Store, call external services, mutate the catalog, edit articles, publish content, enqueue tasks, or invoke an executor. The read-only data adapters that would obtain snapshots are not implemented yet.
+- All reports explicitly say `execution: not_started` and `sideEffects: []`. A finding is a review signal, not permission to auto-correct or publish.
+
 ## Remaining gates
 
 1. Independently review the schema migration, lease transactions, auth boundary, and integration-test evidence.
