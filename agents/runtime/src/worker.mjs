@@ -402,7 +402,14 @@ const worker = {
           if (!lease || typeof lease.owner !== "string" || !Number.isSafeInteger(lease.generation)) {
             throw new Error("state_store_lease_invalid");
           }
-          const report = await manager.reviewBatch([task]);
+          const report = await runWithLeaseHeartbeat(
+            () => manager.reviewBatch([task]),
+            () => writeStateStore(env, "/heartbeat", {
+              taskId: stored.taskId,
+              leaseOwner: lease.owner,
+              leaseGeneration: lease.generation,
+            }),
+          );
           const item = report.items[0];
           const completion = await writeStateStore(env, "/complete", {
             taskId: stored.taskId,
