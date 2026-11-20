@@ -44,20 +44,7 @@ test("run fails closed when the pause flag is missing or malformed", async () =>
   }
 });
 
-test("run remains unavailable after flags and operator authentication are opened", async () => {
-  const token = "preview-only-test-secret-034252848589abcdef";
-  const authorizedRequest = new Request("https://agent-runtime-preview.example.workers.dev/run", {
-    method: "POST",
-    headers: { Authorization: "Bearer " + token },
-  });
-  const response = await worker.fetch(authorizedRequest, {
-    AGENT_ENABLED: "true",
-    AGENT_PAUSED: "false",
-    AGENT_OPERATOR_TOKEN: token,
-  });
-  assert.equal(response.status, 501);
-  assert.equal((await response.json()).error, "execution_not_implemented");
-});
+
 
 test("health rejects non-GET methods", async () => {
   const response = await worker.fetch(request("/health", "POST"), {});
@@ -79,20 +66,7 @@ test("run requires operator authentication if both safety flags are opened", asy
   assert.equal((await response.json()).error, "operator_auth_required");
 });
 
-test("run remains unimplemented after valid operator authentication", async () => {
-  const token = "preview-only-test-secret-034252848589abcdef";
-  const authorizedRequest = new Request("https://agent-runtime-preview.example.workers.dev/run", {
-    method: "POST",
-    headers: { Authorization: "Bearer " + token },
-  });
-  const response = await worker.fetch(authorizedRequest, {
-    AGENT_ENABLED: "true",
-    AGENT_PAUSED: "false",
-    AGENT_OPERATOR_TOKEN: token,
-  });
-  assert.equal(response.status, 501);
-  assert.equal((await response.json()).error, "execution_not_implemented");
-});
+
 
 
 const OPERATOR_TOKEN = "worker-bridge-operator-token-034252848589abcdef";
@@ -478,4 +452,101 @@ test("OIDC pause endpoint rejects shared bearer credentials as malformed JWT inp
   });
   assert.equal(response.status, 401);
   assert.equal((await response.json()).error, "github_oidc_token_required");
+});
+
+const RUN_TOKEN = "preview-read-only-run-token-034252848589abcdef";
+const RUN_URL = "https://agent-runtime-preview.example.workers.dev/run";
+const RUN_ENV = {
+  AGENT_ENABLED: "true",
+  AGENT_PAUSED: "false",
+  AGENT_OPERATOR_TOKEN: RUN_TOKEN,
+};
+
+test("run performs bounded operator-triggered read-only content and AI Bank reviews", async () => {
+  const originalFetch = globalThis.fetch;
+  const articleHtml = `<!doctype html><html><head>
+    <title>Demo article</title>
+    <meta name="description" content="This is a sufficiently detailed description for a content quality review.">
+    <meta name="author" content="DUNG - AI">
+    <link rel="canonical" href="https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/demo-article">
+    <script type="application/ld+json">{"@type":"BlogPosting"}</script>
+    </head><body><section class="article-author-note">Bài viết gốc DUNG - AI; vui lòng ghi công và dẫn liên kết về bài viết.</section>
+    <a href="/thu-vien.html">Library</a><main>${"useful content ".repeat(180)}</main></body></html>`;
+  const catalog = {
+    tools: [{
+      id: "chatgpt", name: "ChatGPT", vendor: "OpenAI",
+      website: "https://chatgpt.com/",
+      official_sources: ["https://chatgpt.com/pricing/"],
+      pricing_model: "freemium", pricing_status: "verified_free_tier",
+      last_verified: "2026-11-15", verification_status: "verified",
+    }],
+  };
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.endsWith("/articles/demo-article.html")) return new Response(articleHtml, { status: 200 });
+    if (url.endsWith("/data/ai-tools.json")) return new Response(JSON.stringify(catalog), { status: 200 });
+    throw new Error("unexpected_source_url");
+  };
+  try {
+    const response = await worker.fetch(new Request(RUN_URL, {
+      method: "POST",
+      headers: { Authorization: "Bearer " + RUN_TOKEN, "Content-Type": "application/json" },
+      body: JSON.stringify({ tasks: [
+        { type: "content.review", idempotencyKey: "content-review-demo-0001", payload: { articlePath: "articles/demo-article.html" } },
+        { type: "ai_bank.candidate_review", idempotencyKey: "ai-bank-review-demo-0001", payload: { candidateId: "chatgpt" } },
+      ] }),
+    }), RUN_ENV);
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+    assert.equal(body.execution, "read_only_analysis");
+    assert.equal(body.result.items.length, 2);
+    assert.equal(body.result.items[0].status, "pass");
+    assert.equal(body.result.items[1].status, "pass");
+    assert.deepEqual(body.result.sideEffects, []);
+    assert.equal(body.limitations.includes("no_scheduler_or_background_execution"), true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("run blocks SEO audits when trusted live HTTP and broken-link evidence is unavailable", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => { throw new Error("SEO source should not be fetched"); };
+  try {
+    const response = await worker.fetch(new Request(RUN_URL, {
+      method: "POST",
+      headers: { Authorization: "Bearer " + RUN_TOKEN, "Content-Type": "application/json" },
+      body: JSON.stringify({ tasks: [
+        { type: "seo.audit", idempotencyKey: "seo-review-demo-0001", payload: { path: "/" } },
+      ] }),
+    }), RUN_ENV);
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(body.result.items[0].ok, false);
+    assert.equal(body.result.items[0].error, "read_only_source_error");
+    assert.equal(body.result.status, "review_required");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("run rejects oversized batches, malformed JSON, and unexpected query parameters", async () => {
+  const headers = { Authorization: "Bearer " + RUN_TOKEN, "Content-Type": "application/json" };
+  const tooMany = await worker.fetch(new Request(RUN_URL, {
+    method: "POST", headers,
+    body: JSON.stringify({ tasks: Array.from({ length: 6 }, (_, i) => ({
+      type: "seo.audit", idempotencyKey: "seo-review-" + String(i).padStart(8, "0"),
+      payload: { path: "/" },
+    })) }),
+  }), RUN_ENV);
+  assert.equal(tooMany.status, 400);
+  const malformed = await worker.fetch(new Request(RUN_URL, {
+    method: "POST", headers, body: "{bad",
+  }), RUN_ENV);
+  assert.equal(malformed.status, 400);
+  const query = await worker.fetch(new Request(RUN_URL + "?url=https://evil.example", {
+    method: "POST", headers, body: JSON.stringify({ tasks: [] }),
+  }), RUN_ENV);
+  assert.equal(query.status, 400);
 });
