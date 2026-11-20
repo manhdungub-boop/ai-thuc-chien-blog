@@ -544,7 +544,7 @@ test("atomic claim admits only one worker and stale lease generations cannot hea
     const completed = await call(stub, "/complete", {
       taskId, leaseOwner: lease.owner, leaseGeneration: lease.generation, status: "succeeded",
       result: {
-        taskType: "content.review",
+        taskType: "seo.audit",
         status: "attention",
         findingCount: 1,
         findings: [{ code: "article_description_short", severity: "warning", message: "Mô tả bài viết còn thiếu hoặc quá ngắn." }],
@@ -553,7 +553,7 @@ test("atomic claim admits only one worker and stale lease generations cannot hea
     assert.equal(completed.status, 200, JSON.stringify(completed.body));
     assert.equal(completed.body.task.state, "succeeded");
     assert.deepEqual(completed.body.task.result, {
-      taskType: "content.review",
+      taskType: "seo.audit",
       status: "attention",
       findingCount: 1,
       findings: [{ code: "article_description_short", severity: "warning", message: "Mô tả bài viết còn thiếu hoặc quá ngắn." }],
