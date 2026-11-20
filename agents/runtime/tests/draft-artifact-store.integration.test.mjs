@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { recordHumanClaimReview } from "../src/human-claim-review.mjs";
+import { buildArticleAuthoringBrief } from "../src/article-authoring-brief.mjs";
 
 const sources = [
   { title: "Official source one", publisher: "OpenAI News", url: "https://openai.com/index/paper", accessed_at: "2026-11-18T00:00:00.000Z" },
@@ -29,6 +30,26 @@ describe("AgentDraftStore Durable Object", () => {
     expect(await store.listPendingReviews()).toHaveLength(1);
     expect(await store.stats()).toEqual({ pending_human_review: 1 });
   });
+  it("persists a research-backed authoring scaffold only as needs_revision, never in the review queue", async () => {
+    const evidence = [
+      { source: "OpenAI News", title: "OpenAI research update", url: "https://openai.com/index/research-update", retrieved_at: "2026-11-19T00:00:00.000Z", status: "source_retrieved_not_fact_checked", excerpt: "A retrieved passage containing source context, method descriptions, limitations, and reported research details for later human inspection." },
+      { source: "Google DeepMind", title: "DeepMind research report", url: "https://deepmind.google/blog/research-report", retrieved_at: "2026-11-19T00:00:00.000Z", status: "source_retrieved_not_fact_checked", excerpt: "A second retrieved passage describing the research context, stated methodology, limitations, and findings for later human inspection." },
+      { source: "Hugging Face", title: "Hugging Face engineering article", url: "https://huggingface.co/blog/engineering-article", retrieved_at: "2026-11-19T00:00:00.000Z", status: "source_retrieved_not_fact_checked", excerpt: "A third retrieved passage outlining platform engineering context, reported implementation details, and limitations for human inspection." }
+    ];
+    const brief = buildArticleAuthoringBrief({
+      topic: "Ứng dụng AI Agent trong tự động hóa công việc và phát triển sản phẩm",
+      researchEvidence: evidence
+    });
+    expect(brief.prepared).toBe(true);
+    const result = await store.createDraft("article-brief-scaffold-01", brief.draft);
+    expect(result.accepted).toBe(true);
+    expect(result.artifact.status).toBe("needs_revision");
+    expect(result.artifact.quality_review.ok).toBe(false);
+    expect(result.artifact.draft.claims).toBeUndefined();
+    expect(result.artifact.quality_review.publication_authorized).toBe(false);
+    expect(await store.listPendingReviews()).toHaveLength(0);
+  });
+
   it("routes failed quality checks to needs_revision", async () => {
     const draft = validDraft(); draft.author = "Unverified Author";
     const result = await store.createDraft("draft-review-0002", draft);

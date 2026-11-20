@@ -4,6 +4,7 @@ import { discoverAiBankReleaseSignals } from "./ai-bank-discovery.mjs";
 import { discoverResearchSignals } from "./research-discovery.mjs";
 import { retrieveResearchEvidence } from "./research-evidence.mjs";
 import { assessResearchEvidence } from "./research-evidence-assessment.mjs";
+import { buildArticleAuthoringBrief } from "./article-authoring-brief.mjs";
 import { handleGoogleReviewerAuth, readGoogleReviewerSessionCookie, AgentReviewerAuthStore } from "./google-reviewer-oauth.mjs";
 import { REVIEWER_CONSOLE_HTML, REVIEWER_CONSOLE_JS } from "./reviewer-console.mjs";
 export { AgentTaskStore } from "./task-store.mjs";
@@ -187,7 +188,65 @@ export class AgentSupervisorWorkflow extends WorkflowEntrypoint {
         researchBudget.count
       );
 
-      const externalCalls = discovery.external_calls + research.external_calls;
+      let contentDraft = {
+        status: "skipped_research_unavailable",
+        artifact_created: false,
+        external_calls: 0,
+        publication_authorized: false
+      };
+      if (["completed", "already_completed"].includes(research.status) && Array.isArray(research.result?.evidence_retrieval?.evidence)) {
+        const draftTaskId = "article-brief-" + scanDate;
+        contentDraft = await executeTask(
+          store,
+          "content_draft",
+          draftTaskId,
+          {
+            topic: "Ứng dụng AI Agent trong tự động hóa công việc và phát triển sản phẩm",
+            research_task_id: researchTaskId
+          },
+          async task => {
+            const brief = buildArticleAuthoringBrief({
+              topic: task.payload.topic,
+              researchEvidence: research.result.evidence_retrieval.evidence,
+              now: Date.now()
+            });
+            if (!brief.prepared) {
+              return {
+                status: brief.status,
+                reason: brief.reason,
+                artifact_created: false,
+                publication_authorized: false,
+                external_calls: 0
+              };
+            }
+            const draftStore = this.env.AGENT_DRAFT_STORE.getByName("primary");
+            const persisted = await draftStore.createDraft(draftTaskId, brief.draft);
+            if (!persisted.accepted) {
+              return {
+                status: "authoring_brief_persistence_rejected",
+                reason: persisted.reason,
+                artifact_created: false,
+                publication_authorized: false,
+                external_calls: 0
+              };
+            }
+            return {
+              status: "human_authoring_required",
+              artifact_id: persisted.artifact.id,
+              artifact_version: persisted.artifact.version,
+              artifact_status: persisted.artifact.status,
+              duplicate: persisted.duplicate,
+              quality_review: persisted.artifact.quality_review,
+              artifact_created: !persisted.duplicate,
+              publication_authorized: false,
+              external_calls: 0,
+              notice: "An internal authoring scaffold was stored. It requires substantial human writing, fact-checking, and review; it is not a publishable article."
+            };
+          }
+        );
+      }
+
+      const externalCalls = discovery.external_calls + research.external_calls + contentDraft.external_calls;
       const dailyBudgets = {
         day: budgetDay,
         ai_bank_discovery: await store.getExternalRequestBudget(budgetDay, "ai_bank_discovery"),
@@ -197,13 +256,13 @@ export class AgentSupervisorWorkflow extends WorkflowEntrypoint {
         cycle_id: cycleId,
         scheduled_at: scheduledAt,
         observed_at: new Date().toISOString(),
-        mode: "bounded_health_ai_bank_and_research_discovery",
+        mode: "bounded_health_ai_bank_research_and_authoring",
         queue: await store.stats(),
         retention,
-        tasks: { health, ai_bank_discovery: discovery, content_research: research },
+        tasks: { health, ai_bank_discovery: discovery, content_research: research, content_draft: contentDraft },
         ai_bank_candidate_store: candidateStore,
-        tasks_considered: 3,
-        tasks_completed: [health, discovery, research].filter(item =>
+        tasks_considered: 4,
+        tasks_completed: [health, discovery, research, contentDraft].filter(item =>
           item.status === "completed"
         ).length,
         external_calls: externalCalls,
@@ -321,7 +380,7 @@ export default {
         ai_bank_discovery: "read_only_daily_allowlisted_github_releases",
         content_research: "read_only_daily_official_feeds_and_bounded_source_evidence_retrieval",
         ai_inference_enabled: false,
-        content_draft_executor_enabled: false,
+        content_draft_executor_enabled: true,
         quality_review_executor_enabled: false,
         website_publication_enabled: false,
         facebook_publication_enabled: false,
