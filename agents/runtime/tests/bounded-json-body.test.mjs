@@ -52,10 +52,13 @@ test("readBoundedText validates strict UTF-8 and byte length", async () => {
 });
 
 test("rejects missing and non-JSON media types before pulling the body", async () => {
-  for (const headers of [{}, { "Content-Type": "text/plain" }, { "Content-Type": "application/problem+json" }]) {
+  for (const headers of [null, { "Content-Type": "text/plain" }, { "Content-Type": "application/problem+json" }]) {
     let pulls = 0;
     const stream = new ReadableStream({ pull(c) { pulls++; c.enqueue(new TextEncoder().encode("{}")); c.close(); } }, { highWaterMark: 0 });
-    const result = await readBoundedJson(requestFromStream(stream, headers), 16);
+    const request = headers === null
+      ? new Request("https://state-store.test/reserve", { method: "POST", body: stream, duplex: "half" })
+      : requestFromStream(stream, headers);
+    const result = await readBoundedJson(request, 16);
     assert.deepEqual(result, { ok: false, status: 400, error: "invalid_content_type" });
     assert.equal(pulls, 0);
   }
