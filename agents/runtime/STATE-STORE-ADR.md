@@ -1,6 +1,6 @@
 # Agent Runtime state store — architecture decision
 
-Status: **SQLite Durable Object implementation, schema v1-v5 migrations, operator control/recovery bridge, and isolated Preview binding config are in Draft PR #339. The operator-triggered POST /run path is connected to durable reserve → fenced claim → read-only review → terminal completion. Exact-head GitHub Actions run #387 passed 219/219 tests. Preview config is not deployed; no scheduler or 24/7 background execution is implemented.**
+Status: **SQLite Durable Object implementation, schema v1-v6 migrations, operator control/recovery bridge, and isolated Preview binding config are in Draft PR #339. The operator-triggered POST /run path is connected to durable reserve → fenced claim → read-only review → terminal completion. Latest code includes bounded result persistence with an exact-schema 4 KiB ceiling; validation is pending for this revision. Preview config is not deployed; no scheduler or 24/7 background execution is implemented.**
 
 Date: 2026-11-19
 
@@ -40,13 +40,13 @@ Use Durable Object SQLite \`transactionSync(callback)\`; do not issue SQL \`BEGI
 
 - `runtime_meta`: schema version.
 - `daily_usage`: UTC day primary key and accepted count.
-- `tasks`: opaque task ID, unique idempotency key, allowlisted type, validated minimal payload JSON, payload hash/size, state, timestamps, bounded attempt count, maximum attempts, lease generation/owner/expiry/absolute expiry, next retry time, and bounded error codes.
+- `tasks`: opaque task ID, unique idempotency key, allowlisted type, validated minimal payload JSON, payload hash/size, state, timestamps, bounded attempt count, maximum attempts, lease generation/owner/expiry/absolute expiry, next retry time, bounded error codes, and an optional strict-schema review result JSON field capped at 4 KiB.
 - `audit_events`: event ID, task ID, event type, timestamp, and non-sensitive metadata only.
 - `runtime_control` and `runtime_control_audit`: durable fail-closed pause state and operator action audit.
 - `runtime_control_rate_limit`: persistent per-actor control mutation window and request count.
 - `oidc_jti_replay`: SHA-256 hashes of consumed GitHub OIDC `jti` values, retained until 24 hours after JWT expiry, with atomic single-use enforcement.
 
-Schema migrations v1-to-v5 are transactional and preserve existing task and daily-usage rows. Constraints include a unique idempotency key, CHECK constraints for task state/type and bounded lease fields, bounded payload size, and bounded audit metadata. No credentials, bearer tokens, article body contents, or personal data are stored in audit rows.
+Schema migrations v1-to-v6 are transactional and preserve existing task and daily-usage rows. Constraints include a unique idempotency key, CHECK constraints for task state/type and bounded lease fields, bounded payload size, and bounded audit metadata. No credentials, bearer tokens, article body contents, or personal data are stored in audit rows.
 
 ## State transitions
 
