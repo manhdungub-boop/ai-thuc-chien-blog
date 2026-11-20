@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import path from "node:path";
+
+import { AgentStateStore } from "../src/worker.mjs";
 
 const configPath = fileURLToPath(new URL("../wrangler.preview.jsonc", import.meta.url));
 const config = JSON.parse(readFileSync(configPath, "utf8"));
@@ -32,4 +33,8 @@ test("dedicated Agent Runtime Preview config binds only its SQLite State Store a
 test("Preview config never enables autonomous execution by default", () => {
   assert.notEqual(config.vars.AGENT_ENABLED, "true");
   assert.notEqual(config.vars.AGENT_PAUSED, "false");
+});
+
+test("Worker entrypoint exports the Durable Object class named by the Preview config", () => {
+  assert.equal(typeof AgentStateStore, "function");
 });
