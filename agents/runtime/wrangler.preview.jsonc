@@ -1,0 +1,25 @@
+{
+  "name": "ai-thuc-chien-agent-runtime-preview",
+  "main": "./src/worker.mjs",
+  "compatibility_date": "2026-11-19",
+  "workers_dev": true,
+  "preview_urls": true,
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "AGENT_STATE_STORE",
+        "class_name": "AgentStateStore"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["AgentStateStore"]
+    }
+  ],
+  "vars": {
+    "AGENT_ENABLED": "false",
+    "AGENT_PAUSED": "true"
+  }
+}
