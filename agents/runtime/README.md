@@ -48,6 +48,10 @@ The GitHub Actions workflow is authoritative for the test dependency tree: it ap
 
 See [STATE-STORE-ADR.md](./STATE-STORE-ADR.md) for the design decision, Free-tier budget, transaction boundary, failure behavior, and remaining gates.
 
+## Lease, fencing, and emergency stop design
+
+See [LEASE-RECOVERY-DESIGN.md](./LEASE-RECOVERY-DESIGN.md) for the proposed crash-recovery, stale-worker fencing, emergency-stop semantics, external-effect ledger, and required fault-injection tests. This is a design document only; none of these execution capabilities are implemented or enabled.
+
 ## Remaining gates
 
 1. Independently review the state-store implementation, fixed-operation client, and integration-test results.
