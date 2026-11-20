@@ -6,7 +6,11 @@ const MAX_BATCH_STEPS = 30;
 
 function frozenResult(result) {
   if (Array.isArray(result.items)) {
-    for (const item of result.items) Object.freeze(item);
+    for (const item of result.items) {
+      if (Array.isArray(item.steps)) Object.freeze(item.steps);
+      if (Array.isArray(item.sideEffects)) Object.freeze(item.sideEffects);
+      Object.freeze(item);
+    }
     Object.freeze(result.items);
   }
   return Object.freeze(result);

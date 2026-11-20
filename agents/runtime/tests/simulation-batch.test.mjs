@@ -22,7 +22,7 @@ test("batch planner bounds task count and aggregates deterministic plans", () =>
   assert.deepEqual(result.sideEffects, []);
   assert.ok(Object.isFrozen(result));
   assert.ok(Object.isFrozen(result.items));
-  assert.ok(result.items.every((item) => Object.isFrozen(item)));
+  assert.ok(result.items.every((item) => Object.isFrozen(item) && Object.isFrozen(item.steps) && Object.isFrozen(item.sideEffects)));
   assert.equal(SIMULATION_BATCH_LIMITS.maxTasks, 10);
   assert.equal(SIMULATION_BATCH_LIMITS.maxSteps, 30);
 });
