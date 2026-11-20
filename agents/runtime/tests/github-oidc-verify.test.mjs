@@ -7,7 +7,7 @@ const expected = Object.freeze({
   audience: "ai-thuc-chien-agent-runtime-preview",
   repository: "manhdungub-boop/ai-thuc-chien-blog",
   repositoryOwner: "manhdungub-boop",
-  repositoryId: "88017464",
+  repositoryId: "1423636651",
   ref: "refs/heads/main",
   workflowRef: "manhdungub-boop/ai-thuc-chien-blog/.github/workflows/agent-runtime-operator.yml@refs/heads/main",
   actorId: "1234567",
@@ -25,7 +25,7 @@ const jwks = { keys: [{ ...publicJwk, kid: "test-key-1", use: "sig", alg: "RS256
 function encodeBase64Url(bytes) {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+  return btoa(binary).replace(/=/g, "").replace(/\\+/g, "-").replace(/\\//g, "_");
 }
 
 function encodeJson(value) {
