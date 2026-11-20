@@ -465,6 +465,41 @@ test("fresh State Store initializes schema v5 paused with conservative lease def
   });
 });
 
+test("running lease and recovery alarm survive a Durable Object runtime restart", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "ai-thuc-chien-do-alarm-restart-"));
+  let first;
+  let second;
+  try {
+    first = await createRuntime({ persistDir: directory, recoveryAlarmEnabled: "true" });
+    const created = await call(first.stub, "/reserve", task("alarm-restart-running"));
+    assert.equal(created.status, 201);
+    const taskId = created.body.task.taskId;
+    const claimed = await call(first.stub, "/claim", { taskId });
+    assert.equal(claimed.status, 200);
+    const before = await call(first.stub, "/__test/alarm-state");
+    assert.equal(typeof before.body.alarmAt, "number");
+    const beforeControl = await call(first.stub, "/control");
+    assert.equal(beforeControl.body.control.paused, false);
+    await first.mf.dispose();
+    first = null;
+
+    second = await createRuntime({ persistDir: directory, recoveryAlarmEnabled: "true", resumeControl: false });
+    const after = await call(second.stub, "/__test/alarm-state");
+    const restored = await call(second.stub, "/task?id=" + encodeURIComponent(taskId));
+    const afterControl = await call(second.stub, "/control");
+    assert.equal(after.body.alarmAt, before.body.alarmAt,
+      "Durable Object alarm deadline must persist across runtime restart");
+    assert.equal(restored.body.task.state, "running");
+    assert.equal(restored.body.task.leaseGeneration, claimed.body.lease.generation);
+    assert.equal(afterControl.body.control.paused, false,
+      "durable operator control state must persist across runtime restart");
+  } finally {
+    if (first) await first.mf.dispose();
+    if (second) await second.mf.dispose();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("persisted v1 State Store migrates transactionally to v6 without losing task or usage", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "ai-thuc-chien-do-v1-migration-"));
   let first;
