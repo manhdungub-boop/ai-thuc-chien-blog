@@ -16,6 +16,7 @@ test("dedicated Agent Runtime Preview config binds only its SQLite State Store a
   assert.deepEqual(config.vars, {
     AGENT_ENABLED: "false",
     AGENT_PAUSED: "true",
+    AGENT_RECOVERY_ALARM_ENABLED: "false",
     AGENT_OIDC_ENABLED: "false",
     AGENT_OIDC_AUDIENCE: "ai-thuc-chien-agent-runtime-preview",
     AGENT_OIDC_REPOSITORY: "manhdungub-boop/ai-thuc-chien-blog",
@@ -45,6 +46,7 @@ test("dedicated Agent Runtime Preview config binds only its SQLite State Store a
 test("Preview config never enables autonomous execution by default", () => {
   assert.notEqual(config.vars.AGENT_ENABLED, "true");
   assert.notEqual(config.vars.AGENT_PAUSED, "false");
+  assert.notEqual(config.vars.AGENT_RECOVERY_ALARM_ENABLED, "true");
 });
 
 test("Worker entrypoint exports the Durable Object class named by the Preview config", () => {
