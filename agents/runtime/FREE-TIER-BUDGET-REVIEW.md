@@ -84,3 +84,15 @@ Before adding a Durable Object binding or deploying this Runtime Preview:
 - complete stale-task recovery, execution idempotency, kill-switch, monitoring and rollback reviews.
 
 No Production Worker, DNS, D1, live user data, secret, schedule or paid setting is changed or authorized by this document.
+
+
+## Live Cloudflare account snapshot (2026-11-20)
+
+A read-only check through the connected Cloudflare account API confirmed:
+
+- `GET /accounts/{account_id}/observability/usage/limit` returned `plan: free`, `status: normal`, `sample_rate: 1`, and an Observability ingestion limit of 200,000 events/day. This is an Observability telemetry limit; it is **not** a measurement of Worker requests, Durable Object requests, SQL rows, duration, or remaining quota.
+- The account Worker inventory returned 12 Worker scripts. The schedules endpoint showed two configured Cron schedules (`17 * * * *` on `ai-thuc-chien-blog` and `ai-thuc-chien-blog-auth-app-preview`); the other ten listed scripts had no schedules. Cloudflare's published Workers Free allowance is five Cron Triggers per account, so the inventory currently shows two configured schedules against that published ceiling.
+- The Durable Object namespace inventory returned an empty list. No Durable Object namespace is currently present in the account, and no `ai-thuc-chien-agent-runtime-preview` Worker appears in the Worker script inventory. The Agent Runtime has therefore **not** been deployed or bound to a Durable Object.
+- A read-only request to the account billing-usage endpoint returned HTTP 403 because the connected OAuth session does not include the `Billing Read` permission. The account's payment method, subscription/billing state, and billable usage could not be independently inspected. Do not interpret the `plan: free` Observability field as proof that no payment method or other paid Cloudflare product exists. No billing or payment settings were changed.
+
+The account snapshot is a point-in-time inventory, not a remaining-quota measurement. Before any Durable Object binding or runtime deployment, re-check live usage and confirm the no-billing-change requirement.
