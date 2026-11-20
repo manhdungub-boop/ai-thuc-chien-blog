@@ -33,12 +33,20 @@ for (const id of newIds) {
   if (catalog.tools.length === 39 && !["pocketpal-ai", "draw-things"].includes(id)) assert.ok(tool, `${id} must exist in the reconciled catalog`);
   if (catalog.tools.length === 46) assert.ok(tool, `${id} must exist in the verified 46-record catalog`);
   if (catalog.tools.length === 49) assert.ok(tool, `${id} must exist in the verified 49-record catalog`);
-  if (catalog.tools.length === 49 && ["cline", "jan", "librechat"].includes(id)) assert.ok(tool, `${id} must exist in the verified 49-record catalog`);
   if (tool) {
     assert.equal(tool.status, "active", `${id} must be active`);
     assert.equal(tool.verification_status, "verified", `${id} must pass editorial/source review`);
   }
 }
+if (catalog.tools.length === 49) {
+  for (const id of ["cline", "jan", "librechat"]) {
+    const tool = catalog.tools.find(t => t.id === id);
+    assert.ok(tool, `${id} must exist in the verified 49-record catalog`);
+    assert.equal(tool.status, "active", `${id} must be active`);
+    assert.equal(tool.verification_status, "verified", `${id} must be source-verified`);
+  }
+}
+
 const flowise = catalog.tools.find(t => t.id === "flowise");
 assert.equal(flowise?.status, "deprecated", "Flowise must remain marked deprecated after its official sunset");
 assert.equal(flowise?.pricing_model, "unknown", "Flowise pricing model must not be inferred after sunset");
