@@ -637,6 +637,7 @@ export default {
           taskId: task.taskId, type: task.type, state: task.state,
           attemptCount: task.attemptCount, maxAttempts: task.maxAttempts,
           nextAttemptAt: task.nextAttemptAt, lastErrorCode: task.lastErrorCode,
+          result: task.result ?? null,
         } });
       } catch (error) {
         if (error?.status === 404) return json({ ok: false, error: "task_not_found" }, 404);
