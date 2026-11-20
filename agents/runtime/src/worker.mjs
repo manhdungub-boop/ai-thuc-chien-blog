@@ -238,8 +238,8 @@ export default {
       }
 
       const authorization = request.headers.get("authorization") || "";
-      const tokenMatch = /^Bearer ([A-Za-z0-9._-]{1,16384})$/.exec(authorization);
-      if (!tokenMatch) return json({ ok: false, error: "github_oidc_token_required" }, 401);
+      const tokenMatch = /^Bearer ([A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+)$/.exec(authorization);
+      if (!tokenMatch || tokenMatch[1].length > 16384) return json({ ok: false, error: "github_oidc_token_required" }, 401);
 
       const expected = {
         audience: env.AGENT_OIDC_AUDIENCE,
