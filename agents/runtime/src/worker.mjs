@@ -25,8 +25,11 @@ async function enforceIngressRateLimit(request, env) {
   if (!limiter || typeof limiter.limit !== "function") {
     return json({ ok: false, error: "rate_limit_unavailable" }, 503);
   }
-  const address = request.headers.get("cf-connecting-ip") || "unknown";
-  const key = address.length <= 64 ? "ip:" + address : "ip:unknown";
+  const address = request.headers.get("cf-connecting-ip");
+  if (!address || address.length > 64 || address.trim() !== address || address.includes(",")) {
+    return json({ ok: false, error: "client_ip_unavailable" }, 503);
+  }
+  const key = "ip:" + address;
   try {
     const result = await limiter.limit({ key });
     if (result?.success !== true) return json({ ok: false, error: "rate_limited" }, 429);
