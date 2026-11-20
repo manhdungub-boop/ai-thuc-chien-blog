@@ -19,11 +19,10 @@ concurrency:
 jobs:
   preview:
     if: >-
+      # Deploy only the reviewed default-branch snapshot. Never execute
+      # a mutable feature branch while the Cloudflare Preview credential exists.
       ${{ github.event_name == 'workflow_dispatch' &&
-          (github.ref == 'refs/heads/feat/agent-runtime-preview-shell-20261119' ||
-           github.ref == 'refs/heads/fix/agent-authoring-revision-queue-20261120' ||
-           github.ref == 'refs/heads/feat/reviewer-authoring-evidence-flow-20261120' ||
-           github.ref == 'refs/heads/security/preview-deploy-branch-gate-20261120') &&
+          github.ref == 'refs/heads/main' &&
           inputs.confirm_preview_only == true }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
