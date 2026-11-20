@@ -480,25 +480,27 @@ const worker = {
             }),
           );
           const item = report.items[0];
+          const result = safeReviewResult(item);
+          const reviewSucceeded = result.ok === true;
           const completion = await writeStateStore(env, "/complete", {
             taskId: stored.taskId,
             leaseOwner: lease.owner,
             leaseGeneration: lease.generation,
-            status: item?.ok === true ? "succeeded" : "failed",
-            ...(item?.ok === true ? {
+            status: reviewSucceeded ? "succeeded" : "failed",
+            ...(reviewSucceeded ? {
               result: {
-                taskType: item.taskType,
-                status: item.status,
-                findingCount: item.findingCount,
-                findings: item.findings,
+                taskType: result.taskType,
+                status: result.status,
+                findingCount: result.findingCount,
+                findings: result.findings,
               },
-            } : { errorCode: "read_only_review_failed" }),
+            } : { errorCode: result.errorCode }),
           });
           items.push({
-            ok: item?.ok === true,
+            ok: reviewSucceeded,
             taskId: stored.taskId,
-            state: completion.task?.state || (item?.ok === true ? "succeeded" : "failed"),
-            result: safeReviewResult(item),
+            state: completion.task?.state || (reviewSucceeded ? "succeeded" : "failed"),
+            result,
           });
         }
         const summary = {
@@ -627,25 +629,27 @@ const worker = {
             }),
           );
           const item = report.items[0];
+          const result = safeReviewResult(item);
+          const reviewSucceeded = result.ok === true;
           const completion = await writeStateStore(env, "/complete", {
             taskId: task.taskId,
             leaseOwner: lease.owner,
             leaseGeneration: lease.generation,
-            status: item?.ok === true ? "succeeded" : "failed",
-            ...(item?.ok === true ? {
+            status: reviewSucceeded ? "succeeded" : "failed",
+            ...(reviewSucceeded ? {
               result: {
-                taskType: item.taskType,
-                status: item.status,
-                findingCount: item.findingCount,
-                findings: item.findings,
+                taskType: result.taskType,
+                status: result.status,
+                findingCount: result.findingCount,
+                findings: result.findings,
               },
-            } : { errorCode: "read_only_review_failed" }),
+            } : { errorCode: result.errorCode }),
           });
           items.push({
-            ok: item?.ok === true,
+            ok: reviewSucceeded,
             taskId: task.taskId,
-            state: completion.task?.state || (item?.ok === true ? "succeeded" : "failed"),
-            result: item,
+            state: completion.task?.state || (reviewSucceeded ? "succeeded" : "failed"),
+            result,
           });
         }
         const summary = {
