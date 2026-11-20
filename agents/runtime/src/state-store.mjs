@@ -146,7 +146,7 @@ function validatePersistedResult(value) {
         typeof item.code !== "string" || !/^[a-z][a-z0-9_]{1,79}$/.test(item.code) ||
         !["error", "warning"].includes(item.severity) ||
         typeof item.message !== "string" || item.message.length < 1 || item.message.length > 256 ||
-        item.message.trim() !== item.message || /[\\u0000-\\u001f\\u007f]/.test(item.message)) return null;
+        item.message.trim() !== item.message || /[\u0000-\u001f\u007f]/.test(item.message)) return null;
   }
   const json = JSON.stringify(value);
   if (new TextEncoder().encode(json).byteLength > 4096) return null;
