@@ -5,7 +5,7 @@ Status: **isolated validation scaffold; no Agent Runtime Worker deployment and n
 ## Safety boundary
 
 - Separate intended Worker name: \`ai-thuc-chien-agent-runtime-preview\`.
-- No account ID, production route, custom domain, D1 binding, KV/R2 binding, Durable Object binding, secret, cron trigger, or queue consumer is configured in \`wrangler.jsonc\`.
+- `wrangler.jsonc` is the no-binding validation shell. `wrangler.preview.jsonc` is a separate, dedicated Preview deployment config that binds only the SQLite `AgentStateStore` Durable Object; it has no account ID, production route, custom domain, D1/KV/R2/service binding, secret, cron trigger, or queue consumer. Both configs keep `AGENT_ENABLED=false` and `AGENT_PAUSED=true`.
 - \`AGENT_ENABLED=false\` and \`AGENT_PAUSED=true\` are the checked-in defaults.
 - \`POST /run\` fails closed while disabled or paused.
 - If both flags are manually opened, \`POST /run\` requires an \`Authorization: Bearer\` token matching the externally injected \`AGENT_OPERATOR_TOKEN\`; missing or invalid credentials fail closed with \`401\`. A valid token still receives \`501 execution_not_implemented\`; no task execution exists.
@@ -59,14 +59,14 @@ See [STATE-STORE-ADR.md](./STATE-STORE-ADR.md) for the design decision, Free-tie
 - State Store schema v3 adds durable pause state and control audit; schema v4 adds a durable per-actor mutation limit of 10 control changes per 60-second window; schema v5 stores SHA-256 digests of consumed GitHub OIDC `jti` values in an atomic replay ledger. Control audit records the configured actor, request ID, action, reason, and timestamp transactionally. The replay ledger is an internal State Store primitive only; it is not bridged by the Worker, does not verify JWTs, and does not authorize operator actions.
 - The actor is a configured service/operator identity, not proof of an individual human identity. The current bearer is a shared secret; there is no browser session, MFA, per-user identity provider, or public admin UI. Do not expose these endpoints to browser clients or distribute the bearer token.
 - The Worker now contains an operator-authenticated `POST /internal/recover` bridge. It requires both outer runtime gates to be explicitly open, injects the configured operator identity and a server-generated request ID, and forwards only the dedicated internal State Store credential. The State Store enforces a per-actor rate limit and records actor/request ID in the recovery audit event. This bridge is code-only pending Preview binding and independent review. `AGENT_ENABLED` and `AGENT_PAUSED` remain independent deployment-level outer gates. A persisted Resume cannot bypass those gates or dispatch queued work.
-- No Worker-to-DO binding or secret is configured in the checked-in Preview config, so these bridge routes cannot operate in a live deployment yet. Local integration tests use Miniflare only.
+- The dedicated `wrangler.preview.jsonc` now declares the isolated SQLite State Store binding and migration, but it has not been deployed. The required `AGENT_STATE_STORE_TOKEN` and `AGENT_OPERATOR_TOKEN` remain external secrets and must be provisioned only in the dedicated Preview Worker after permission review. Until then, the bridge routes cannot operate in a live deployment. Local integration tests use Miniflare only.
 - The State Store's internal `POST /oidc/replay/consume` route is protected by the distinct Worker-to-State-Store bearer and is not exposed by the Worker shell. It accepts only `jti` plus verified-token expiry metadata, hashes the identifier before storage, enforces single use transactionally, and fails closed when storage is unavailable. It must only be called after a future caller independently verifies the GitHub JWT signature and claims; that caller is not implemented.
 ## Remaining gates
 
 1. Independently review the schema migration, lease transactions, auth boundary, and integration-test evidence.
 2. Review the Free-tier request/SQL-row budget including heartbeat and recovery audit writes against measured workload.
-3. Integrate the Worker-to-State-Store call path using only the fixed Durable Object identity and dedicated internal token; keep it in a separate Runtime Preview config.
-4. Deploy the separate Preview Worker only after all local gates pass and Preview-only permissions are explicitly available.
+3. Independently review the new dedicated `wrangler.preview.jsonc`, SQLite migration, and Worker class export.
+4. Deploy the separate Preview Worker only after all local gates pass and Preview-only permissions are explicitly available; inject both tokens as Preview-only secrets without exposing them in repository files.
 5. Add an execution engine only after read-only task handlers, idempotency, cancellation, kill-switch behavior, and monitoring are independently reviewed.
 6. Add alarms or schedules only after recovery, quota pause behavior, and rollback are proven.
 
