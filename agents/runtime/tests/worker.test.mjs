@@ -17,12 +17,33 @@ test("required ingress limiter covers every route and keys by Cloudflare client 
 });
 
 test("ingress limiter rejects requests before route handling", async () => {
-  const response = await worker.fetch(request("/health"), {
+  const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/health", {
+    headers: { "cf-connecting-ip": "203.0.113.10" },
+  }), {
     AGENT_RATE_LIMIT_REQUIRED: "true",
     AGENT_INGRESS_RATE_LIMITER: { limit: async () => ({ success: false }) },
   });
   assert.equal(response.status, 429);
   assert.equal((await response.json()).error, "rate_limited");
+});
+
+
+test("required ingress limiter fails closed when the trusted client IP is missing or malformed", async () => {
+  let calls = 0;
+  const env = {
+    AGENT_RATE_LIMIT_REQUIRED: "true",
+    AGENT_INGRESS_RATE_LIMITER: { limit: async () => { calls += 1; return { success: true }; } },
+  };
+  const missing = await worker.fetch(request("/health"), env);
+  assert.equal(missing.status, 503);
+  assert.equal((await missing.json()).error, "client_ip_unavailable");
+
+  const malformed = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/health", {
+    headers: { "cf-connecting-ip": "203.0.113.10, 198.51.100.7" },
+  }), env);
+  assert.equal(malformed.status, 503);
+  assert.equal((await malformed.json()).error, "client_ip_unavailable");
+  assert.equal(calls, 0, "the limiter must not collapse unrelated callers into a shared fallback key");
 });
 
 test("required ingress limiter fails closed when binding is missing or unavailable", async () => {
