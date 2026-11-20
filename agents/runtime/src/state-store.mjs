@@ -213,7 +213,7 @@ export class AgentStateStore {
   transition(body, now) {
     if (!isObject(body) || Object.keys(body).some((key) => !["taskId","status","errorCode"].includes(key)) ||
         !Object.hasOwn(body, "taskId") || !Object.hasOwn(body, "status") ||
-        typeof body.taskId !== "string" || body.taskId.length > 64) {
+        typeof body.taskId !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(body.taskId)) {
       return { status: 400, body: { ok: false, error: "transition_request_invalid" } };
     }
     const next = body.status;
