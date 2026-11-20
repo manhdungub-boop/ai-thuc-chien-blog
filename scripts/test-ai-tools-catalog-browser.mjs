@@ -29,7 +29,8 @@ assert.deepEqual(needsReview.map(t => t.id).sort(), [], "all active catalog reco
 assert.equal(activeNeedsReview.length, 0, "no active record should remain in the needs-review filter");
 for (const id of newIds) {
   const tool = catalog.tools.find(t => t.id === id);
-  if (catalog.tools.length === 39 && !["pocketpal-ai", "draw-things"].includes(id)) assert.ok(tool, `${id} must exist in the reconciled catalog`);\n  if (catalog.tools.length === 46) assert.ok(tool, `${id} must exist in the verified 46-record catalog`);
+  if (catalog.tools.length === 39 && !["pocketpal-ai", "draw-things"].includes(id)) assert.ok(tool, `${id} must exist in the reconciled catalog`);
+  if (catalog.tools.length === 46) assert.ok(tool, `${id} must exist in the verified 46-record catalog`);
   if (tool) {
     assert.equal(tool.status, "active", `${id} must be active`);
     assert.equal(tool.verification_status, "verified", `${id} must pass editorial/source review`);
