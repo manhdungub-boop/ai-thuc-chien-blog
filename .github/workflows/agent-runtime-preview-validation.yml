@@ -91,7 +91,7 @@ jobs:
           NODE
 
       - name: Check syntax
-        run: node --check agents/runtime/src/worker.mjs && node --check agents/runtime/src/state-store.mjs && node --check agents/runtime/src/lease-policy.mjs && node --check agents/runtime/src/internal-auth.mjs && node --check agents/runtime/src/github-oidc-verify.mjs && node --check agents/runtime/src/github-oidc-jwks.mjs && node --check agents/runtime/src/github-oidc-trusted-verify.mjs && node --check agents/runtime/src/github-oidc-authorize.mjs && node --check agents/runtime/src/state-store-client.mjs && node --check agents/runtime/src/task-handlers.mjs && node --check agents/runtime/src/task-snapshot-adapters.mjs && node --check agents/runtime/src/repository-readers.mjs
+        run: node --check agents/runtime/src/worker.mjs && node --check agents/runtime/src/state-store.mjs && node --check agents/runtime/src/lease-policy.mjs && node --check agents/runtime/src/internal-auth.mjs && node --check agents/runtime/src/github-oidc-verify.mjs && node --check agents/runtime/src/github-oidc-jwks.mjs && node --check agents/runtime/src/github-oidc-trusted-verify.mjs && node --check agents/runtime/src/github-oidc-authorize.mjs && node --check agents/runtime/src/state-store-client.mjs && node --check agents/runtime/src/task-handlers.mjs && node --check agents/runtime/src/task-snapshot-adapters.mjs && node --check agents/runtime/src/repository-readers.mjs && node --check agents/runtime/src/read-only-agent-manager.mjs
 
       - name: Run isolated Worker shell and contract tests
         timeout-minutes: 4
