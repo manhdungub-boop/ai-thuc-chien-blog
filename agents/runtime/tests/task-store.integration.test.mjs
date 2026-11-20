@@ -622,8 +622,8 @@ describe("AgentTaskStore Durable Object", () => {
       AGENT_REVIEWER_AUTH_ENABLED: "true",
       AGENT_OPERATOR_CONTROL_ENABLED: "true",
       AGENT_OPERATOR_ALLOWED_EMAILS: "operator@example.com",
-      GOOGLE_REVIEWER_CLIENT_ID: "operator-test-client-id",
-      GOOGLE_REVIEWER_CLIENT_SECRET: "operator-test-client-secret",
+      GOOGLE_REVIEWER_CLIENT_ID: "operator-test-client-id-for-tests-123456",
+      GOOGLE_REVIEWER_CLIENT_SECRET: "operator-test-client-secret-for-tests-123456",
       GOOGLE_REVIEWER_REDIRECT_URI: "https://ai-thuc-chien-agent-runtime-preview.manhdungub.workers.dev/auth/google/callback",
       GOOGLE_REVIEWER_STATE_SECRET: "operator-state-secret-for-tests-only-abcdefghijklmnopqrstuvwxyz",
       GOOGLE_REVIEWER_SESSION_SECRET: sessionSecret
