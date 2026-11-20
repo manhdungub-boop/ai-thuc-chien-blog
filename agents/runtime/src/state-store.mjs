@@ -643,13 +643,6 @@ export class AgentStateStore {
         typeof body.taskId !== "string" || body.taskId.length < 1 || body.taskId.length > 64) {
       return { status: 400, body: { ok: false, error: "heartbeat_request_invalid" } };
     }
-    const resultJson = Object.hasOwn(body, "result") ? validatePersistedResult(body.result) : null;
-    if (Object.hasOwn(body, "result") && resultJson === null) {
-      return { status: 400, body: { ok: false, error: "complete_result_invalid" } };
-    }
-    if (resultJson !== null && body.status !== "succeeded") {
-      return { status: 400, body: { ok: false, error: "complete_result_status_invalid" } };
-    }
     try {
       return this.ctx.storage.transactionSync(() => {
         const row = readRow(this.sql, "SELECT * FROM tasks WHERE task_id = ?", body.taskId);
@@ -680,6 +673,13 @@ export class AgentStateStore {
         !["taskId","leaseOwner","leaseGeneration","status"].every((key) => Object.hasOwn(body, key)) ||
         typeof body.taskId !== "string" || body.taskId.length < 1 || body.taskId.length > 64) {
       return { status: 400, body: { ok: false, error: "complete_request_invalid" } };
+    }
+    const resultJson = Object.hasOwn(body, "result") ? validatePersistedResult(body.result) : null;
+    if (Object.hasOwn(body, "result") && resultJson === null) {
+      return { status: 400, body: { ok: false, error: "complete_result_invalid" } };
+    }
+    if (resultJson !== null && body.status !== "succeeded") {
+      return { status: 400, body: { ok: false, error: "complete_result_status_invalid" } };
     }
     try {
       return this.ctx.storage.transactionSync(() => {
