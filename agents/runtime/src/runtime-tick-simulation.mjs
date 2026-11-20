@@ -63,17 +63,23 @@ export function simulateRuntimeTick(queueEntries, options = {}) {
     return blocked("runtime_tick_options_invalid");
   }
 
+  let maxSteps = MAX_STEPS_PER_TASK;
+  if (options.limits !== undefined) {
+    if (!isPlainRecord(options.limits) ||
+        !exactKeys(options.limits, ["maxSteps"])) {
+      return blocked("runtime_tick_limits_invalid");
+    }
+    maxSteps = options.limits.maxSteps;
+  }
+
   const { now, controlSnapshot } = options;
   const maxDispatch = options.maxDispatch === undefined ? MAX_DISPATCH_PER_TICK : options.maxDispatch;
-  const maxSteps = options.limits === undefined ? MAX_STEPS_PER_TASK : options.limits.maxSteps;
 
   if (!Number.isSafeInteger(now) || now < 0 ||
       !Number.isSafeInteger(maxDispatch) || maxDispatch < 1 ||
       maxDispatch > MAX_DISPATCH_PER_TICK ||
       !Number.isSafeInteger(maxSteps) || maxSteps < 1 ||
-      maxSteps > MAX_STEPS_PER_TASK ||
-      (options.limits !== undefined &&
-        (!isPlainRecord(options.limits) || !exactKeys(options.limits, ["maxSteps"])))) {
+      maxSteps > MAX_STEPS_PER_TASK) {
     return blocked("runtime_tick_limits_invalid");
   }
 

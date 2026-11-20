@@ -74,6 +74,8 @@ test("invalid options, limits, queue and timestamps fail closed", () => {
     simulateRuntimeTick([entry(1)], { now: -1, controlSnapshot: CONTROL }),
     simulateRuntimeTick([entry(1)], { now: 1, maxDispatch: 6, controlSnapshot: CONTROL }),
     simulateRuntimeTick([entry(1)], { now: 1, limits: { maxSteps: 6 }, controlSnapshot: CONTROL }),
+    simulateRuntimeTick([entry(1)], { now: 1, limits: null, controlSnapshot: CONTROL }),
+    simulateRuntimeTick([entry(1)], { now: 1, limits: [], controlSnapshot: CONTROL }),
     simulateRuntimeTick(Array(21).fill(entry(1)), { now: 1, controlSnapshot: CONTROL }),
   ];
   assert.ok(cases.every((result) => result.ok === false));
