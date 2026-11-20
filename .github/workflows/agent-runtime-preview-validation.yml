@@ -97,7 +97,7 @@ jobs:
         timeout-minutes: 4
         run: timeout --signal=TERM --kill-after=10s 180s node --test agents/runtime/tests/*.test.mjs
 
-      - name: Verify preview config is isolated and has no execution triggers
+      - name: Verify Preview config is isolated and scheduled dispatcher remains disabled
         run: |
           node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
@@ -128,6 +128,8 @@ jobs:
           assert.equal(preview.preview_urls, true);
           assert.equal(preview.vars.AGENT_ENABLED, 'false');
           assert.equal(preview.vars.AGENT_PAUSED, 'true');
+          assert.equal(preview.vars.AGENT_SCHEDULER_ENABLED, 'false');
+          assert.deepEqual(preview.triggers?.crons, ['*/30 * * * *']);
           assert.equal(preview.vars.AGENT_OIDC_ENABLED, 'false');
           assert.equal(preview.durable_objects?.bindings?.length, 1);
           assert.deepEqual(preview.durable_objects.bindings[0], {
@@ -143,9 +145,12 @@ jobs:
           assert.equal('queues' in preview, false);
           assert.equal('kv_namespaces' in preview, false);
           assert.equal('r2_buckets' in preview, false);
-          assert.equal('triggers' in preview, false);
           assert.equal('vars' in preview && Object.keys(preview.vars).some(k => /TOKEN|SECRET|KEY/i.test(k)), false);
-          console.log('PASS: validation shell and dedicated Preview config are isolated; Preview stays disabled/paused with only its SQLite State Store binding.');
+          const workerSource = await readFile('agents/runtime/src/worker.mjs', 'utf8');
+          assert.match(workerSource, /controller\?\.cron !== "\*\/30 \* \* \* \*"/);
+          assert.match(workerSource, /AGENT_SCHEDULER_ENABLED !== "true"/);
+          assert.match(workerSource, /JSON\.stringify\(\{ maxTasks: 1 \}\)/);
+          console.log('PASS: Preview is isolated, scheduler cron is explicitly disabled by default, and each tick is code-bounded to one task.');
           NODE
 
       - name: Assert workflow is validation-only
