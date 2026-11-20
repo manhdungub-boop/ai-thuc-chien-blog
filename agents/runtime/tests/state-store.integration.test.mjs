@@ -100,7 +100,7 @@ test("state-store admission fails closed while disabled or paused", async () => 
     modules: true,
     scriptPath: workerPath,
     compatibilityDate: "2026-07-08",
-    durableObjects: { AGENT_STATE_STORE: { className: "AgentStateStore", useSQLite: true } },
+    durableObjects: { AGENT_STATE_STORE: { className: "TestAgentStateStore", useSQLite: true } },
     durableObjectsPersist: directory,
     bindings: { AGENT_OPERATOR_TOKEN: TEST_OPERATOR_TOKEN, AGENT_STATE_STORE_TOKEN: TEST_STATE_STORE_TOKEN, AGENT_ENABLED: "false", AGENT_PAUSED: "true" },
   });
