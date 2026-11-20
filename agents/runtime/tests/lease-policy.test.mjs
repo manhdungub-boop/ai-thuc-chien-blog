@@ -9,7 +9,7 @@ import {
 } from "../src/lease-policy.mjs";
 
 const OWNER_A = "a1b2c3d4-e5f6-4711-8123-abcdef012345";
-const OWNER_B = "b1b2c3d4-e5f6-4711-8123-abcdef012345";
+const OWNER_B = "b1c2d3d4-e5f6-4711-8123-abcdef012345";
 
 function queued(overrides = {}) {
   return {
@@ -105,7 +105,26 @@ test("expired lease is requeued only below attempt ceiling and with bounded dela
   assert.equal(result.fields.lease_owner, null);
   assert.equal(result.fields.lease_expires_at, null);
   assert.equal(recoverExpiredLease(running(), { now: 4999 }).error, "lease_not_expired");
-  assert.equal(recoverExpiredLease(running(), { now: 5000, retryDelayMs: 5 * 60 * 1000 + 1 }).error, "retry_delay_invalid");
+  assert.equal(recoverExpiredLease(running(), { now: 5000, retryDelayMs: 30 * 60 * 1000 + 1 }).error, "retry_delay_invalid");
+});
+
+test("expired lease uses the bounded exponential retry schedule", () => {
+  const schedule = [
+    [1, 30_000],
+    [2, 120_000],
+    [3, 600_000],
+    [4, 1_800_000],
+  ];
+  for (const [attempt, delay] of schedule) {
+    const result = recoverExpiredLease(running({
+      attempt_count: attempt,
+      max_attempts: 5,
+    }), { now: 5000 });
+    assert.equal(result.ok, true);
+    assert.equal(result.outcome, "requeued");
+    assert.equal(result.fields.next_attempt_at, 5000 + delay);
+  }
+  assert.deepEqual(LEASE_POLICY_LIMITS.retryBackoffMs, schedule.map(([, delay]) => delay));
 });
 
 test("expired lease at max attempts becomes terminal and cannot be retried", () => {
