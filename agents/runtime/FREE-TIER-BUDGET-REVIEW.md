@@ -110,5 +110,5 @@ A second read-only Cloudflare API check confirmed:
 
 - GitHub OIDC verification performs two fixed-host HTTPS GETs (issuer discovery and JWKS) per accepted token; no custom URL, redirect, or caller credential is allowed. This adds no paid AI provider dependency, but request latency and Worker CPU must be measured in Preview before operational use.
 - A successful token consumes one State Store replay-ledger write and one durable Pause control mutation/audit write. Invalid tokens should fail before State Store access; replayed tokens return conflict without a second Pause.
-- The manual workflow is disabled from operational use until the Preview URL repository variable and actor allowlist ID are confirmed. The Worker config feature flag remains false.
+- The manual workflow is disabled from operational use until the Preview URL repository variable and Preview deployment are confirmed. The actor allowlist is pinned to `342528485`, observed as the triggering actor in GitHub Actions run #317. The Worker config feature flag remains false.
 - This is not evidence of Cloudflare Free-tier entitlement. Namespace, Worker, secret, and deploy steps remain blocked until Billing Read or equivalent authoritative usage evidence is available. No paid upgrade or billing activation is permitted.
