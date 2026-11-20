@@ -269,6 +269,77 @@ test("control mutation bridge rejects missing operator identity and caller-suppl
   assert.equal(calls.length, 0);
 });
 
+test("operator recovery bridge requires auth, explicit runtime gates, and strict input", async () => {
+  const { env, calls } = bridgeEnv({ responseBody: { ok: true, outcome: "requeued", task: {
+    taskId: "task-recover-01", type: "seo.audit", state: "queued",
+    attemptCount: 1, maxAttempts: 3, nextAttemptAt: 200, lastErrorCode: "lease_expired",
+  } } });
+  const url = "https://agent-runtime-preview.example.workers.dev/internal/recover";
+  assert.equal((await worker.fetch(new Request(url, { method: "POST" }), env)).status, 401);
+  const authHeaders = { Authorization: "Bearer " + OPERATOR_TOKEN, "Content-Type": "application/json" };
+  assert.equal((await worker.fetch(new Request(url, { method: "GET", headers: authHeaders }), env)).status, 405);
+  assert.equal((await worker.fetch(new Request(url + "?extra=1", { method: "POST", headers: authHeaders, body: '{"taskId":"task-recover-01"}' }), env)).status, 400);
+  assert.equal((await worker.fetch(new Request(url, { method: "POST", headers: authHeaders, body: '{"taskId":"task-recover-01","actor":"spoof"}' }), env)).status, 400);
+  assert.equal(calls.length, 0);
+
+  env.AGENT_ENABLED = "false";
+  assert.equal((await worker.fetch(new Request(url, { method: "POST", headers: authHeaders, body: '{"taskId":"task-recover-01"}' }), env)).status, 503);
+  env.AGENT_ENABLED = "true";
+  env.AGENT_PAUSED = "true";
+  assert.equal((await worker.fetch(new Request(url, { method: "POST", headers: authHeaders, body: '{"taskId":"task-recover-01"}' }), env)).status, 503);
+  assert.equal(calls.length, 0);
+});
+
+test("operator recovery bridge uses fixed State Store identity and records server actor", async () => {
+  const { env, calls } = bridgeEnv({ responseBody: { ok: true, outcome: "requeued", task: {
+    taskId: "task-recover-01", type: "seo.audit", state: "queued",
+    attemptCount: 1, maxAttempts: 3, nextAttemptAt: 200, lastErrorCode: "lease_expired",
+  } } });
+  env.AGENT_ENABLED = "true";
+  env.AGENT_PAUSED = "false";
+  const incoming = new Request("https://agent-runtime-preview.example.workers.dev/internal/recover", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + OPERATOR_TOKEN, Cookie: "session=must-not-forward", "Content-Type": "application/json" },
+    body: JSON.stringify({ taskId: "task-recover-01" }),
+  });
+  const response = await worker.fetch(incoming, env);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.outcome, "requeued");
+  assert.equal(body.task.taskId, "task-recover-01");
+  assert.equal("payload" in body.task, false);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "https://state-store.internal/recover");
+  assert.equal(calls[0].method, "POST");
+  assert.equal(calls[0].headers.get("authorization"), "Bearer " + STATE_TOKEN);
+  assert.equal(calls[0].headers.get("cookie"), null);
+  const forwarded = await calls[0].json();
+  assert.deepEqual(Object.keys(forwarded).sort(), ["actor", "requestId", "taskId"]);
+  assert.equal(forwarded.actor, "project-operator-01");
+  assert.equal(forwarded.taskId, "task-recover-01");
+  assert.match(forwarded.requestId, /^[a-z0-9-]{16,64}$/i);
+  assert.equal(JSON.stringify(forwarded).includes(OPERATOR_TOKEN), false);
+  assert.equal(JSON.stringify(forwarded).includes(STATE_TOKEN), false);
+});
+
+test("operator recovery bridge rejects malformed, oversized, and missing-identity requests", async () => {
+  const { env, calls } = bridgeEnv();
+  env.AGENT_ENABLED = "true";
+  env.AGENT_PAUSED = "false";
+  const url = "https://agent-runtime-preview.example.workers.dev/internal/recover";
+  const headers = { Authorization: "Bearer " + OPERATOR_TOKEN, "Content-Type": "application/json" };
+  const oversized = await worker.fetch(new Request(url, {
+    method: "POST", headers: { ...headers, "Content-Length": "1025" }, body: "{}",
+  }), env);
+  assert.equal(oversized.status, 413);
+  const malformed = await worker.fetch(new Request(url, { method: "POST", headers, body: "{bad" }), env);
+  assert.equal(malformed.status, 400);
+  delete env.AGENT_OPERATOR_ID;
+  const missingActor = await worker.fetch(new Request(url, { method: "POST", headers, body: '{"taskId":"task-recover-01"}' }), env);
+  assert.equal(missingActor.status, 503);
+  assert.equal(calls.length, 0);
+});
+
 test("bridge fails closed when the internal token is missing", async () => {
   const { env, calls } = bridgeEnv();
   delete env.AGENT_STATE_STORE_TOKEN;
