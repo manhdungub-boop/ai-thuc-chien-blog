@@ -96,7 +96,8 @@ Trust boundaries:
 - [x] Remove test-only route/clock override from deployable code; verify the production source has no test hook and the production Durable Object returns 404 for the test route.
 - [x] Implement Worker ingress → fixed-operation State Store client integration with operator authorization, bounded request bodies, and no caller credential/header forwarding; keep all task handlers read-only.
 - [x] Add a Preview-only per-IP ingress/read-route limiter and negative tests for missing/unavailable limiter bindings; note that Cloudflare limits are approximate per location, not globally strict.
-- [ ] Independently verify explicit response allowlisting and negative tests for response leakage and missing/rotated secrets.
+- [x] Add explicit response allowlisting for read-only review results; malformed/failed items return a fixed generic error code rather than raw internal error strings. Verify the negative path does not expose the adapter error code.
+- [ ] Independently verify remaining response paths and negative tests for response leakage and missing/rotated secrets.
 - [ ] Add end-to-end negative tests for every unauthenticated route, operator/internal token confusion, arbitrary path/header injection, response leakage, missing binding, missing secret, and rotation.
 - [ ] Keep one operator only, or implement tenant ownership and cross-tenant isolation before multi-user access.
 - [ ] Obtain verifiable Free-plan usage/headroom and confirm no billing/payment/paid upgrade change; if unavailable, do not bind or deploy.
