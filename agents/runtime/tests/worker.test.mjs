@@ -43,16 +43,18 @@ const request = (path, method = "GET") =>
 
 test("lease heartbeat keeps a long bounded review alive and stops when it completes", async () => {
   let heartbeats = 0;
+  let finishWork;
+  const work = new Promise((resolve) => { finishWork = resolve; });
   const result = await runWithLeaseHeartbeat(
+    () => work,
     async () => {
-      await new Promise((resolve) => setTimeout(resolve, 24));
-      return "review-complete";
+      heartbeats += 1;
+      if (heartbeats === 2) finishWork("review-complete");
     },
-    async () => { heartbeats += 1; },
     5,
   );
   assert.equal(result, "review-complete");
-  assert.ok(heartbeats >= 2, "a review longer than the heartbeat interval must renew its lease");
+  assert.equal(heartbeats, 2, "the work completes only after two successful lease renewals");
 });
 
 test("lease heartbeat does not add a write for a fast review", async () => {
