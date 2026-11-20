@@ -744,3 +744,18 @@ test("claim accepts a valid JSON request exactly at the 16 KiB ingress limit", a
     assert.equal((await response.json()).error, "task_not_found");
   });
 });
+
+
+test("all six task mutation routes reject non-JSON media types before mutation", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    for (const pathname of ["/reserve", "/claim", "/heartbeat", "/complete", "/recover", "/transition"]) {
+      const response = await stub.fetch("http://do.local" + pathname, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain", Authorization: "Bearer " + TEST_STATE_STORE_TOKEN },
+        body: "{}",
+      });
+      assert.equal(response.status, 400, pathname);
+      assert.equal((await response.json()).error, "request_invalid", pathname);
+    }
+  });
+});
