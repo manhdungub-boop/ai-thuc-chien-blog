@@ -112,3 +112,15 @@ A second read-only Cloudflare API check confirmed:
 - A successful token consumes one State Store replay-ledger write and one durable Pause control mutation/audit write. Invalid tokens should fail before State Store access; replayed tokens return conflict without a second Pause.
 - The manual workflow is disabled from operational use until the Preview URL repository variable and Preview deployment are confirmed. The actor allowlist is pinned to `342528485`, observed as the triggering actor in GitHub Actions run #317. The Worker config feature flag remains false.
 - This is not evidence of Cloudflare Free-tier entitlement. Namespace, Worker, secret, and deploy steps remain blocked until Billing Read or equivalent authoritative usage evidence is available. No paid upgrade or billing activation is permitted.
+
+
+## Cloudflare account read-only gate check (2026-11-20)
+
+A read-only Cloudflare account inspection was completed after the OIDC CI passed:
+
+- The authenticated Cloudflare account's Worker Scripts listing contains no `ai-thuc-chien-agent-runtime-preview` script. The existing site and other preview scripts are separate and were not modified.
+- The account's Durable Object namespace listing returned `total_count: 0`. No Agent Runtime namespace has been created.
+- The account Billing Usage endpoint returned HTTP 403 / Authentication error because the connected Cloudflare authorization has no `Billing Read` scope. Therefore actual Workers Free plan status, usage and remaining headroom cannot be confirmed from this connection.
+- No Cloudflare resource was created, updated, deleted, deployed, or configured during this inspection.
+
+**Gate decision:** do not create a namespace, upload a Worker, set secrets, or enable OIDC until the exact account plan and free-tier headroom are verified through an authorized read-only billing view, and the exact dedicated Preview hostname is pinned. This is a permission limitation, not evidence that the account is on a paid plan.
