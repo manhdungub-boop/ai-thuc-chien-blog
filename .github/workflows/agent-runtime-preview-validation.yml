@@ -103,6 +103,7 @@ jobs:
           import assert from 'node:assert/strict';
           import { readFile } from 'node:fs/promises';
           const config = JSON.parse(await readFile('agents/runtime/wrangler.jsonc', 'utf8'));
+          const preview = JSON.parse(await readFile('agents/runtime/wrangler.preview.jsonc', 'utf8'));
           const stateStoreSource = await readFile('agents/runtime/src/state-store.mjs', 'utf8');
           assert.equal(config.main, './src/worker.mjs');
           assert.equal(stateStoreSource.includes('/__test/'), false, 'test-only routes must stay outside deployable source');
@@ -121,7 +122,30 @@ jobs:
           assert.equal('durable_objects' in config, false);
           assert.equal('kv_namespaces' in config, false);
           assert.equal('r2_buckets' in config, false);
-          console.log('PASS: isolated preview configuration; no production bindings, secrets, or schedules.');
+          assert.equal(preview.name, 'ai-thuc-chien-agent-runtime-preview');
+          assert.equal(preview.main, './src/worker.mjs');
+          assert.equal(preview.workers_dev, true);
+          assert.equal(preview.preview_urls, true);
+          assert.equal(preview.vars.AGENT_ENABLED, 'false');
+          assert.equal(preview.vars.AGENT_PAUSED, 'true');
+          assert.equal(preview.vars.AGENT_OIDC_ENABLED, 'false');
+          assert.equal(preview.durable_objects?.bindings?.length, 1);
+          assert.deepEqual(preview.durable_objects.bindings[0], {
+            name: 'AGENT_STATE_STORE',
+            class_name: 'AgentStateStore'
+          });
+          assert.deepEqual(preview.migrations, [{
+            tag: 'v1',
+            new_sqlite_classes: ['AgentStateStore']
+          }]);
+          assert.equal('routes' in preview, false);
+          assert.equal('d1_databases' in preview, false);
+          assert.equal('queues' in preview, false);
+          assert.equal('kv_namespaces' in preview, false);
+          assert.equal('r2_buckets' in preview, false);
+          assert.equal('triggers' in preview, false);
+          assert.equal('vars' in preview && Object.keys(preview.vars).some(k => /TOKEN|SECRET|KEY/i.test(k)), false);
+          console.log('PASS: validation shell and dedicated Preview config are isolated; Preview stays disabled/paused with only its SQLite State Store binding.');
           NODE
 
       - name: Assert workflow is validation-only
