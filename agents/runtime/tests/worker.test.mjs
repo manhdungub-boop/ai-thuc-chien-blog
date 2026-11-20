@@ -1,9 +1,48 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import worker from "../src/worker.mjs";
+import worker, { runWithLeaseHeartbeat } from "../src/worker.mjs";
 
 const request = (path, method = "GET") =>
   new Request("https://agent-runtime-preview.example.workers.dev" + path, { method });
+
+test("lease heartbeat keeps a long bounded review alive and stops when it completes", async () => {
+  let heartbeats = 0;
+  const result = await runWithLeaseHeartbeat(
+    async () => {
+      await new Promise((resolve) => setTimeout(resolve, 24));
+      return "review-complete";
+    },
+    async () => { heartbeats += 1; },
+    5,
+  );
+  assert.equal(result, "review-complete");
+  assert.ok(heartbeats >= 2, "a review longer than the heartbeat interval must renew its lease");
+});
+
+test("lease heartbeat does not add a write for a fast review", async () => {
+  let heartbeats = 0;
+  const result = await runWithLeaseHeartbeat(
+    async () => "fast-review",
+    async () => { heartbeats += 1; },
+    20,
+  );
+  assert.equal(result, "fast-review");
+  assert.equal(heartbeats, 0);
+});
+
+test("lease heartbeat fails closed when renewal fails", async () => {
+  await assert.rejects(
+    runWithLeaseHeartbeat(
+      async () => {
+        await new Promise((resolve) => setTimeout(resolve, 12));
+        return "review-complete";
+      },
+      async () => { throw new Error("internal token must not escape"); },
+      2,
+    ),
+    (error) => error.message === "task_lease_heartbeat_unavailable",
+  );
+});
 
 test("health is read-only and reports the default closed state", async () => {
   const response = await worker.fetch(request("/health"), {
