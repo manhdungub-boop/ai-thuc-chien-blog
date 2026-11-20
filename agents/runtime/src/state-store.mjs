@@ -247,7 +247,7 @@ export class AgentStateStore {
         return jsonResponse(result.body, result.status);
       }
       if (url.pathname === "/claim" && request.method === "POST") {
-        const result = this.claim(await request.json(), this.requestTime(request));
+        const result = await this.claim(await request.json(), this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
       if (url.pathname === "/heartbeat" && request.method === "POST") {
@@ -290,6 +290,86 @@ export class AgentStateStore {
 
   requestTime() {
     return Date.now();
+  }
+
+  async scheduleRecoveryAlarm(now = Date.now()) {
+    if (this.env.AGENT_RECOVERY_ALARM_ENABLED !== "true" ||
+        this.env.AGENT_ENABLED !== "true" || this.env.AGENT_PAUSED !== "false") {
+      try { await this.ctx.storage.deleteAlarm(); } catch {}
+      return false;
+    }
+    try {
+      const control = this.controlState();
+      if (control.paused) {
+        await this.ctx.storage.deleteAlarm();
+        return false;
+      }
+      const next = readRow(this.sql,
+        "SELECT MIN(lease_expires_at) AS next_at FROM tasks WHERE state='running' AND lease_expires_at IS NOT NULL");
+      if (!next || next.next_at === null || next.next_at === undefined) {
+        await this.ctx.storage.deleteAlarm();
+        return false;
+      }
+      // One shared alarm per DO, with a five-minute minimum cadence.
+      // This is recovery-only; it never claims or executes queued work.
+      const desired = Math.max(now + 5 * 60 * 1000, next.next_at);
+      const existing = await this.ctx.storage.getAlarm();
+      if (existing === null || existing > desired) {
+        await this.ctx.storage.setAlarm(desired);
+      }
+      return true;
+    } catch {
+      // Alarm scheduling is best-effort and must not turn a successful lease
+      // claim into a false failure. The operator path remains available.
+      return false;
+    }
+  }
+
+  async alarm() {
+    await this.ready;
+    if (this.env.AGENT_RECOVERY_ALARM_ENABLED !== "true" ||
+        this.env.AGENT_ENABLED !== "true" || this.env.AGENT_PAUSED !== "false") {
+      try { await this.ctx.storage.deleteAlarm(); } catch {}
+      return;
+    }
+    const now = Date.now();
+    try {
+      const recovered = this.ctx.storage.transactionSync(() => {
+        if (this.controlState().paused) return 0;
+        const rows = this.sql.exec(
+          "SELECT * FROM tasks WHERE state='running' AND lease_expires_at<=? ORDER BY lease_expires_at LIMIT 5",
+          now,
+        ).toArray();
+        let count = 0;
+        for (const row of rows) {
+          const decision = recoverExpiredLease(row, { now });
+          if (!decision.ok) continue;
+          const fields = decision.fields;
+          this.sql.exec(
+            "UPDATE tasks SET state=?,updated_at=?,terminal_at=?,error_code=?,lease_owner=NULL,lease_expires_at=NULL,lease_max_expires_at=NULL,next_attempt_at=?,last_error_code=? WHERE task_id=? AND state='running' AND lease_generation=? AND lease_expires_at<=?",
+            fields.state, fields.updated_at, fields.terminal_at, fields.error_code,
+            fields.next_attempt_at, fields.last_error_code, row.task_id, row.lease_generation, now,
+          );
+          const updated = readRow(this.sql, "SELECT state, lease_owner FROM tasks WHERE task_id=?", row.task_id);
+          if (!updated || updated.state !== fields.state || updated.lease_owner !== null) continue;
+          this.audit(row.task_id, decision.outcome === "failed" ? "task.lease_expired_failed" : "task.lease_expired_requeued", now, {
+            attempt: row.attempt_count,
+            leaseGeneration: row.lease_generation,
+            source: "durable_object_alarm",
+          });
+          count++;
+        }
+        return count;
+      });
+      await this.scheduleRecoveryAlarm(now);
+      return recovered;
+    } catch {
+      // Bounded self-retry only while the explicit recovery gate remains open.
+      try {
+        await this.ctx.storage.setAlarm(now + 5 * 60 * 1000);
+      } catch {}
+      return;
+    }
   }
 
   limits() {
@@ -418,7 +498,7 @@ export class AgentStateStore {
     }
   }
 
-  claim(body, now) {
+  async claim(body, now) {
     if (this.env.AGENT_ENABLED !== "true" || this.env.AGENT_PAUSED !== "false") {
       return { status: 503, body: { ok: false, error: "agent_disabled_or_paused" } };
     }
@@ -427,7 +507,7 @@ export class AgentStateStore {
       return { status: 400, body: { ok: false, error: "claim_request_invalid" } };
     }
     try {
-      return this.ctx.storage.transactionSync(() => {
+      const result = this.ctx.storage.transactionSync(() => {
         if (this.controlState().paused) return { status: 503, body: { ok: false, error: "agent_disabled_or_paused" } };
         const row = readRow(this.sql, "SELECT * FROM tasks WHERE task_id = ?", body.taskId);
         if (!row) return { status: 404, body: { ok: false, error: "task_not_found" } };
@@ -462,6 +542,8 @@ export class AgentStateStore {
           },
         };
       });
+      if (result.status === 200) await this.scheduleRecoveryAlarm(now);
+      return result;
     } catch {
       return { status: 503, body: { ok: false, error: "state_store_unavailable" } };
     }
