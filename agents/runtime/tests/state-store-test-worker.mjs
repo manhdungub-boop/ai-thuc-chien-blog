@@ -39,6 +39,23 @@ export class TestAgentStateStore extends AgentStateStore {
 
     try {
       await this.ready;
+      if (url.pathname === "/__test/alarm-state" && request.method === "GET") {
+        return jsonResponse({ ok: true, alarmAt: await this.ctx.storage.getAlarm() });
+      }
+      if (url.pathname === "/__test/expire-and-fire" && request.method === "POST") {
+        const body = await request.json();
+        if (!body || typeof body.taskId !== "string" || body.taskId.length > 64) {
+          return jsonResponse({ ok: false, error: "test_task_id_invalid" }, 400);
+        }
+        this.sql.exec("UPDATE tasks SET lease_expires_at=? WHERE task_id=? AND state='running'", Date.now() - 1, body.taskId);
+        await this.alarm();
+        const row = this.sql.exec("SELECT state, next_attempt_at, lease_owner FROM tasks WHERE task_id=?", body.taskId).toArray()[0] ?? null;
+        return jsonResponse({ ok: true, task: row, alarmAt: await this.ctx.storage.getAlarm() });
+      }
+      if (url.pathname === "/__test/fire-alarm" && request.method === "POST") {
+        await this.alarm();
+        return jsonResponse({ ok: true, alarmAt: await this.ctx.storage.getAlarm() });
+      }
       if (url.pathname === "/__test/downgrade-v1") {
         this.ctx.storage.transactionSync(() => {
           this.sql.exec("CREATE TABLE tasks_v1_fixture (task_id TEXT PRIMARY KEY, idempotency_key TEXT NOT NULL UNIQUE, task_type TEXT NOT NULL CHECK (task_type IN ('content.review','ai_bank.candidate_review','seo.audit')), payload_json TEXT NOT NULL, payload_hash TEXT NOT NULL, payload_bytes INTEGER NOT NULL CHECK (payload_bytes BETWEEN 1 AND 8192), state TEXT NOT NULL CHECK (state IN ('queued','running','succeeded','failed','cancelled')), created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, terminal_at INTEGER, error_code TEXT)");
