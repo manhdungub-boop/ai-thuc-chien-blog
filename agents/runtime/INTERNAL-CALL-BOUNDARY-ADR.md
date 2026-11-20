@@ -1,6 +1,6 @@
 # Agent Runtime — internal Worker-to-State-Store security boundary
 
-Status: **the dedicated State Store bearer validator and a narrow read-only Worker-to-DO forwarding path are implemented and tested; Durable Object binding, Preview secret injection, rate limiting, operator session/access layer, and deployment remain unconfigured.**
+Status: **the dedicated State Store bearer validator and authenticated Worker-to-DO read/control/recovery bridges are implemented and tested; the Durable Object binding exists only in an undeployed separate Preview config; Preview secret injection, human identity/session layer, global ingress rate limiting, and deployment remain unconfigured.**
 
 Date: 2026-11-19
 
@@ -19,7 +19,7 @@ Before adding a Durable Object binding, separate external operator authenticatio
 
 - `src/internal-auth.mjs` validates `AGENT_STATE_STORE_TOKEN` with bounded syntax/length and constant-time digest comparison.
 - The State Store rejects the external `AGENT_OPERATOR_TOKEN`; integration tests verify that missing, invalid, and cross-boundary credentials fail closed.
-- The Worker now calls the State Store only through the narrow read-only bridge documented below. The Wrangler shell config still has no Durable Object binding or secret, so the bridge cannot reach a live namespace and fails closed. This code path is not deployment authorization.
+- The Worker now calls the State Store only through fixed route handlers documented below, covering read-only inspection, pause/resume, and expired-lease recovery. The Wrangler shell config still has no Durable Object binding or secret, so the bridge cannot reach a live namespace and fails closed. This code path is not deployment authorization.
 
 ## Request path
 
@@ -71,3 +71,10 @@ The Worker now contains a narrow, operator-authenticated read-only bridge:
 - No write/admission/claim/dispatch operation is exposed through this bridge. `/run` remains `execution_not_implemented`.
 
 The bridge is code-only at this stage. The checked-in Wrangler config still has no Durable Object binding or secrets; therefore these endpoints fail closed until an independently reviewed Preview-only configuration and credentials exist. The operator bearer ingress has no rate limiter and is not approved for public browser administration. No binding creation, secret injection, Preview deployment, Production change, or Agent enablement is authorized by this code change.
+
+
+## Operator mutation bridge update (2026-11-20)
+
+The Worker source now contains authenticated `POST /internal/control/pause`, `POST /internal/control/resume`, and `POST /internal/recover` routes. The recovery route is gated by both outer flags (`AGENT_ENABLED=true` and `AGENT_PAUSED=false`), validates a bounded task ID, injects the configured service-actor label and a server-generated request ID, and forwards only the dedicated internal bearer to the fixed Durable Object identity. The State Store applies a durable per-actor rate limit (10 operations per 60-second window) and records the actor/request ID in the recovery audit event. Recovery only changes an already-expired lease to requeued or terminal-failed; it does not execute the task.
+
+The actor is a static service label, not a verified human identity. The shared operator bearer is not suitable for browser JavaScript or public administration. The Durable Object binding is declared only in `wrangler.preview.jsonc`; that config has not been deployed. The account's actual Workers plan, billing state and quota headroom remain unverified, so no namespace creation, secret injection, or deployment is authorized by this update.
