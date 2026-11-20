@@ -340,21 +340,76 @@ export default {
       try {
         const snapshotAdapter = createReadOnlyTaskSnapshotAdapter(createPreviewReadOnlyReaders());
         const manager = createReadOnlyAgentManager({ snapshotAdapter });
-        const result = await manager.reviewBatch(body.tasks);
+        const items = [];
+        for (const task of body.tasks) {
+          const reserved = await writeStateStore(env, "/reserve", { task });
+          const stored = reserved.task;
+          if (!stored || typeof stored.taskId !== "string") {
+            throw new Error("state_store_reservation_invalid");
+          }
+          if (stored.state === "succeeded" || stored.state === "failed" || stored.state === "cancelled") {
+            items.push({ ok: stored.state === "succeeded", taskId: stored.taskId, state: stored.state, duplicate: true });
+            continue;
+          }
+          if (stored.state === "running") {
+            items.push({ ok: false, taskId: stored.taskId, state: "running", duplicate: true, error: "task_already_running" });
+            continue;
+          }
+          if (stored.state !== "queued") throw new Error("state_store_task_state_invalid");
+
+          let claimed;
+          try {
+            claimed = await writeStateStore(env, "/claim", { taskId: stored.taskId });
+          } catch (error) {
+            if (error?.status === 409) {
+              items.push({ ok: false, taskId: stored.taskId, state: "queued", error: "task_not_claimable" });
+              continue;
+            }
+            throw error;
+          }
+          const lease = claimed.lease;
+          if (!lease || typeof lease.owner !== "string" || !Number.isSafeInteger(lease.generation)) {
+            throw new Error("state_store_lease_invalid");
+          }
+          const report = await manager.reviewBatch([task]);
+          const item = report.items[0];
+          const completion = await writeStateStore(env, "/complete", {
+            taskId: stored.taskId,
+            leaseOwner: lease.owner,
+            leaseGeneration: lease.generation,
+            status: item?.ok === true ? "succeeded" : "failed",
+            ...(item?.ok === true ? {} : { errorCode: "read_only_review_failed" }),
+          });
+          items.push({
+            ok: item?.ok === true,
+            taskId: stored.taskId,
+            state: completion.task?.state || (item?.ok === true ? "succeeded" : "failed"),
+            result: item,
+          });
+        }
+        const summary = {
+          total: items.length,
+          succeeded: items.filter((item) => item.state === "succeeded").length,
+          failed: items.filter((item) => item.state === "failed").length,
+          queued: items.filter((item) => item.state === "queued").length,
+          running: items.filter((item) => item.state === "running").length,
+        };
         return json({
-          ok: result.ok,
-          mode: "operator_triggered_read_only_analysis",
-          execution: "read_only_analysis",
-          result,
+          ok: summary.failed === 0 && summary.queued === 0 && summary.running === 0,
+          mode: "operator_triggered_durable_read_only_review",
+          execution: "synchronous_leased_read_only_review",
+          items,
+          summary,
           limitations: [
-            "no_task_queue_or_persistent_result",
+            "results_are_returned_to_operator_and_not_persisted",
             "no_scheduler_or_background_execution",
             "seo_live_evidence_unavailable",
             "repository_source_is_public_main_branch",
           ],
         });
-      } catch {
-        return json({ ok: false, error: "read_only_analysis_unavailable" }, 503);
+      } catch (error) {
+        const status = [400, 401, 409, 429, 503].includes(error?.status) ? error.status : 503;
+        return json({ ok: false, error: status === 429 ? "runtime_capacity_limited" : "durable_review_unavailable" }, status);
       }
     }
     if (url.pathname === "/internal/control") {
