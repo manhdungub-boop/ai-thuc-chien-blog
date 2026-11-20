@@ -350,7 +350,7 @@ test("control mutation rejects oversized declared and chunked request bodies bef
 test("bridge rejects malformed and unsafe declared State Store response lengths", async () => {
   const incoming = new Request("https://agent-runtime-preview.example.workers.dev/internal/usage", { headers: { Authorization: "Bearer " + OPERATOR_TOKEN } });
   for (const contentLength of ["2x", "9007199254740992"]) {
-    const { env } = bridgeEnv({ response: new Response("{}", { headers: { "Content-Length": contentLength } }) });
+    const { env } = bridgeEnv({ response: new Response("{}", { headers: { "Content-Type": "application/json", "Content-Length": contentLength } }) });
     const result = await worker.fetch(incoming, env);
     assert.equal(result.status, 503);
     assert.equal((await result.json()).error, "state_store_unavailable");
@@ -360,7 +360,7 @@ test("bridge rejects malformed and unsafe declared State Store response lengths"
 test("bridge cancels a State Store response stream declared over the byte cap", async () => {
   let cancelled = false;
   const stream = new ReadableStream({ pull(controller) { controller.enqueue(new TextEncoder().encode("{}")); }, cancel() { cancelled = true; } }, { highWaterMark: 0 });
-  const response = new Response(stream, { headers: { "Content-Length": String(16 * 1024 + 1) } });
+  const response = new Response(stream, { headers: { "Content-Type": "application/json", "Content-Length": String(16 * 1024 + 1) } });
   const { env } = bridgeEnv({ response });
   const incoming = new Request("https://agent-runtime-preview.example.workers.dev/internal/usage", { headers: { Authorization: "Bearer " + OPERATOR_TOKEN } });
   const result = await worker.fetch(incoming, env);
@@ -371,7 +371,7 @@ test("bridge cancels a State Store response stream declared over the byte cap", 
 
 test("bridge rejects invalid UTF-8 and mismatched State Store response lengths", async () => {
   const incoming = new Request("https://agent-runtime-preview.example.workers.dev/internal/usage", { headers: { Authorization: "Bearer " + OPERATOR_TOKEN } });
-  for (const response of [new Response(new Uint8Array([0xc3,0x28])), new Response("{}", { headers: { "Content-Length": "1" } })]) {
+  for (const response of [new Response(new Uint8Array([0xc3,0x28]), { headers: { "Content-Type": "application/json" } }), new Response("{}", { headers: { "Content-Type": "application/json", "Content-Length": "1" } })]) {
     const { env } = bridgeEnv({ response });
     const result = await worker.fetch(incoming, env);
     assert.equal(result.status, 503);
