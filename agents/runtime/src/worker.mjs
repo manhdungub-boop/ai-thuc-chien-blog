@@ -246,7 +246,7 @@ async function readStateStore(env, pathname) {
   return body;
 }
 
-export default {
+const worker = {
   async fetch(request, env = {}) {
     const url = new URL(request.url);
     if (url.pathname === "/health") {
@@ -684,4 +684,30 @@ export default {
     }
     return json({ ok: false, error: "not_found" }, 404);
   },
+  async scheduled(controller, env, ctx) {
+    // Code-only scheduler: the dedicated Preview config owns the 30-minute
+    // trigger. All gates remain fail-closed; one due task maximum per tick.
+    if (controller?.cron !== "*/30 * * * *" ||
+        env.AGENT_SCHEDULER_ENABLED !== "true" ||
+        env.AGENT_ENABLED !== "true" || env.AGENT_PAUSED !== "false") return;
+    const token = env.AGENT_OPERATOR_TOKEN;
+    if (typeof token !== "string" || token.length < 32 || token.length > 512) return;
+    const request = new Request("https://agent-runtime-scheduler.internal/internal/dispatch", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer " + token,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ maxTasks: 1 }),
+    });
+    try {
+      const response = await worker.fetch(request, env, ctx);
+      if (!response.ok) console.warn("Agent Runtime scheduled tick deferred", response.status);
+    } catch {
+      // No retry loop or alarm is created here. The next scheduled tick retries
+      // admission; the durable lease/recovery policy remains authoritative.
+      console.warn("Agent Runtime scheduled tick unavailable");
+    }
+  },
 };
+export default worker;
