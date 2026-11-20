@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-11-18T20:00:00+07:00",
+  "generated_at": "2026-11-20T20:00:00+07:00",
   "catalog_policy": {
     "default_locale": "vi",
     "currency": "USD",
@@ -346,13 +346,13 @@
         "self_hosted"
       ],
       "description": "Nền tảng workflow automation kết nối ứng dụng, trigger/action và AI agent.",
-      "free_tier_summary": "Activepieces Cloud Free hiện công bố $0, không cần thẻ, unlimited flows và tối đa 5 users; gồm Flows, Agents, Tables, MCP và API access. Lưu ý trang giá chính thức đang có thông tin không nhất quán về chu kỳ credits: phần đầu và FAQ nêu 1.000 credits mỗi tháng, nhưng bảng so sánh ghi Free reset hằng ngày và hết quota thì chờ đến ngày sau. Vì vậy không khẳng định chu kỳ làm mới cho đến khi nhà cung cấp làm rõ. Free không thu phí vượt quota; AI steps tiêu thụ credits bổ sung theo loại model (trang giá nêu fast 2, smart 10, frontier 20 credits mỗi AI step). Không chuyển sang Plus/Team hoặc bật thanh toán nếu giữ ngân sách 0 đồng. Community Edition tự lưu trữ dùng lõi MIT; tính năng Enterprise/Cloud nâng cao thuộc Commercial License. Self-host cần máy chủ, vận hành và cập nhật riêng.",
+      "free_tier_summary": "Gói Cloud Free có giá $0, không cần thẻ và không giới hạn số flow. Trang giá chính thức đang có các phiên bản hiển thị quota khác nhau: 100 credits/ngày hoặc 1.000 credits/tháng; nội dung cũng mô tả lượt chạy vượt quota bị dừng cho tới khi credits làm mới. AI steps có thể tiêu thụ 2/10/20 credits tùy model. Hãy kiểm tra quota thực tế trong workspace trước khi ước tính; không bật gói trả phí hoặc pay-as-you-go.",
       "official_sources": [
         "https://www.activepieces.com/pricing",
         "https://www.activepieces.com/docs/about/license",
         "https://www.activepieces.com/docs/install/overview"
       ],
-      "last_verified": "2026-11-16",
+      "last_verified": "2026-11-20",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -1685,6 +1685,76 @@
         "image-generation",
         "limited-free",
         "watermark"
+      ]
+    },
+    {
+      "id": "pocketpal-ai",
+      "name": "PocketPal AI",
+      "vendor": "PocketPal",
+      "website": "https://pocketpal.dev/",
+      "categories": [
+        "assistant",
+        "local-llm",
+        "voice"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "verified_free_tier",
+      "license": "Mã nguồn ứng dụng PocketPal AI theo MIT License; model weights tải về có giấy phép và điều khoản riêng. App Store Việt Nam hiển thị Free + In-App Purchases; chu kỳ thanh toán và mapping tính năng của các mức PocketPal Plus/Pals chưa được xác định rõ.",
+      "platforms": [
+        "ios",
+        "android"
+      ],
+      "description": "Trợ lý AI di động chạy mô hình GGUF trực tiếp trên iPhone, iPad và Android; hỗ trợ trò chuyện offline, giọng nói và công cụ tùy model/thiết bị.",
+      "free_tier_summary": "Chat và suy luận local cơ bản miễn phí, không cần tài khoản; tải model GGUF rồi chạy trên thiết bị. App Store Việt Nam có In-App Purchases, nhưng không suy đoán chu kỳ thanh toán hoặc tính năng tương ứng từng mức. Web search, page reading hoặc remote server là tính năng online có thể gửi dữ liệu ra ngoài. Model weights có giấy phép riêng; hiệu năng phụ thuộc RAM và phần cứng.",
+      "official_sources": [
+        "https://pocketpal.dev/",
+        "https://github.com/a-ghorbani/pocketpal-ai",
+        "https://github.com/a-ghorbani/pocketpal-ai/blob/main/LICENSE",
+        "https://apps.apple.com/vn/app/pocketpal-ai/id6502579498"
+      ],
+      "last_verified": "2026-11-20",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "on-device",
+        "offline",
+        "gguf",
+        "privacy",
+        "mobile"
+      ]
+    },
+    {
+      "id": "draw-things",
+      "name": "Draw Things",
+      "vendor": "Draw Things, Inc.",
+      "website": "https://drawthings.ai/",
+      "categories": [
+        "image",
+        "design"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "verified_free_tier",
+      "license": "Ứng dụng thương mại/proprietary; giấy phép của model weights, LoRA và tài sản cộng đồng được tải vào ứng dụng phải kiểm tra riêng.",
+      "platforms": [
+        "ios",
+        "macos"
+      ],
+      "description": "Ứng dụng sáng tạo hình ảnh AI trên iPhone, iPad và Mac; hỗ trợ tạo ảnh local, chỉnh sửa ảnh, canvas và huấn luyện LoRA trên thiết bị.",
+      "free_tier_summary": "Free Edition dùng compute trên thiết bị, tải model, infinite canvas và train LoRA local. Community là tài khoản miễn phí cho phép dùng Cloud Compute miễn phí theo điều kiện dịch vụ; Draw Things+ có giá $8.99/tháng để tăng giới hạn cloud và mở tính năng cloud nâng cao. Tạo ảnh local không cần subscription; cloud compute cần đăng nhập và có luồng dữ liệu riêng. Model weights/LoRA có giấy phép riêng.",
+      "official_sources": [
+        "https://drawthings.ai/pricing/",
+        "https://drawthings.ai/policy/",
+        "https://apps.apple.com/vn/app/draw-things-offline-ai-art/id6444050820"
+      ],
+      "last_verified": "2026-11-20",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "image-generation",
+        "on-device",
+        "offline",
+        "local-compute",
+        "lora"
       ]
     }
   ]
