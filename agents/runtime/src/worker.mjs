@@ -689,6 +689,7 @@ const worker = {
     // trigger. All gates remain fail-closed; one due task maximum per tick.
     if (controller?.cron !== "*/30 * * * *" ||
         env.AGENT_SCHEDULER_ENABLED !== "true" ||
+        env.AGENT_RECOVERY_ALARM_ENABLED !== "true" ||
         env.AGENT_ENABLED !== "true" || env.AGENT_PAUSED !== "false") return;
     const token = env.AGENT_OPERATOR_TOKEN;
     if (typeof token !== "string" || token.length < 32 || token.length > 512) return;
