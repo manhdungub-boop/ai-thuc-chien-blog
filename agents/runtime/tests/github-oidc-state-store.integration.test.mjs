@@ -142,20 +142,23 @@ function callRealStateStore(env, operation, input, diagnostics) {
   assert.equal(operation, "oidcReplayConsume");
   const namespace = env.AGENT_STATE_STORE;
   const stub = namespace.get(namespace.idFromName("agent-runtime-global"));
-  return stub.fetch(new Request("http://do.local/oidc/replay/consume", {
+  return stub.fetch("http://do.local/oidc/replay/consume", {
     method: "POST",
     headers: {
       Authorization: "Bearer " + env.AGENT_STATE_STORE_TOKEN,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(input),
-  })).then(async (response) => {
+  }).then(async (response) => {
     diagnostics.push({
       status: response.status,
       contentType: response.headers.get("content-type"),
       body: await response.clone().text(),
     });
     return response;
+  }).catch((error) => {
+    diagnostics.push({ thrown: String(error?.message || error) });
+    throw error;
   });
 }
 function authorize(token, fixture, env, diagnostics) {
