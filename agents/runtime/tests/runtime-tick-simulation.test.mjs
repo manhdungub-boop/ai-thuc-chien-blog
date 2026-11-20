@@ -84,13 +84,20 @@ test("invalid options, limits, queue and timestamps fail closed", () => {
   assert.ok(cases.every((result) => result.sideEffects.length === 0));
 });
 
-test("duplicate idempotency keys are rejected by scheduler before executor planning", () => {
+test("duplicate idempotency key blocks only the duplicate entry before its executor is planned", () => {
   const result = simulateRuntimeTick([
     entry(100, TASK),
     entry(100, TASK),
   ], { now: 100, controlSnapshot: CONTROL });
+
   assert.equal(result.ok, false);
-  assert.equal(result.selectedCount, 0);
-  assert.deepEqual(result.items, []);
+  assert.equal(result.blocked, true);
+  assert.equal(result.selectedCount, 2);
+  assert.equal(result.plannedCount, 1);
+  assert.equal(result.items[0].executor.ok, true);
+  assert.equal(result.items[1].blocked, true);
+  assert.equal(result.items[1].reason, "duplicate_idempotency_key_in_batch");
+  assert.equal(result.items[1].executor, null);
+  assert.deepEqual(result.items[1].steps, []);
   assert.deepEqual(result.sideEffects, []);
 });
