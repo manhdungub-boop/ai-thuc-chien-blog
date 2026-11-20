@@ -646,6 +646,39 @@ test("atomic claim admits only one worker and stale lease generations cannot hea
   });
 });
 
+test("concurrent conflicting completions serialize and preserve exactly one terminal result", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const created = await call(stub, "/reserve", task("parallel-completion-conflict"));
+    const taskId = created.body.task.taskId;
+    const claimed = await call(stub, "/claim", { taskId }, { "x-test-now": "2026-11-19T10:00:00.000Z" });
+    const lease = claimed.body.lease;
+    const completion = (status) => call(stub, "/complete", {
+      taskId,
+      leaseOwner: lease.owner,
+      leaseGeneration: lease.generation,
+      status: "succeeded",
+      result: {
+        taskType: "seo.audit",
+        status,
+        findingCount: 0,
+        findings: [],
+      },
+    }, { "x-test-now": "2026-11-19T10:01:00.000Z" });
+
+    const results = await Promise.all([completion("pass"), completion("attention")]);
+    assert.deepEqual(results.map((item) => item.status).sort(), [200, 409]);
+    const winner = results.find((item) => item.status === 200);
+    const conflict = results.find((item) => item.status === 409);
+    assert.equal(winner.body.task.state, "succeeded");
+    assert.equal(conflict.body.error, "completion_conflict");
+
+    const persisted = await call(stub, "/task?id=" + encodeURIComponent(taskId));
+    assert.equal(persisted.status, 200);
+    assert.deepEqual(persisted.body.task.result, winner.body.task.result,
+      "the serialized winner must remain the only persisted terminal result");
+  });
+});
+
 test("completion rejects malformed or oversized persisted review results", async () => {
   await withRuntime({}, async ({ stub }) => {
     const created = await call(stub, "/reserve", task("result-validation"));
