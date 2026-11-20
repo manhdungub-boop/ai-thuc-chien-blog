@@ -78,6 +78,14 @@ See [STATE-STORE-ADR.md](./STATE-STORE-ADR.md) for the design decision, Free-tie
 - SEO HTTP status and broken-link counts are not inferred from local files. The repository reader requires an explicit `seoEvidenceReader` provider for those facts; sitemap membership is independently derived from the checked-out `sitemap.xml`.
 - Integration tests now inspect the real article, AI Bank catalog and sitemap in the checked-out repository. This validates local source reading, not a live website HTTP crawl or a deployed agent.
 
+## Read-only Audit Integrity Inspector
+
+- `src/audit-integrity-inspector.mjs` cross-checks caller-supplied task snapshots against audit events using the actual State Store event vocabulary: queued, claimed, heartbeat, terminal outcomes and lease-expiry recovery.
+- Detects duplicate task/event IDs, missing or unknown events, invalid lifecycle transitions, lease-generation mismatches, inconsistent lease/terminal fields, timestamp regressions and task/audit-tail disagreement.
+- Task rows are retained for 30 days while audit events are retained for 90 days. An audit event whose task is missing only after the task-retention window is therefore a warning, not automatically corruption.
+- Bounded to 1,000 tasks and 5,000 events. Timestamp ties are explicitly marked ambiguous because the current audit schema has no monotonic sequence column.
+- Pure analysis only: no database reads, source authentication, audit deletion detection, repair, retry or task execution. The inspector cannot prove that records were never tampered with or removed.
+
 ## Read-only Health Monitor and Manual Recovery Planner
 
 - `src/agent-health-monitor.mjs` evaluates a fresh caller-supplied snapshot of State Store, Worker bridge and usage-evidence status, heartbeat age, queue/running counts and expired leases. It does not poll services or prove continuous uptime.
