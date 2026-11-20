@@ -252,6 +252,13 @@ export default {
         actorId: env.AGENT_OIDC_ACTOR_ID,
         eventName: "workflow_dispatch",
       };
+      if (!Object.entries(expected).every(([key, value]) =>
+        typeof value === "string" && value.length > 0 && value.length <= (key === "workflowRef" ? 512 : 256)) ||
+        !/^\\d{1,20}$/.test(expected.actorId) ||
+        !/^\\d{1,20}$/.test(expected.repositoryId) ||
+        !/^\\d{1,20}$/.test(expected.repositoryOwnerId)) {
+        return json({ ok: false, error: "github_oidc_policy_unconfigured" }, 503);
+      }
       const authorized = await authorizeGitHubActionsOperator(tokenMatch[1], { env, expected });
       if (!authorized.ok) {
         if (authorized.error === "oidc_token_replayed") return json({ ok: false, error: "github_oidc_token_replayed" }, 409);
