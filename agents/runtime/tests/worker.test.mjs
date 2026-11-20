@@ -2,6 +2,42 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import worker, { runWithLeaseHeartbeat } from "../src/worker.mjs";
 
+test("required ingress limiter covers every route and keys by Cloudflare client IP", async () => {
+  let received;
+  const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/health", {
+    headers: { "cf-connecting-ip": "203.0.113.9" },
+  }), {
+    AGENT_ENABLED: "false",
+    AGENT_PAUSED: "true",
+    AGENT_RATE_LIMIT_REQUIRED: "true",
+    AGENT_INGRESS_RATE_LIMITER: { limit: async (input) => { received = input; return { success: true }; } },
+  });
+  assert.equal(response.status, 200);
+  assert.deepEqual(received, { key: "ip:203.0.113.9" });
+});
+
+test("ingress limiter rejects requests before route handling", async () => {
+  const response = await worker.fetch(request("/health"), {
+    AGENT_RATE_LIMIT_REQUIRED: "true",
+    AGENT_INGRESS_RATE_LIMITER: { limit: async () => ({ success: false }) },
+  });
+  assert.equal(response.status, 429);
+  assert.equal((await response.json()).error, "rate_limited");
+});
+
+test("required ingress limiter fails closed when binding is missing or unavailable", async () => {
+  const missing = await worker.fetch(request("/health"), { AGENT_RATE_LIMIT_REQUIRED: "true" });
+  assert.equal(missing.status, 503);
+  assert.equal((await missing.json()).error, "rate_limit_unavailable");
+
+  const unavailable = await worker.fetch(request("/health"), {
+    AGENT_RATE_LIMIT_REQUIRED: "true",
+    AGENT_INGRESS_RATE_LIMITER: { limit: async () => { throw new Error("binding unavailable"); } },
+  });
+  assert.equal(unavailable.status, 503);
+  assert.equal((await unavailable.json()).error, "rate_limit_unavailable");
+});
+
 const request = (path, method = "GET") =>
   new Request("https://agent-runtime-preview.example.workers.dev" + path, { method });
 
