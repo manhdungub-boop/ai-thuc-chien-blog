@@ -195,7 +195,7 @@ test("concurrent authorization attempts for one signed jti yield exactly one win
     ]);
     assert.deepEqual(
       results.map((result) => result.ok ? "ok" : result.error).sort(),
-      ["ok", "oidc_token_replayed"],
+      ["oidc_token_replayed", "ok"],
       "unexpected concurrent authorization results: " + JSON.stringify(results) + "; State Store: " + JSON.stringify(diagnostics),
     );
   });
