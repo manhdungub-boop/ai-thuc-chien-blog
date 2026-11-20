@@ -438,7 +438,7 @@ test("fresh State Store initializes schema v5 paused with conservative lease def
   });
 });
 
-test("persisted v1 State Store migrates transactionally to v5 without losing task or usage", async () => {
+test("persisted v1 State Store migrates transactionally to v6 without losing task or usage", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "ai-thuc-chien-do-v1-migration-"));
   let first;
   let second;
@@ -467,6 +467,7 @@ test("persisted v1 State Store migrates transactionally to v5 without losing tas
     assert.equal(restored.body.task.leaseMaxExpiresAt, null);
     assert.equal(restored.body.task.nextAttemptAt, null);
     assert.equal(restored.body.task.lastErrorCode, null);
+    assert.equal(restored.body.task.result, null, "legacy tasks must migrate without an invented result");
     assert.equal(usage.body.acceptedToday, 1);
     assert.equal(usage.body.inFlight, 1);
   } finally {
