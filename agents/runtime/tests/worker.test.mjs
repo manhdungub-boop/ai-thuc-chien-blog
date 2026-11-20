@@ -541,14 +541,15 @@ test("run reserves, claims, reviews, and completes durable read-only tasks", asy
     throw new Error("unexpected_source_url");
   };
   const { env, records, calls } = durableRunEnv();
+  const taskBatch = [
+    { type: "content.review", idempotencyKey: "content-review-demo-0001", payload: { articlePath: "articles/demo-article.html" } },
+    { type: "ai_bank.candidate_review", idempotencyKey: "ai-bank-review-demo-0001", payload: { candidateId: "chatgpt" } },
+  ];
   try {
     const response = await worker.fetch(new Request(RUN_URL, {
       method: "POST",
       headers: { Authorization: "Bearer " + RUN_TOKEN, "Content-Type": "application/json" },
-      body: JSON.stringify({ tasks: [
-        { type: "content.review", idempotencyKey: "content-review-demo-0001", payload: { articlePath: "articles/demo-article.html" } },
-        { type: "ai_bank.candidate_review", idempotencyKey: "ai-bank-review-demo-0001", payload: { candidateId: "chatgpt" } },
-      ] }),
+      body: JSON.stringify({ tasks: taskBatch }),
     }), env);
     const body = await response.json();
     assert.equal(response.status, 200);
@@ -565,6 +566,20 @@ test("run reserves, claims, reviews, and completes durable read-only tasks", asy
     assert.equal(calls.every((call) => call.headers.get("authorization") === "Bearer " + RUN_STATE_TOKEN), true);
     assert.equal(JSON.stringify(body).includes(RUN_STATE_TOKEN), false);
     assert.equal(body.limitations.includes("no_scheduler_or_background_execution"), true);
+
+    const repeated = await worker.fetch(new Request(RUN_URL, {
+      method: "POST",
+      headers: { Authorization: "Bearer " + RUN_TOKEN, "Content-Type": "application/json" },
+      body: JSON.stringify({ tasks: taskBatch }),
+    }), env);
+    const repeatedBody = await repeated.json();
+    assert.equal(repeated.status, 200);
+    assert.equal(repeatedBody.ok, true);
+    assert.deepEqual(repeatedBody.items.map((item) => ({ state: item.state, duplicate: item.duplicate })), [
+      { state: "succeeded", duplicate: true },
+      { state: "succeeded", duplicate: true },
+    ]);
+    assert.equal(calls.length, 6, "completed idempotent tasks must not be claimed or executed again");
   } finally {
     globalThis.fetch = originalFetch;
   }
