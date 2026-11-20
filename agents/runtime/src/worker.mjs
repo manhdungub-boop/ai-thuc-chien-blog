@@ -412,6 +412,64 @@ export default {
         return json({ ok: false, error: status === 429 ? "runtime_capacity_limited" : "durable_review_unavailable" }, status);
       }
     }
+    if (url.pathname === "/internal/enqueue") {
+      if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
+      if (!isEnabled(env.AGENT_ENABLED) || env.AGENT_PAUSED !== "false") {
+        return json({ ok: false, error: "agent_disabled_or_paused" }, 503);
+      }
+      if (!await hasValidOperatorBearer(request, env)) return json({ ok: false, error: "operator_auth_required" }, 401);
+      if ([...url.searchParams.keys()].length > 0) return json({ ok: false, error: "request_invalid" }, 400);
+      const parsed = await readBoundedJsonValueRequest(request, 16 * 1024);
+      if (!parsed.ok) {
+        return json({ ok: false, error: parsed.status === 413 ? "request_body_too_large" : "request_invalid" }, parsed.status);
+      }
+      const body = parsed.value;
+      if (!body || typeof body !== "object" || Array.isArray(body) ||
+          Object.keys(body).length !== 1 || !Array.isArray(body.tasks) ||
+          body.tasks.length < 1 || body.tasks.length > 5) {
+        return json({ ok: false, error: "request_invalid" }, 400);
+      }
+      const items = [];
+      for (const task of body.tasks) {
+        try {
+          const reserved = await writeStateStore(env, "/reserve", { task });
+          if (!reserved.task || typeof reserved.task.taskId !== "string") {
+            return json({ ok: false, error: "queue_admission_unavailable", items }, 503);
+          }
+          items.push({
+            ok: true,
+            taskId: reserved.task.taskId,
+            state: reserved.task.state,
+            duplicate: reserved.duplicate === true,
+          });
+        } catch (error) {
+          const status = [400, 401, 409, 429, 503].includes(error?.status) ? error.status : 503;
+          return json({
+            ok: false,
+            error: status === 429 ? "runtime_capacity_limited" :
+              status === 400 ? "task_request_invalid" : "queue_admission_unavailable",
+            items,
+          }, status);
+        }
+      }
+      return json({
+        ok: true,
+        mode: "operator_triggered_queue_admission",
+        execution: "not_started",
+        items,
+        summary: {
+          submitted: items.length,
+          newlyQueued: items.filter((item) => !item.duplicate && item.state === "queued").length,
+          duplicates: items.filter((item) => item.duplicate).length,
+        },
+        limitations: [
+          "admission_only_no_task_execution",
+          "manual_operator_dispatch_required",
+          "no_scheduler_or_background_execution",
+          "read_only_review_handlers_only",
+        ],
+      });
+    }
     if (url.pathname === "/internal/dispatch") {
       if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
       if (!isEnabled(env.AGENT_ENABLED) || env.AGENT_PAUSED !== "false") {
