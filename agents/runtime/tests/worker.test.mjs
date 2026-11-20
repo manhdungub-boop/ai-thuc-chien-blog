@@ -31,7 +31,7 @@ test("run is rejected while disabled", async () => {
 });
 
 test("run fails closed when the pause flag is missing or malformed", async () => {
-  const token = "preview-only-test-secret-0123456789abcdef";
+  const token = "preview-only-test-secret-034252848589abcdef";
   for (const paused of [undefined, "true", "1", "yes"]) {
     const env = { AGENT_ENABLED: "true", AGENT_OPERATOR_TOKEN: token };
     if (paused !== undefined) env.AGENT_PAUSED = paused;
@@ -45,7 +45,7 @@ test("run fails closed when the pause flag is missing or malformed", async () =>
 });
 
 test("run remains unavailable after flags and operator authentication are opened", async () => {
-  const token = "preview-only-test-secret-0123456789abcdef";
+  const token = "preview-only-test-secret-034252848589abcdef";
   const authorizedRequest = new Request("https://agent-runtime-preview.example.workers.dev/run", {
     method: "POST",
     headers: { Authorization: "Bearer " + token },
@@ -80,7 +80,7 @@ test("run requires operator authentication if both safety flags are opened", asy
 });
 
 test("run remains unimplemented after valid operator authentication", async () => {
-  const token = "preview-only-test-secret-0123456789abcdef";
+  const token = "preview-only-test-secret-034252848589abcdef";
   const authorizedRequest = new Request("https://agent-runtime-preview.example.workers.dev/run", {
     method: "POST",
     headers: { Authorization: "Bearer " + token },
@@ -95,8 +95,8 @@ test("run remains unimplemented after valid operator authentication", async () =
 });
 
 
-const OPERATOR_TOKEN = "worker-bridge-operator-token-0123456789abcdef";
-const STATE_TOKEN = "worker-bridge-state-store-token-0123456789abcdef";
+const OPERATOR_TOKEN = "worker-bridge-operator-token-034252848589abcdef";
+const STATE_TOKEN = "worker-bridge-state-store-token-034252848589abcdef";
 function bridgeEnv({ responseBody = { ok: true, dayUtc: "2026-11-19", acceptedToday: 2, inFlight: 1 } } = {}) {
   const calls = [];
   const stub = {
@@ -459,7 +459,7 @@ test("OIDC pause endpoint fails closed when the exact actor trust policy is inco
 });
 
 test("OIDC pause endpoint rejects shared bearer credentials as malformed JWT input", async () => {
-  const shared = "preview-only-test-secret-0123456789abcdef";
+  const shared = "preview-only-test-secret-034252848589abcdef";
   const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/oidc/pause", {
     method: "POST",
     headers: { Authorization: "Bearer " + shared, "Content-Type": "application/json" },
@@ -473,7 +473,7 @@ test("OIDC pause endpoint rejects shared bearer credentials as malformed JWT inp
     AGENT_OIDC_REPOSITORY_OWNER_ID: "342528485",
     AGENT_OIDC_REF: "refs/heads/main",
     AGENT_OIDC_WORKFLOW_REF: "manhdungub-boop/ai-thuc-chien-blog/.github/workflows/agent-runtime-operator.yml@refs/heads/main",
-    AGENT_OIDC_ACTOR_ID: "1234567",
+    AGENT_OIDC_ACTOR_ID: "342528485",
     AGENT_STATE_STORE: { idFromName: () => "unused", get: () => ({ fetch: async () => { throw new Error("must_not_reach_state_store"); } }) },
   });
   assert.equal(response.status, 401);
