@@ -479,11 +479,11 @@ test("expired leases are requeued after bounded delay and fail at the attempt ce
     const first = await call(stub, "/claim", { taskId }, { "x-test-now": "2026-11-19T10:00:00.000Z" });
     assert.equal(first.status, 200);
 
-    const tooEarly = await call(stub, "/recover", { taskId }, { "x-test-now": "2026-11-19T10:04:59.999Z" });
+    const tooEarly = await call(stub, "/recover", { taskId, actor: "integration-test", requestId: crypto.randomUUID() }, { "x-test-now": "2026-11-19T10:04:59.999Z" });
     assert.equal(tooEarly.status, 409);
     assert.equal(tooEarly.body.error, "lease_not_expired");
 
-    const recovered1 = await call(stub, "/recover", { taskId }, { "x-test-now": "2026-11-19T10:05:00.000Z" });
+    const recovered1 = await call(stub, "/recover", { taskId, actor: "integration-test", requestId: crypto.randomUUID() }, { "x-test-now": "2026-11-19T10:05:00.000Z" });
     assert.equal(recovered1.status, 200);
     assert.equal(recovered1.body.outcome, "requeued");
     assert.equal(recovered1.body.task.state, "queued");
@@ -497,13 +497,13 @@ test("expired leases are requeued after bounded delay and fail at the attempt ce
 
     const second = await call(stub, "/claim", { taskId }, { "x-test-now": "2026-11-19T10:05:30.000Z" });
     assert.equal(second.status, 200);
-    const recovered2 = await call(stub, "/recover", { taskId }, { "x-test-now": "2026-11-19T10:10:30.000Z" });
+    const recovered2 = await call(stub, "/recover", { taskId, actor: "integration-test", requestId: crypto.randomUUID() }, { "x-test-now": "2026-11-19T10:10:30.000Z" });
     assert.equal(recovered2.status, 200);
     assert.equal(recovered2.body.outcome, "requeued");
 
     const third = await call(stub, "/claim", { taskId }, { "x-test-now": "2026-11-19T10:11:00.000Z" });
     assert.equal(third.status, 200);
-    const exhausted = await call(stub, "/recover", { taskId }, { "x-test-now": "2026-11-19T10:16:00.000Z" });
+    const exhausted = await call(stub, "/recover", { taskId, actor: "integration-test", requestId: crypto.randomUUID() }, { "x-test-now": "2026-11-19T10:16:00.000Z" });
     assert.equal(exhausted.status, 200);
     assert.equal(exhausted.body.outcome, "failed");
     assert.equal(exhausted.body.task.state, "failed");
