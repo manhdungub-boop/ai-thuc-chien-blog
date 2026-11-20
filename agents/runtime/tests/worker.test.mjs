@@ -16,7 +16,7 @@ test("health is read-only and reports the default closed state", async () => {
   assert.equal(body.ok, true);
   assert.equal(body.enabled, false);
   assert.equal(body.paused, true);
-  assert.equal(body.execution, "not_implemented");
+  assert.equal(body.execution, "operator_triggered_read_only_analysis");
   assert.equal(response.headers.get("cache-control"), "no-store");
   assert.equal(response.headers.get("x-content-type-options"), "nosniff");
 });
