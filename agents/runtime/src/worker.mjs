@@ -191,6 +191,37 @@ async function writeStateStore(env, pathname, payload) {
   return body;
 }
 
+export async function runWithLeaseHeartbeat(work, heartbeat, intervalMs = 120_000) {
+  if (typeof work !== "function" || typeof heartbeat !== "function" ||
+      !Number.isSafeInteger(intervalMs) || intervalMs < 1 || intervalMs > 120_000) {
+    throw new Error("lease_heartbeat_configuration_invalid");
+  }
+  let finished = false;
+  let heartbeatFailed = false;
+  const workPromise = Promise.resolve().then(work).then(
+    (value) => { finished = true; return value; },
+    (error) => { finished = true; throw error; },
+  );
+  while (!finished) {
+    let timer;
+    await Promise.race([
+      workPromise.then(() => undefined, () => undefined),
+      new Promise((resolve) => { timer = setTimeout(resolve, intervalMs); }),
+    ]);
+    if (timer !== undefined) clearTimeout(timer);
+    if (finished) break;
+    try {
+      await heartbeat();
+    } catch {
+      heartbeatFailed = true;
+      break;
+    }
+  }
+  const result = await workPromise;
+  if (heartbeatFailed) throw new Error("task_lease_heartbeat_unavailable");
+  return result;
+}
+
 async function readBoundedJson(response) {
   const declared = Number(response.headers.get("content-length") || 0);
   if (declared > MAX_INTERNAL_RESPONSE_BYTES) throw new Error("internal_response_too_large");
@@ -507,11 +538,18 @@ const worker = {
               !lease || typeof lease.owner !== "string" || !Number.isSafeInteger(lease.generation)) {
             throw new Error("state_store_claim_invalid");
           }
-          const report = await manager.reviewBatch([{
-            type: task.type,
-            idempotencyKey: task.idempotencyKey,
-            payload: task.payload,
-          }]);
+          const report = await runWithLeaseHeartbeat(
+            () => manager.reviewBatch([{
+              type: task.type,
+              idempotencyKey: task.idempotencyKey,
+              payload: task.payload,
+            }]),
+            () => writeStateStore(env, "/heartbeat", {
+              taskId: task.taskId,
+              leaseOwner: lease.owner,
+              leaseGeneration: lease.generation,
+            }),
+          );
           const item = report.items[0];
           const completion = await writeStateStore(env, "/complete", {
             taskId: task.taskId,
