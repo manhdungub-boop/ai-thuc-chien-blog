@@ -1,13 +1,13 @@
-# Thẩm định biên tập sơ bộ — 4 ứng viên AI Bank (18/11/2026)
+# Thẩm định biên tập sơ bộ — 2 ứng viên iOS còn lại (20/11/2026)
 
-Phạm vi: kiểm tra nguồn chính thức và thông tin App Store cho các ứng viên phù hợp iPhone/offline. Đây là ghi chú nghiên cứu, không phải phê duyệt xuất bản.
+Phạm vi: kiểm tra nguồn chính thức và thông tin App Store cho nhóm ứng viên iPhone/offline. Cập nhật 20/11/2026: PocketPal AI và Draw Things đã được xác minh ở mức thông tin sản phẩm/gói miễn phí và được chuyển sang danh mục công khai trong PR #139; Noema và Loci vẫn ở trạng thái needs_review. Các ghi chú chi tiết bên dưới lưu lại bằng chứng và giới hạn đã rà soát, không phải xác nhận hiệu năng trên thiết bị.
 
 ## Kết luận nhanh
 
 | Công cụ | Miễn phí thực tế | Quyền riêng tư / giấy phép | Đánh giá sơ bộ |
 |---|---|---|---|
-| PocketPal AI | Chat và model local miễn phí; có mua thêm tùy chọn cho hands-free voice | MIT; xử lý local, tính năng online như web search/remote server chỉ gửi dữ liệu khi người dùng bật | Ứng viên tốt nhất để thử AI chat offline; cần chọn model nhỏ và kiểm tra hiệu năng trên từng iPhone |
-| Draw Things | Tạo ảnh local miễn phí, không giới hạn token theo mô tả nhà phát triển; có mua trong ứng dụng và cloud compute tùy chọn | Nhà phát triển mô tả prompt/ảnh ở trên thiết bị khi tạo local; chưa kết luận giấy phép của toàn bộ app/model chỉ từ trang App Store | Ứng viên tốt cho tạo hình minh họa bài viết; chỉ dùng local, không bật cloud compute/mua boost |
+| PocketPal AI | Chat/inference local cơ bản miễn phí; App Store có In-App Purchases, chu kỳ và mapping tính năng chưa rõ | Mã nguồn ứng dụng MIT; model weights có giấy phép riêng; tính năng online có thể gửi dữ liệu ra ngoài | Đã xác minh thông tin cơ bản; chuyển sang catalog công khai với cảnh báo mua trong ứng dụng và giới hạn model |
+| Draw Things | Free Edition tạo ảnh bằng local compute; Community có cloud compute miễn phí theo điều kiện; Draw Things+ là gói trả phí | Ứng dụng proprietary; model/LoRA tải vào có giấy phép riêng; cloud compute có xử lý dữ liệu theo policy | Đã xác minh free local tier; chuyển sang catalog công khai, phân biệt rõ local với cloud trả phí |
 | Noema | Ứng dụng App Store miễn phí; chat/RAG local sau khi tải model | Chính sách mô tả dữ liệu local; web search, remote endpoint, MCP, iCloud/Constellation có luồng dữ liệu riêng. Không bật các tính năng online khi thử | Có tiềm năng nghiên cứu tài liệu offline, nhưng giao diện nhiều chức năng hơn mức cần thiết; cần xác minh model và hiệu năng |
 | Loci | Local chat miễn phí, không tài khoản/subscription theo nhà phát triển | Local chat ở thiết bị; diagnostics tùy chọn. App Store Việt Nam vẫn liệt kê dữ liệu định danh/vị trí gần đúng/usage/diagnostics có thể liên kết người dùng; khai báo App Store do nhà phát triển cung cấp và chưa được Apple xác minh | Dễ dùng, nhưng cần tắt diagnostic sharing và ad measurement trước khi thử; không bật web search |
 
@@ -38,16 +38,15 @@ Phạm vi: kiểm tra nguồn chính thức và thông tin App Store cho các �
 
 ## Quyết định biên tập
 
-1. Giữ cả 4 bản ghi ở trạng thái `needs_review`; không tự động đưa vào danh mục AI Bank công khai.
-2. Ưu tiên PocketPal AI cho thử nghiệm chat local; Draw Things cho tạo ảnh local.
-3. Noema và Loci chỉ thử nghiệm sau khi kiểm tra cài đặt quyền riêng tư; không bật web search, remote endpoints, MCP, iCloud sync hoặc cloud compute.
+1. PocketPal AI và Draw Things đã được thẩm định ở mức nguồn chính thức, gỡ khỏi candidate queue và chuyển sang public catalog trong PR #139; không coi đây là phê duyệt tích hợp vào workflow.
+2. Noema và Loci vẫn giữ `needs_review`; chỉ thử nghiệm sau khi kiểm tra quyền riêng tư, không bật web search, remote endpoints, MCP, iCloud sync hoặc cloud compute.
 4. Chưa kết nối bất kỳ ứng dụng nào vào tài khoản dự án; chưa cài đặt, cấp quyền, nhập API key hay gửi dữ liệu.
 5. Chưa benchmark tốc độ, nhiệt độ, pin, RAM, dung lượng model hoặc chất lượng tiếng Việt trên thiết bị thực. Không được khẳng định hiệu năng iPhone cho tới khi có kiểm thử.
 6. Trước khi xuất bản từng công cụ, cần xác minh riêng giấy phép model weights, ngày cập nhật, vùng App Store, quyền riêng tư và điều khoản của tính năng được mô tả.
 
 ## Cập nhật đối chiếu App Store và quyền riêng tư — 19/11/2026
 
-Phạm vi cập nhật: chỉ làm mới bằng chứng storefront/điều khoản/quyền riêng tư cho bốn ứng viên iOS ở trên. Đây không phải kiểm thử ứng dụng trên thiết bị, không phải xác minh license của mọi model, và không phải quyết định đưa vào catalog công khai.
+Phạm vi cập nhật ngày 19/11: làm mới bằng chứng storefront/điều khoản/quyền riêng tư cho bốn ứng viên iOS ban đầu. Đây không phải kiểm thử ứng dụng trên thiết bị hoặc xác minh license của mọi model. Trạng thái promotion được cập nhật ở mục quyết định cuối.
 
 ### PocketPal AI
 - App Store Việt Nam hiện hiển thị Free + In-App Purchases, v1.23.0, 140.3 MB, iOS 15.1+, English, tuổi 18+. App Privacy ghi “Data Not Collected” theo khai báo nhà phát triển; Apple lưu ý khai báo chưa được xác minh.
@@ -79,9 +78,9 @@ Nguồn: https://apps.apple.com/vn/app/noema-local-ai-offline-llm/id6751169935?p
 
 Nguồn: https://apps.apple.com/vn/app/loci-private-unlimited-ai/id6762100748 ; https://askloci.ai/privacy/ ; https://askloci.ai/
 
-### Quyết định sau cập nhật
-1. Cả bốn ứng viên vẫn verification_status=needs_review; không thay đổi data/ai-tools.json công khai.
-2. Chỉ cập nhật ngày kiểm tra nguồn cho bốn hồ sơ này; không tuyên bố đã cài, benchmark hoặc xác nhận hiệu năng.
-3. Không cài app, tải model, cấp quyền, gửi dữ liệu dự án, bật Cloud Compute, web search, remote provider, MCP, iCloud sync hoặc mua In-App Purchase.
-4. Cần rà license từng model/voice, kiểm tra cài đặt quyền riêng tư trên thiết bị thật và benchmark có sự cho phép trước khi cân nhắc promotion.
+### Quyết định sau cập nhật — 20/11/2026
+1. PocketPal AI và Draw Things được chuyển khỏi candidate queue sang public catalog trong PR #139. PocketPal được ghi rõ In-App Purchases có giá/chu kỳ/feature mapping chưa xác định; Draw Things tách bạch Free Edition local, Community cloud free theo điều kiện và Draw Things+ trả phí.
+2. Noema và Loci tiếp tục `verification_status=needs_review`; chưa promotion.
+3. Không cài app, tải model, cấp quyền, gửi dữ liệu dự án, bật Cloud Compute, web search, remote provider, MCP, iCloud sync hoặc mua In-App Purchase trong lần rà soát này.
+4. Không tuyên bố đã benchmark hiệu năng; license của từng model/voice vẫn phải kiểm tra riêng.
 
