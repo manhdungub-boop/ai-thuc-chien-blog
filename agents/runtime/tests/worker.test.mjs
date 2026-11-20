@@ -46,6 +46,33 @@ test("required ingress limiter fails closed when the trusted client IP is missin
   assert.equal(calls, 0, "the limiter must not collapse unrelated callers into a shared fallback key");
 });
 
+test("ingress limiter accepts valid IPv4 and IPv6 addresses and rejects invalid IP syntax", async () => {
+  const accepted = [];
+  for (const address of ["198.51.100.42", "2001:db8::42"]) {
+    const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/health", {
+      headers: { "cf-connecting-ip": address },
+    }), {
+      AGENT_RATE_LIMIT_REQUIRED: "true",
+      AGENT_INGRESS_RATE_LIMITER: { limit: async ({ key }) => { accepted.push(key); return { success: true }; } },
+    });
+    assert.equal(response.status, 200);
+  }
+  assert.deepEqual(accepted, ["ip:198.51.100.42", "ip:2001:db8::42"]);
+
+  let calls = 0;
+  for (const address of ["not-an-ip", "999.1.1.1", "203.0.113", "2001:db8::zz", "2001:::1"]) {
+    const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/health", {
+      headers: { "cf-connecting-ip": address },
+    }), {
+      AGENT_RATE_LIMIT_REQUIRED: "true",
+      AGENT_INGRESS_RATE_LIMITER: { limit: async () => { calls += 1; return { success: true }; } },
+    });
+    assert.equal(response.status, 503, address);
+    assert.equal((await response.json()).error, "client_ip_unavailable", address);
+  }
+  assert.equal(calls, 0, "syntactically invalid addresses must never reach the limiter");
+});
+
 test("required ingress limiter fails closed when binding is missing or unavailable", async () => {
   const missing = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/health", {
     headers: { "cf-connecting-ip": "203.0.113.11" },
