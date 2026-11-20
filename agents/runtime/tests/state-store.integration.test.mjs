@@ -500,10 +500,15 @@ test("expired leases are requeued after bounded delay and fail at the attempt ce
     const recovered2 = await call(stub, "/recover", { taskId }, { "x-test-now": "2026-11-19T10:10:30.000Z" });
     assert.equal(recovered2.status, 200);
     assert.equal(recovered2.body.outcome, "requeued");
+    assert.equal(recovered2.body.task.nextAttemptAt, Date.parse("2026-11-19T10:12:30.000Z"));
 
-    const third = await call(stub, "/claim", { taskId }, { "x-test-now": "2026-11-19T10:11:00.000Z" });
+    const beforeSecondRetryDue = await call(stub, "/claim", { taskId }, { "x-test-now": "2026-11-19T10:12:29.999Z" });
+    assert.equal(beforeSecondRetryDue.status, 409);
+    assert.equal(beforeSecondRetryDue.body.error, "retry_not_due");
+
+    const third = await call(stub, "/claim", { taskId }, { "x-test-now": "2026-11-19T10:12:30.000Z" });
     assert.equal(third.status, 200);
-    const exhausted = await call(stub, "/recover", { taskId }, { "x-test-now": "2026-11-19T10:16:00.000Z" });
+    const exhausted = await call(stub, "/recover", { taskId }, { "x-test-now": "2026-11-19T10:17:30.000Z" });
     assert.equal(exhausted.status, 200);
     assert.equal(exhausted.body.outcome, "failed");
     assert.equal(exhausted.body.task.state, "failed");
