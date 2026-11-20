@@ -11,7 +11,7 @@ const workerPath = path.resolve(here, "state-store-test-worker.mjs");
 const TEST_OPERATOR_TOKEN = "integration-test-operator-token-0123456789abcdef";
 const TEST_STATE_STORE_TOKEN = "integration-test-state-store-token-0123456789abcdef";
 
-async function createRuntime({ daily = 100, concurrent = 5, persistDir, enabled = "true", paused = "false", resumeControl = true } = {}) {
+async function createRuntime({ daily = 100, concurrent = 5, persistDir, enabled = "true", paused = "false", resumeControl = true, recoveryAlarmEnabled = "false" } = {}) {
   const directory = persistDir ?? await mkdtemp(path.join(tmpdir(), "ai-thuc-chien-do-"));
   const mf = new Miniflare({
     modules: true,
@@ -24,6 +24,7 @@ async function createRuntime({ daily = 100, concurrent = 5, persistDir, enabled 
     bindings: {
       AGENT_ENABLED: enabled,
       AGENT_PAUSED: paused,
+      AGENT_RECOVERY_ALARM_ENABLED: recoveryAlarmEnabled,
       AGENT_OPERATOR_TOKEN: TEST_OPERATOR_TOKEN,
       AGENT_STATE_STORE_TOKEN: TEST_STATE_STORE_TOKEN,
       RUNTIME_MAX_TASKS_PER_DAY: String(daily),
@@ -64,6 +65,54 @@ async function call(stub, pathname, body, headers = {}) {
   });
   return { status: response.status, body: await response.json() };
 }
+
+test("lease recovery alarm is disabled by default and recovers only expired leases when explicitly enabled", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const created = await call(stub, "/reserve", task("alarm-disabled"));
+    const claimed = await call(stub, "/claim", { taskId: created.body.task.taskId });
+    assert.equal(claimed.status, 200);
+    const alarm = await call(stub, "/__test/alarm-state");
+    assert.equal(alarm.body.alarmAt, null, "default-off recovery alarm must not schedule billable events");
+  });
+
+  await withRuntime({ recoveryAlarmEnabled: "true" }, async ({ stub }) => {
+    const created = await call(stub, "/reserve", task("alarm-enabled"));
+    const taskId = created.body.task.taskId;
+    const claimed = await call(stub, "/claim", { taskId });
+    assert.equal(claimed.status, 200);
+    const scheduled = await call(stub, "/__test/alarm-state");
+    assert.equal(typeof scheduled.body.alarmAt, "number");
+    assert.ok(scheduled.body.alarmAt >= Date.now() + 4 * 60 * 1000);
+
+    const fired = await call(stub, "/__test/expire-and-fire", { taskId });
+    assert.equal(fired.body.task.state, "queued");
+    assert.equal(fired.body.task.lease_owner, null);
+    assert.equal(typeof fired.body.task.next_attempt_at, "number");
+    assert.equal(fired.body.alarmAt, null, "no running leases should leave no scheduled alarm");
+    const stored = await call(stub, "/task?id=" + encodeURIComponent(taskId));
+    assert.equal(stored.body.task.state, "queued");
+    assert.equal(stored.body.task.attemptCount, 1);
+  });
+});
+
+test("recovery alarm stops and clears itself while the durable operator pause is active", async () => {
+  await withRuntime({ recoveryAlarmEnabled: "true" }, async ({ stub }) => {
+    const created = await call(stub, "/reserve", task("alarm-paused"));
+    const taskId = created.body.task.taskId;
+    assert.equal((await call(stub, "/claim", { taskId })).status, 200);
+    assert.equal(typeof (await call(stub, "/__test/alarm-state")).body.alarmAt, "number");
+    const paused = await call(stub, "/control/pause", {
+      actor: "alarm-test-operator",
+      requestId: crypto.randomUUID(),
+      reason: "pause alarm test",
+    });
+    assert.equal(paused.status, 200);
+    const fired = await call(stub, "/__test/fire-alarm", {});
+    assert.equal(fired.body.alarmAt, null);
+    const stored = await call(stub, "/task?id=" + encodeURIComponent(taskId));
+    assert.equal(stored.body.task.state, "running", "paused recovery must not mutate task state");
+  });
+});
 
 test("all state-store routes require the distinct internal credential", async () => {
   await withRuntime({}, async ({ stub }) => {
