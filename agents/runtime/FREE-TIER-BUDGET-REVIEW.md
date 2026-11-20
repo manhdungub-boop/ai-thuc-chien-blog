@@ -92,3 +92,15 @@ A read-only Cloudflare API inspection was performed for the connected account:
 ### Decision
 
 **Do not create a Durable Object namespace or deploy the Agent Runtime yet.** Published Free-tier limits are not a substitute for confirming this account's actual plan and usage. The next safe prerequisite is a read-only verification of the account's Workers plan and Durable Objects usage through an authorized billing-read view (or the Cloudflare dashboard). If the plan/usage cannot be verified as Free with sufficient headroom, keep the runtime unbound and disabled; do not upgrade or enable billing.
+
+
+## Read-only Preview prerequisite recheck (2026-11-20)
+
+A second read-only Cloudflare API check confirmed:
+
+- The account's Durable Objects namespace list is still empty.
+- The Worker script list contains the existing website/Preview scripts but no `ai-thuc-chien-agent-runtime-preview` script.
+- No namespace was created, no Worker was deployed, and no secret or account setting was changed.
+- The prior Billing Read permission gap remains unresolved; the actual Workers plan, billing state, and remaining usage headroom are still unverified.
+
+**Decision unchanged:** keep `wrangler.preview.jsonc` as code-only. Do not create a namespace, inject secrets, or deploy until a read-only Free-plan/usage verification is available. Do not upgrade or enable billing to clear this gate.
