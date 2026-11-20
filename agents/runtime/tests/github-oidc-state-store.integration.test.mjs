@@ -153,7 +153,7 @@ test("verified GitHub OIDC token is consumed by the real SQLite State Store and 
   await withStateStore(async ({ env }) => {
     const fixture = await makeSignedFixture("github-actions-oidc-e2e-jti-0001");
     const first = await authorize(fixture.token, fixture, env);
-    assert.equal(first.ok, true);
+    assert.equal(first.ok, true, "first authorization failed: " + JSON.stringify(first));
     assert.equal(first.replayConsumed, true);
     assert.equal(first.identity.jti, "github-actions-oidc-e2e-jti-0001");
 
@@ -169,7 +169,10 @@ test("concurrent authorization attempts for one signed jti yield exactly one win
       authorize(fixture.token, fixture, env),
       authorize(fixture.token, fixture, env),
     ]);
-    assert.equal(results.filter((result) => result.ok === true).length, 1);
-    assert.equal(results.filter((result) => result.error === "oidc_token_replayed").length, 1);
+    assert.deepEqual(
+      results.map((result) => result.ok ? "ok" : result.error).sort(),
+      ["ok", "oidc_token_replayed"],
+      "unexpected concurrent authorization results: " + JSON.stringify(results),
+    );
   });
 });
