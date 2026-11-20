@@ -346,7 +346,7 @@
         "self_hosted"
       ],
       "description": "Nền tảng workflow automation kết nối ứng dụng, trigger/action và AI agent.",
-      "free_tier_summary": "Gói Cloud Free có giá $0, không cần thẻ và không giới hạn số flow. Trang giá chính thức đang có các phiên bản hiển thị quota khác nhau: 100 credits/ngày hoặc 1.000 credits/tháng; nội dung cũng mô tả lượt chạy vượt quota bị dừng cho tới khi credits làm mới. AI steps có thể tiêu thụ 2/10/20 credits tùy model. Hãy kiểm tra quota thực tế trong workspace trước khi ước tính; không bật gói trả phí hoặc pay-as-you-go.",
+      "free_tier_summary": "Cloud Free có giá $0, không cần thẻ và không giới hạn số flow. Trang giá chính thức nêu 1.000 credits/tháng, nhưng cùng trang có mô tả reset/overage không nhất quán: bảng so sánh ghi reset hằng ngày và chờ đến ngày hôm sau, còn FAQ nói 1.000 credits làm mới theo tháng. Kiểm tra quota thực tế trong workspace; không bật pay-as-you-go hoặc nâng cấp nếu ngân sách bằng 0. AI steps tiêu thụ credits theo model (fast 2, smart 10, frontier 20).",
       "official_sources": [
         "https://www.activepieces.com/pricing",
         "https://www.activepieces.com/docs/about/license",
@@ -1734,7 +1734,7 @@
       ],
       "pricing_model": "freemium",
       "pricing_status": "verified_free_tier",
-      "license": "Ứng dụng thương mại/proprietary; giấy phép của model weights, LoRA và tài sản cộng đồng được tải vào ứng dụng phải kiểm tra riêng.",
+      "license": "Mã nguồn cộng đồng công khai của engine Draw Things được cấp phép GPL-v3; ứng dụng đầy đủ do nhà phát triển quản lý trong kho riêng và chịu EULA/điều khoản ứng dụng. Không suy ra toàn bộ ứng dụng hoặc model weights/LoRA là GPL-v3; kiểm tra giấy phép riêng của từng model và tài sản nhập vào.",
       "platforms": [
         "ios",
         "macos"
