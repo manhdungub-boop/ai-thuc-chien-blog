@@ -84,8 +84,14 @@ export function simulateRuntimeCycle(input, options = {}) {
     maxDispatch,
     controlSnapshot,
   });
-  if (!tick.ok) return reject("runtime_cycle_tick_rejected");
+  const globalStopActive = controlSnapshot.paused || controlSnapshot.emergencyStopped;
+  if (!tick.ok && !globalStopActive) {
+    return reject("runtime_cycle_tick_rejected");
+  }
 
+  // A global stop is an expected safe outcome, not a malformed cycle.
+  // Continue evaluating the pure Recovery and Fencing policies so the caller
+  // receives an auditable blocked decision from every stage.
   const recovery = planLeaseRecovery(recoveryEntries, {
     now,
     retryDelayMs,
@@ -106,12 +112,14 @@ export function simulateRuntimeCycle(input, options = {}) {
     mode: "runtime_cycle_simulation",
     execution: "not_started",
     persistence: "not_started",
-    blocked: tick.blocked || recovery.blocked || decisions.some((item) => item.blocked),
-    reason: tick.blocked
-      ? tick.reason
-      : recovery.blocked
-        ? recovery.reason
-        : decisions.find((item) => item.blocked)?.reason ?? null,
+    blocked: globalStopActive || tick.blocked || recovery.blocked || decisions.some((item) => item.blocked),
+    reason: globalStopActive
+      ? (controlSnapshot.emergencyStopped ? "emergency_stop_active" : "runtime_paused")
+      : tick.blocked
+        ? tick.reason
+        : recovery.blocked
+          ? recovery.reason
+          : decisions.find((item) => item.blocked)?.reason ?? null,
     tick,
     recovery,
     fencing: { decisions },
