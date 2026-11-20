@@ -55,9 +55,8 @@ async function readReplayResponse(response) {
  * after replay consumption succeeds. Callers must perform no state change before
  * this function returns ok:true.
  *
- * This is an authorization primitive, not an HTTP route. It remains unused by
- * the Worker until an independently reviewed, least-privilege operator workflow
- * and dedicated Preview binding are implemented.
+ * The Worker uses this primitive only for the dedicated OIDC Pause endpoint.
+ * It does not authorize Resume, recovery, task submission, or task execution.
  */
 export async function authorizeGitHubActionsOperator(token, {
   env = {},
