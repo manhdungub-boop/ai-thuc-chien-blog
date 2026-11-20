@@ -2,7 +2,7 @@ import { validateTaskRequest } from "./task-contract.mjs";
 import { hasValidStateStoreBearer } from "./internal-auth.mjs";
 import { claimQueuedTask, heartbeatLease, recoverExpiredLease, completeLeasedTask } from "./lease-policy.mjs";
 
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 6;
 // Conservative Free-tier pilot defaults; hard caps remain enforced below.
 const DEFAULT_LIMITS = Object.freeze({ daily: 100, concurrent: 5, payloadBytes: 8192 });
 const TERMINAL_STATES = new Set(["succeeded", "failed", "cancelled"]);
@@ -134,6 +134,24 @@ async function sha256Hex(value) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
+function validatePersistedResult(value) {
+  if (!isObject(value) || Object.keys(value).sort().join(",") !== "findingCount,findings,status,taskType" ||
+      !["content.review", "ai_bank.candidate_review", "seo.audit"].includes(value.taskType) ||
+      !["pass", "attention", "review_required"].includes(value.status) ||
+      !Number.isSafeInteger(value.findingCount) || value.findingCount < 0 || value.findingCount > 20 ||
+      !Array.isArray(value.findings) || value.findings.length > 20 ||
+      value.findings.length !== value.findingCount) return null;
+  for (const item of value.findings) {
+    if (!isObject(item) || Object.keys(item).sort().join(",") !== "code,message,severity" ||
+        typeof item.code !== "string" || !/^[a-z][a-z0-9_]{1,79}$/.test(item.code) ||
+        !["error", "warning"].includes(item.severity) ||
+        typeof item.message !== "string" || item.message.length < 1 || item.message.length > 256 ||
+        item.message.trim() !== item.message || /[\\u0000-\\u001f\\u007f]/.test(item.message)) return null;
+  }
+  const json = JSON.stringify(value);
+  if (new TextEncoder().encode(json).byteLength > 4096) return null;
+  return json;
+}
 function safeTask(row) {
   if (!row) return null;
   return {
@@ -143,6 +161,7 @@ function safeTask(row) {
     attemptCount: row.attempt_count, maxAttempts: row.max_attempts,
     leaseGeneration: row.lease_generation, leaseExpiresAt: row.lease_expires_at, leaseMaxExpiresAt: row.lease_max_expires_at,
     nextAttemptAt: row.next_attempt_at, lastErrorCode: row.last_error_code,
+    result: row.result_json ? JSON.parse(row.result_json) : null,
   };
 }
 
@@ -208,6 +227,11 @@ export class AgentStateStore {
           this.sql.exec("CREATE INDEX oidc_jti_replay_expiry_idx ON oidc_jti_replay(expires_at)");
           this.sql.exec("UPDATE runtime_meta SET value = '5' WHERE key = 'schema_version'");
           version = { value: "5" };
+        }
+        if (version.value === "5") {
+          this.sql.exec("ALTER TABLE tasks ADD COLUMN result_json TEXT CHECK (result_json IS NULL OR length(CAST(result_json AS BLOB)) <= 4096)");
+          this.sql.exec("UPDATE runtime_meta SET value = '6' WHERE key = 'schema_version'");
+          version = { value: "6" };
         }
         if (version.value !== String(SCHEMA_VERSION)) {
           throw new Error("runtime_schema_version_unsupported");
@@ -619,6 +643,13 @@ export class AgentStateStore {
         typeof body.taskId !== "string" || body.taskId.length < 1 || body.taskId.length > 64) {
       return { status: 400, body: { ok: false, error: "heartbeat_request_invalid" } };
     }
+    const resultJson = Object.hasOwn(body, "result") ? validatePersistedResult(body.result) : null;
+    if (Object.hasOwn(body, "result") && resultJson === null) {
+      return { status: 400, body: { ok: false, error: "complete_result_invalid" } };
+    }
+    if (resultJson !== null && body.status !== "succeeded") {
+      return { status: 400, body: { ok: false, error: "complete_result_status_invalid" } };
+    }
     try {
       return this.ctx.storage.transactionSync(() => {
         const row = readRow(this.sql, "SELECT * FROM tasks WHERE task_id = ?", body.taskId);
@@ -645,7 +676,7 @@ export class AgentStateStore {
   }
 
   complete(body, now) {
-    if (!isObject(body) || Object.keys(body).some((key) => !["taskId","leaseOwner","leaseGeneration","status","errorCode"].includes(key)) ||
+    if (!isObject(body) || Object.keys(body).some((key) => !["taskId","leaseOwner","leaseGeneration","status","errorCode","result"].includes(key)) ||
         !["taskId","leaseOwner","leaseGeneration","status"].every((key) => Object.hasOwn(body, key)) ||
         typeof body.taskId !== "string" || body.taskId.length < 1 || body.taskId.length > 64) {
       return { status: 400, body: { ok: false, error: "complete_request_invalid" } };
@@ -662,9 +693,9 @@ export class AgentStateStore {
         if (decision.duplicate) return { status: 200, body: { ok: true, duplicate: true, task: safeTask(row) } };
         const fields = decision.fields;
         this.sql.exec(
-          "UPDATE tasks SET state=?,updated_at=?,terminal_at=?,error_code=?,lease_owner=NULL,lease_expires_at=NULL,lease_max_expires_at=NULL,next_attempt_at=NULL,last_error_code=? WHERE task_id=? AND state='running' AND lease_owner=? AND lease_generation=? AND lease_expires_at>?",
+          "UPDATE tasks SET state=?,updated_at=?,terminal_at=?,error_code=?,lease_owner=NULL,lease_expires_at=NULL,lease_max_expires_at=NULL,next_attempt_at=NULL,last_error_code=?,result_json=? WHERE task_id=? AND state='running' AND lease_owner=? AND lease_generation=? AND lease_expires_at>?",
           fields.state, fields.updated_at, fields.terminal_at, fields.error_code,
-          fields.error_code, body.taskId, body.leaseOwner, body.leaseGeneration, now,
+          fields.error_code, resultJson, body.taskId, body.leaseOwner, body.leaseGeneration, now,
         );
         const updated = readRow(this.sql, "SELECT * FROM tasks WHERE task_id = ?", body.taskId);
         if (!updated || updated.state !== fields.state || updated.lease_owner !== null) {
