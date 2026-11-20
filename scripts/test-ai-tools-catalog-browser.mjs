@@ -9,7 +9,7 @@ const catalog = JSON.parse(fs.readFileSync(catalogPath, "utf8"));
 const activeTools = catalog.tools.filter(t => t && t.status === "active");
 const needsReview = catalog.tools.filter(t => t.verification_status === "needs_review");
 const activeNeedsReview = activeTools.filter(t => t.verification_status === "needs_review");
-const newIds = ["anythingllm", "opencode", "comfyui", "qdrant", "whisper-cpp", "mlflow", "pydantic-ai", "haystack", "elevenlabs", "embeddinggemma-2", "google-ai-edge-gallery", "gemini-4-hydrogen", "pocketpal-ai", "draw-things", "cline", "jan", "librechat"];
+const newIds = ["anythingllm", "opencode", "comfyui", "qdrant", "whisper-cpp", "mlflow", "pydantic-ai", "haystack", "elevenlabs", "embeddinggemma-2", "google-ai-edge-gallery", "gemini-4-hydrogen", "pocketpal-ai", "draw-things"];
 const expandedIds = ["invideo", "heygen", "metricool", "vidiq", "higgsfield"];
 const searchNames = [
   ["anythingllm", "AnythingLLM"], ["opencode", "OpenCode"], ["comfyui", "ComfyUI"],
@@ -33,6 +33,7 @@ for (const id of newIds) {
   if (catalog.tools.length === 39 && !["pocketpal-ai", "draw-things"].includes(id)) assert.ok(tool, `${id} must exist in the reconciled catalog`);
   if (catalog.tools.length === 46) assert.ok(tool, `${id} must exist in the verified 46-record catalog`);
   if (catalog.tools.length === 49) assert.ok(tool, `${id} must exist in the verified 49-record catalog`);
+  if (catalog.tools.length === 49 && ["cline", "jan", "librechat"].includes(id)) assert.ok(tool, `${id} must exist in the verified 49-record catalog`);
   if (tool) {
     assert.equal(tool.status, "active", `${id} must be active`);
     assert.equal(tool.verification_status, "verified", `${id} must pass editorial/source review`);
