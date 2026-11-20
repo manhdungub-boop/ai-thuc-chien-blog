@@ -412,6 +412,76 @@ export default {
         return json({ ok: false, error: status === 429 ? "runtime_capacity_limited" : "durable_review_unavailable" }, status);
       }
     }
+    if (url.pathname === "/internal/dispatch") {
+      if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
+      if (!isEnabled(env.AGENT_ENABLED) || env.AGENT_PAUSED !== "false") {
+        return json({ ok: false, error: "agent_disabled_or_paused" }, 503);
+      }
+      if (!await hasValidOperatorBearer(request, env)) return json({ ok: false, error: "operator_auth_required" }, 401);
+      if ([...url.searchParams.keys()].length > 0) return json({ ok: false, error: "request_invalid" }, 400);
+      const parsed = await readBoundedJsonValueRequest(request, 1024);
+      if (!parsed.ok) {
+        return json({ ok: false, error: parsed.status === 413 ? "request_body_too_large" : "request_invalid" }, parsed.status);
+      }
+      const body = parsed.value;
+      if (!body || typeof body !== "object" || Array.isArray(body) ||
+          Object.keys(body).some((key) => key !== "maxTasks") ||
+          (body.maxTasks !== undefined && (!Number.isSafeInteger(body.maxTasks) || body.maxTasks < 1 || body.maxTasks > 5))) {
+        return json({ ok: false, error: "request_invalid" }, 400);
+      }
+      const maxTasks = body.maxTasks ?? 1;
+      try {
+        const snapshotAdapter = createReadOnlyTaskSnapshotAdapter(createPreviewReadOnlyReaders());
+        const manager = createReadOnlyAgentManager({ snapshotAdapter });
+        const items = [];
+        for (let index = 0; index < maxTasks; index++) {
+          const claimed = await writeStateStore(env, "/claim-next", {});
+          if (!claimed.task) break;
+          const task = claimed.task;
+          const lease = claimed.lease;
+          if (!task || typeof task.taskId !== "string" ||
+              !lease || typeof lease.owner !== "string" || !Number.isSafeInteger(lease.generation)) {
+            throw new Error("state_store_claim_invalid");
+          }
+          const report = await manager.reviewBatch([task]);
+          const item = report.items[0];
+          const completion = await writeStateStore(env, "/complete", {
+            taskId: task.taskId,
+            leaseOwner: lease.owner,
+            leaseGeneration: lease.generation,
+            status: item?.ok === true ? "succeeded" : "failed",
+            ...(item?.ok === true ? {} : { errorCode: "read_only_review_failed" }),
+          });
+          items.push({
+            ok: item?.ok === true,
+            taskId: task.taskId,
+            state: completion.task?.state || (item?.ok === true ? "succeeded" : "failed"),
+            result: item,
+          });
+        }
+        const summary = {
+          requested: maxTasks,
+          processed: items.length,
+          succeeded: items.filter((item) => item.state === "succeeded").length,
+          failed: items.filter((item) => item.state === "failed").length,
+        };
+        return json({
+          ok: summary.failed === 0,
+          mode: "operator_triggered_bounded_queue_dispatch",
+          execution: "synchronous_leased_read_only_review",
+          items,
+          summary,
+          limitations: [
+            "manual_operator_trigger_only",
+            "no_scheduler_or_background_execution",
+            "results_are_returned_to_operator_and_not_persisted",
+            "seo_live_evidence_unavailable",
+          ],
+        });
+      } catch {
+        return json({ ok: false, error: "queue_dispatch_unavailable" }, 503);
+      }
+    }
     if (url.pathname === "/internal/control") {
       if (request.method !== "GET") return json({ ok: false, error: "method_not_allowed" }, 405);
       if (!await hasValidOperatorBearer(request, env)) return json({ ok: false, error: "operator_auth_required" }, 401);
