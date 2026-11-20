@@ -509,6 +509,13 @@ function durableRunEnv() {
         idempotency.set(task.idempotencyKey, task.taskId);
         return Response.json({ ok: true, duplicate: false, task }, { status: 201 });
       }
+      if (url.pathname === "/claim-next") {
+        const task = [...records.values()].find((item) => item.state === "queued");
+        if (!task) return Response.json({ ok: true, task: null, lease: null });
+        task.state = "running";
+        task.lease = { owner: "lease-owner-" + task.taskId, generation: 1 };
+        return Response.json({ ok: true, task, lease: task.lease });
+      }
       if (url.pathname === "/claim") {
         const task = records.get(body.taskId);
         if (!task || task.state !== "queued") return Response.json({ ok: false, error: "task_not_claimable" }, { status: 409 });
@@ -612,6 +619,78 @@ test("run reserves, claims, reviews, and completes durable read-only tasks", asy
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("operator queue dispatcher processes only a bounded number of already-queued read-only tasks", async () => {
+  const originalFetch = globalThis.fetch;
+  const articleHtml = `<!doctype html><html><head>
+    <title>Demo article</title>
+    <meta name="description" content="This is a sufficiently detailed description for a content quality review.">
+    <meta name="author" content="DUNG - AI">
+    <link rel="canonical" href="https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/demo-article">
+    <script type="application/ld+json">{"@type":"BlogPosting"}</script>
+    </head><body><section class="article-author-note">Bài viết gốc DUNG - AI; vui lòng ghi công và dẫn liên kết về bài viết.</section>
+    <a href="/thu-vien.html">Library</a><main>${"useful content ".repeat(270)}</main></body></html>`;
+  globalThis.fetch = async (input) => {
+    if (String(input).endsWith("/articles/demo-article.html")) return new Response(articleHtml, { status: 200 });
+    throw new Error("unexpected_source_url");
+  };
+  const { env, records, calls } = durableRunEnv();
+  records.set("queued-1", {
+    taskId: "queued-1", type: "content.review",
+    payload: { articlePath: "articles/demo-article.html" },
+    idempotencyKey: "queued-content-review-0001", state: "queued",
+  });
+  records.set("queued-2", {
+    taskId: "queued-2", type: "content.review",
+    payload: { articlePath: "articles/demo-article.html" },
+    idempotencyKey: "queued-content-review-0002", state: "queued",
+  });
+  try {
+    const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/dispatch", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + RUN_TOKEN, "Content-Type": "application/json" },
+      body: JSON.stringify({ maxTasks: 1 }),
+    }), env);
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(body.mode, "operator_triggered_bounded_queue_dispatch");
+    assert.equal(body.summary.processed, 1);
+    assert.equal(body.summary.succeeded, 1);
+    assert.equal(records.get("queued-1").state, "succeeded");
+    assert.equal(records.get("queued-2").state, "queued", "dispatcher must honor the caller's hard batch bound");
+    assert.deepEqual(calls.map((call) => new URL(call.url).pathname), ["/claim-next", "/complete"]);
+    assert.equal(JSON.stringify(body).includes(RUN_STATE_TOKEN), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("operator queue dispatcher requires authentication, explicit gates, and strict bounded input", async () => {
+  const { env } = durableRunEnv();
+  const url = "https://agent-runtime-preview.example.workers.dev/internal/dispatch";
+  const unauthorized = await worker.fetch(new Request(url, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ maxTasks: 1 }),
+  }), env);
+  assert.equal(unauthorized.status, 401);
+  const disabled = await worker.fetch(new Request(url, {
+    method: "POST",
+    headers: { Authorization: "Bearer " + RUN_TOKEN, "Content-Type": "application/json" },
+    body: JSON.stringify({ maxTasks: 1 }),
+  }), { ...env, AGENT_PAUSED: "true" });
+  assert.equal(disabled.status, 503);
+  const invalid = await worker.fetch(new Request(url, {
+    method: "POST",
+    headers: { Authorization: "Bearer " + RUN_TOKEN, "Content-Type": "application/json" },
+    body: JSON.stringify({ maxTasks: 6 }),
+  }), env);
+  assert.equal(invalid.status, 400);
+  const query = await worker.fetch(new Request(url + "?limit=5", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + RUN_TOKEN, "Content-Type": "application/json" },
+    body: JSON.stringify({ maxTasks: 1 }),
+  }), env);
+  assert.equal(query.status, 400);
 });
 
 test("run durably marks unavailable SEO evidence as failed without inventing a pass", async () => {
