@@ -1,5 +1,6 @@
 import { hasValidOperatorBearer } from "./operator-auth.mjs";
 import { hasValidStateStoreBearer } from "./internal-auth.mjs";
+import { authorizeGitHubActionsOperator } from "./github-oidc-authorize.mjs";
 export { AgentStateStore } from "./state-store.mjs";
 
 const SECURITY_HEADERS = Object.freeze({
@@ -218,6 +219,60 @@ export default {
         paused: env.AGENT_PAUSED !== "false",
         execution: "not_implemented",
       });
+    }
+    if (url.pathname === "/internal/oidc/pause") {
+      if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
+      if (env.AGENT_OIDC_ENABLED !== "true") return json({ ok: false, error: "oidc_operator_disabled" }, 503);
+      if ([...url.searchParams.keys()].length > 0) return json({ ok: false, error: "request_invalid" }, 400);
+
+      const parsedBody = await readBoundedJsonRequest(request, 1024);
+      if (!parsedBody.ok) {
+        return json({ ok: false, error: parsedBody.status === 413 ? "request_body_too_large" : "request_invalid" }, parsedBody.status);
+      }
+      const body = parsedBody.value;
+      if (body === null || typeof body !== "object" || Array.isArray(body) ||
+          Object.keys(body).some((key) => key !== "reason") ||
+          (body.reason !== undefined && (typeof body.reason !== "string" || body.reason.length > 160 ||
+            [...body.reason].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)))) {
+        return json({ ok: false, error: "request_invalid" }, 400);
+      }
+
+      const authorization = request.headers.get("authorization") || "";
+      const tokenMatch = /^Bearer ([A-Za-z0-9._-]{1,16384})$/.exec(authorization);
+      if (!tokenMatch) return json({ ok: false, error: "github_oidc_token_required" }, 401);
+
+      const expected = {
+        audience: env.AGENT_OIDC_AUDIENCE,
+        repository: env.AGENT_OIDC_REPOSITORY,
+        repositoryOwner: env.AGENT_OIDC_REPOSITORY_OWNER,
+        repositoryId: env.AGENT_OIDC_REPOSITORY_ID,
+        repositoryOwnerId: env.AGENT_OIDC_REPOSITORY_OWNER_ID,
+        ref: env.AGENT_OIDC_REF,
+        workflowRef: env.AGENT_OIDC_WORKFLOW_REF,
+        actorId: env.AGENT_OIDC_ACTOR_ID,
+        eventName: "workflow_dispatch",
+      };
+      const authorized = await authorizeGitHubActionsOperator(tokenMatch[1], { env, expected });
+      if (!authorized.ok) {
+        if (authorized.error === "oidc_token_replayed") return json({ ok: false, error: "github_oidc_token_replayed" }, 409);
+        if (authorized.error?.includes("unavailable") || authorized.error === "oidc_replay_response_invalid") {
+          return json({ ok: false, error: "github_oidc_verification_unavailable" }, 503);
+        }
+        return json({ ok: false, error: "github_oidc_token_invalid" }, 401);
+      }
+
+      const actor = "github-actions:" + authorized.identity.actorId;
+      try {
+        const result = await writeStateStore(env, "/control/pause", {
+          actor,
+          requestId: crypto.randomUUID(),
+          ...(body.reason === undefined ? {} : { reason: body.reason }),
+        });
+        return json({ ok: true, changed: result.changed, control: result.control });
+      } catch (error) {
+        if (error?.status === 429) return json({ ok: false, error: "rate_limited" }, 429);
+        return json({ ok: false, error: "control_unavailable" }, 503);
+      }
     }
     if (url.pathname === "/run") {
       if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
