@@ -30,8 +30,6 @@ jobs:
 
       - name: Request and verify a real GitHub-issued OIDC token without exposing it
         env:
-          ACTIONS_ID_TOKEN_REQUEST_URL: ${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
           EXPECTED_AUDIENCE: ai-thuc-chien-agent-runtime-preview
           EXPECTED_REPOSITORY: manhdungub-boop/ai-thuc-chien-blog
           EXPECTED_REPOSITORY_ID: "1423636651"
