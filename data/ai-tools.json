@@ -1734,7 +1734,7 @@
       ],
       "pricing_model": "freemium",
       "pricing_status": "verified_free_tier",
-      "license": "Mã nguồn cộng đồng công khai của engine Draw Things được cấp phép GPL-v3; ứng dụng đầy đủ do nhà phát triển quản lý trong kho riêng và chịu EULA/điều khoản ứng dụng. Không suy ra toàn bộ ứng dụng hoặc model weights/LoRA là GPL-v3; kiểm tra giấy phép riêng của từng model và tài sản nhập vào.",
+      "license": "Public community repository for code used by the app is GPL-v3; its README states the complete Draw Things app is managed in a private monorepo. Do not infer that the whole app or all assets are GPL-v3; check app terms and each model/LoRA license separately.",
       "platforms": [
         "ios",
         "macos"
@@ -1744,7 +1744,9 @@
       "official_sources": [
         "https://drawthings.ai/pricing/",
         "https://drawthings.ai/policy/",
-        "https://apps.apple.com/vn/app/draw-things-offline-ai-art/id6444050820"
+        "https://apps.apple.com/vn/app/draw-things-offline-ai-art/id6444050820",
+        "https://github.com/drawthingsai/draw-things-community/blob/main/README.md",
+        "https://github.com/drawthingsai/draw-things-community/blob/main/LICENSE.md"
       ],
       "last_verified": "2026-11-20",
       "verification_status": "verified",
