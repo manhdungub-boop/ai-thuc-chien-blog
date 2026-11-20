@@ -81,6 +81,7 @@ test("all state-store routes require the distinct internal credential", async ()
       ["/task?id=missing", undefined],
       ["/usage", undefined],
       ["/__test/rollback", {}],
+      ["/__test/downgrade-v1", {}],
     ]) {
       const missing = await call(stub, pathname, body, { Authorization: "" });
       const invalid = await call(stub, pathname, body, { Authorization: "Bearer invalid-token" });

@@ -95,6 +95,11 @@ jobs:
           import assert from 'node:assert/strict';
           import { readFile } from 'node:fs/promises';
           const config = JSON.parse(await readFile('agents/runtime/wrangler.jsonc', 'utf8'));
+          const stateStoreSource = await readFile('agents/runtime/src/state-store.mjs', 'utf8');
+          assert.equal(config.main, './src/worker.mjs');
+          assert.equal(stateStoreSource.includes('/__test/'), false, 'test-only routes must stay outside deployable source');
+          assert.equal(stateStoreSource.includes('RUNTIME_TESTING'), false, 'test-only flags must stay outside deployable source');
+          assert.equal(stateStoreSource.includes('x-test-now'), false, 'test clock override must stay outside deployable source');
           assert.equal(config.name, 'ai-thuc-chien-agent-runtime-preview');
           assert.equal(config.workers_dev, true);
           assert.equal(config.preview_urls, true);
