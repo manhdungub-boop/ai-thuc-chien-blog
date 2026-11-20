@@ -36,6 +36,7 @@ The GitHub Actions workflow is authoritative for the test dependency tree: it ap
 
 - Enforced pilot ceilings: 100 accepted tasks/day, 5 in-flight tasks, and 8 KiB serialized task request. These are code limits, not measured provider quota.
 - Daily usage is counted in UTC. In-flight usage is derived from rows in \`queued\` or \`running\`, not an in-memory counter.
+- A future Durable Object alarm is not cost-free by assumption: each \`setAlarm()\` is one SQLite row write and each alarm invocation is one Durable Object request. Alarm cadence, retry/recovery volume, heartbeat audit writes, and retention deletes must be budgeted against the verified account-wide Free allowance before implementation or activation.
 - Completed/failed/cancelled task rows are retained for 30 days; audit events and daily-usage rows are retained for 90 days. Idempotency protection therefore lasts for the task-retention period.
 - Storage errors, unsupported schema versions, and invalid limits fail closed. There is no memory fallback.
 - These are internal guardrails, not proof of remaining Cloudflare account quota or a guarantee of uninterrupted service.
