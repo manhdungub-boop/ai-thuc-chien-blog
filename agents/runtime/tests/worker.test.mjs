@@ -146,6 +146,7 @@ test("task inspection uses a fixed route and strips payload and lease secrets", 
       taskId: "task-123", type: "seo.audit", state: "queued",
       createdAt: 100, updatedAt: 101, attemptCount: 1, maxAttempts: 3,
       nextAttemptAt: null, lastErrorCode: null,
+      result: { taskType: "seo.audit", status: "attention", findingCount: 0, findings: [] },
       payload: { private: "do-not-return" }, leaseOwner: "private-lease-owner",
     } },
   });
@@ -157,6 +158,7 @@ test("task inspection uses a fixed route and strips payload and lease secrets", 
   assert.equal(response.status, 200);
   assert.equal(calls[0].url, "https://state-store.internal/task?id=task-123");
   assert.equal(body.task.taskId, "task-123");
+  assert.deepEqual(body.task.result, { taskType: "seo.audit", status: "attention", findingCount: 0, findings: [] });
   assert.equal("payload" in body.task, false);
   assert.equal("leaseOwner" in body.task, false);
 });
