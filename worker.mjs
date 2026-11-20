@@ -1239,16 +1239,25 @@ async function handleCommunityApi(request, env) {
 
     return communityJson({ error: "Không tìm thấy API cộng đồng." }, 404, request);
   } catch (error) {
-    // Never log credentials, request bodies, cookies, email addresses or IP addresses.
-    // Keep enough sanitized context to diagnose future production failures.
+    const message = String(error?.message || error || "");
+    let errorCode = "COMMUNITY_INTERNAL";
+    if (/no such table/i.test(message)) errorCode = "D1_TABLE_MISSING";
+    else if (/no such column/i.test(message)) errorCode = "D1_COLUMN_MISSING";
+    else if (/unique constraint|constraint failed|foreign key constraint/i.test(message)) errorCode = "D1_CONSTRAINT";
+    else if (/database is locked|sqlite_busy|d1_busy/i.test(message)) errorCode = "D1_BUSY";
+    else if (/d1_error|sqlite|database|sql/i.test(message)) errorCode = "D1_QUERY";
+    else if (/crypto|derivebits|subtlecrypto/i.test(message)) errorCode = "CRYPTO_FAILURE";
+    const requestId = String(request.headers.get("CF-Ray") || crypto.randomUUID()).split("-")[0].slice(0, 20);
     const failedRoute = new URL(request.url).pathname.replace(/^\/api\/community\/?/, "").slice(0, 64);
-    console.error("community_api_error", {
-      route: failedRoute || "root",
-      method: request.method,
-      errorName: error instanceof Error ? error.name : "UnknownError",
-      errorMessage: error instanceof Error ? String(error.message).slice(0, 160) : "Non-Error throwable",
-    });
-    return communityJson({ error: "Tạm thời không xử lý được yêu cầu cộng đồng. Vui lòng thử lại sau." }, 500, request);
+    // Log only safe categories and request metadata; never log raw errors, PII, credentials, or request bodies.
+    console.error("community_api_failure", JSON.stringify({
+      requestId, route: failedRoute || "root", method: request.method, errorCode,
+      errorName: String(error?.name || "Error").slice(0, 40),
+    }));
+    return communityJson({
+      error: `Tạm thời không xử lý được yêu cầu cộng đồng. Vui lòng thử lại sau. (Mã lỗi: ${errorCode}; tham chiếu: ${requestId})`,
+      errorCode, errorId: requestId,
+    }, 500, request);
   }
 }
 
