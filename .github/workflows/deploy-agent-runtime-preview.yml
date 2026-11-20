@@ -74,12 +74,12 @@ jobs:
         run: |
           set -euo pipefail
           npx wrangler deploy --config wrangler.preview.jsonc 2>&1 | tee "$RUNNER_TEMP/agent-runtime-preview-deploy.log"
-          worker_url="$(grep -Eo 'https://[a-zA-Z0-9._-]+\\.workers\\.dev' "$RUNNER_TEMP/agent-runtime-preview-deploy.log" | tail -n 1 || true)"
+          worker_url="$(grep -Eo 'https://[a-zA-Z0-9._-]+\.workers\.dev' "$RUNNER_TEMP/agent-runtime-preview-deploy.log" | tail -n 1 || true)"
           if [[ -z "$worker_url" ]]; then
             echo "::error::Wrangler did not report a workers.dev URL; refusing to claim a successful health check."
             exit 1
           fi
-          printf '%s\\n' "$worker_url" > "$RUNNER_TEMP/agent-runtime-preview-url.txt"
+          printf '%s\n' "$worker_url" > "$RUNNER_TEMP/agent-runtime-preview-url.txt"
 
       - name: Verify Preview health is paused and no recurring Workflow schedule is configured
         shell: bash
