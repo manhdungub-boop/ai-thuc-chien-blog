@@ -1,6 +1,6 @@
 # Agent Runtime state store — architecture decision
 
-Status: **SQLite Durable Object implementation, schema v1-v5 migrations, operator control/recovery bridge, and isolated Preview binding config are in Draft PR #339; GitHub Actions run #300 passed 157/157 local tests; Preview config is not deployed and no task execution is connected**.
+Status: **SQLite Durable Object implementation, schema v1-v5 migrations, operator control/recovery bridge, and isolated Preview binding config are in Draft PR #339. The operator-triggered POST /run path is connected to durable reserve → fenced claim → read-only review → terminal completion. Exact-head GitHub Actions run #387 passed 219/219 tests. Preview config is not deployed; no scheduler or 24/7 background execution is implemented.**
 
 Date: 2026-11-19
 
@@ -82,7 +82,7 @@ This primitive does not verify JWT signatures, fetch JWKS, validate claims, or a
 
 ## Operational control-plane gaps
 
-- The State Store `POST /recover` route remains behind the dedicated Worker-to-DO internal bearer. The Worker source now contains an operator-authenticated `POST /internal/recover` bridge that injects a configured service actor and server-generated request ID, forwards only the dedicated internal credential, and returns a minimized task projection. The State Store validates the actor/request ID, applies a per-actor 10-per-60-second rate limit using the durable control-rate table, and records both fields in the recovery audit event. This code path remains unbound and undeployed in the checked-in Preview config; it is not yet operationally available.
+- The State Store `POST /recover` route remains behind the dedicated Worker-to-DO internal bearer. The Worker source now contains an operator-authenticated `POST /internal/recover` bridge that injects a configured service actor and server-generated request ID, forwards only the dedicated internal credential, and returns a minimized task projection. The State Store validates the actor/request ID, applies a per-actor 10-per-60-second rate limit using the durable control-rate table, and records both fields in the recovery audit event. This bridge is implemented in source and covered by isolated Worker tests, but it is not operationally available until the dedicated Preview Worker is deployed with its Preview-only binding and secrets.
 - The current pause controls are environment flags (`AGENT_ENABLED` and `AGENT_PAUSED`), not a separately authenticated, dynamically mutable kill-switch API. A change to runtime flags requires a controlled configuration/deployment operation; do not describe this as an instant remote kill switch.
 - There is no operator UI, browser session, MFA, or per-human identity provider. The recovery bridge uses a configured service actor and a shared operator bearer; its audit identity is therefore a service identity, not proof of which human initiated the action. The bridge has a durable per-actor rate limit, but pause/resume and recovery share the same actor bucket. Do not expose the internal State Store token to a browser.
 - Before any task execution, independently review the shared rate-limit semantics, service-actor audit limitation, recovery bridge, explicit pause/resume behavior, and rollback path. Add a human-bound operator identity/MFA or an equivalent trusted administrative boundary before broader operational use. Until those gates pass, keep the Runtime disabled and unbound.
@@ -90,7 +90,7 @@ This primitive does not verify JWT signatures, fetch JWKS, validate claims, or a
 
 - No Durable Object namespace/binding or migration is added to the validation-only `wrangler.jsonc`. A separate `wrangler.preview.jsonc` now declares one SQLite `AgentStateStore` binding and its initial migration, with both runtime gates closed. This Preview config is code-only and has not been deployed; secrets, account identifiers, production routes, and schedules remain absent.
 - No Cloudflare Agent Runtime deployment, secret configuration, alarm, cron trigger, queue consumer, or public endpoint is enabled.
-- No task execution, external side effects, backup/restore promise, or 24/7 claim is authorized.
+- Only the bounded, operator-triggered, synchronous read-only review path exists in source; it has no publishing or other external write side effects. No automatic background execution, backup/restore promise, or 24/7 claim is authorized.
 - No Production Worker, DNS, D1, or live data is changed.
 
 ## Implementation gates
