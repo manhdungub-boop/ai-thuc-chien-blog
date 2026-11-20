@@ -76,3 +76,14 @@ This scaffold makes no claim of 24/7 execution, backup readiness, or production 
 ## Preview URL and operator exposure
 
 The dedicated Preview config sets `workers_dev=true` and `preview_urls=true`; if deployed, its workers.dev/Preview URL is publicly reachable unless an access-control layer is added. `/health` exposes only non-sensitive gate state. Operator routes require server-side bearer validation, but the current shared token/static actor label do not provide named-human identity, MFA, browser-safe sessions, or global ingress rate limiting. Do not put either secret in browser code. A no-cost Access/session boundary and the actual account Free-plan/usage headroom must be verified before deployment. The separate Preview config remains undeployed until those gates pass.
+
+
+## GitHub Actions OIDC emergency-pause bridge (code-only)
+
+The Worker now has a separate `POST /internal/oidc/pause` route. It accepts only a short-lived GitHub Actions JWT, verifies it against signing keys obtained from GitHub's fixed issuer discovery/JWKS endpoints, pins the expected repository/owner IDs, main ref, exact workflow ref, custom audience, `workflow_dispatch` event, and a configured actor ID, then atomically consumes the token `jti` in the State Store before recording a durable Pause action. It does not accept the shared operator bearer, does not expose Resume, and does not enqueue or execute tasks.
+
+The dedicated Preview config sets `AGENT_OIDC_ENABLED=false`. It includes the exact repository/owner identifiers and workflow/ref/audience policy, but deliberately leaves `AGENT_OIDC_ACTOR_ID` empty. The route fails closed until the actual trusted human actor ID is confirmed and configured. The new manual workflow `.github/workflows/agent-runtime-operator.yml` requests `id-token: write` only for a manually dispatched pause operation and requires the non-secret repository variable `AGENT_RUNTIME_PREVIEW_URL`; that variable is not configured here. No OIDC token, Cloudflare secret, or Preview URL is committed.
+
+The repository was created on 2026-10-17. GitHub's current documentation says repositories created after 2026-07-15 use immutable default OIDC subjects containing owner and repository IDs; the verifier's expected subject is pinned to that immutable format. This is verified against GitHub's OIDC reference, but the actual workflow token has not yet been obtained or tested against a live Worker.
+
+This is a code-level emergency-pause path only. It is not human MFA, it cannot resume the runtime, and it does not establish that the Preview Worker is deployed. Keep it disabled until the actor ID, Preview URL, Free-tier headroom, and dedicated Preview access boundary are verified.
