@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-11-20T22:15:00+07:00",
+  "generated_at": "2026-11-20T23:40:00+07:00",
   "catalog_policy": {
     "default_locale": "vi",
     "currency": "USD",
@@ -1878,6 +1878,86 @@
         "mcp",
         "rag",
         "privacy"
+      ]
+    },
+    {
+      "id": "browser-use",
+      "name": "Browser Use",
+      "vendor": "Browser Use",
+      "website": "https://browser-use.com/",
+      "categories": [
+        "agents",
+        "browser-automation",
+        "developer",
+        "automation"
+      ],
+      "pricing_model": "self_hosted_free_and_cloud_paid",
+      "pricing_status": "self_hosted_free",
+      "license": "MIT cho thư viện Python mã nguồn mở; Browser Use Cloud và hosted Agent API có điều khoản và giá riêng.",
+      "platforms": [
+        "python",
+        "typescript",
+        "chromium",
+        "chrome",
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "description": "Thư viện AI browser agent mã nguồn mở cho phép agent điều khiển Chromium/Chrome qua giao diện trình duyệt; có thể chạy local với model tương thích hoặc dùng hạ tầng cloud riêng của nhà cung cấp.",
+      "free_tier_summary": "Thư viện mã nguồn mở MIT có thể chạy miễn phí trên máy của bạn; khi chạy local vẫn cần tự cung cấp model/inference và tài nguyên máy. Browser Use Cloud, browser-hosting và hosted agent API là dịch vụ tính phí; README hiện nêu cloud browser từ 0,02 USD/giờ. Không nhầm thư viện local miễn phí với dịch vụ cloud miễn phí.",
+      "official_sources": [
+        "https://github.com/browser-use/browser-use",
+        "https://github.com/browser-use/browser-use/blob/main/LICENSE",
+        "https://docs.browser-use.com/"
+      ],
+      "last_verified": "2026-11-20",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "browser-agent",
+        "automation",
+        "local-first",
+        "mit-license"
+      ]
+    },
+    {
+      "id": "open-webui",
+      "name": "Open WebUI",
+      "vendor": "Open WebUI Inc.",
+      "website": "https://openwebui.com/",
+      "categories": [
+        "assistant",
+        "self-hosted",
+        "chat-ui",
+        "rag",
+        "agents"
+      ],
+      "pricing_model": "self_hosted_free_and_cloud_paid",
+      "pricing_status": "self_hosted_free",
+      "license": "Open WebUI License cho các bản hiện hành từ v0.6.6+, có điều khoản giữ nguyên thương hiệu; code trước v0.6.6 giữ BSD-3-Clause theo lịch sử giấy phép. Không phải giấy phép OSI-approved cho bản mới.",
+      "platforms": [
+        "web",
+        "docker",
+        "python",
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "description": "Giao diện AI tự lưu trữ, hỗ trợ Ollama và API tương thích OpenAI, tích hợp tài liệu, công cụ, RAG và nhiều provider; có thể vận hành trên hạ tầng riêng.",
+      "free_tier_summary": "Community edition có thể tự host miễn phí; cần tự chịu chi phí máy chủ, điện, lưu trữ và model/API nếu dùng dịch vụ cloud. Từ v0.6.6 phải giữ nguyên nhận diện Open WebUI trong các trường hợp không thuộc ngoại lệ được cấp phép; không mặc định được white-label hoặc gỡ logo. Đọc đúng LICENSE của phiên bản triển khai.",
+      "official_sources": [
+        "https://docs.openwebui.com/",
+        "https://docs.openwebui.com/license/",
+        "https://github.com/open-webui/open-webui/blob/main/LICENSE"
+      ],
+      "last_verified": "2026-11-20",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "self-hosted",
+        "ollama",
+        "rag",
+        "branding-license"
       ]
     }
   ]
