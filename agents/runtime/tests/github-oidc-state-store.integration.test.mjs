@@ -6,7 +6,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Miniflare } from "miniflare";
 import { authorizeGitHubActionsOperator } from "../src/github-oidc-authorize.mjs";
-import { callStateStore } from "../src/state-store-client.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const workerPath = path.resolve(here, "state-store-test-worker.mjs");
@@ -139,13 +138,26 @@ async function withStateStore(callback) {
     await rm(directory, { recursive: true, force: true });
   }
 }
+function callRealStateStore(env, operation, input) {
+  assert.equal(operation, "oidcReplayConsume");
+  const namespace = env.AGENT_STATE_STORE;
+  const stub = namespace.get(namespace.idFromName("agent-runtime-global"));
+  return stub.fetch(new Request("http://do.local/oidc/replay/consume", {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer " + env.AGENT_STATE_STORE_TOKEN,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(input),
+  }));
+}
 function authorize(token, fixture, env) {
   return authorizeGitHubActionsOperator(token, {
     env,
     expected: EXPECTED,
     nowSeconds: fixture.now,
     fetchImpl: makeGitHubFetch(fixture.jwks),
-    callStateStoreImpl: callStateStore,
+    callStateStoreImpl: callRealStateStore,
   });
 }
 
