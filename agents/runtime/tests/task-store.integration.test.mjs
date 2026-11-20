@@ -571,6 +571,35 @@ describe("AgentTaskStore Durable Object", () => {
     expect(audit).toEqual([{ event_type: "circuit_breaker_auto_pause", count: 1 }]);
   });
 
+  it("auto-pauses exactly once when concurrent terminal failures cross the threshold", async () => {
+    const claims = [];
+    for (let index = 1; index <= 5; index += 1) {
+      const id = `breaker-race-${String(index).padStart(4, "0")}`;
+      await store.enqueue(task(id));
+      const claim = await store.claim(["ai_bank_discovery"], id);
+      expect(claim.task.id).toBe(id);
+      claims.push({ id, leaseToken: claim.lease_token });
+    }
+
+    const outcomes = await Promise.all(claims.map(({ id, leaseToken }) =>
+      store.abandon(id, leaseToken, "concurrent_terminal_failure")
+    ));
+    expect(outcomes).toHaveLength(5);
+    expect(outcomes.every(result => result.updated && result.status === "dead")).toBe(true);
+    expect(await store.getControl()).toMatchObject({
+      paused: true,
+      failure_count_last_10m: 5,
+      reason: "circuit_breaker:5_failures_in_10m"
+    });
+
+    const audit = await runInDurableObject(store, async (_instance, state) =>
+      state.storage.sql.exec(
+        "SELECT event_type, COUNT(*) AS count FROM task_store_audit WHERE event_type = 'circuit_breaker_auto_pause' GROUP BY event_type"
+      ).toArray()
+    );
+    expect(audit).toEqual([{ event_type: "circuit_breaker_auto_pause", count: 1 }]);
+  });
+
   it("includes a terminal failure exactly on the ten-minute circuit-breaker boundary", async () => {
     const windowStart = Date.parse("2026-11-20T00:00:00.000Z");
     for (let index = 1; index <= 4; index += 1) {
