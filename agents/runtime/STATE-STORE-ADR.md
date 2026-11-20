@@ -1,6 +1,6 @@
 # Agent Runtime state store — architecture decision
 
-Status: **SQLite Durable Object implementation with schema v5 migrations, transactional lease operations, and an internal OIDC replay-ledger primitive is in Draft PR #297; local Miniflare/workerd validation is running for the latest revision; not bound, not deployed, and not connected to task execution**.
+Status: **SQLite Durable Object implementation, schema v1-v5 migrations, operator control/recovery bridge, and isolated Preview binding config are in Draft PR #339; GitHub Actions run #300 passed 157/157 local tests; Preview config is not deployed and no task execution is connected**.
 
 Date: 2026-11-19
 
