@@ -20,7 +20,7 @@ Status: **isolated validation scaffold; no Agent Runtime Worker deployment and n
 - \`src/admission-policy.mjs\` remains a pure fail-closed policy helper; it is not the quota authority.
 - \`src/internal-auth.mjs\` validates a dedicated \`AGENT_STATE_STORE_TOKEN\`, separate from the external operator token.
 - \`src/lease-policy.mjs\` defines bounded claim, heartbeat, recovery and completion rules, including a 30-minute absolute lease lifetime and three attempts by default.
-- \`src/state-store.mjs\` implements a SQLite-backed Durable Object class, but the class is **not bound** in the checked-in Preview Worker config. It supports transactional schema v1-to-v5 migrations, durable idempotency, UTC daily counters, atomic admission reservations, fenced claims, bounded heartbeats, operator-invoked expiry recovery and terminal completion. Every state-changing lease operation writes an audit event transactionally.
+- `src/state-store.mjs` implements the SQLite-backed Durable Object class with transactional schema v1-to-v5 migrations, durable idempotency, UTC daily counters, atomic admission reservations, fenced claims, bounded heartbeats, operator-invoked expiry recovery and terminal completion. The class is bound only in `wrangler.preview.jsonc`; the validation-only `wrangler.jsonc` remains unbound. Every state-changing lease operation writes an audit event transactionally.
 - State Store routes are not connected to \`POST /run\`; no task is enqueued or executed by the Worker shell. \`/recover\` is manually invoked; there is no alarm, cron or background scheduler.
 
 ## Local integration validation
