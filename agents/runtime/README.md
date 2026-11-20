@@ -73,6 +73,18 @@ See [STATE-STORE-ADR.md](./STATE-STORE-ADR.md) for the design decision, Free-tie
 - This module is deliberately pure: it does not fetch files, access the State Store, call external services, mutate the catalog, edit articles, publish content, enqueue tasks, or invoke an executor. The read-only data adapters that would obtain snapshots are not implemented yet.
 - All reports explicitly say `execution: not_started` and `sideEffects: []`. A finding is a review signal, not permission to auto-correct or publish.
 
+
+## Read-only source snapshot adapters
+
+- `src/task-snapshot-adapters.mjs` converts an already-authorized source read into a bounded metadata snapshot for the pure task handlers.
+- It accepts only three injected read capabilities: `readArticleHtml(articlePath)`, `readAiBankCatalog()`, and `readSeoPage(path)`. Task payloads are validated before any reader is invoked; article and route identifiers are passed unchanged and are never converted into arbitrary URLs.
+- Article snapshots extract title, description, canonical, author, BlogPosting JSON-LD presence, attribution-note presence, visible-text word count, and relative internal-link count.
+- AI Bank snapshots use the repository catalog schema (`tools[].id/name/vendor/website/official_sources/pricing_model/pricing_status/last_verified/verification_status`) and detect duplicate names or website hostnames within that catalog.
+- SEO readers must explicitly supply HTTP status, sitemap membership, and broken-internal-link count alongside bounded HTML. The adapter does not guess sitemap or broken-link status.
+- Each HTML source is capped at 512 KiB; the AI catalog is capped at 512 KiB and 1,000 entries. Source failures, missing records, malformed results and oversize data fail closed with generic errors.
+- The adapter has no filesystem, network, `fetch`, Worker binding, write, publish, or executor capability. The injected reader functions are an interface contract only; production/Preview readers are not wired and no live repository or Worker data is being read by this module.
+- Adapter tests use in-memory fixtures. Passing the adapter tests does not establish a deployed data connection.
+
 ## Remaining gates
 
 1. Independently review the schema migration, lease transactions, auth boundary, and integration-test evidence.
