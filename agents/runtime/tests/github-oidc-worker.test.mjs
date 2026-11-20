@@ -73,6 +73,10 @@ test("OIDC pause verifies GitHub signature, consumes jti, and records only the v
 
   const internalCalls = [];
   const env = {
+    // Emergency pause must remain reachable even when execution is disabled
+    // or already paused by the fail-closed runtime defaults.
+    AGENT_ENABLED: "false",
+    AGENT_PAUSED: "true",
     AGENT_OIDC_ENABLED: "true",
     AGENT_OIDC_AUDIENCE: AUDIENCE,
     AGENT_OIDC_REPOSITORY: EXPECTED.repository,
