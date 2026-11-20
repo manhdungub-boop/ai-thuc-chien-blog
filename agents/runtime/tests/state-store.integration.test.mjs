@@ -545,18 +545,18 @@ test("atomic claim admits only one worker and stale lease generations cannot hea
       taskId, leaseOwner: lease.owner, leaseGeneration: lease.generation, status: "succeeded",
       result: {
         taskType: "seo.audit",
-        status: "pass",
-        findingCount: 0,
-        findings: [],
+        status: "attention",
+        findingCount: 1,
+        findings: [{ code: "seo_title_missing", severity: "error", message: "SEO title is missing." }],
       },
     }, { "x-test-now": "2026-11-19T10:02:00.000Z" });
     assert.equal(completed.status, 200, JSON.stringify(completed.body));
     assert.equal(completed.body.task.state, "succeeded");
     assert.deepEqual(completed.body.task.result, {
       taskType: "seo.audit",
-      status: "pass",
-      findingCount: 0,
-      findings: [],
+      status: "attention",
+      findingCount: 1,
+      findings: [{ code: "seo_title_missing", severity: "error", message: "SEO title is missing." }],
     });
     const persisted = await call(stub, "/task?id=" + encodeURIComponent(taskId));
     assert.equal(persisted.status, 200);
