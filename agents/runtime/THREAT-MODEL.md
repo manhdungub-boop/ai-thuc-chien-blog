@@ -38,7 +38,7 @@ Trust boundaries:
 ### T2 — Operator credential compromise
 **Threat:** an attacker with the operator token attempts to submit arbitrary task types, payloads, or state transitions.  
 **Current controls:** task contract validation, fixed operation allowlist in the internal client, bounded payload/body sizes, and bounded state transitions.  
-**Residual risk:** bounded read-only review processing now exists, but there is no mutating task executor or publishing capability. Worker ingress still lacks a global rate limit, read routes are not rate-limited, and the service actor label is shared/static rather than a human identity. Before enabling scheduled processing, complete ingress/read-route rate limits, request replay policy, auditable credential revocation/rotation, and independent review of the operator identity boundary. A shared bearer token must never be placed in browser JavaScript.
+**Residual risk:** bounded read-only review processing now exists, but there is no mutating task executor or publishing capability. The dedicated Preview config now requires a per-client-IP ingress rate limiter for all routes, including reads. Cloudflare applies approximate counters separately in each location, so this is not a strict global cap and must not be treated as the only abuse-control layer. The service actor label remains shared/static rather than a human identity. Before enabling scheduled processing, complete request replay policy, auditable credential revocation/rotation, and independent review of the operator identity boundary. A shared bearer token must never be placed in browser JavaScript.
 
 ### T3 — Internal token leakage or confused-deputy abuse
 **Threat:** a caller tricks the Worker into forwarding caller-controlled paths, headers, object IDs, or credentials to the DO.  
@@ -63,7 +63,7 @@ Trust boundaries:
 ### T7 — Resource exhaustion / oversized inputs
 **Threat:** large bodies, malformed JSON, unbounded task payloads, or repeated requests consume CPU/storage.  
 **Current controls:** streamed body cap before JSON parse, task payload cap, strict schema validation, daily quota and concurrency cap.  
-**Residual risk:** State Store mutation routes have a durable per-service-actor rate limit, but the Worker ingress has no global rate limit, read routes are not rate-limited, and the actor label is shared/static rather than a human identity. No deployed request timeout budget, scheduler backpressure, or measured DO resource usage exists. Do not increase limits based only on arithmetic estimates.
+**Residual risk:** State Store mutation routes have a durable per-service-actor rate limit. The Preview Worker additionally requires an approximate per-client-IP ingress limit for all routes; Cloudflare counters are per-location and can temporarily exceed the threshold, so this is not a strict global rate limit. The actor label is shared/static rather than a human identity. No deployed request timeout budget, scheduler backpressure, or measured DO resource usage exists. Do not increase limits based only on arithmetic estimates.
 
 ### T8 — Pause/kill switch bypass
 **Threat:** queued work starts after pause, or the operator cannot stop active dispatch.  
@@ -95,7 +95,8 @@ Trust boundaries:
 - [ ] Independent reviewer inspects current source and this threat model; records findings and disposition.
 - [x] Remove test-only route/clock override from deployable code; verify the production source has no test hook and the production Durable Object returns 404 for the test route.
 - [x] Implement Worker ingress → fixed-operation State Store client integration with operator authorization, bounded request bodies, and no caller credential/header forwarding; keep all task handlers read-only.
-- [ ] Add/verify global ingress and read-route rate limits, explicit response allowlisting, and negative tests for response leakage and missing/rotated secrets.
+- [x] Add a Preview-only per-IP ingress/read-route limiter and negative tests for missing/unavailable limiter bindings; note that Cloudflare limits are approximate per location, not globally strict.
+- [ ] Independently verify explicit response allowlisting and negative tests for response leakage and missing/rotated secrets.
 - [ ] Add end-to-end negative tests for every unauthenticated route, operator/internal token confusion, arbitrary path/header injection, response leakage, missing binding, missing secret, and rotation.
 - [ ] Keep one operator only, or implement tenant ownership and cross-tenant isolation before multi-user access.
 - [ ] Obtain verifiable Free-plan usage/headroom and confirm no billing/payment/paid upgrade change; if unavailable, do not bind or deploy.
