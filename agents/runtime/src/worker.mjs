@@ -256,7 +256,7 @@ export default {
         service: "ai-thuc-chien-agent-runtime-preview",
         enabled: isEnabled(env.AGENT_ENABLED),
         paused: env.AGENT_PAUSED !== "false",
-        execution: "not_implemented",
+        execution: "operator_triggered_read_only_analysis",
       });
     }
     if (url.pathname === "/internal/oidc/pause") {
