@@ -54,7 +54,7 @@ function parseControlJson(text) {
   skipWhitespace();
   if (text[index++] !== "{") throw new Error("control_json_invalid");
   const result = {};
-  const allowedKeys = new Set(["reason", "actor", "requestId"]);
+  const allowedKeys = new Set(["reason", "actor", "requestId", "taskId"]);
   skipWhitespace();
   if (text[index] === "}") {
     index++;
@@ -270,6 +270,50 @@ export default {
           return json({ ok: false, error: error.status === 429 ? "rate_limited" : "control_unavailable" }, error.status);
         }
         return json({ ok: false, error: "control_unavailable" }, 503);
+      }
+    }
+    if (url.pathname === "/internal/recover") {
+      if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
+      if (!await hasValidOperatorBearer(request, env)) return json({ ok: false, error: "operator_auth_required" }, 401);
+      if ([...url.searchParams.keys()].length > 0) return json({ ok: false, error: "request_invalid" }, 400);
+      if (env.AGENT_ENABLED !== "true" || env.AGENT_PAUSED !== "false") {
+        return json({ ok: false, error: "agent_disabled_or_paused" }, 503);
+      }
+      const actor = env.AGENT_OPERATOR_ID;
+      if (typeof actor !== "string" || !/^[a-zA-Z0-9._:-]{3,64}$/.test(actor)) {
+        return json({ ok: false, error: "operator_identity_unavailable" }, 503);
+      }
+      const parsedBody = await readBoundedJsonRequest(request, 1024);
+      if (!parsedBody.ok) {
+        return json({ ok: false, error: parsedBody.status === 413 ? "request_body_too_large" : "request_invalid" }, parsedBody.status);
+      }
+      const body = parsedBody.value;
+      if (body === null || typeof body !== "object" || Array.isArray(body) ||
+          Object.keys(body).length !== 1 || typeof body.taskId !== "string" ||
+          body.taskId.length < 1 || body.taskId.length > 64 ||
+          [...body.taskId].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)) {
+        return json({ ok: false, error: "request_invalid" }, 400);
+      }
+      try {
+        const result = await writeStateStore(env, "/recover", {
+          taskId: body.taskId,
+          actor,
+          requestId: crypto.randomUUID(),
+        });
+        const task = result.task;
+        if (!task || typeof task.taskId !== "string") {
+          return json({ ok: false, error: "state_store_response_invalid" }, 503);
+        }
+        return json({ ok: true, outcome: result.outcome, task: {
+          taskId: task.taskId, type: task.type, state: task.state,
+          attemptCount: task.attemptCount, maxAttempts: task.maxAttempts,
+          nextAttemptAt: task.nextAttemptAt, lastErrorCode: task.lastErrorCode,
+        } });
+      } catch (error) {
+        if (error?.status === 404) return json({ ok: false, error: "task_not_found" }, 404);
+        if (error?.status === 409) return json({ ok: false, error: "task_recovery_conflict" }, 409);
+        if (error?.status === 429) return json({ ok: false, error: "rate_limited" }, 429);
+        return json({ ok: false, error: "state_store_unavailable" }, 503);
       }
     }
     if (url.pathname === "/internal/usage" || url.pathname === "/internal/task") {
