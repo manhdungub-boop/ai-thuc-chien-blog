@@ -1,6 +1,9 @@
 import { hasValidOperatorBearer } from "./operator-auth.mjs";
 import { hasValidStateStoreBearer } from "./internal-auth.mjs";
 import { authorizeGitHubActionsOperator } from "./github-oidc-authorize.mjs";
+import { createReadOnlyAgentManager } from "./read-only-agent-manager.mjs";
+import { createReadOnlyTaskSnapshotAdapter } from "./task-snapshot-adapters.mjs";
+import { createPreviewReadOnlyReaders } from "./preview-read-only-sources.mjs";
 export { AgentStateStore } from "./state-store.mjs";
 
 const SECURITY_HEADERS = Object.freeze({
@@ -117,6 +120,42 @@ async function readBoundedJsonRequest(request, maxBytes) {
   for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
   try {
     return { ok: true, value: parseControlJson(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) };
+  } catch {
+    return { ok: false, status: 400 };
+  }
+}
+
+async function readBoundedJsonValueRequest(request, maxBytes) {
+  const declared = request.headers.get("content-length");
+  if (declared !== null) {
+    if (!/^(0|[1-9][0-9]*)$/.test(declared)) return { ok: false, status: 400 };
+    if (Number(declared) > maxBytes) return { ok: false, status: 413 };
+  }
+  if (!request.body) return { ok: false, status: 400 };
+  const reader = request.body.getReader();
+  const chunks = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        try { await reader.cancel(); } catch {}
+        return { ok: false, status: 413 };
+      }
+      chunks.push(value);
+    }
+  } catch {
+    return { ok: false, status: 400 };
+  } finally {
+    try { reader.releaseLock(); } catch {}
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  try {
+    return { ok: true, value: JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) };
   } catch {
     return { ok: false, status: 400 };
   }
@@ -287,7 +326,36 @@ export default {
         return json({ ok: false, error: "agent_disabled_or_paused" }, 503);
       }
       if (!await hasValidOperatorBearer(request, env)) return json({ ok: false, error: "operator_auth_required" }, 401);
-      return json({ ok: false, error: "execution_not_implemented" }, 501);
+      if ([...url.searchParams.keys()].length > 0) return json({ ok: false, error: "request_invalid" }, 400);
+      const parsed = await readBoundedJsonValueRequest(request, 16 * 1024);
+      if (!parsed.ok) {
+        return json({ ok: false, error: parsed.status === 413 ? "request_body_too_large" : "request_invalid" }, parsed.status);
+      }
+      const body = parsed.value;
+      if (!body || typeof body !== "object" || Array.isArray(body) ||
+          Object.keys(body).length !== 1 || !Array.isArray(body.tasks) ||
+          body.tasks.length < 1 || body.tasks.length > 5) {
+        return json({ ok: false, error: "request_invalid" }, 400);
+      }
+      try {
+        const snapshotAdapter = createReadOnlyTaskSnapshotAdapter(createPreviewReadOnlyReaders());
+        const manager = createReadOnlyAgentManager({ snapshotAdapter });
+        const result = await manager.reviewBatch(body.tasks);
+        return json({
+          ok: result.ok,
+          mode: "operator_triggered_read_only_analysis",
+          execution: "read_only_analysis",
+          result,
+          limitations: [
+            "no_task_queue_or_persistent_result",
+            "no_scheduler_or_background_execution",
+            "seo_live_evidence_unavailable",
+            "repository_source_is_public_main_branch",
+          ],
+        });
+      } catch {
+        return json({ ok: false, error: "read_only_analysis_unavailable" }, 503);
+      }
     }
     if (url.pathname === "/internal/control") {
       if (request.method !== "GET") return json({ ok: false, error: "method_not_allowed" }, 405);
