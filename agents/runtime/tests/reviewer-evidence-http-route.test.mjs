@@ -326,6 +326,46 @@ describe("authenticated operator runtime-control HTTP route", () => {
     expect(await response.json()).toEqual({ changed: true, control });
   });
 
+  it("routes Resume only to clear the Task Store pause and preserves deployment disable flags", async () => {
+    let received;
+    const reason = "Resume queue after operator review";
+    const env = {
+      AGENT_ENABLED: "false",
+      AGENT_PAUSED: "true",
+      AGENT_TASK_STORE: { getByName: name => {
+        expect(name).toBe("primary");
+        return {
+          async setOperatorControl(...args) {
+            received = args;
+            return {
+              authorized: true,
+              changed: true,
+              control: { paused: false, reason, failure_count_last_10m: 0 }
+            };
+          }
+        };
+      } }
+    };
+    const response = await worker.fetch(new Request(path, {
+      method: "POST",
+      headers: {
+        origin,
+        "content-type": "application/json",
+        cookie: "__Host-ai_reviewer_session=" + token
+      },
+      body: JSON.stringify({ action: "resume", reason })
+    }), env);
+
+    expect(received).toEqual([false, reason, token]);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      changed: true,
+      control: { paused: false, reason, failure_count_last_10m: 0 }
+    });
+    expect(env.AGENT_ENABLED).toBe("false");
+    expect(env.AGENT_PAUSED).toBe("true");
+  });
+
   it("returns operator state only after the Task Store authorizes the session", async () => {
     let received;
     const control = { paused: false, reason: null, failure_count_last_10m: 0 };
