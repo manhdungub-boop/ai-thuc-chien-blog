@@ -2,7 +2,7 @@ name: Agent Runtime Preview Shell Validation
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, integration/agent-runtime-v5-preview-20261120]
     paths:
       - "agents/runtime/**"
       - ".github/workflows/agent-runtime-preview-validation.yml"
