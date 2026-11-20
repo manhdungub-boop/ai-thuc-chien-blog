@@ -86,7 +86,6 @@ test("rejects redirects, non-JSON responses, and oversized discovery documents",
 });
 
 test("rejects malformed, duplicate, unsupported, empty, and oversized JWKS key sets", async () => {
-  const discovery = jsonResponse({ issuer, jwks_uri: jwksUrl });
   const invalidSets = [
     { keys: [] },
     { keys: [signingKey, signingKey] },
@@ -96,7 +95,12 @@ test("rejects malformed, duplicate, unsupported, empty, and oversized JWKS key s
   ];
   for (const value of invalidSets) {
     await assert.rejects(
-      fetchGitHubActionsJwks({ fetchImpl: fetchSequence([discovery, jsonResponse(value)]) }),
+      fetchGitHubActionsJwks({
+        fetchImpl: fetchSequence([
+          jsonResponse({ issuer, jwks_uri: jwksUrl }),
+          jsonResponse(value),
+        ]),
+      }),
       /oidc_jwks_invalid/,
     );
   }
