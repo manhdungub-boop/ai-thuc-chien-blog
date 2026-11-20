@@ -19,12 +19,12 @@ const searchNames = [
   ["gemini-4-hydrogen", "Gemini 4 Hydrogen"], ["pocketpal-ai", "PocketPal AI"], ["draw-things", "Draw Things"],
   ["invideo", "InVideo"], ["heygen", "HeyGen"],
   ["metricool", "Metricool"], ["vidiq", "vidIQ"], ["higgsfield", "Higgsfield"],
-  ["cline", "Cline"], ["jan", "Jan"], ["librechat", "LibreChat"]
+  ["cline", "Cline"], ["jan", "Jan"], ["librechat", "LibreChat"], ["browser-use", "Browser Use"], ["open-webui", "Open WebUI"]
 ].filter(([id]) => catalog.tools.some(tool => tool.id === id)).map(([, name]) => name);
-const expectedActiveByTotal = new Map([[36, 35], [39, 38], [44, 43], [46, 45], [49, 48]]);
+const expectedActiveByTotal = new Map([[36, 35], [39, 38], [44, 43], [46, 45], [49, 48], [51, 50]]);
 const expectedActive = expectedActiveByTotal.get(catalog.tools.length);
 
-assert.ok(expectedActive !== undefined, `catalog total ${catalog.tools.length} is not an approved baseline (36), reconciled catalog (39), expanded catalog (44), verified update (46), or local-AI expansion (49)`);
+assert.ok(expectedActive !== undefined, `catalog total ${catalog.tools.length} is not an approved baseline (36), reconciled catalog (39), expanded catalog (44), verified update (46), local-AI expansion (49), or browser-agent expansion (51)`);
 assert.equal(activeTools.length, expectedActive, "public AI Bank active count must match the approved catalog baseline; deprecated Flowise stays hidden");
 assert.deepEqual(needsReview.map(t => t.id).sort(), [], "all active catalog records have verified editorial status");
 assert.equal(activeNeedsReview.length, 0, "no active record should remain in the needs-review filter");
@@ -36,6 +36,14 @@ for (const id of newIds) {
   if (tool) {
     assert.equal(tool.status, "active", `${id} must be active`);
     assert.equal(tool.verification_status, "verified", `${id} must pass editorial/source review`);
+  }
+}
+if (catalog.tools.length === 51) {
+  for (const id of ["browser-use", "open-webui"]) {
+    const tool = catalog.tools.find(t => t.id === id);
+    assert.ok(tool, `${id} must exist in the verified 51-record catalog`);
+    assert.equal(tool.status, "active", `${id} must be active`);
+    assert.equal(tool.verification_status, "verified", `${id} must be source-verified`);
   }
 }
 if (catalog.tools.length === 49) {
