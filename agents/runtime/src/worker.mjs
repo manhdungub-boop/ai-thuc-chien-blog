@@ -20,6 +20,35 @@ function json(data, status = 200) {
 }
 function isEnabled(value) { return value === "true"; }
 
+const SAFE_TASK_TYPES = new Set(["content.review", "ai_bank.candidate_review", "seo.audit"]);
+function safeReviewResult(item) {
+  if (!item || item.ok !== true || !SAFE_TASK_TYPES.has(item.taskType) ||
+      !["pass", "attention", "review_required"].includes(item.status) ||
+      !Number.isSafeInteger(item.findingCount) || item.findingCount < 0 || item.findingCount > 20 ||
+      !Array.isArray(item.findings) || item.findings.length !== item.findingCount) {
+    return { ok: false, errorCode: "read_only_review_failed" };
+  }
+  const findings = [];
+  for (const finding of item.findings) {
+    if (!finding || typeof finding !== "object" || Array.isArray(finding) ||
+        Object.keys(finding).sort().join(",") !== "code,message,severity" ||
+        typeof finding.code !== "string" || !/^[a-z][a-z0-9_]{1,79}$/.test(finding.code) ||
+        !["error", "warning"].includes(finding.severity) ||
+        typeof finding.message !== "string" || finding.message.length < 1 || finding.message.length > 256 ||
+        finding.message.trim() !== finding.message || /[\\u0000-\\u001f\\u007f]/.test(finding.message)) {
+      return { ok: false, errorCode: "read_only_review_failed" };
+    }
+    findings.push({ code: finding.code, severity: finding.severity, message: finding.message });
+  }
+  return {
+    ok: true,
+    taskType: item.taskType,
+    status: item.status,
+    findingCount: item.findingCount,
+    findings,
+  };
+}
+
 function isValidClientIp(address) {
   if (address.includes(":")) {
     try {
@@ -469,7 +498,7 @@ const worker = {
             ok: item?.ok === true,
             taskId: stored.taskId,
             state: completion.task?.state || (item?.ok === true ? "succeeded" : "failed"),
-            result: item,
+            result: safeReviewResult(item),
           });
         }
         const summary = {
