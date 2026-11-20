@@ -42,10 +42,17 @@ function blocked(reason, taskType = null) {
  * It never invokes task handlers, State Store, queues, network, storage,
  * timers, filesystem, publishers, or the Worker /run route.
  */
-export function simulateExecutorRun(taskInput, {
-  controlSnapshot,
-  limits = { maxSteps: DEFAULT_MAX_STEPS },
-} = {}) {
+export function simulateExecutorRun(taskInput, options = {}) {
+  if (!isPlainRecord(options) ||
+      Object.keys(options).some((key) => !["controlSnapshot", "limits"].includes(key))) {
+    return blocked("executor_simulation_options_invalid");
+  }
+
+  const controlSnapshot = options.controlSnapshot;
+  const limits = options.limits === undefined
+    ? { maxSteps: DEFAULT_MAX_STEPS }
+    : options.limits;
+
   if (!isPlainRecord(limits) || !exactKeys(limits, ["maxSteps"]) ||
       !Number.isSafeInteger(limits.maxSteps) ||
       limits.maxSteps < 1 || limits.maxSteps > HARD_MAX_STEPS) {

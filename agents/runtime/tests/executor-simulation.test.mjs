@@ -100,6 +100,16 @@ test("limits and options reject extra fields and non-integer values", () => {
     assert.equal(result.ok, false);
     assert.equal(result.reason, "executor_simulation_limits_invalid");
   }
+
+  for (const options of [
+    null,
+    [],
+    { controlSnapshot: ACTIVE, execute: true },
+  ]) {
+    const result = simulateExecutorRun(TASKS[0], options);
+    assert.equal(result.ok, false);
+    assert.equal(result.reason, "executor_simulation_options_invalid");
+  }
 });
 
 test("simulation trace contains no executable payload or handler material", () => {
