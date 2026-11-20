@@ -34,6 +34,23 @@ jobs:
       - name: Build static site and SEO feeds
         run: npm run build
 
+      - name: Validate AI agent registry and scripts
+        run: |
+          node -e "JSON.parse(require('node:fs').readFileSync('agents/agent-registry.json', 'utf8'))"
+          node --check scripts/validate-agent-task.mjs
+          node --check scripts/plan-agent-tasks.mjs
+          node --test tests/agent-task-contract.test.mjs
+
+      - name: Test AI agent task queue and state transitions
+        run: |
+          node --check scripts/agent-task-store.mjs
+          node --test tests/agent-task-store.test.mjs
+
+      - name: Run offline AI agent coordinator dry-run
+        run: |
+          node --check scripts/agent-coordinator-dry-run.mjs
+          node scripts/agent-coordinator-dry-run.mjs agents/examples/read-only-ai-bank-review.tasks.json
+
       - name: Check JavaScript syntax
         run: |
           node --check script.js

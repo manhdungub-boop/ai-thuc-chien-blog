@@ -1,0 +1,21 @@
+{
+  "tasks": [
+    {
+      "task_id": "ai-bank-review-2026-11-18-001",
+      "goal": "Rà soát các ứng viên công cụ AI đã có trong hồ sơ dự án bằng nguồn chính thức; ghi rõ giá, giới hạn, giấy phép và điểm chưa xác minh.",
+      "task_type": "ai_bank",
+      "state": "RECEIVED",
+      "permission_scope": "read_only",
+      "cost_class": "no_external_execution",
+      "data_class": "public",
+      "acceptance_criteria": [
+        "Mỗi công cụ có nguồn chính thức hoặc được đánh dấu chưa xác minh",
+        "Không tự suy đoán giá, quota, giấy phép hoặc khả năng miễn phí",
+        "Không sửa danh mục công khai; chỉ tạo báo cáo đề xuất"
+      ],
+      "allowed_tools": [],
+      "evidence": [],
+      "blockers": []
+    }
+  ]
+}

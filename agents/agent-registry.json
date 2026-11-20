@@ -1,0 +1,121 @@
+{
+  "schema_version": "1.0.0",
+  "project": "AI Thực Chiến DUNG - AI",
+  "mode": "provider_neutral_review_only",
+  "default_permission": "read_only",
+  "cost_policy": "zero_cost_only",
+  "agents": [
+    {
+      "id": "manager",
+      "name": "Manager Agent",
+      "role": "orchestrator",
+      "goal": "Translate owner requests into bounded tasks, assign specialists, track dependencies, and report verified completion.",
+      "inputs": ["owner_request", "project_rules", "current_evidence"],
+      "outputs": ["task_plan", "task_status", "completion_report"],
+      "may_delegate_to": ["research", "ai_bank", "content", "media", "social", "qa_security", "release"],
+      "may_publish": false,
+      "may_merge": false,
+      "may_deploy_production": false
+    },
+    {
+      "id": "research",
+      "name": "Research Agent",
+      "role": "evidence_research",
+      "goal": "Find primary sources, verify claims, pricing, licensing, availability, and source dates.",
+      "inputs": ["research_question", "tool_or_topic_candidates"],
+      "outputs": ["source_register", "verified_facts", "uncertainties"],
+      "may_publish": false,
+      "may_merge": false,
+      "may_deploy_production": false
+    },
+    {
+      "id": "ai_bank",
+      "name": "AI Bank Agent",
+      "role": "catalog_curator",
+      "goal": "Review AI tools, deduplicate by name/provider/domain, classify pricing and license, and propose evidence-backed catalog changes.",
+      "inputs": ["candidate_tool", "existing_catalog"],
+      "outputs": ["catalog_review", "duplicate_report", "proposed_record"],
+      "required_fields": ["name", "provider", "domain", "category", "pricing_status", "free_limits", "license", "platforms", "official_source", "checked_at", "activity_status"],
+      "default_record_status": "needs_review",
+      "may_publish": false,
+      "may_merge": false,
+      "may_deploy_production": false
+    },
+    {
+      "id": "content",
+      "name": "Content Agent",
+      "role": "editorial_production",
+      "goal": "Produce original Vietnamese SEO content with practical value, citations, attribution, and editorial metadata.",
+      "inputs": ["topic_brief", "verified_research", "editorial_rules"],
+      "outputs": ["article_draft", "source_list", "seo_checklist", "rights_check"],
+      "may_publish": false,
+      "may_merge": false,
+      "may_deploy_production": false
+    },
+    {
+      "id": "media",
+      "name": "Media Agent",
+      "role": "media_planning",
+      "goal": "Prepare scripts, shot lists, image briefs, and video drafts only with verified no-cost tools and available credits.",
+      "inputs": ["approved_content", "media_goal", "tool_capabilities"],
+      "outputs": ["media_brief", "script", "asset_rights_check", "export_status"],
+      "must_verify_credit_cost_before_generation": true,
+      "may_publish": false,
+      "may_merge": false,
+      "may_deploy_production": false
+    },
+    {
+      "id": "social",
+      "name": "Social Agent",
+      "role": "social_editorial",
+      "goal": "Adapt approved content for social channels, prepare drafts and schedules, and report verified analytics.",
+      "inputs": ["approved_content", "channel_rules", "connected_account_status"],
+      "outputs": ["channel_drafts", "schedule_proposal", "performance_report"],
+      "may_publish": false,
+      "may_reply_to_users": false,
+      "may_merge": false,
+      "may_deploy_production": false
+    },
+    {
+      "id": "qa_security",
+      "name": "QA & Security Agent",
+      "role": "quality_gate",
+      "goal": "Run only affected-scope checks, inspect permissions and data exposure, and produce evidence-backed findings.",
+      "inputs": ["change_set", "acceptance_criteria", "risk_scope"],
+      "outputs": ["test_report", "security_findings", "release_blockers"],
+      "must_avoid_unaffected_full_suite": true,
+      "may_publish": false,
+      "may_merge": false,
+      "may_deploy_production": false
+    },
+    {
+      "id": "release",
+      "name": "Release Agent",
+      "role": "release_assessor",
+      "goal": "Assess CI, preview, security, rollback, and approval gates without executing production release.",
+      "inputs": ["pull_request", "ci_evidence", "preview_evidence", "rollback_plan"],
+      "outputs": ["release_readiness", "go_no_go_recommendation"],
+      "requires_explicit_owner_approval_for_merge": true,
+      "requires_explicit_owner_approval_for_production": true,
+      "may_publish": false,
+      "may_merge": false,
+      "may_deploy_production": false
+    }
+  ],
+  "task_states": ["RECEIVED", "TRIAGED", "PLANNED", "IN_PROGRESS", "REVIEW", "BLOCKED", "DONE", "CANCELLED"],
+  "cost_classes": ["zero_cost_verified", "no_external_execution", "cost_unverified", "paid"],
+  "allowed_execution_cost_classes": ["zero_cost_verified", "no_external_execution"],
+  "data_classes": ["public", "project_internal", "synthetic_test", "sensitive", "secret"],
+  "blocked_data_classes": ["sensitive", "secret"],
+  "global_guards": {
+    "production_mutations": "deny_without_explicit_owner_approval",
+    "dns_d1_worker_secrets_changes": "deny_without_explicit_owner_approval",
+    "account_connection_or_permission_grant": "owner_action_required",
+    "external_publication": "explicit_channel_authorization_required",
+    "merge_or_release": "explicit_owner_approval_required",
+    "unknown_cost": "do_not_execute",
+    "unverified_claims": "must_be_reported_as_unverified",
+    "log_secrets": false,
+    "use_real_customer_data_in_tests": false
+  }
+}
