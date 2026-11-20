@@ -23,6 +23,7 @@
   "vars": {
     "AGENT_ENABLED": "false",
     "AGENT_PAUSED": "true",
+    "AGENT_RECOVERY_ALARM_ENABLED": "false",
     "AGENT_OIDC_ENABLED": "false",
     "AGENT_OIDC_AUDIENCE": "ai-thuc-chien-agent-runtime-preview",
     "AGENT_OIDC_REPOSITORY": "manhdungub-boop/ai-thuc-chien-blog",
