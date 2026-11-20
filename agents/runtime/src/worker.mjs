@@ -20,6 +20,21 @@ function json(data, status = 200) {
 }
 function isEnabled(value) { return value === "true"; }
 
+function isValidClientIp(address) {
+  if (address.includes(":")) {
+    try {
+      const hostname = new URL("http://[" + address + "]/").hostname;
+      return hostname.startsWith("[") && hostname.endsWith("]");
+    } catch {
+      return false;
+    }
+  }
+  const octets = address.split(".");
+  return octets.length === 4 && octets.every((octet) =>
+    /^(0|[1-9][0-9]{0,2})$/.test(octet) && Number(octet) <= 255
+  );
+}
+
 async function enforceIngressRateLimit(request, env) {
   if (env.AGENT_RATE_LIMIT_REQUIRED !== "true") return null;
   const limiter = env.AGENT_INGRESS_RATE_LIMITER;
@@ -27,7 +42,7 @@ async function enforceIngressRateLimit(request, env) {
     return json({ ok: false, error: "rate_limit_unavailable" }, 503);
   }
   const address = request.headers.get("cf-connecting-ip");
-  if (!address || address.length > 64 || address.trim() !== address || address.includes(",")) {
+  if (!address || address.length > 64 || address.trim() !== address || address.includes(",") || !isValidClientIp(address)) {
     return json({ ok: false, error: "client_ip_unavailable" }, 503);
   }
   const key = "ip:" + address;
