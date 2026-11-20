@@ -22,7 +22,7 @@ export function evaluateRuntimeAdmission({ safetySnapshot, usageEvidence, budget
 
   const budget = evaluateAgentBudget({ ledger: budgetLedger, requests });
   if (!budget.ok || budget.status === "blocked") blockers.push("internal_capacity_budget_blocked");
-  if (budget.ok && budget.status === "partially_approved") blockers.push("some_tasks_exceed_internal_capacity");
+  if (budget.ok && budget.rejected.length > 0) blockers.push("some_tasks_exceed_internal_capacity");
 
   return Object.freeze({
     ok: blockers.length === 0,
