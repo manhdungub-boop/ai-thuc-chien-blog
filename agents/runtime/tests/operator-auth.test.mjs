@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { hasValidOperatorBearer } from "../src/operator-auth.mjs";
+import { hasValidStateStoreBearer } from "../src/internal-auth.mjs";
 
 const secret = "preview-only-test-secret-0123456789abcdef";
 const request = (authorization) => new Request("https://agent-runtime-preview.example.workers.dev/run", {
@@ -36,4 +37,28 @@ test("rejects oversized and syntactically invalid bearer values", async () => {
   assert.equal(await hasValidOperatorBearer(request("Bearer contains spaces"), {
     AGENT_OPERATOR_TOKEN: secret,
   }), false);
+});
+
+
+test("rotating the configured operator secret revokes the previous bearer immediately", async () => {
+  const replacement = "preview-rotated-test-secret-0123456789abcdef";
+  assert.equal(await hasValidOperatorBearer(request("Bearer " + secret), {
+    AGENT_OPERATOR_TOKEN: replacement,
+  }), false);
+  assert.equal(await hasValidOperatorBearer(request("Bearer " + replacement), {
+    AGENT_OPERATOR_TOKEN: replacement,
+  }), true);
+});
+
+test("operator and Worker-to-State-Store credentials cannot authenticate across trust boundaries", async () => {
+  const stateSecret = "preview-state-store-test-secret-0123456789abcdef";
+  assert.equal(await hasValidOperatorBearer(request("Bearer " + stateSecret), {
+    AGENT_OPERATOR_TOKEN: secret,
+  }), false);
+  assert.equal(await hasValidStateStoreBearer(request("Bearer " + secret), {
+    AGENT_STATE_STORE_TOKEN: stateSecret,
+  }), false);
+  assert.equal(await hasValidStateStoreBearer(request("Bearer " + stateSecret), {
+    AGENT_STATE_STORE_TOKEN: stateSecret,
+  }), true);
 });

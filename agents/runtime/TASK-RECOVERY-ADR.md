@@ -1,6 +1,6 @@
 # Agent Runtime — task lease and recovery architecture decision
 
-Status: **design only; no recovery code, Durable Object binding, alarm, schedule, or task execution is enabled.**
+Status: **schema v5 and transactional claim/heartbeat/completion/expiry-recovery routes are implemented in Draft PR #297, with policy helpers and local Durable Object tests. They remain unmerged and unbound. No Durable Object binding, alarm, schedule, or task execution is enabled.**
 
 Date: 2026-11-19
 
@@ -10,19 +10,32 @@ Use a durable lease with a monotonically increasing fencing generation for futur
 
 The initial task types (`content.review`, `ai_bank.candidate_review`, and `seo.audit`) are intended to be read-only review/audit operations. Before any task type can create external side effects (publishing, editing live content, sending messages, changing account settings, or writing production data), it must have a separate side-effect idempotency contract and explicit destination allowlist.
 
-## Proposed schema migration
+## Implemented schema migration (v1 → v5)
 
-A future schema version should add bounded fields to `tasks`:
+The current implementation starts a fresh store from the v1 baseline and applies the same transactional migration chain used for a persisted v1 store:
 
-- `attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0)`
-- `max_attempts INTEGER NOT NULL DEFAULT 3 CHECK (max_attempts BETWEEN 1 AND 5)`
-- `lease_generation INTEGER NOT NULL DEFAULT 0 CHECK (lease_generation >= 0)`
-- `lease_owner TEXT` — opaque per-claim identifier; never a credential
-- `lease_expires_at INTEGER`
-- `next_attempt_at INTEGER`
-- `last_error_code TEXT` — bounded machine-readable code only
+- **v1 → v2:** bounded attempt counters, maximum attempts, monotonic lease generation, opaque lease owner, lease expiry and maximum expiry, retry due time, last error code, and retry/expiry indexes.
+- **v2 → v3:** durable pause state and transactional control audit table; stores start paused.
+- **v3 → v4:** persistent per-operator control mutation rate-limit table.
+- **v4 → v5:** durable OIDC `jti` replay ledger with expiry and single-consumption semantics.
 
-Add indexes for `(state, next_attempt_at)` and `(state, lease_expires_at)`. Migration must be transactional, versioned, and tested against both an empty database and a persisted v1 database. Do not mutate the current schema until the migration and recovery tests are implemented.
+The migration is transactional and rejects unsupported schema versions. Tests cover a fresh store and a persisted v1-shaped store with task and daily-usage preservation. This is local test evidence; it is not a live Cloudflare Durable Object migration or deployment.
+
+## Implementation progress (2026-11-19)
+
+- Draft PR #296 introduced pure policy functions for claim, heartbeat, expiry recovery, and fenced completion.
+- Draft PR #297 now contains a transactional schema v1 → v5 migration. Fresh stores intentionally create the v1 baseline and run the same migration path used for persisted v1 data.
+- Schema v2 adds bounded attempt counters, monotonically increasing lease generation, opaque owner, per-claim expiry, absolute lease maximum expiry (30 minutes), retry due time, and bounded machine-readable last-error code. The migration adds retry/lease indexes and preserves existing task and usage rows.
+- Schema v3 adds durable pause state and control audit; schema v4 adds persistent control-mutation rate limiting; schema v5 adds the internal OIDC `jti` replay ledger. The replay ledger is not an OIDC verifier and does not authorize requests.
+- The State Store exposes authenticated `/claim`, `/heartbeat`, `/complete`, and operator-invoked `/recover` routes. Claim and recovery fail closed while paused; heartbeat and completion may finish an already-owned lease while paused.
+- SQL updates are performed in synchronous SQLite transactions with task state, owner, generation, and expiry predicates. A stale generation cannot heartbeat or complete a newer attempt.
+- Every claim, heartbeat, retry/requeue, expiry failure, and terminal completion appends an audit event in the same transaction. Same-generation repeated terminal completion is idempotent and does not write another event.
+- Generic `/transition` can no longer start or finish running work; a valid lease is required.
+- The State Store validates a dedicated `AGENT_STATE_STORE_TOKEN`, distinct from the external `AGENT_OPERATOR_TOKEN`. The Worker-to-DO call path and binding remain intentionally unwired.
+- Migration tests cover a fresh store and a persisted v1-shaped store with task and daily-usage preservation. Lease tests cover concurrent claim, fencing, heartbeat, pause behavior, bounded recovery, and attempt exhaustion.
+- The test-only v1 fixture route is guarded by `RUNTIME_TESTING=true`; the deploy configuration does not set that flag.
+
+The next implementation step is independent security review and Worker-to-State-Store call-path integration in an isolated, separate Preview config. Do not enable a Durable Object binding, scheduler, or task execution as part of this PR.
 
 ## State machine
 
@@ -44,7 +57,7 @@ Every claim, heartbeat, retry/requeue, expiry failure, cancellation, and termina
 - Retry transient store/network failures only when the operation is known to be safe to repeat.
 - Exhausted tasks become terminal and visible for operator review; never retry indefinitely.
 
-These are proposed retry/lease defaults, not live configuration. The current state-store admission ceilings and defaults are 100 reservations/day and 5 in-flight tasks; the implementation rejects configured values above these caps.
+These are proposed retry/lease defaults, not live configuration. The current state-store admission defaults are separately capped at 100 reservations/day and 5 in-flight tasks for the Free-tier pilot; hard code ceilings remain 1,000/day and 100 in-flight.
 
 ## At-least-once semantics and side effects
 
@@ -76,7 +89,7 @@ A lease cannot guarantee exactly-once execution. A worker can perform an externa
 
 ## Required tests before implementation can be accepted
 
-1. v1-to-v2 migration preserves existing tasks, idempotency keys, usage counters, and audit rows.
+1. v1-to-v5 migration preserves existing tasks, idempotency keys, usage counters, and audit rows.
 2. Concurrent claims of one queued task yield exactly one current lease.
 3. A stale generation cannot heartbeat, complete, or cancel a newer attempt.
 4. Expired lease is not recovered before expiry and is recoverable after expiry.
@@ -86,7 +99,8 @@ A lease cannot guarantee exactly-once execution. A worker can perform an externa
 8. Duplicate idempotency key never creates a second task.
 9. A crash/restart preserves lease and retry metadata.
 10. All state transitions and audit writes roll back together on injected failure.
-11. No execution, schedule, alarm, binding, or external side effect is introduced by the recovery layer.
+11. OIDC replay consumption is single-use, rejects concurrent duplicates, persists across restart, and prunes expired identifiers safely.
+12. No execution, schedule, alarm, binding, or external side effect is introduced by the recovery layer.
 
 ## Release gate
 

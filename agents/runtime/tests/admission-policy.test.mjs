@@ -11,6 +11,14 @@ const valid = (overrides = {}) => ({
   ...overrides,
 });
 
+test("hard safety caps match the documented Free-tier pilot limits", () => {
+  assert.deepEqual(ADMISSION_LIMIT_CAPS, {
+    maxTasksPerDay: 100,
+    maxConcurrent: 5,
+    maxPayloadBytes: 8 * 1024,
+  });
+});
+
 test("admits a request strictly below all configured limits", () => {
   assert.deepEqual(evaluateAdmission(valid()), { ok: true, reason: "admitted" });
 });
