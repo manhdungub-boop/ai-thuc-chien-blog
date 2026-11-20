@@ -13,7 +13,19 @@ test("dedicated Agent Runtime Preview config binds only its SQLite State Store a
   assert.equal(config.main, "./src/worker.mjs");
   assert.equal(config.workers_dev, true);
   assert.equal(config.preview_urls, true);
-  assert.deepEqual(config.vars, { AGENT_ENABLED: "false", AGENT_PAUSED: "true" });
+  assert.deepEqual(config.vars, {
+    AGENT_ENABLED: "false",
+    AGENT_PAUSED: "true",
+    AGENT_OIDC_ENABLED: "false",
+    AGENT_OIDC_AUDIENCE: "ai-thuc-chien-agent-runtime-preview",
+    AGENT_OIDC_REPOSITORY: "manhdungub-boop/ai-thuc-chien-blog",
+    AGENT_OIDC_REPOSITORY_OWNER: "manhdungub-boop",
+    AGENT_OIDC_REPOSITORY_ID: "1423636651",
+    AGENT_OIDC_REPOSITORY_OWNER_ID: "342528485",
+    AGENT_OIDC_REF: "refs/heads/main",
+    AGENT_OIDC_WORKFLOW_REF: "manhdungub-boop/ai-thuc-chien-blog/.github/workflows/agent-runtime-operator.yml@refs/heads/main",
+    AGENT_OIDC_ACTOR_ID: "",
+  });
   assert.deepEqual(config.durable_objects, {
     bindings: [{ name: "AGENT_STATE_STORE", class_name: "AgentStateStore" }],
   });
@@ -37,4 +49,9 @@ test("Preview config never enables autonomous execution by default", () => {
 
 test("Worker entrypoint exports the Durable Object class named by the Preview config", () => {
   assert.equal(typeof AgentStateStore, "function");
+});
+
+test("GitHub OIDC operator remains disabled and cannot authenticate without a pinned human actor ID", () => {
+  assert.equal(config.vars.AGENT_OIDC_ENABLED, "false");
+  assert.equal(config.vars.AGENT_OIDC_ACTOR_ID, "");
 });
