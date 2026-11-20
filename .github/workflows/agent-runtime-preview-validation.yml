@@ -141,9 +141,9 @@ jobs:
           assert.match(workflow, /workflow_dispatch:/);
           assert.match(workflow, /id-token: write/);
           assert.match(workflow, /contents: read/);
-          assert.match(workflow, /internal\\/oidc\\/pause/);
+          assert.match(workflow, /internal\/oidc\/pause/);
           assert.doesNotMatch(workflow, /schedule:|repository_dispatch:|workflow_run:/);
-          assert.doesNotMatch(workflow, /internal\\/oidc\\/resume|wrangler\\s+deploy|CLOUDFLARE_.*TOKEN/i);
+          assert.doesNotMatch(workflow, /internal\/oidc\/resume|wrangler\s+deploy|CLOUDFLARE_.*TOKEN/i);
           assert.match(workflow, /ai-thuc-chien-agent-runtime-preview/);
           console.log('PASS: OIDC workflow is manual, scoped to Preview, and pause-only.');
           NODE
