@@ -88,7 +88,7 @@ This primitive does not verify JWT signatures, fetch JWKS, validate claims, or a
 - Before any task execution, independently review the shared rate-limit semantics, service-actor audit limitation, recovery bridge, explicit pause/resume behavior, and rollback path. Add a human-bound operator identity/MFA or an equivalent trusted administrative boundary before broader operational use. Until those gates pass, keep the Runtime disabled and unbound.
 ## Not approved by this ADR
 
-- No Durable Object namespace/binding or migration is added to the checked-in Preview Worker config.
+- No Durable Object namespace/binding or migration is added to the validation-only `wrangler.jsonc`. A separate `wrangler.preview.jsonc` now declares one SQLite `AgentStateStore` binding and its initial migration, with both runtime gates closed. This Preview config is code-only and has not been deployed; secrets, account identifiers, production routes, and schedules remain absent.
 - No Cloudflare Agent Runtime deployment, secret configuration, alarm, cron trigger, queue consumer, or public endpoint is enabled.
 - No task execution, external side effects, backup/restore promise, or 24/7 claim is authorized.
 - No Production Worker, DNS, D1, or live data is changed.
