@@ -257,6 +257,11 @@ test("state transitions reject invalid paths and do not reopen terminal tasks", 
   await withRuntime({}, async ({ stub }) => {
     const created = await call(stub, "/reserve", task("transitions"));
     const taskId = created.body.task.taskId;
+    for (const invalidTaskId of ["bad id", "../escape", "id?x=1", "a".repeat(65)]) {
+      const invalid = await call(stub, "/transition", { taskId: invalidTaskId, status: "running" });
+      assert.equal(invalid.status, 400);
+      assert.equal(invalid.body.error, "transition_request_invalid");
+    }
     assert.equal((await call(stub, "/transition", { taskId, status: "succeeded" })).status, 409);
     assert.equal((await call(stub, "/transition", { taskId, status: "running" })).status, 200);
     assert.equal((await call(stub, "/transition", { taskId, status: "failed", errorCode: "review_failed" })).status, 200);
