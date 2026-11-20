@@ -124,3 +124,16 @@ A read-only Cloudflare account inspection was completed after the OIDC CI passed
 - No Cloudflare resource was created, updated, deleted, deployed, or configured during this inspection.
 
 **Gate decision:** do not create a namespace, upload a Worker, set secrets, or enable OIDC until the exact account plan and free-tier headroom are verified through an authorized read-only billing view, and the exact dedicated Preview hostname is pinned. This is a permission limitation, not evidence that the account is on a paid plan.
+
+## Scheduled dispatcher cost update (2026-11-20)
+
+The code-only Preview configuration now declares `*/30 * * * *` (48 scheduled invocations/day), but `AGENT_SCHEDULER_ENABLED=false`, `AGENT_RECOVERY_ALARM_ENABLED=false`, `AGENT_ENABLED=false`, and `AGENT_PAUSED=true`. The config has not been deployed, so these are design bounds, not observed usage.
+
+- Each scheduled invocation dispatches at most one already-queued task; it does not admit new work or publish content.
+- A full 15-minute review can cause up to seven two-minute lease heartbeats. Each heartbeat costs one Durable Object request and two SQL row writes (task update + audit event).
+- The shared recovery alarm checks at five-minute intervals. A long task may therefore cause up to four alarm invocations during/around a 15-minute review, depending on completion and scheduling races. Each alarm invocation costs one Durable Object request. Alarm set/re-arm/delete operations also count as SQL row writes; count the actual calls from traces rather than assuming they are free.
+- Conservative upper envelope for 48 full-duration task ticks: up to 624 Durable Object requests/day (48 × [claim + completion + seven heartbeats + four alarm invocations]). Heartbeat writes contribute up to 672 SQL row writes/day; alarm set/re-arm/delete may add up to approximately 240 more in this deliberately conservative model. Add normal task lifecycle writes (up to 336 rows for 48 tasks using the current seven-write lifecycle estimate), recovery/audit activity, retention deletes, operator/manual requests and all other account workloads. These are planning bounds, not measured values or guaranteed exact maxima.
+- Cloudflare Workers Free Cron CPU allowance is 10 ms per invocation. The scheduled handler awaits the full task-review path; CPU consumption for actual task handlers has not been measured. The 15-minute Cron wall-time limit does not override the CPU limit.
+- No Cloudflare account plan or remaining quota is inferred from published platform limits. Actual Free plan, billing state, CPU, requests, SQL writes, storage and account-wide headroom remain unverified.
+
+**Decision remains NO-GO for deployment or activation.** Keep all four gates closed. Do not create a namespace, bind a DO, deploy Preview, add secrets, or activate Cron until read-only Billing/usage evidence confirms the account is Free with sufficient headroom, the CPU profile is measured against the 10 ms limit, and an independent review approves the implementation. If evidence cannot be obtained, leave the runtime unbound and disabled. No paid upgrade or billing setup is permitted.
