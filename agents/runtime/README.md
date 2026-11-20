@@ -78,6 +78,13 @@ See [STATE-STORE-ADR.md](./STATE-STORE-ADR.md) for the design decision, Free-tie
 - SEO HTTP status and broken-link counts are not inferred from local files. The repository reader requires an explicit `seoEvidenceReader` provider for those facts; sitemap membership is independently derived from the checked-out `sitemap.xml`.
 - Integration tests now inspect the real article, AI Bank catalog and sitemap in the checked-out repository. This validates local source reading, not a live website HTTP crawl or a deployed agent.
 
+## Read-only Health Monitor and Manual Recovery Planner
+
+- `src/agent-health-monitor.mjs` evaluates a fresh caller-supplied snapshot of State Store, Worker bridge and usage-evidence status, heartbeat age, queue/running counts and expired leases. It does not poll services or prove continuous uptime.
+- Missing, stale, future-dated, malformed or out-of-bound observations fail closed. Unavailable components or expired leases produce a critical status; warnings produce degraded status.
+- `src/agent-recovery-planner.mjs` creates a human/operator checklist. Critical cases recommend manual pause if running, inspection and reconciliation before any later release review.
+- The planner never invokes Pause, Resume, lease recovery, retries, or task execution. Auto-resume remains prohibited.
+
 ## Usage Evidence Collector and Runtime Admission Controller
 
 - `src/usage-evidence-collector.mjs` validates a caller-supplied Cloudflare usage snapshot: source label, redacted account reference, observation timestamp, freshness, resource names, used values and limits. It performs no network call and does not authenticate the source.
