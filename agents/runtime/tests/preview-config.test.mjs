@@ -8,7 +8,7 @@ import { AgentStateStore } from "../src/worker.mjs";
 const configPath = fileURLToPath(new URL("../wrangler.preview.jsonc", import.meta.url));
 const config = JSON.parse(readFileSync(configPath, "utf8"));
 
-test("dedicated Agent Runtime Preview config binds only its SQLite State Store and remains disabled", () => {
+test("dedicated Agent Runtime Preview config binds its isolated State Store and rate limiter and remains disabled", () => {
   assert.equal(config.name, "ai-thuc-chien-agent-runtime-preview");
   assert.equal(config.main, "./src/worker.mjs");
   assert.equal(config.workers_dev, true);
@@ -19,6 +19,7 @@ test("dedicated Agent Runtime Preview config binds only its SQLite State Store a
     AGENT_PAUSED: "true",
     AGENT_RECOVERY_ALARM_ENABLED: "false",
     AGENT_OIDC_ENABLED: "false",
+    AGENT_RATE_LIMIT_REQUIRED: "true",
     AGENT_OIDC_AUDIENCE: "ai-thuc-chien-agent-runtime-preview",
     AGENT_OIDC_REPOSITORY: "manhdungub-boop/ai-thuc-chien-blog",
     AGENT_OIDC_REPOSITORY_OWNER: "manhdungub-boop",
@@ -29,6 +30,11 @@ test("dedicated Agent Runtime Preview config binds only its SQLite State Store a
     AGENT_OIDC_ACTOR_ID: "342528485",
   });
   assert.deepEqual(config.triggers, { crons: ["*/30 * * * *"] });
+  assert.deepEqual(config.ratelimits, [{
+    name: "AGENT_INGRESS_RATE_LIMITER",
+    namespace_id: "20261121",
+    simple: { limit: 60, period: 60 },
+  }]);
   assert.deepEqual(config.durable_objects, {
     bindings: [{ name: "AGENT_STATE_STORE", class_name: "AgentStateStore" }],
   });
