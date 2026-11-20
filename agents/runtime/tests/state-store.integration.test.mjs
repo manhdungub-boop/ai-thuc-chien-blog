@@ -513,6 +513,23 @@ test("expired leases are requeued after bounded delay and fail at the attempt ce
   });
 });
 
+test("operator lease recovery is rate limited to ten requests per actor per minute", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const actor = "recovery-rate-test";
+    const outcomes = [];
+    for (let index = 0; index < 11; index++) {
+      outcomes.push(await call(stub, "/recover", {
+        taskId: "missing-task",
+        actor,
+        requestId: crypto.randomUUID(),
+      }, { "x-test-now": "2026-11-19T10:00:00.000Z" }));
+    }
+    assert.ok(outcomes.slice(0, 10).every((item) => item.status === 404));
+    assert.equal(outcomes[10].status, 429);
+    assert.equal(outcomes[10].body.error, "runtime_control_rate_limited");
+  });
+});
+
 test("pause blocks new claims and expiry recovery but allows safe heartbeat and completion", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "ai-thuc-chien-do-pause-lease-"));
   let active;
