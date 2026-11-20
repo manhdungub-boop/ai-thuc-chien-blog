@@ -78,6 +78,13 @@ See [STATE-STORE-ADR.md](./STATE-STORE-ADR.md) for the design decision, Free-tie
 - SEO HTTP status and broken-link counts are not inferred from local files. The repository reader requires an explicit `seoEvidenceReader` provider for those facts; sitemap membership is independently derived from the checked-out `sitemap.xml`.
 - Integration tests now inspect the real article, AI Bank catalog and sitemap in the checked-out repository. This validates local source reading, not a live website HTTP crawl or a deployed agent.
 
+## Read-only Budget Guard and Priority Engine
+
+- `src/agent-priority-engine.mjs` assigns fixed deterministic weights to the allowlisted task families and preserves input order for ties. It does not mutate or execute tasks.
+- `src/agent-budget-guard.mjs` validates a caller-supplied, explicitly verified ledger snapshot and allocates bounded abstract internal capacity units in priority order. Missing or inconsistent evidence fails closed.
+- These units are not currency, model tokens, Cloudflare billing units, or provider quotas. This pure helper does not fetch usage, persist reservations, charge money, or prove that any external service is on a free tier.
+- The current daily ceiling of 100 abstract units is an application-level safety ceiling, not an observed provider limit. No scheduler or runtime integration is enabled.
+
 ## Read-only Safety Supervisor
 
 - `src/agent-safety-supervisor.mjs` evaluates a caller-supplied boolean evidence snapshot and fails closed when any required evidence is absent.
