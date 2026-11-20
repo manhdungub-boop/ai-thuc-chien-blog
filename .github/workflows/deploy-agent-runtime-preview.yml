@@ -31,12 +31,12 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: "92cf091bbac8b4879ec65feb30b4715b"
     steps:
       - name: Check out source
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
 
@@ -100,8 +100,8 @@ jobs:
       - name: Validate isolated paused Worker configuration
         run: |
           set -euo pipefail
-          npx --yes wrangler@4 types --config agents/runtime/wrangler.jsonc
-          npx --yes wrangler@4 deploy --dry-run --config agents/runtime/wrangler.jsonc
+          npx --yes wrangler@4.164.0 types --config agents/runtime/wrangler.jsonc
+          npx --yes wrangler@4.164.0 deploy --dry-run --config agents/runtime/wrangler.jsonc
 
       - name: Deploy isolated Agent Runtime Preview only
         shell: bash
@@ -109,7 +109,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}
         run: |
           set -euo pipefail
-          npx --yes wrangler@4 deploy --config agents/runtime/wrangler.jsonc 2>&1 | tee "$RUNNER_TEMP/agent-runtime-preview-deploy.log"
+          npx --yes wrangler@4.164.0 deploy --config agents/runtime/wrangler.jsonc 2>&1 | tee "$RUNNER_TEMP/agent-runtime-preview-deploy.log"
           worker_url="$(grep -Eo 'https://[a-zA-Z0-9._-]+\.workers\.dev' "$RUNNER_TEMP/agent-runtime-preview-deploy.log" | tail -n 1 || true)"
           if [[ -z "$worker_url" ]]; then
             echo "::error::Wrangler did not report a workers.dev URL; refusing to claim a successful health check."
