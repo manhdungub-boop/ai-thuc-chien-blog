@@ -13,7 +13,7 @@ Status: **isolated validation scaffold; no Agent Runtime Worker deployment and n
 - Task admission, idempotency keys, queue state, daily accepted count, concurrency limit, leases, and terminal task status are persisted by the State Store. Review findings are returned to the operator in the response and are **not persisted** as task result records.
 - The Preview source adapter has no caller-controlled URL, credential, write API, or filesystem access. SEO tasks fail closed because trusted live HTTP-status and broken-link evidence is not yet available; the system does not fabricate a clean SEO result.
 - This is not a background executor: no scheduler, cron trigger, automatic retry loop, publishing, or 24/7 execution is implemented. A queued task left by an interrupted request remains visible for explicit operator recovery. `GET /health` reports `operator_triggered_read_only_analysis` as the bounded capability; it does not imply background operation.
-- State Store routes are not connected to \`POST /run\`; no task is enqueued or executed by the Worker shell. \`/recover\` is manually invoked; there is no alarm, cron or background scheduler.
+- State Store routes are connected to the operator-triggered \`POST /run\` path for reserve, claim and completion. \`/internal/recover\` remains manually invoked; there is no alarm, cron or background scheduler.
 
 ## Local integration validation
 
