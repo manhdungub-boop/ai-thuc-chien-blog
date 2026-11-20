@@ -642,6 +642,13 @@ describe("AgentTaskStore Durable Object", () => {
     const result = await runInDurableObject(store, async (instance, state) => {
       // Override only this isolated emulator instance; no deployed Worker config is touched.
       instance.env = testEnv;
+      const auth = await instance.authorizeOperator(token);
+      const configured = {
+        reviewerAuth: instance.env.AGENT_REVIEWER_AUTH_ENABLED,
+        operatorControl: instance.env.AGENT_OPERATOR_CONTROL_ENABLED,
+        allowlist: instance.env.AGENT_OPERATOR_ALLOWED_EMAILS,
+        redirectUri: instance.env.GOOGLE_REVIEWER_REDIRECT_URI
+      };
       const paused = await instance.setOperatorControl(true, pauseReason, token);
       const pausedRead = await instance.getOperatorControl(token);
       const resumed = await instance.setOperatorControl(false, resumeReason, token);
@@ -649,9 +656,16 @@ describe("AgentTaskStore Durable Object", () => {
       const audit = state.storage.sql.exec(
         "SELECT event_type, metadata_json FROM task_store_audit ORDER BY occurred_at ASC, event_id ASC"
       ).toArray();
-      return { paused, pausedRead, resumed, resumedRead, audit };
+      return { auth, configured, paused, pausedRead, resumed, resumedRead, audit };
     });
 
+    expect(result.configured).toEqual({
+      reviewerAuth: "true",
+      operatorControl: "true",
+      allowlist: "operator@example.com",
+      redirectUri: "https://ai-thuc-chien-agent-runtime-preview.manhdungub.workers.dev/auth/google/callback"
+    });
+    expect(result.auth).toEqual({ authorized: true, actor_ref: "google:operator-test-subject" });
     expect(result.paused).toMatchObject({
       authorized: true,
       changed: true,
