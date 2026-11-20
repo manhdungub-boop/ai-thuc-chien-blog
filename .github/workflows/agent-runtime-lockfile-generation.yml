@@ -13,8 +13,9 @@ on:
       - "agents/runtime/package-lock.json"
       - "agents/runtime/tests/**"
 
+# This workflow only validates a reproducible lockfile. It never writes to GitHub.
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: agent-runtime-lockfile-generation
@@ -60,45 +61,26 @@ jobs:
           npm test
           node --test tests/runtime-contract.test.mjs
 
-      - name: Commit only the verified lockfile
-        id: commit
-        shell: bash
+      - name: Verify generated lockfile is the committed lockfile
         run: |
           set -euo pipefail
-          git status --short
-          git add agents/runtime/package-lock.json
-          if git diff --cached --quiet; then
-            echo "No lockfile change to commit."
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            exit 0
+          git diff --check
+          if ! git diff --quiet -- agents/runtime/package-lock.json; then
+            echo "::error::Generated lockfile differs from the committed lockfile. Regenerate and submit the lockfile in a reviewed commit."
+            git diff --stat -- agents/runtime/package-lock.json
+            exit 1
           fi
-          test "$(git diff --cached --name-only | wc -l | tr -d ' ')" = "1"
-          test "$(git diff --cached --name-only)" = "agents/runtime/package-lock.json"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "build(agent-runtime): add verified npm lockfile"
-          echo "changed=true" >> "$GITHUB_OUTPUT"
-
-      - name: Push verified lockfile after all untrusted code has finished
-        if: github.event_name == 'push' && steps.commit.outputs.changed == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          gh auth setup-git
-          git push origin HEAD
+          echo "Committed lockfile is reproducible and matches the declared dependency graph."
 
       - name: Report safety boundary
         if: always()
         run: |
           {
-            echo "## Agent Runtime lockfile generation"
-            echo "- Isolated lockfile workflow; PR runs validate without pushing"
-            echo "- Node.js 22 and npm 10.9.4"
-            echo "- npm lifecycle scripts disabled"
-            echo "- Checkout credentials are not persisted during dependency installation or tests"
-            echo "- Repository write token is exposed only to the final push step on the dedicated push event"
-            echo "- npm ci and targeted Runtime tests required before commit"
-            echo "- Only agents/runtime/package-lock.json may be committed"
+            echo "## Agent Runtime lockfile validation"
+            echo "- GitHub token permission: contents: read only"
+            echo "- Checkout credentials are not persisted"
+            echo "- npm lifecycle scripts are disabled"
+            echo "- Lockfile generation and reproducible install are validated"
+            echo "- Workflow does not commit or push repository changes"
             echo "- No Cloudflare credentials, deployment, OAuth, Cron, AI inference, publication, Production Worker, D1, or DNS access"
           } >> "$GITHUB_STEP_SUMMARY"
