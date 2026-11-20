@@ -471,7 +471,7 @@ test("run performs bounded operator-triggered read-only content and AI Bank revi
     <link rel="canonical" href="https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/demo-article">
     <script type="application/ld+json">{"@type":"BlogPosting"}</script>
     </head><body><section class="article-author-note">Bài viết gốc DUNG - AI; vui lòng ghi công và dẫn liên kết về bài viết.</section>
-    <a href="/thu-vien.html">Library</a><main>${"useful content ".repeat(180)}</main></body></html>`;
+    <a href="/thu-vien.html">Library</a><main>${"useful content ".repeat(270)}</main></body></html>`;
   const catalog = {
     tools: [{
       id: "chatgpt", name: "ChatGPT", vendor: "OpenAI",
