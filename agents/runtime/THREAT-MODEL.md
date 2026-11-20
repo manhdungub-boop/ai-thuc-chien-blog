@@ -32,13 +32,13 @@ Trust boundaries:
 
 ### T1 — Unauthenticated public caller
 **Threat:** call task creation, transitions, inspection, or usage routes directly.  
-**Current controls:** Worker exposes `/health`, `/run`, and operator-authenticated `/internal/*` routes for control state, pause/resume, usage, task inspection, and expired-lease recovery. State Store calls require a distinct internal bearer token; the Durable Object handler verifies it before route handling. The Preview config is undeployed and both outer runtime gates remain closed by default. `/run` still returns 501; no task handler exists.  
-**Residual risk:** no namespace is bound today. Once bound, every request path must remain reachable only through the fixed Worker client; never expose the DO stub or a generic proxy.
+**Current controls:** Worker exposes `/health`, operator-authenticated `/run`, and operator-authenticated `/internal/*` routes. `/run` and `/internal/dispatch` fail closed while `AGENT_ENABLED` is not `true` or `AGENT_PAUSED` is not `false`. When enabled, the Worker can process only bounded read-only reviews for `content.review`, `ai_bank.candidate_review`, and `seo.audit`; live SEO evidence deliberately fails closed when unavailable. The read-only manager does not publish, mutate repository content, or call an external model provider. State Store calls use a distinct internal bearer token, verified by the Durable Object handler. The Preview config remains undeployed and all outer runtime gates remain closed by default.  
+**Residual risk:** `wrangler.preview.jsonc` declares the `AGENT_STATE_STORE` Durable Object binding and SQLite migration on this feature branch, but the config is undeployed and the Cloudflare namespace/binding has not been provisioned or verified in the account. If deployed later, every request path must remain reachable only through the fixed Worker client; never expose the DO stub or a generic proxy.
 
 ### T2 — Operator credential compromise
 **Threat:** an attacker with the operator token attempts to submit arbitrary task types, payloads, or state transitions.  
 **Current controls:** task contract validation, fixed operation allowlist in the internal client, bounded payload/body sizes, and bounded state transitions.  
-**Residual risk:** the ingress currently has no execution implementation and no rate limiting. Before enabling it, add operator identity/authorization, rate limits, request replay policy, and auditable revocation/rotation. A shared bearer token must never be placed in browser JavaScript.
+**Residual risk:** bounded read-only review processing now exists, but there is no mutating task executor or publishing capability. Worker ingress still lacks a global rate limit, read routes are not rate-limited, and the service actor label is shared/static rather than a human identity. Before enabling scheduled processing, complete ingress/read-route rate limits, request replay policy, auditable credential revocation/rotation, and independent review of the operator identity boundary. A shared bearer token must never be placed in browser JavaScript.
 
 ### T3 — Internal token leakage or confused-deputy abuse
 **Threat:** a caller tricks the Worker into forwarding caller-controlled paths, headers, object IDs, or credentials to the DO.  
@@ -68,7 +68,7 @@ Trust boundaries:
 ### T8 — Pause/kill switch bypass
 **Threat:** queued work starts after pause, or the operator cannot stop active dispatch.  
 **Current controls:** State Store persists pause state and rejects reservations, queued→running transitions, and lease recovery when disabled/paused; terminal bookkeeping remains available where explicitly allowed. Worker has authenticated pause/resume control routes. Both outer flags default closed in the dedicated Preview config.  
-**Residual risk:** there is no executor, scheduler, dispatch gate, or operational emergency-stop runbook yet. Pause does not forcibly interrupt an in-flight external side effect. A complete kill switch must stop new admissions, claims, scheduled dispatch, and outbound side effects; define what happens to in-flight requests and verify it with fault-injection tests. The shared bearer and static actor label are not a human identity control.
+**Residual risk:** a bounded scheduler path and dispatch gate now exist in source, and the Preview config declares a 30-minute cron. They remain inactive because `AGENT_SCHEDULER_ENABLED=false`, `AGENT_RECOVERY_ALARM_ENABLED=false`, `AGENT_ENABLED=false`, and `AGENT_PAUSED=true`. The GitHub OIDC operator workflow is manual and pause-only; it is not a resume or autonomous recovery authorization. Pause does not forcibly interrupt an in-flight external side effect. A complete kill switch still needs fault-injection evidence covering admission, claims, scheduled dispatch, in-flight work, and any future outbound effects. The shared bearer and static actor label are not a human identity control.
 
 ### T9 — External side-effect / publishing abuse
 **Threat:** an agent publishes unreviewed, duplicated, copyrighted, misleading, or malicious content to the official website or Facebook.  
@@ -82,8 +82,8 @@ Trust boundaries:
 
 ## 4. Current evidence (source-level only)
 
-- Worker ingress returns `execution_not_implemented` (501) even when operator authentication succeeds.
-- Wrangler config is a standalone `ai-thuc-chien-agent-runtime-preview` shell with `AGENT_ENABLED=false` and `AGENT_PAUSED=true`; it has no DO binding, route, custom domain, D1/KV/R2 binding, queue, cron trigger, or secret.
+- While the outer gates are closed, `/run` and `/internal/dispatch` return a fail-closed disabled/paused response. If explicitly enabled, `/run` accepts at most five tasks and `/internal/dispatch` processes at most five operator-requested tasks or one scheduled task per tick; both use the bounded read-only review manager and persist lease/result bookkeeping in the State Store. No mutating or publishing task handler is present.
+- `wrangler.preview.jsonc` is a standalone `ai-thuc-chien-agent-runtime-preview` config that declares a SQLite Durable Object binding/migration and a `*/30 * * * *` cron. The outer gates remain `AGENT_ENABLED=false`, `AGENT_SCHEDULER_ENABLED=false`, `AGENT_RECOVERY_ALARM_ENABLED=false`, `AGENT_PAUSED=true`, and `AGENT_OIDC_ENABLED=false`. The config has no route, custom domain, D1/KV/R2 binding, queue, or checked-in secret value. It remains undeployed; account-side namespace provisioning, secret configuration, and Free-plan headroom have not been verified.
 - State Store routes authenticate with `AGENT_STATE_STORE_TOKEN` before parsing or routing.
 - Internal client uses a fixed DO identity and fixed operations, and creates a new request with only the internal token and required content type.
 - State Store and client tests cover auth separation, rotation, request bounds, strict query validation, quota/idempotency, transitions, pause behavior, and persistence.
@@ -94,12 +94,14 @@ Trust boundaries:
 
 - [ ] Independent reviewer inspects current source and this threat model; records findings and disposition.
 - [x] Remove test-only route/clock override from deployable code; verify the production source has no test hook and the production Durable Object returns 404 for the test route.
-- [ ] Implement Worker ingress → fixed-operation client integration with strict operator authorization, request limits, rate limits, response allowlisting, and no credential forwarding.
+- [x] Implement Worker ingress → fixed-operation State Store client integration with operator authorization, bounded request bodies, and no caller credential/header forwarding; keep all task handlers read-only.
+- [ ] Add/verify global ingress and read-route rate limits, explicit response allowlisting, and negative tests for response leakage and missing/rotated secrets.
 - [ ] Add end-to-end negative tests for every unauthenticated route, operator/internal token confusion, arbitrary path/header injection, response leakage, missing binding, missing secret, and rotation.
 - [ ] Keep one operator only, or implement tenant ownership and cross-tenant isolation before multi-user access.
 - [ ] Obtain verifiable Free-plan usage/headroom and confirm no billing/payment/paid upgrade change; if unavailable, do not bind or deploy.
-- [ ] Implement executor safety, per-side-effect idempotency, bounded retries, lease expiry/recovery, and reconciliation.
-- [ ] Implement a complete emergency stop covering admission, claim, schedule, dispatch, and outbound effects.
+- [x] Implement bounded read-only task review, idempotent task reservation, lease fencing/heartbeat, and bounded expired-lease recovery paths in source/tests.
+- [ ] Before any external write capability, independently review executor safety, per-side-effect idempotency, bounded retries, and reconciliation; no publishing executor is currently implemented.
+- [ ] Verify a complete emergency stop with fault-injection tests covering admission, claim, cron scheduling, dispatch, in-flight work, and future outbound effects; the current manual OIDC operator is pause-only.
 - [ ] Implement monitoring, redacted logs, alerts, storage/usage sampling, rollback and recovery runbooks.
 - [ ] Verify the Preview deployment is isolated from Production Worker, DNS, D1, secrets, and live user data.
 - [ ] Re-run only the affected runtime/security/release checks on the exact candidate SHA.
