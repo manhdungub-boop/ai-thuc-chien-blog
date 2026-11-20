@@ -16,7 +16,8 @@ const searchNames = [
   ["qdrant", "Qdrant"], ["whisper-cpp", "whisper.cpp"], ["mlflow", "MLflow"],
   ["pydantic-ai", "Pydantic AI"], ["haystack", "Haystack"], ["elevenlabs", "ElevenLabs"],
   ["embeddinggemma-2", "EmbeddingGemma 2"], ["google-ai-edge-gallery", "Google AI Edge Gallery"],
-  ["gemini-4-hydrogen", "Gemini 4 Hydrogen"], ["pocketpal-ai", "PocketPal AI"], ["draw-things", "Draw Things"],\n  ["invideo", "InVideo"], ["heygen", "HeyGen"],
+  ["gemini-4-hydrogen", "Gemini 4 Hydrogen"], ["pocketpal-ai", "PocketPal AI"], ["draw-things", "Draw Things"],
+  ["invideo", "InVideo"], ["heygen", "HeyGen"],
   ["metricool", "Metricool"], ["vidiq", "vidIQ"], ["higgsfield", "Higgsfield"]
 ].filter(([id]) => catalog.tools.some(tool => tool.id === id)).map(([, name]) => name);
 const expectedActiveByTotal = new Map([[36, 35], [39, 38], [44, 43], [46, 45]]);
