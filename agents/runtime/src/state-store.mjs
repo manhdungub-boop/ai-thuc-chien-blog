@@ -250,6 +250,10 @@ export class AgentStateStore {
         const result = await this.claim(await request.json(), this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
+      if (url.pathname === "/claim-next" && request.method === "POST") {
+        const result = await this.claimNext(await request.json(), this.requestTime(request));
+        return jsonResponse(result.body, result.status);
+      }
       if (url.pathname === "/heartbeat" && request.method === "POST") {
         const result = this.heartbeat(await request.json(), this.requestTime(request));
         return jsonResponse(result.body, result.status);
@@ -546,6 +550,63 @@ export class AgentStateStore {
         };
       });
       if (result.status === 200) await this.scheduleRecoveryAlarm(now);
+      return result;
+    } catch {
+      return { status: 503, body: { ok: false, error: "state_store_unavailable" } };
+    }
+  }
+
+
+  async claimNext(body, now) {
+    if (this.env.AGENT_ENABLED !== "true" || this.env.AGENT_PAUSED !== "false") {
+      return { status: 503, body: { ok: false, error: "agent_disabled_or_paused" } };
+    }
+    if (!isObject(body) || Object.keys(body).length !== 0) {
+      return { status: 400, body: { ok: false, error: "claim_next_request_invalid" } };
+    }
+    try {
+      const result = this.ctx.storage.transactionSync(() => {
+        if (this.controlState().paused) {
+          return { status: 503, body: { ok: false, error: "agent_disabled_or_paused" } };
+        }
+        const row = readRow(this.sql,
+          "SELECT * FROM tasks WHERE state='queued' AND (next_attempt_at IS NULL OR next_attempt_at<=?) ORDER BY COALESCE(next_attempt_at,created_at),created_at,task_id LIMIT 1",
+          now,
+        );
+        if (!row) return { status: 200, body: { ok: true, task: null, lease: null } };
+        const leaseOwner = crypto.randomUUID();
+        const decision = claimQueuedTask(row, { now, leaseOwner });
+        if (!decision.ok) {
+          const status = decision.error === "lease_state_invalid" || decision.error === "lease_owner_invalid" ? 400 : 409;
+          return { status, body: { ok: false, error: decision.error } };
+        }
+        const fields = decision.fields;
+        this.sql.exec(
+          "UPDATE tasks SET state=?,attempt_count=?,lease_generation=?,lease_owner=?,lease_expires_at=?,lease_max_expires_at=?,next_attempt_at=?,updated_at=? WHERE task_id=? AND state='queued' AND attempt_count=? AND lease_generation=?",
+          fields.state, fields.attempt_count, fields.lease_generation, fields.lease_owner,
+          fields.lease_expires_at, fields.lease_max_expires_at, fields.next_attempt_at, fields.updated_at,
+          row.task_id, row.attempt_count, row.lease_generation,
+        );
+        const updated = readRow(this.sql, "SELECT * FROM tasks WHERE task_id=?", row.task_id);
+        if (!updated || updated.state !== "running" || updated.lease_owner !== leaseOwner ||
+            updated.lease_generation !== fields.lease_generation) {
+          return { status: 409, body: { ok: false, error: "task_claim_conflict" } };
+        }
+        this.audit(row.task_id, "task.claimed", now, {
+          attempt: updated.attempt_count,
+          leaseGeneration: updated.lease_generation,
+          source: "bounded_queue_dispatch",
+        });
+        return {
+          status: 200,
+          body: {
+            ok: true,
+            task: safeTask(updated),
+            lease: { owner: updated.lease_owner, generation: updated.lease_generation, expiresAt: updated.lease_expires_at, maxExpiresAt: updated.lease_max_expires_at },
+          },
+        };
+      });
+      if (result.status === 200 && result.body.task) await this.scheduleRecoveryAlarm(now);
       return result;
     } catch {
       return { status: 503, body: { ok: false, error: "state_store_unavailable" } };
