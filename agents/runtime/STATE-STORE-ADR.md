@@ -14,7 +14,7 @@ Do not use Workers KV for admission counters: its eventual-consistency behavior 
 
 ## Why SQLite-backed Durable Objects
 
-Cloudflare documents SQLite-backed Durable Objects as available on Workers Free. Published Free allowances include 100,000 Durable Object requests/day, 13,000 GB-s/day, 100,000 SQL rows written/day, and 5 GB of account storage. These are platform ceilings, not account-specific remaining quota. Exceeding a Free allowance causes operations of that type to fail; no paid upgrade is authorized.
+Cloudflare's current Durable Objects pricing documentation (last updated 2026-11-13) states that SQLite-backed Durable Objects are available on Workers Free. Published Free allowances include 100,000 Durable Object requests/day (alarm invocations count as requests), 13,000 GB-s/day, 5 million SQL rows read/day, 100,000 SQL rows written/day, and 5 GB of SQL storage. Each SQLite-backed `setAlarm()` is one SQL row write; deletes also count as row writes. Daily limits reset at 00:00 UTC and exceeding a Free limit causes further operations of that type to fail. These are platform ceilings, not evidence that this Cloudflare account is on Free or has remaining headroom. No paid upgrade or overage is authorized.
 
 Official references:
 - https://developers.cloudflare.com/durable-objects/platform/pricing/
@@ -65,6 +65,7 @@ The implementation does not include an alarm, cron trigger, queue consumer, auto
 - Terminal task rows are retained for 30 days; audit and daily-usage rows are retained for 90 days. Idempotency protection is bounded by the 30-day task retention.
 - Admission, claim, heartbeat, recovery and terminal completion update task rows and append audit events in the same SQLite transaction. Heartbeats add two row writes apiece; actual heartbeat cadence and recovery rates must be measured before any live Preview binding.
 - These internal limits are conservative guardrails, not evidence of remaining account quota or guaranteed availability.
+- Alarm cost implication for a future scheduler: every `setAlarm()` consumes one SQL row write and every alarm invocation consumes one Durable Object request. Alarm cadence, task retries, heartbeat writes, and retention deletes must be included in the account-wide daily budget before any alarm is implemented or enabled. Do not treat the published Free ceiling as available project headroom.
 
 ## Failure behavior
 
