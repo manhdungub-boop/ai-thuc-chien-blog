@@ -78,6 +78,13 @@ See [STATE-STORE-ADR.md](./STATE-STORE-ADR.md) for the design decision, Free-tie
 - SEO HTTP status and broken-link counts are not inferred from local files. The repository reader requires an explicit `seoEvidenceReader` provider for those facts; sitemap membership is independently derived from the checked-out `sitemap.xml`.
 - Integration tests now inspect the real article, AI Bank catalog and sitemap in the checked-out repository. This validates local source reading, not a live website HTTP crawl or a deployed agent.
 
+## Read-only Agent Manager
+
+- `src/read-only-agent-manager.mjs` coordinates a bounded batch of up to 20 validated review tasks in a deterministic sequential order.
+- It obtains snapshots only through the injected read-only adapter, applies the existing pure Task Handlers, and produces per-task findings plus a severity-prioritized aggregate report.
+- Invalid tasks and duplicate idempotency keys are rejected before an additional source read. A failed source read is isolated to that item; subsequent tasks can continue.
+- The manager has no State Store, filesystem, network, Worker binding, scheduler, retry, enqueue, publish, or execution capability. It does not persist reports. This is a local orchestration/reporting layer, not an autonomous agent or 24/7 service.
+
 ## Read-only source snapshot adapters
 
 - `src/task-snapshot-adapters.mjs` converts an already-authorized source read into a bounded metadata snapshot for the pure task handlers.
