@@ -78,6 +78,13 @@ See [STATE-STORE-ADR.md](./STATE-STORE-ADR.md) for the design decision, Free-tie
 - SEO HTTP status and broken-link counts are not inferred from local files. The repository reader requires an explicit `seoEvidenceReader` provider for those facts; sitemap membership is independently derived from the checked-out `sitemap.xml`.
 - Integration tests now inspect the real article, AI Bank catalog and sitemap in the checked-out repository. This validates local source reading, not a live website HTTP crawl or a deployed agent.
 
+## Read-only Safety Supervisor
+
+- `src/agent-safety-supervisor.mjs` evaluates a caller-supplied boolean evidence snapshot and fails closed when any required evidence is absent.
+- It flags enabled/unpaused runtime state, scheduler or executor configuration before approval, and production bindings. An unverified Cloudflare budget remains a warning and never grants deployment permission.
+- The supervisor does not poll, change runtime state, invoke Pause, deploy, or trigger tasks. It is a pure policy evaluator, not a live 24/7 monitoring service.
+- The safe idle result still instructs operators to keep the runtime disabled until the separate release gates are explicitly satisfied.
+
 ## Read-only Agent Manager
 
 - `src/read-only-agent-manager.mjs` coordinates a bounded batch of up to 20 validated review tasks in a deterministic sequential order.
