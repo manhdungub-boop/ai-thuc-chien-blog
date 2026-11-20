@@ -24,8 +24,6 @@ jobs:
     steps:
       - name: Request a short-lived GitHub OIDC token and pause Preview
         env:
-          ACTIONS_ID_TOKEN_REQUEST_URL: ${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
           AGENT_RUNTIME_PREVIEW_URL: ${{ vars.AGENT_RUNTIME_PREVIEW_URL }}
           OIDC_AUDIENCE: ai-thuc-chien-agent-runtime-preview
           PAUSE_REASON: ${{ inputs.reason }}
