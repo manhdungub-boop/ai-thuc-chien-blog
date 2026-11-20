@@ -1,8 +1,8 @@
 # Agent Runtime state store — architecture decision
 
-Status: **SQLite Durable Object implementation, schema v1-v6 migrations, operator control/recovery bridge, and isolated Preview binding config are in Draft PR #339. The operator-triggered POST /run path is connected to durable reserve → fenced claim → read-only review → terminal completion. Latest code includes bounded result persistence with an exact-schema 4 KiB ceiling; validation is pending for this revision. Preview config is not deployed; no scheduler or 24/7 background execution is implemented.**
+Status: **SQLite Durable Object implementation, schema v1-v6 migrations, operator control/recovery bridge, bounded result persistence, and an opt-in scheduled queue dispatcher are in Draft PR #339. The Preview config contains a 30-minute Cron Trigger, but `AGENT_SCHEDULER_ENABLED=false`, `AGENT_ENABLED=false`, and `AGENT_PAUSED=true`; the config is not deployed. This is code-level scheduler support only, not a running or 24/7 service.**
 
-Date: 2026-11-19
+Date: 2026-11-20
 
 ## Decision
 
@@ -53,11 +53,11 @@ Schema migrations v1-to-v6 are transactional and preserve existing task and dail
 - `queued -> running` occurs only through an atomic claim while `AGENT_ENABLED=true` and `AGENT_PAUSED=false`; generic `/transition` cannot bypass lease ownership. `queued -> cancelled` remains available while paused for operator cleanup.
 - Claim increments the attempt count and lease generation and assigns an opaque lease owner. Heartbeat and completion require the current owner/generation and an unexpired lease; stale owners are rejected by fencing checks.
 - A lease has a five-minute initial duration, a 15-minute maximum individual extension, and a 30-minute absolute lifetime. Heartbeat and completion may finish an already-owned in-flight task while admission is paused; new claims and recovery are blocked while paused.
-- Expired-lease recovery is bounded: it requeues before the attempt ceiling with a bounded retry delay, or marks the task failed at the ceiling. Recovery is an operator-invoked `POST /recover`; it is **not automatic**.
+- Expired-lease recovery is bounded: it requeues before the attempt ceiling with a bounded retry delay, or marks the task failed at the ceiling. An operator-invoked `POST /recover` remains available; a separate recovery-only Durable Object alarm can perform the same bounded lease recovery when explicitly enabled. The alarm is disabled in Preview config and does not dispatch queued tasks.
 - Repeating the same terminal completion for the same lease generation is idempotent; attempting to reopen or change a terminal state is rejected.
 - In-flight count is derived from durable task rows; terminal transitions do not decrement a separate counter.
 
-The implementation does not include an alarm, cron trigger, queue consumer, automatic recovery scheduler, task handler, or external-side-effect idempotency. An expired task can remain running until an authorized operator invokes recovery.
+The Worker now implements an opt-in `scheduled()` handler for one bounded queue-dispatch tick. It accepts only the exact configured 30-minute cron, requires `AGENT_SCHEDULER_ENABLED=true`, `AGENT_ENABLED=true`, `AGENT_PAUSED=false`, and a valid operator bearer, then reuses the authenticated dispatcher with a hard-coded batch size of one. No task is admitted by the scheduler, no retry loop is started, and no publishing or external write handler is available. The dedicated Preview config declares `*/30 * * * *` but keeps the scheduler and runtime gates closed. It has not been deployed or enabled.
 
 ## Retention and budgets
 
@@ -65,9 +65,9 @@ The implementation does not include an alarm, cron trigger, queue consumer, auto
 - Terminal task rows are retained for 30 days; audit and daily-usage rows are retained for 90 days. Idempotency protection is bounded by the 30-day task retention.
 - Admission, claim, heartbeat, recovery and terminal completion update task rows and append audit events in the same SQLite transaction. Heartbeats add two row writes apiece; actual heartbeat cadence and recovery rates must be measured before any live Preview binding.
 - These internal limits are conservative guardrails, not evidence of remaining account quota or guaranteed availability.
-- Alarm cost implication for a future scheduler: every `setAlarm()` consumes one SQL row write and every alarm invocation consumes one Durable Object request. Alarm cadence, task retries, heartbeat writes, and retention deletes must be included in the account-wide daily budget before any alarm is implemented or enabled. Do not treat the published Free ceiling as available project headroom.
+- Scheduler budget model (code-only, not measured): `*/30 * * * *` is 48 Worker Cron invocations/day. Each tick is hard-bounded to one task; a non-empty tick can issue at most one `/claim-next` and one `/complete` Durable Object request, in addition to any recovery alarm activity. Each scheduled task claim may set one recovery alarm; `setAlarm()` consumes one SQL row write and each alarm invocation consumes one Durable Object request. This estimate excludes other project/account traffic, audit writes, retries, and retention. Cloudflare documents a 10 ms CPU limit per Workers Free Cron invocation and a 15-minute Cron wall-time limit; the task-review path has not been measured against the CPU ceiling. Published limits are not account headroom. No scheduler is enabled until the account plan/remaining quota and actual CPU/SQL usage are independently verified.
 - The Worker also exposes operator-authenticated `POST /internal/enqueue` for bounded, idempotent admission of one to five validated tasks; it only reserves queue entries and does not execute them. `POST /internal/dispatch` is a separate bounded operator action.
-- The State Store now exposes an authenticated internal `/claim-next` operation that atomically selects the oldest due queued task and grants a fenced lease. The Worker exposes operator-authenticated `POST /internal/dispatch` with a hard maximum batch of five and only the existing read-only review handlers. It is an operator-triggered dispatcher, not a scheduler or background worker; no publishing/write handlers are wired.
+- The State Store exposes authenticated `/claim-next`, which atomically selects the oldest due queued task and grants a fenced lease. Operator `POST /internal/dispatch` retains a hard maximum batch of five. The scheduled handler reuses this same path but hard-caps itself at one task per 30-minute tick. All review handlers remain read-only; no publishing/write handlers are wired.
 - A bounded lease-recovery alarm handler is now implemented in the isolated source branch. It is gated by `AGENT_RECOVERY_ALARM_ENABLED=true`, the existing outer enabled/unpaused flags, and the durable pause control. The checked-in Preview value is `false`. The handler uses one shared alarm with a five-minute minimum cadence, processes at most five expired leases per invocation, audits each recovery, and clears itself while disabled or paused. It only requeues/fails expired leases; it does not claim or execute queued tasks. This is not a scheduler or 24/7 execution path. It has not been deployed or enabled.
 
 ## Failure behavior
@@ -93,7 +93,7 @@ This primitive does not verify JWT signatures, fetch JWKS, validate claims, or a
 ## Not approved by this ADR
 
 - No Durable Object namespace/binding or migration is added to the validation-only `wrangler.jsonc`. A separate `wrangler.preview.jsonc` now declares one SQLite `AgentStateStore` binding and its initial migration, with both runtime gates closed. This Preview config is code-only and has not been deployed; secrets, account identifiers, production routes, and schedules remain absent.
-- No Cloudflare Agent Runtime deployment, secret configuration, alarm, cron trigger, queue consumer, or public endpoint is enabled.
+- No Cloudflare Agent Runtime deployment, secret configuration, alarm activation, Cron Trigger execution, queue consumer, or public endpoint is enabled. The Cron expression exists only in the un-deployed Preview config and the handler remains gated off.
 - Only the bounded, operator-triggered, synchronous read-only review path exists in source; it has no publishing or other external write side effects. No automatic background execution, backup/restore promise, or 24/7 claim is authorized.
 - No Production Worker, DNS, D1, or live data is changed.
 
