@@ -24,7 +24,7 @@ test("dedicated Agent Runtime Preview config binds only its SQLite State Store a
     AGENT_OIDC_REPOSITORY_OWNER_ID: "342528485",
     AGENT_OIDC_REF: "refs/heads/main",
     AGENT_OIDC_WORKFLOW_REF: "manhdungub-boop/ai-thuc-chien-blog/.github/workflows/agent-runtime-operator.yml@refs/heads/main",
-    AGENT_OIDC_ACTOR_ID: "",
+    AGENT_OIDC_ACTOR_ID: "342528485",
   });
   assert.deepEqual(config.durable_objects, {
     bindings: [{ name: "AGENT_STATE_STORE", class_name: "AgentStateStore" }],
@@ -51,7 +51,7 @@ test("Worker entrypoint exports the Durable Object class named by the Preview co
   assert.equal(typeof AgentStateStore, "function");
 });
 
-test("GitHub OIDC operator remains disabled and cannot authenticate without a pinned human actor ID", () => {
+test("GitHub OIDC operator remains disabled while pinning only the observed GitHub actor", () => {
   assert.equal(config.vars.AGENT_OIDC_ENABLED, "false");
-  assert.equal(config.vars.AGENT_OIDC_ACTOR_ID, "");
+  assert.equal(config.vars.AGENT_OIDC_ACTOR_ID, "342528485");
 });
