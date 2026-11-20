@@ -11,7 +11,7 @@ Status: **isolated validation scaffold; no Agent Runtime Worker deployment and n
 - If both flags are manually opened, \`POST /run\` requires an \`Authorization: Bearer\` token matching the externally injected \`AGENT_OPERATOR_TOKEN\`; missing or invalid credentials fail closed with \`401\`. A valid token still receives \`501 execution_not_implemented\`; no task execution exists.
 - Operator bearer validation uses SHA-256 digests with constant-time byte comparison. The secret is never committed, logged, or returned; no secret is configured in this repository.
 - \`GET /health\` returns only non-sensitive state.
-- No deploy workflow is provided. CI only runs local tests and static configuration checks.
+- This PR does not deploy the Worker. A separate dependent PR (#326) proposes a manual-dispatch-only Preview workflow restricted to `main` and an explicit Preview confirmation; it remains Draft/unmerged and requires the dedicated `CLOUDFLARE_AGENT_PREVIEW_API_TOKEN`, which is not currently configured. CI in this PR runs local tests and static configuration checks.
 
 ## Implemented validation-only building blocks
 
