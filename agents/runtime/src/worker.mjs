@@ -14,6 +14,7 @@ const SECURITY_HEADERS = Object.freeze({
   "Referrer-Policy": "no-referrer",
 });
 const MAX_INTERNAL_RESPONSE_BYTES = 16 * 1024;
+const INTERNAL_SCHEDULED_DISPATCH = Symbol("internal-scheduled-dispatch");
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: SECURITY_HEADERS });
 }
@@ -298,9 +299,11 @@ async function readStateStore(env, pathname) {
 }
 
 const worker = {
-  async fetch(request, env = {}) {
-    const limited = await enforceIngressRateLimit(request, env);
-    if (limited) return limited;
+  async fetch(request, env = {}, context) {
+    if (context !== INTERNAL_SCHEDULED_DISPATCH) {
+      const limited = await enforceIngressRateLimit(request, env);
+      if (limited) return limited;
+    }
     const url = new URL(request.url);
     if (url.pathname === "/health") {
       if (request.method !== "GET") return json({ ok: false, error: "method_not_allowed" }, 405);
@@ -769,7 +772,7 @@ const worker = {
       body: JSON.stringify({ maxTasks: 1 }),
     });
     try {
-      const response = await worker.fetch(request, env, ctx);
+      const response = await worker.fetch(request, env, INTERNAL_SCHEDULED_DISPATCH);
       if (!response.ok) console.warn("Agent Runtime scheduled tick deferred", response.status);
     } catch {
       // No retry loop or alarm is created here. The next scheduled tick retries
