@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readBoundedJson, readBoundedText } from "../src/bounded-json-body.mjs";
 function requestFromStream(stream, headers = {}) {
-  return new Request("https://state-store.test/reserve", { method: "POST", headers, body: stream, duplex: "half" });
+  return new Request("https://state-store.test/reserve", { method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: stream, duplex: "half" });
 }
 test("rejects malformed Content-Length before pulling the request stream", async () => {
   let pulls = 0;
@@ -27,11 +27,11 @@ test("enforces the streamed byte cap without Content-Length and cancels on overf
 });
 test("accepts valid JSON exactly at the byte limit", async () => {
   const body = '{"ok":true}', size = new TextEncoder().encode(body).byteLength;
-  const result = await readBoundedJson(new Request("https://state-store.test/", { method: "POST", headers: { "Content-Length": String(size) }, body }), size);
+  const result = await readBoundedJson(new Request("https://state-store.test/", { method: "POST", headers: { "Content-Type": "application/json", "Content-Length": String(size) }, body }), size);
   assert.deepEqual(result, { ok: true, value: { ok: true } });
 });
 test("rejects declared and actual byte-length mismatch", async () => {
-  const result = await readBoundedJson(new Request("https://state-store.test/", { method: "POST", headers: { "Content-Length": "5" }, body: "{}" }), 16);
+  const result = await readBoundedJson(new Request("https://state-store.test/", { method: "POST", headers: { "Content-Type": "application/json", "Content-Length": "5" }, body: "{}" }), 16);
   assert.deepEqual(result, { ok: false, status: 400, error: "invalid_content_length" });
 });
 test("rejects invalid UTF-8 before JSON parsing", async () => {
@@ -40,13 +40,27 @@ test("rejects invalid UTF-8 before JSON parsing", async () => {
   assert.deepEqual(result, { ok: false, status: 400, error: "invalid_json_encoding" });
 });
 test("rejects malformed JSON and invalid configured limits", async () => {
-  const result = await readBoundedJson(new Request("https://state-store.test/", { method: "POST", body: "{invalid" }), 16);
+  const result = await readBoundedJson(new Request("https://state-store.test/", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{invalid" }), 16);
   assert.deepEqual(result, { ok: false, status: 400, error: "invalid_json" });
   await assert.rejects(() => readBoundedJson(new Request("https://state-store.test/"), 0), { name: "TypeError", message: "invalid_body_limit" });
 });
 test("readBoundedText validates strict UTF-8 and byte length", async () => {
   const body = '{"reason":"maintenance"}', size = new TextEncoder().encode(body).byteLength;
-  assert.deepEqual(await readBoundedText(new Request("https://state-store.test/", { method: "POST", headers: { "Content-Length": String(size) }, body }), size), { ok: true, value: body });
+  assert.deepEqual(await readBoundedText(new Request("https://state-store.test/", { method: "POST", headers: { "Content-Type": "application/json", "Content-Length": String(size) }, body }), size), { ok: true, value: body });
   const invalid = new ReadableStream({ start(c) { c.enqueue(new Uint8Array([0xc3,0x28])); c.close(); } });
   assert.equal((await readBoundedText(requestFromStream(invalid), 16)).error, "invalid_json_encoding");
+});
+
+test("rejects missing and non-JSON media types before pulling the body", async () => {
+  for (const headers of [{}, { "Content-Type": "text/plain" }, { "Content-Type": "application/problem+json" }]) {
+    let pulls = 0;
+    const stream = new ReadableStream({ pull(c) { pulls++; c.enqueue(new TextEncoder().encode("{}")); c.close(); } }, { highWaterMark: 0 });
+    const result = await readBoundedJson(requestFromStream(stream, headers), 16);
+    assert.deepEqual(result, { ok: false, status: 400, error: "invalid_content_type" });
+    assert.equal(pulls, 0);
+  }
+});
+test("accepts application/json with charset parameters", async () => {
+  const result = await readBoundedJson(requestFromStream(new ReadableStream({ start(c) { c.enqueue(new TextEncoder().encode("{}")); c.close(); } }), { "Content-Type": "application/json; charset=utf-8" }), 16);
+  assert.deepEqual(result, { ok: true, value: {} });
 });
