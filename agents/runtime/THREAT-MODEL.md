@@ -32,7 +32,7 @@ Trust boundaries:
 
 ### T1 — Unauthenticated public caller
 **Threat:** call task creation, transitions, inspection, or usage routes directly.  
-**Current controls:** Worker exposes only `/health` and `/run`; `/run` requires POST, disabled/paused checks, and an operator bearer token before it returns 501. The Durable Object handler verifies the distinct internal bearer token before any route handling. Integration tests cover missing, malformed, wrong, and external-operator tokens for every State Store route.  
+**Current controls:** Worker exposes `/health`, `/run`, and operator-authenticated `/internal/*` routes for control state, pause/resume, usage, task inspection, and expired-lease recovery. State Store calls require a distinct internal bearer token; the Durable Object handler verifies it before route handling. The Preview config is undeployed and both outer runtime gates remain closed by default. `/run` still returns 501; no task handler exists.  
 **Residual risk:** no namespace is bound today. Once bound, every request path must remain reachable only through the fixed Worker client; never expose the DO stub or a generic proxy.
 
 ### T2 — Operator credential compromise
@@ -42,7 +42,7 @@ Trust boundaries:
 
 ### T3 — Internal token leakage or confused-deputy abuse
 **Threat:** a caller tricks the Worker into forwarding caller-controlled paths, headers, object IDs, or credentials to the DO.  
-**Current controls:** the client fixes the object identity and internal origin, allows only `reserve`, `transition`, `task`, and `usage`, constructs a fresh request, and sends only the internal bearer token. It does not forward caller Authorization, cookies, Origin, or arbitrary headers. The internal token is distinct from the operator token.  
+**Current controls:** the Worker uses the fixed object identity and internal origin, maps fixed route handlers to State Store paths, constructs fresh requests, and sends only the internal bearer token. It does not forward caller Authorization, cookies, Origin, or arbitrary headers. The internal token is distinct from the operator token. The bridge now includes pause/resume and expired-lease recovery operations in addition to read-only usage/task/control inspection.  
 **Residual risk:** the client returns the raw internal `Response`; the future Worker integration must parse and reduce it to an explicit response schema. Never pass through raw DO responses, stack traces, SQL errors, or internal headers. Secret leakage through logs/traces must be tested.
 
 ### T4 — State inspection crosses tenant/operator boundaries
@@ -63,12 +63,12 @@ Trust boundaries:
 ### T7 — Resource exhaustion / oversized inputs
 **Threat:** large bodies, malformed JSON, unbounded task payloads, or repeated requests consume CPU/storage.  
 **Current controls:** streamed body cap before JSON parse, task payload cap, strict schema validation, daily quota and concurrency cap.  
-**Residual risk:** no deployed ingress rate limiting, request timeout budget, scheduler backpressure, or measured DO resource usage. Do not increase limits based only on arithmetic estimates.
+**Residual risk:** State Store mutation routes have a durable per-service-actor rate limit, but the Worker ingress has no global rate limit, read routes are not rate-limited, and the actor label is shared/static rather than a human identity. No deployed request timeout budget, scheduler backpressure, or measured DO resource usage exists. Do not increase limits based only on arithmetic estimates.
 
 ### T8 — Pause/kill switch bypass
 **Threat:** queued work starts after pause, or the operator cannot stop active dispatch.  
-**Current controls:** State Store rejects reservations and queued→running transitions when disabled/paused; terminal cancellation remains available.  
-**Residual risk:** there is no executor, scheduler, dispatch gate, or operational emergency-stop procedure yet. A complete kill switch must stop new admissions, claims, scheduled dispatch, and outbound side effects; define what happens to in-flight requests and verify it with fault-injection tests.
+**Current controls:** State Store persists pause state and rejects reservations, queued→running transitions, and lease recovery when disabled/paused; terminal bookkeeping remains available where explicitly allowed. Worker has authenticated pause/resume control routes. Both outer flags default closed in the dedicated Preview config.  
+**Residual risk:** there is no executor, scheduler, dispatch gate, or operational emergency-stop runbook yet. Pause does not forcibly interrupt an in-flight external side effect. A complete kill switch must stop new admissions, claims, scheduled dispatch, and outbound side effects; define what happens to in-flight requests and verify it with fault-injection tests. The shared bearer and static actor label are not a human identity control.
 
 ### T9 — External side-effect / publishing abuse
 **Threat:** an agent publishes unreviewed, duplicated, copyrighted, misleading, or malicious content to the official website or Facebook.  
@@ -108,3 +108,8 @@ Trust boundaries:
 ## 6. Explicit non-claims
 
 This document is not a penetration test, independent audit, compliance certification, deployment approval, or proof of 24/7 operation. No Agent Runtime Worker has been deployed or activated by this work. No Production Worker, DNS, D1, live data, production secret, billing setting, or social account has been changed.
+
+
+## Preview exposure note (2026-11-20)
+
+`wrangler.preview.jsonc` sets `workers_dev=true` and `preview_urls=true`, so the dedicated Worker is intended to have a public workers.dev/Preview URL if deployed. Public reachability is not access control. `/health` intentionally returns only non-sensitive service/gate state; every operator route must continue to require authentication, and no shared bearer may be placed in browser JavaScript. Before deployment, decide whether to add an already-entitled, no-cost Cloudflare Access boundary or another independently reviewed ingress control. Billing/plan status and remaining quota are not verified, so the separate Preview config must remain undeployed until those checks pass.
