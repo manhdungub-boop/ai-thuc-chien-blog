@@ -326,7 +326,11 @@ export class AgentStateStore {
   }
 
   async alarm() {
-    await this.ready;
+    try {
+      await this.ready;
+    } catch {
+      return;
+    }
     if (this.env.AGENT_RECOVERY_ALARM_ENABLED !== "true" ||
         this.env.AGENT_ENABLED !== "true" || this.env.AGENT_PAUSED !== "false") {
       try { await this.ctx.storage.deleteAlarm(); } catch {}
@@ -364,10 +368,9 @@ export class AgentStateStore {
       await this.scheduleRecoveryAlarm(now);
       return recovered;
     } catch {
-      // Bounded self-retry only while the explicit recovery gate remains open.
-      try {
-        await this.ctx.storage.setAlarm(now + 5 * 60 * 1000);
-      } catch {}
+      // Re-arm only through the same gate and durable-pause checks. If the
+      // control state is unavailable, fail closed rather than retry forever.
+      await this.scheduleRecoveryAlarm(now);
       return;
     }
   }
