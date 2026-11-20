@@ -543,9 +543,24 @@ test("atomic claim admits only one worker and stale lease generations cannot hea
 
     const completed = await call(stub, "/complete", {
       taskId, leaseOwner: lease.owner, leaseGeneration: lease.generation, status: "succeeded",
+      result: {
+        taskType: "content.review",
+        status: "attention",
+        findingCount: 1,
+        findings: [{ code: "article_description_short", severity: "warning", message: "Mô tả bài viết còn thiếu hoặc quá ngắn." }],
+      },
     }, { "x-test-now": "2026-11-19T10:02:00.000Z" });
     assert.equal(completed.status, 200);
     assert.equal(completed.body.task.state, "succeeded");
+    assert.deepEqual(completed.body.task.result, {
+      taskType: "content.review",
+      status: "attention",
+      findingCount: 1,
+      findings: [{ code: "article_description_short", severity: "warning", message: "Mô tả bài viết còn thiếu hoặc quá ngắn." }],
+    });
+    const persisted = await call(stub, "/task?id=" + encodeURIComponent(taskId));
+    assert.equal(persisted.status, 200);
+    assert.deepEqual(persisted.body.task.result, completed.body.task.result);
     assert.equal(completed.body.task.leaseExpiresAt, null);
     assert.equal(completed.body.task.leaseMaxExpiresAt, null);
     const duplicate = await call(stub, "/complete", {
@@ -553,6 +568,35 @@ test("atomic claim admits only one worker and stale lease generations cannot hea
     }, { "x-test-now": "2026-11-19T10:03:00.000Z" });
     assert.equal(duplicate.status, 200);
     assert.equal(duplicate.body.duplicate, true);
+  });
+});
+
+test("completion rejects malformed or oversized persisted review results", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const created = await call(stub, "/reserve", task("result-validation"));
+    const taskId = created.body.task.taskId;
+    const claimed = await call(stub, "/claim", { taskId }, { "x-test-now": "2026-11-19T10:00:00.000Z" });
+    const lease = claimed.body.lease;
+    const invalid = await call(stub, "/complete", {
+      taskId, leaseOwner: lease.owner, leaseGeneration: lease.generation, status: "succeeded",
+      result: { taskType: "content.review", status: "pass", findingCount: 1, findings: [] },
+    });
+    assert.equal(invalid.status, 400);
+    assert.equal(invalid.body.error, "complete_result_invalid");
+    const wrongStatus = await call(stub, "/complete", {
+      taskId, leaseOwner: lease.owner, leaseGeneration: lease.generation, status: "failed",
+      result: { taskType: "content.review", status: "pass", findingCount: 0, findings: [] },
+    });
+    assert.equal(wrongStatus.status, 400);
+    assert.equal(wrongStatus.body.error, "complete_result_status_invalid");
+    const oversized = await call(stub, "/complete", {
+      taskId, leaseOwner: lease.owner, leaseGeneration: lease.generation, status: "succeeded",
+      result: { taskType: "content.review", status: "attention", findingCount: 1, findings: [
+        { code: "oversized_finding", severity: "warning", message: "x".repeat(5000) },
+      ] },
+    });
+    assert.equal(oversized.status, 400);
+    assert.equal(oversized.body.error, "complete_result_invalid");
   });
 });
 
