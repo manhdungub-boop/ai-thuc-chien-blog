@@ -11,6 +11,7 @@ const OPERATIONS = Object.freeze({
   transition: Object.freeze({ method: "POST", path: "/transition" }),
   task: Object.freeze({ method: "GET", path: "/task" }),
   usage: Object.freeze({ method: "GET", path: "/usage" }),
+  oidcReplayConsume: Object.freeze({ method: "POST", path: "/oidc/replay/consume" }),
 });
 
 function unavailable() {
@@ -72,6 +73,14 @@ function operationUrl(operation, input) {
         (input.errorCode !== undefined && (input.status !== "failed" ||
           typeof input.errorCode !== "string" || !/^[a-z0-9_.:-]{1,64}$/.test(input.errorCode)))) {
       throw new TypeError("state_store_request_invalid");
+    }
+  } else if (operation === "oidcReplayConsume") {
+    if (!isPlainObject(input) || Object.keys(input).length !== 2 ||
+        typeof input.jti !== "string" || !/^[a-zA-Z0-9._:-]{16,128}$/.test(input.jti) ||
+        typeof input.expiresAt !== "string" || !/^[0-9]{1,12}$/.test(input.expiresAt) ||
+        !Number.isSafeInteger(Number(input.expiresAt)) ||
+        String(Number(input.expiresAt)) !== input.expiresAt) {
+      throw new TypeError("state_store_oidc_replay_request_invalid");
     }
   }
   return url;
