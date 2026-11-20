@@ -236,6 +236,7 @@ export class AgentStateStore {
           return jsonResponse({ ok: false, error: parsedBody.status === 413 ? "request_body_too_large" : "request_invalid" }, parsedBody.status);
         }
         const result = this.setPaused(url.pathname.endsWith("/pause"), parsedBody.value, this.requestTime(request));
+        if (result.status === 200) await this.scheduleRecoveryAlarm(this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
             if (url.pathname === "/reserve" && request.method === "POST") {

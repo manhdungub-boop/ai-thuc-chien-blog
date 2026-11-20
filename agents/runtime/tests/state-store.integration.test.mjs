@@ -114,6 +114,33 @@ test("recovery alarm stops and clears itself while the durable operator pause is
   });
 });
 
+test("pause clears the recovery alarm immediately and resume re-arms it for persisted leases", async () => {
+  await withRuntime({ recoveryAlarmEnabled: "true" }, async ({ stub }) => {
+    const created = await call(stub, "/reserve", task("alarm-pause-resume"));
+    const taskId = created.body.task.taskId;
+    assert.equal((await call(stub, "/claim", { taskId })).status, 200);
+    const initiallyScheduled = await call(stub, "/__test/alarm-state");
+    assert.equal(typeof initiallyScheduled.body.alarmAt, "number");
+
+    const paused = await call(stub, "/control/pause", {
+      actor: "alarm-resume-operator", requestId: crypto.randomUUID(), reason: "maintenance",
+    });
+    assert.equal(paused.status, 200);
+    assert.equal((await call(stub, "/__test/alarm-state")).body.alarmAt, null,
+      "pause must clear a pending recovery alarm immediately");
+
+    const resumed = await call(stub, "/control/resume", {
+      actor: "alarm-resume-operator", requestId: crypto.randomUUID(), reason: "maintenance complete",
+    });
+    assert.equal(resumed.status, 200);
+    const rearmed = await call(stub, "/__test/alarm-state");
+    assert.equal(typeof rearmed.body.alarmAt, "number",
+      "resume must re-arm recovery for leases that persisted through pause");
+    assert.equal((await call(stub, "/task?id=" + encodeURIComponent(taskId))).body.task.state, "running",
+      "resume schedules recovery but does not execute or mutate the task");
+  });
+});
+
 test("all state-store routes require the distinct internal credential", async () => {
   await withRuntime({}, async ({ stub }) => {
     for (const [pathname, body] of [
