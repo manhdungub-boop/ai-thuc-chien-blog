@@ -130,8 +130,7 @@ export async function verifyGitHubActionsOidcToken(token, {
       claims.workflow_ref !== expected.workflowRef ||
       claims.event_name !== expected.eventName ||
       String(claims.actor_id ?? "") !== expected.actorId ||
-      claims.sub !== "repo:" + expected.repositoryOwner + "@" + expected.repositoryOwnerId + "/" +
-        expected.repository.split("/")[1] + "@" + expected.repositoryId + ":ref:" + expected.ref ||
+      claims.sub !== "repo:" + expected.repository + ":ref:" + expected.ref ||
       !isNonEmptyString(claims.jti, 128) ||
       !/^\d+$/.test(String(claims.run_id ?? "")) ||
       !/^\d+$/.test(String(claims.run_attempt ?? "")) ||
