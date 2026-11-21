@@ -248,6 +248,7 @@ export class AgentStateStore {
           return jsonResponse({ ok: false, error: parsedBody.status === 413 ? "request_body_too_large" : "request_invalid" }, parsedBody.status);
         }
         const result = this.setPaused(url.pathname.endsWith("/pause"), parsedBody.value, this.requestTime(request));
+        if (result.status === 200) await this.scheduleRecoveryAlarm(this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
                   if (url.pathname === "/external-budget" && request.method === "GET") {
@@ -508,7 +509,26 @@ if (url.pathname === "/task" && request.method === "GET") {
           body.actor, windowStart, requestCount + 1);
         const current = readRow(this.sql, "SELECT paused, changed_at, version FROM runtime_control WHERE singleton_id = 1");
         if (!current) return { status: 503, body: { ok: false, error: "runtime_control_unavailable" } };
+        const cancelRunningTasks = () => {
+          const running = this.sql.exec(
+            "SELECT task_id, task_type, lease_generation FROM tasks WHERE state='running'",
+          ).toArray();
+          this.sql.exec(
+            "UPDATE tasks SET state='cancelled', updated_at=?, terminal_at=?, error_code='operator_paused', lease_owner=NULL, lease_expires_at=NULL, lease_max_expires_at=NULL, next_attempt_at=NULL, last_error_code='operator_paused' WHERE state='running'",
+            now, now,
+          );
+          for (const task of running) {
+            this.audit(task.task_id, "task.cancelled", now, {
+              taskType: task.task_type,
+              leaseGeneration: task.lease_generation,
+              reason: "operator_paused",
+            });
+          }
+        };
         if (current.paused === (paused ? 1 : 0)) {
+          // Repeated Pause is idempotent but still repairs any stale running
+          // lease left by an earlier runtime version or interrupted rollout.
+          if (paused) cancelRunningTasks();
           return { status: 200, body: { ok: true, changed: false, control: this.controlState() } };
         }
         const version = current.version + 1;
@@ -520,6 +540,10 @@ if (url.pathname === "/task" && request.method === "GET") {
         }
         this.sql.exec("INSERT INTO runtime_control_audit (event_id, action, occurred_at, actor, reason, request_id) VALUES (?,?,?,?,?,?)",
           crypto.randomUUID(), paused ? "pause" : "resume", now, body.actor, body.reason ?? "", body.requestId);
+
+        // Emergency pause atomically fences every in-flight lease. The worker's
+        // next heartbeat observes the cancelled lease and aborts cooperative work.
+        if (paused) cancelRunningTasks();
         return { status: 200, body: { ok: true, changed: true, control: updated } };
       });
     } catch {
@@ -736,7 +760,14 @@ if (url.pathname === "/task" && request.method === "GET") {
           status: body.status, errorCode: body.errorCode,
         });
         if (!decision.ok) return { status: 409, body: { ok: false, error: decision.error } };
-        if (decision.duplicate) return { status: 200, body: { ok: true, duplicate: true, task: safeTask(row) } };
+        if (decision.duplicate) {
+          const resultConflict = resultJson !== null && resultJson !== row.result_json;
+          const errorConflict = Object.hasOwn(body, "errorCode") && body.errorCode !== row.error_code;
+          if (resultConflict || errorConflict) {
+            return { status: 409, body: { ok: false, error: "completion_conflict" } };
+          }
+          return { status: 200, body: { ok: true, duplicate: true, task: safeTask(row) } };
+        }
         const fields = decision.fields;
         this.sql.exec(
           "UPDATE tasks SET state=?,updated_at=?,terminal_at=?,error_code=?,lease_owner=NULL,lease_expires_at=NULL,lease_max_expires_at=NULL,next_attempt_at=NULL,last_error_code=?,result_json=? WHERE task_id=? AND state='running' AND lease_owner=? AND lease_generation=? AND lease_expires_at>?",
