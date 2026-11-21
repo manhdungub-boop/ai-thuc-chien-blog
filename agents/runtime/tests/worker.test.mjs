@@ -492,9 +492,9 @@ test("bridge maps malformed and oversized State Store responses to generic unava
     headers: { Authorization: "Bearer " + token },
   });
   for (const response of [
-    new Response("not-json", { status: 200 }),
-    new Response("x".repeat(16 * 1024 + 1), { status: 200 }),
-    new Response(JSON.stringify({ ok: false, error: "database_sql_detail" }), { status: 500 }),
+    new Response("not-json", { status: 200, headers: { "Content-Type": "application/json" } }),
+    new Response("x".repeat(16 * 1024 + 1), { status: 200, headers: { "Content-Type": "application/json" } }),
+    new Response(JSON.stringify({ ok: false, error: "database_sql_detail" }), { status: 500, headers: { "Content-Type": "application/json" } }),
   ]) {
     const env = {
       AGENT_OPERATOR_TOKEN: token,
@@ -1023,3 +1023,49 @@ test("run rejects oversized batches, malformed JSON, and unexpected query parame
   }), env);
   assert.equal(query.status, 400);
 });
+
+test("bridge rejects malformed Content-Length, mismatched lengths, and invalid UTF-8 State Store responses", async () => {
+  const token = OPERATOR_TOKEN;
+  const incoming = new Request("https://agent-runtime-preview.example.workers.dev/internal/usage", {
+    headers: { Authorization: "Bearer " + token },
+  });
+  let malformedLengthCancelled = false;
+  let oversizedDeclaredCancelled = false;
+  let chunkedOversizedCancelled = false;
+  const malformedLength = new Response(new ReadableStream({
+    start(controller) { controller.enqueue(new TextEncoder().encode("{}")); },
+    cancel() { malformedLengthCancelled = true; },
+  }), { headers: { "Content-Type": "application/json", "Content-Length": "2x" } });
+  const oversizedDeclared = new Response(new ReadableStream({
+    start(controller) { controller.enqueue(new TextEncoder().encode("{}")); },
+    cancel() { oversizedDeclaredCancelled = true; },
+  }), { headers: { "Content-Type": "application/json", "Content-Length": String(16 * 1024 + 1) } });
+  const chunkedOversized = new Response(new ReadableStream({
+    start(controller) { controller.enqueue(new Uint8Array(16 * 1024 + 1)); },
+    cancel() { chunkedOversizedCancelled = true; },
+  }), { headers: { "Content-Type": "application/json" } });
+  const mismatchedLength = new Response("{}", {
+    headers: { "Content-Type": "application/json", "Content-Length": "3" },
+  });
+  const invalidUtf8 = new Response(new Uint8Array([0xc3, 0x28]), {
+    headers: { "Content-Type": "application/json" },
+  });
+
+  for (const response of [malformedLength, oversizedDeclared, chunkedOversized, mismatchedLength, invalidUtf8]) {
+    const env = {
+      AGENT_OPERATOR_TOKEN: token,
+      AGENT_STATE_STORE_TOKEN: STATE_TOKEN,
+      AGENT_STATE_STORE: {
+        idFromName: () => "fixed-object-id",
+        get: () => ({ fetch: async () => response }),
+      },
+    };
+    const result = await worker.fetch(incoming, env);
+    assert.equal(result.status, 503);
+    assert.deepEqual(await result.json(), { ok: false, error: "state_store_unavailable" });
+  }
+  assert.equal(malformedLengthCancelled, true);
+  assert.equal(oversizedDeclaredCancelled, true);
+  assert.equal(chunkedOversizedCancelled, true);
+});
+

@@ -4,6 +4,7 @@ import { authorizeGitHubActionsOperator } from "./github-oidc-authorize.mjs";
 import { createReadOnlyAgentManager } from "./read-only-agent-manager.mjs";
 import { createReadOnlyTaskSnapshotAdapter } from "./task-snapshot-adapters.mjs";
 import { createPreviewReadOnlyReaders } from "./preview-read-only-sources.mjs";
+import { readBoundedJson as readBoundedJsonBody } from "./bounded-json-body.mjs";
 export { AgentStateStore } from "./state-store.mjs";
 
 const SECURITY_HEADERS = Object.freeze({
@@ -288,30 +289,18 @@ export async function runWithLeaseHeartbeat(work, heartbeat, intervalMs = 120_00
 }
 
 async function readBoundedJson(response) {
-  const declared = Number(response.headers.get("content-length") || 0);
-  if (declared > MAX_INTERNAL_RESPONSE_BYTES) throw new Error("internal_response_too_large");
-  if (!response.body) throw new Error("internal_response_empty");
-  const reader = response.body.getReader();
-  const chunks = [];
-  let total = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      total += value.byteLength;
-      if (total > MAX_INTERNAL_RESPONSE_BYTES) {
-        await reader.cancel();
-        throw new Error("internal_response_too_large");
-      }
-      chunks.push(value);
-    }
-  } finally {
-    reader.releaseLock();
+  const parsed = await readBoundedJsonBody(response, MAX_INTERNAL_RESPONSE_BYTES);
+  if (!parsed.ok) {
+    const code = parsed.status === 413
+      ? "internal_response_too_large"
+      : parsed.error === "invalid_json_encoding"
+        ? "internal_response_encoding_invalid"
+        : parsed.error === "invalid_content_length"
+          ? "internal_response_content_length_invalid"
+          : "internal_response_invalid";
+    throw new Error(code);
   }
-  const bytes = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
-  return JSON.parse(new TextDecoder().decode(bytes));
+  return parsed.value;
 }
 
 /** Fixed-identity, allowlisted, server-to-DO call. Never forwards caller headers. */
