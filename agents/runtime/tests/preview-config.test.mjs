@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { AgentStateStore, AgentReviewerAuthStore, AgentDraftStore } from "../src/worker.mjs";
+import { AgentStateStore, AgentReviewerAuthStore, AgentDraftStore, AgentAIBankCandidateStore } from "../src/worker.mjs";
 
 const configPath = fileURLToPath(new URL("../wrangler.preview.jsonc", import.meta.url));
 const config = JSON.parse(readFileSync(configPath, "utf8"));
@@ -41,11 +41,13 @@ test("dedicated Agent Runtime Preview config binds its isolated State Store and 
       { name: "AGENT_STATE_STORE", class_name: "AgentStateStore" },
       { name: "AGENT_REVIEWER_AUTH_STORE", class_name: "AgentReviewerAuthStore" },
       { name: "AGENT_DRAFT_STORE", class_name: "AgentDraftStore" },
+      { name: "AGENT_AI_BANK_CANDIDATE_STORE", class_name: "AgentAIBankCandidateStore" },
     ],
   });
   assert.deepEqual(config.migrations, [
     { tag: "v1", new_sqlite_classes: ["AgentStateStore"] },
     { tag: "v2", new_sqlite_classes: ["AgentReviewerAuthStore", "AgentDraftStore"] },
+    { tag: "v3-ai-bank-candidate-store", new_sqlite_classes: ["AgentAIBankCandidateStore"] },
   ]);
   for (const forbidden of [
     "account_id", "routes", "route", "custom_domains", "d1_databases",
@@ -68,6 +70,7 @@ test("Worker entrypoint exports the Durable Object class named by the Preview co
   assert.equal(typeof AgentStateStore, "function");
   assert.equal(typeof AgentReviewerAuthStore, "function");
   assert.equal(typeof AgentDraftStore, "function");
+  assert.equal(typeof AgentAIBankCandidateStore, "function");
 });
 
 test("GitHub OIDC operator remains disabled while pinning only the observed GitHub actor", () => {
