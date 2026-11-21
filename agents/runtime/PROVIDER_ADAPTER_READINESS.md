@@ -6,7 +6,7 @@ Status: design gate only. No provider is enabled by this document.
 
 Cloudflare Workers AI is the first candidate for an isolated Agent Runtime Preview adapter because it can be called through a Workers AI binding (`env.AI.run`) without placing a long-lived API token in application code.
 
-This is not yet approved for execution. The account's actual Workers plan, billing configuration, current daily usage, and available model entitlements have not been verified. Do not add an active binding, execute inference, or deploy based only on public pricing documentation.
+This is not approved for execution. The account owner supplied Cloudflare dashboard evidence confirming Workers Free tier Active, Durable Objects Free tier, no payment method on file, no invoices, and no spend-limit history activity. This closes the base-plan verification gate only. The Agent Runtime Preview Worker and Durable Object namespace are not deployed/provisioned. Workers AI model eligibility, Neurons usage/headroom, model-specific paid requirements, and provider-level quota evidence remain unverified. Do not add an active binding, execute inference, or deploy based only on public pricing documentation.
 
 ## Publicly documented constraints checked on 2026-11-20
 
@@ -25,12 +25,12 @@ Official references:
 
 Before implementing or enabling the adapter, verify all of the following from the Cloudflare account itself:
 
-1. The Agent Runtime Preview is attached to a Workers Free account/plan, not a paid Workers plan with billable overage.
+1. **Verified at account level:** the owner-supplied dashboard shows Workers Free tier Active and Durable Objects Free tier. The Agent Runtime Preview itself is not deployed. Recheck this gate if account subscriptions change.
 2. No paid AI credits, paid-only model entitlement, or automatic paid upgrade is required for the selected model.
 3. The exact model ID is currently available to Workers Free.
 4. Account usage can be observed independently; public documentation alone is not quota evidence.
 5. A hard application-side admission ceiling is configured below the provider's published free allocation, with a safety reserve.
-6. If the plan or billing state cannot be verified, inference remains disabled.
+6. The dashboard's `Spectrum: No data` view is Spectrum-only and is not evidence of Workers AI usage. `No invoices` and no payment method do not prove that every Cloudflare product is incapable of billable usage. If provider entitlement, usage, or quota evidence cannot be verified, inference remains disabled.
 
 If the account is on a paid plan or its billing state is ambiguous, do not call the provider. A software-side token estimate is not a substitute for the provider's Neurons accounting.
 
@@ -56,7 +56,7 @@ A fallback is permitted only when it is a separately verified provider with its 
 
 ## Preview-only implementation sequence
 
-1. Verify the Cloudflare account plan and billing state without changing settings.
+1. Base plan and billing evidence has been verified from the owner's dashboard; do not change billing settings. Separately verify Workers AI model eligibility and actual Neurons usage before any inference.
 2. Select one currently Free-eligible model and capture dated evidence.
 3. Implement adapter unit tests with a mocked AI binding; tests must never invoke live inference.
 4. Add the AI binding to `wrangler.preview.jsonc` only; do not touch production `wrangler.jsonc`, Worker, DNS, or D1.
@@ -67,7 +67,7 @@ A fallback is permitted only when it is a separately verified provider with its 
 
 ## Acceptance criteria
 
-- [ ] Cloudflare account plan and billing state verified from account evidence.
+- [x] Base Cloudflare Workers and Durable Objects plan labels verified from owner-supplied account evidence (Workers Free; Durable Objects Free; no payment method; no invoices). This does not verify Workers AI model entitlement or quota.
 - [ ] Selected model verified Free-eligible on the test date.
 - [ ] No paid credits, paid-only model, or paid gateway is used.
 - [ ] Runtime-owned quota evidence is fresh and independently sourced.
