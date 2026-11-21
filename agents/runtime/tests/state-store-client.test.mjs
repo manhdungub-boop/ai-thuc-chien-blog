@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { callStateStore } from "../src/state-store-client.mjs";
 
 const TOKEN = "internal-client-test-token-0123456789abcdef";
+const LEASE_OWNER = "123e4567-e89b-12d3-a456-426614174000";
 
 function mockNamespace(response = new Response("{}", { status: 200 })) {
   const calls = [];
@@ -95,4 +96,50 @@ test("State Store client builds constrained GET queries without forwarding arbit
   assert.equal(request.method, "GET");
   assert.equal(request.url, "https://agent-state-store.internal/task?id=task_123");
   assert.deepEqual(request.headers, [["authorization", "Bearer " + TOKEN]]);
+});
+
+test("State Store client exposes only validated lease operations on fixed internal routes", async () => {
+  const { namespace, calls } = mockNamespace();
+  const env = { AGENT_STATE_STORE: namespace, AGENT_STATE_STORE_TOKEN: TOKEN };
+  const cases = [
+    ["claim", { taskId: "task_123" }, "/claim"],
+    ["heartbeat", { taskId: "task_123", leaseOwner: LEASE_OWNER, leaseGeneration: 2 }, "/heartbeat"],
+    ["complete", { taskId: "task_123", leaseOwner: LEASE_OWNER, leaseGeneration: 2, status: "succeeded" }, "/complete"],
+    ["recover", { taskId: "task_123" }, "/recover"],
+  ];
+
+  for (const [operation, input, path] of cases) {
+    await callStateStore(env, operation, input);
+    const request = calls.at(-1);
+    assert.equal(request.url, "https://agent-state-store.internal" + path);
+    assert.equal(request.method, "POST");
+    assert.deepEqual(request.headers.sort(), [
+      ["authorization", "Bearer " + TOKEN],
+      ["content-type", "application/json"],
+    ]);
+    assert.deepEqual(JSON.parse(request.body), input);
+  }
+});
+
+test("State Store client rejects malformed lease identities, generations, states, and extra fields", async () => {
+  const { namespace, calls } = mockNamespace();
+  const env = { AGENT_STATE_STORE: namespace, AGENT_STATE_STORE_TOKEN: TOKEN };
+  await assert.rejects(() => callStateStore(env, "claim", { taskId: "../task" }), /state_store_request_invalid/);
+  await assert.rejects(() => callStateStore(env, "recover", { taskId: "task_1", extra: true }), /state_store_request_invalid/);
+  await assert.rejects(() => callStateStore(env, "heartbeat", {
+    taskId: "task_1", leaseOwner: "not-a-lease-owner", leaseGeneration: 1,
+  }), /state_store_request_invalid/);
+  await assert.rejects(() => callStateStore(env, "heartbeat", {
+    taskId: "task_1", leaseOwner: LEASE_OWNER, leaseGeneration: 0,
+  }), /state_store_request_invalid/);
+  await assert.rejects(() => callStateStore(env, "complete", {
+    taskId: "task_1", leaseOwner: LEASE_OWNER, leaseGeneration: 1, status: "queued",
+  }), /state_store_request_invalid/);
+  await assert.rejects(() => callStateStore(env, "complete", {
+    taskId: "task_1", leaseOwner: LEASE_OWNER, leaseGeneration: 1, status: "succeeded", errorCode: "should-not-be-here",
+  }), /state_store_request_invalid/);
+  await assert.rejects(() => callStateStore(env, "complete", {
+    taskId: "task_1", leaseOwner: LEASE_OWNER, leaseGeneration: 1, status: "failed", errorCode: "INVALID CODE",
+  }), /state_store_request_invalid/);
+  assert.equal(calls.length, 0);
 });

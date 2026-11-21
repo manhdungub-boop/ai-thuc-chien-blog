@@ -8,6 +8,10 @@ const STORE_ORIGIN = "https://agent-state-store.internal";
 
 const OPERATIONS = Object.freeze({
   reserve: Object.freeze({ method: "POST", path: "/reserve" }),
+  claim: Object.freeze({ method: "POST", path: "/claim" }),
+  heartbeat: Object.freeze({ method: "POST", path: "/heartbeat" }),
+  complete: Object.freeze({ method: "POST", path: "/complete" }),
+  recover: Object.freeze({ method: "POST", path: "/recover" }),
   transition: Object.freeze({ method: "POST", path: "/transition" }),
   task: Object.freeze({ method: "GET", path: "/task" }),
   usage: Object.freeze({ method: "GET", path: "/usage" }),
@@ -33,6 +37,23 @@ function isPlainObject(value) {
   return prototype === Object.prototype || prototype === null;
 }
 
+function validTaskId(value) {
+  return typeof value === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(value);
+}
+
+function validLeaseIdentity(owner, generation) {
+  return typeof owner === "string" && /^[a-f0-9-]{16,64}$/i.test(owner) &&
+    Number.isSafeInteger(generation) && generation >= 1;
+}
+
+function hasExactKeys(value, expected) {
+  if (!isPlainObject(value)) return false;
+  const actual = Object.keys(value).sort();
+  const allowed = [...expected].sort();
+  return actual.length === allowed.length &&
+    actual.every((key, index) => key === allowed[index]);
+}
+
 function operationUrl(operation, input) {
   const definition = OPERATIONS[operation];
   if (!definition) throw new TypeError("state_store_operation_not_allowed");
@@ -40,7 +61,7 @@ function operationUrl(operation, input) {
   const url = new URL(definition.path, STORE_ORIGIN);
   if (operation === "task") {
     if (!isPlainObject(input) || Object.keys(input).length !== 1 ||
-        typeof input.taskId !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(input.taskId)) {
+        !validTaskId(input.taskId)) {
       throw new TypeError("state_store_task_id_invalid");
     }
     url.searchParams.set("id", input.taskId);
@@ -57,18 +78,39 @@ function operationUrl(operation, input) {
       url.searchParams.set("day", input.day);
     }
   } else if (operation === "reserve") {
-    if (!isPlainObject(input) || Object.keys(input).length !== 1 ||
-        !Object.hasOwn(input, "task") || !isPlainObject(input.task)) {
+    if (!isPlainObject(input) || !hasExactKeys(input, ["task"]) || !isPlainObject(input.task)) {
       throw new TypeError("state_store_request_invalid");
     }
     const validation = validateTaskRequest(input.task);
     if (!validation.ok) throw new TypeError("state_store_task_invalid:" + validation.error);
+  } else if (operation === "claim" || operation === "recover") {
+    if (!hasExactKeys(input, ["taskId"]) || !validTaskId(input.taskId)) {
+      throw new TypeError("state_store_request_invalid");
+    }
+  } else if (operation === "heartbeat") {
+    if (!hasExactKeys(input, ["taskId", "leaseOwner", "leaseGeneration"]) ||
+        !validTaskId(input.taskId) || !validLeaseIdentity(input.leaseOwner, input.leaseGeneration)) {
+      throw new TypeError("state_store_request_invalid");
+    }
+  } else if (operation === "complete") {
+    const keys = isPlainObject(input) ? Object.keys(input) : [];
+    if (!isPlainObject(input) ||
+        keys.some((key) => !["taskId", "leaseOwner", "leaseGeneration", "status", "errorCode"].includes(key)) ||
+        !["taskId", "leaseOwner", "leaseGeneration", "status"].every((key) => Object.hasOwn(input, key)) ||
+        !validTaskId(input.taskId) ||
+        !validLeaseIdentity(input.leaseOwner, input.leaseGeneration) ||
+        !["succeeded", "failed", "cancelled"].includes(input.status) ||
+        (input.errorCode !== undefined &&
+          (input.status !== "failed" || typeof input.errorCode !== "string" ||
+           !/^[a-z0-9_.:-]{1,64}$/.test(input.errorCode)))) {
+      throw new TypeError("state_store_request_invalid");
+    }
   } else if (operation === "transition") {
     const keys = isPlainObject(input) ? Object.keys(input) : [];
     if (!isPlainObject(input) || !Object.hasOwn(input, "taskId") ||
         !Object.hasOwn(input, "status") ||
         keys.some((key) => !["taskId", "status", "errorCode"].includes(key)) ||
-        typeof input.taskId !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(input.taskId) ||
+        !validTaskId(input.taskId) ||
         !["running", "succeeded", "failed", "cancelled"].includes(input.status) ||
         (input.errorCode !== undefined && (input.status !== "failed" ||
           typeof input.errorCode !== "string" || !/^[a-z0-9_.:-]{1,64}$/.test(input.errorCode)))) {
@@ -89,6 +131,7 @@ function operationUrl(operation, input) {
 /**
  * Calls only fixed State Store operations through the dedicated internal token.
  * Caller headers, cookies, Origin, and caller-supplied URLs are never forwarded.
+ * Lease operations are exposed only to trusted server-side runtime modules.
  * The OIDC Pause route uses the replay-consumption operation. All other exposed
  * operations remain constrained to their fixed allowlist and runtime gates.
  */

@@ -3,6 +3,13 @@ const HARD_MAX_ATTEMPTS = 5;
 const DEFAULT_LEASE_MS = 5 * 60 * 1000;
 const MAX_LEASE_MS = 15 * 60 * 1000;
 const MAX_TOTAL_LEASE_MS = 30 * 60 * 1000;
+const MAX_RETRY_DELAY_MS = 30 * 60 * 1000;
+// Match the legacy queue's bounded retry schedule: 30s, 2m, 10m, then 30m.
+const RETRY_BACKOFF_MS = Object.freeze([30_000, 120_000, 600_000, 1_800_000]);
+
+function retryDelayForAttempt(attempts) {
+  return RETRY_BACKOFF_MS[Math.min(Math.max(attempts, 1), RETRY_BACKOFF_MS.length) - 1];
+}
 
 function reject(error) { return { ok: false, error }; }
 function validInteger(value, min = 0) { return Number.isSafeInteger(value) && value >= min; }
@@ -83,14 +90,17 @@ export function heartbeatLease(row, {
 /** Expiry recovery is bounded: requeue before max attempts, otherwise fail terminally. */
 export function recoverExpiredLease(row, {
   now,
-  retryDelayMs = 30_000,
+  retryDelayMs,
 } = {}) {
   if (!row || row.state !== "running") return reject("task_not_running");
   if (!validInteger(now) || !validInteger(row.lease_expires_at) ||
       !validInteger(row.attempt_count, 1) || !validInteger(row.max_attempts, 1) ||
       !validInteger(row.lease_generation, 1)) return reject("lease_state_invalid");
   if (row.lease_expires_at > now) return reject("lease_not_expired");
-  if (!validInteger(retryDelayMs) || retryDelayMs > 5 * 60 * 1000) {
+  const effectiveRetryDelayMs = retryDelayMs === undefined
+    ? retryDelayForAttempt(row.attempt_count)
+    : retryDelayMs;
+  if (!validInteger(effectiveRetryDelayMs) || effectiveRetryDelayMs > MAX_RETRY_DELAY_MS) {
     return reject("retry_delay_invalid");
   }
   const clearedLease = {
@@ -112,7 +122,7 @@ export function recoverExpiredLease(row, {
     ok: true,
     outcome: "requeued",
     fields: { ...clearedLease, state: "queued", terminal_at: null,
-      next_attempt_at: now + retryDelayMs, error_code: null },
+      next_attempt_at: now + effectiveRetryDelayMs, error_code: null },
   };
 }
 
@@ -162,4 +172,6 @@ export const LEASE_POLICY_LIMITS = Object.freeze({
   defaultLeaseMs: DEFAULT_LEASE_MS,
   maxLeaseMs: MAX_LEASE_MS,
   maxTotalLeaseMs: MAX_TOTAL_LEASE_MS,
+  maxRetryDelayMs: MAX_RETRY_DELAY_MS,
+  retryBackoffMs: RETRY_BACKOFF_MS,
 });

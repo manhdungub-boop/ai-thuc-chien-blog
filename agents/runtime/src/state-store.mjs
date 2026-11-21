@@ -3,11 +3,13 @@ import { readBoundedJson, readBoundedText } from "./bounded-json-body.mjs";
 import { hasValidStateStoreBearer } from "./internal-auth.mjs";
 import { claimQueuedTask, heartbeatLease, recoverExpiredLease, completeLeasedTask } from "./lease-policy.mjs";
 
-const SCHEMA_VERSION = 6;
+const SCHEMA_VERSION = 7;
 // Conservative Free-tier pilot defaults; hard caps remain enforced below.
 const DEFAULT_LIMITS = Object.freeze({ daily: 100, concurrent: 5, payloadBytes: 8192 });
 const TERMINAL_STATES = new Set(["succeeded", "failed", "cancelled"]);
 const TASK_TYPES_SQL = "'content.review','ai_bank.candidate_review','seo.audit'";
+const CIRCUIT_BREAKER = Object.freeze({ threshold: 5, windowMs: 10 * 60 * 1000 });
+const EXTERNAL_REQUEST_LIMITS = Object.freeze({ ai_bank_discovery: 10, content_research: 8 });
 
 function boundedLimit(value, fallback, maximum) {
   if (value === undefined || value === null || value === "") return fallback;
@@ -23,6 +25,11 @@ function jsonResponse(body, status = 200) {
   }});
 }
 function isObject(value) { return value !== null && typeof value === "object" && !Array.isArray(value); }
+function isValidUtcDay(day) {
+  if (typeof day !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return false;
+  const timestamp = Date.parse(day + "T00:00:00.000Z");
+  return Number.isFinite(timestamp) && new Date(timestamp).toISOString().slice(0, 10) === day;
+}
 
 
 
@@ -201,7 +208,23 @@ export class AgentStateStore {
           version = { value: "5" };
         }
         if (version.value === "5") {
-          this.sql.exec("ALTER TABLE tasks ADD COLUMN result_json TEXT CHECK (result_json IS NULL OR length(CAST(result_json AS BLOB)) <= 4096)");
+        if (version.value === "5") {
+          // Reserve v6 for the union of the two independently developed changes.
+          this.sql.exec("UPDATE runtime_meta SET value = '6' WHERE key = 'schema_version'");
+          version = { value: "6" };
+        }
+        if (version.value === "6") {
+          // Earlier branches both used v6 for different additions. Reconcile either
+          // persisted shape idempotently before advancing every store to v7.
+          this.sql.exec("CREATE TABLE IF NOT EXISTS external_request_budgets (budget_day TEXT NOT NULL CHECK (length(budget_day) = 10), scope TEXT NOT NULL CHECK (scope IN ('ai_bank_discovery','content_research')), used INTEGER NOT NULL CHECK (used >= 0), updated_at INTEGER NOT NULL CHECK (updated_at >= 0), PRIMARY KEY (budget_day, scope))");
+          this.sql.exec("CREATE INDEX IF NOT EXISTS external_request_budget_day_idx ON external_request_budgets(budget_day)");
+          const taskColumns = this.sql.exec("PRAGMA table_info(tasks)").toArray();
+          if (!taskColumns.some((column) => column.name === "result_json")) {
+            this.sql.exec("ALTER TABLE tasks ADD COLUMN result_json TEXT CHECK (result_json IS NULL OR length(CAST(result_json AS BLOB)) <= 4096)");
+          }
+          this.sql.exec("UPDATE runtime_meta SET value = '7' WHERE key = 'schema_version'");
+          version = { value: "7" };
+        }
           this.sql.exec("UPDATE runtime_meta SET value = '6' WHERE key = 'schema_version'");
           version = { value: "6" };
         }
@@ -238,7 +261,22 @@ export class AgentStateStore {
         const result = this.setPaused(url.pathname.endsWith("/pause"), parsedBody.value, this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
-            if (url.pathname === "/reserve" && request.method === "POST") {
+      if (url.pathname === "/external-budget" && request.method === "GET") {
+        const day = url.searchParams.get("day");
+        const scope = url.searchParams.get("scope");
+        const result = await this.getExternalRequestBudget(day, scope);
+        return jsonResponse(result.ok ? { ok: true, budget: result } : { ok: false, error: result.error }, result.ok ? 200 : 400);
+      }
+      if (url.pathname === "/external-budget/consume" && request.method === "POST") {
+        const parsedBody = await readBoundedJson(request, 1024);
+        if (!parsedBody.ok) return jsonResponse({ ok: false, error: parsedBody.status === 413 ? "request_body_too_large" : "request_invalid" }, parsedBody.status);
+        if (!isObject(parsedBody.value) || Object.keys(parsedBody.value).length !== 2 || !Object.hasOwn(parsedBody.value, "day") || !Object.hasOwn(parsedBody.value, "scope")) {
+          return jsonResponse({ ok: false, error: "external_request_budget_input_invalid" }, 400);
+        }
+        const result = await this.consumeExternalRequestBudget(parsedBody.value.day, parsedBody.value.scope, this.requestTime(request));
+        return jsonResponse(result.ok ? { ok: true, budget: result } : { ok: false, error: result.error }, result.ok ? 200 : 400);
+      }
+      if (url.pathname === "/reserve" && request.method === "POST") {
         const parsedBody = await readBoundedJson(request, 16 * 1024);
         if (!parsedBody.ok) return jsonResponse({ ok: false, error: parsedBody.status === 413 ? "request_body_too_large" : "request_invalid" }, parsedBody.status);
         const result = await this.reserve(parsedBody.value, this.requestTime(request));
@@ -304,6 +342,29 @@ if (url.pathname === "/task" && request.method === "GET") {
 
   requestTime() {
     return Date.now();
+  }
+
+  async getExternalRequestBudget(day, scope) {
+    const limit = EXTERNAL_REQUEST_LIMITS[scope];
+    if (!isValidUtcDay(day) || !Number.isSafeInteger(limit)) return { ok: false, error: "external_request_budget_input_invalid" };
+    const row = readRow(this.sql, "SELECT used FROM external_request_budgets WHERE budget_day = ? AND scope = ?", day, scope);
+    const used = row?.used ?? 0;
+    return { ok: true, day, scope, used, limit, remaining: Math.max(0, limit - used) };
+  }
+
+  async consumeExternalRequestBudget(day, scope, now = this.requestTime()) {
+    const limit = EXTERNAL_REQUEST_LIMITS[scope];
+    if (!isValidUtcDay(day) || !Number.isSafeInteger(limit) || !Number.isSafeInteger(now) || now < 0) {
+      return { ok: false, error: "external_request_budget_input_invalid" };
+    }
+    const consumed = readRow(this.sql,
+      "INSERT INTO external_request_budgets (budget_day,scope,used,updated_at) VALUES (?,?,1,?) ON CONFLICT(budget_day,scope) DO UPDATE SET used = external_request_budgets.used + 1, updated_at = excluded.updated_at WHERE external_request_budgets.used < ? RETURNING used",
+      day, scope, now, limit,
+    );
+    if (consumed) return { ok: true, allowed: true, day, scope, used: consumed.used, limit, remaining: Math.max(0, limit - consumed.used) };
+    const current = readRow(this.sql, "SELECT used FROM external_request_budgets WHERE budget_day = ? AND scope = ?", day, scope);
+    const used = current?.used ?? 0;
+    return { ok: true, allowed: false, day, scope, used, limit, remaining: 0 };
   }
 
   async scheduleRecoveryAlarm(now = Date.now()) {
@@ -400,7 +461,18 @@ if (url.pathname === "/task" && request.method === "GET") {
   controlState() {
     const row = readRow(this.sql, "SELECT paused, changed_at, version FROM runtime_control WHERE singleton_id = 1");
     if (!row) throw new Error("runtime_control_missing");
-    return { paused: row.paused === 1, changedAt: row.changed_at, version: row.version };
+    const failureCount = readRow(this.sql,
+      "SELECT COUNT(*) AS count FROM audit_events WHERE event_type = 'task.terminal_failure' AND occurred_at >= ?",
+      Date.now() - CIRCUIT_BREAKER.windowMs,
+    )?.count ?? 0;
+    return {
+      paused: row.paused === 1,
+      changedAt: row.changed_at,
+      version: row.version,
+      failureCountLast10m: failureCount,
+      circuitBreakerThreshold: CIRCUIT_BREAKER.threshold,
+      circuitBreakerWindowMs: CIRCUIT_BREAKER.windowMs,
+    };
   }
 
   async consumeOidcJti(body, now) {
@@ -691,6 +763,10 @@ if (url.pathname === "/task" && request.method === "GET") {
           taskType: row.task_type,
           leaseGeneration: row.lease_generation,
         });
+        if (fields.state === "failed" && fields.error_code !== "daily_external_request_budget_exhausted") {
+          this.audit(body.taskId, "task.terminal_failure", now, { errorCode: fields.error_code });
+          this.evaluateCircuitBreaker(body.taskId, now);
+        }
         return { status: 200, body: { ok: true, task: safeTask(updated) } };
       });
     } catch {
@@ -737,6 +813,10 @@ if (url.pathname === "/task" && request.method === "GET") {
           actor: body.actor,
           requestId: body.requestId,
         });
+        if (decision.outcome === "failed") {
+          this.audit(body.taskId, "task.terminal_failure", now, { errorCode: fields.error_code });
+          this.evaluateCircuitBreaker(body.taskId, now);
+        }
         return { status: 200, body: { ok: true, outcome: decision.outcome, task: safeTask(updated) } };
       });
     } catch {
@@ -784,6 +864,36 @@ if (url.pathname === "/task" && request.method === "GET") {
     }
   }
 
+  evaluateCircuitBreaker(taskId, now) {
+    const countRow = readRow(this.sql,
+      "SELECT COUNT(*) AS count FROM audit_events WHERE event_type = 'task.terminal_failure' AND occurred_at >= ?",
+      now - CIRCUIT_BREAKER.windowMs,
+    );
+    const failureCount = countRow?.count ?? 0;
+    if (failureCount < CIRCUIT_BREAKER.threshold) return;
+
+    const current = readRow(this.sql, "SELECT paused, version FROM runtime_control WHERE singleton_id = 1");
+    if (!current || current.paused === 1) return;
+    const nextVersion = current.version + 1;
+    this.sql.exec(
+      "UPDATE runtime_control SET paused = 1, changed_at = ?, version = ? WHERE singleton_id = 1 AND paused = 0 AND version = ?",
+      now, nextVersion, current.version,
+    );
+    const updated = readRow(this.sql, "SELECT paused, version FROM runtime_control WHERE singleton_id = 1");
+    if (!updated || updated.paused !== 1 || updated.version !== nextVersion) return;
+
+    this.sql.exec(
+      "INSERT INTO runtime_control_audit (event_id, action, occurred_at, actor, reason, request_id) VALUES (?,?,?,?,?,?)",
+      crypto.randomUUID(), "pause", now, "system:circuit_breaker",
+      "circuit_breaker:5_failures_in_10m", crypto.randomUUID(),
+    );
+    this.audit(taskId, "runtime.circuit_breaker_auto_pause", now, {
+      failureCount,
+      threshold: CIRCUIT_BREAKER.threshold,
+      windowMs: CIRCUIT_BREAKER.windowMs,
+    });
+  }
+
   audit(taskId, eventType, now, metadata) {
     this.sql.exec("INSERT INTO audit_events (event_id,task_id,event_type,occurred_at,metadata_json) VALUES (?,?,?,?,?)",
       crypto.randomUUID(), taskId, eventType, now, JSON.stringify(metadata));
@@ -797,5 +907,6 @@ if (url.pathname === "/task" && request.method === "GET") {
     this.sql.exec("DELETE FROM runtime_control_audit WHERE occurred_at < ?", auditCutoff);
     this.sql.exec("DELETE FROM runtime_control_rate_limit WHERE window_started_at < ?", now - 24 * 60 * 60 * 1000);
     this.sql.exec("DELETE FROM daily_usage WHERE day_utc < ?", utcDay(auditCutoff));
+    this.sql.exec("DELETE FROM external_request_budgets WHERE rowid IN (SELECT rowid FROM external_request_budgets WHERE budget_day < ? ORDER BY budget_day LIMIT 100)", utcDay(now - 30 * 24 * 60 * 60 * 1000));
   }
 }

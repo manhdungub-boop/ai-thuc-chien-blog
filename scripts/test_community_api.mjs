@@ -497,5 +497,27 @@ expirySession.expires_at = new Date(Date.now() - 1000).toISOString();
 const expiredSessionMe = await call('/me', { cookie: expiryCookie });
 assert.equal((await expiredSessionMe.json()).member, null,
   'an expired server-side session must not authenticate');
+// A missing D1 table must produce a safe category and correlation ID, never raw schema details.
+const failingDb = {
+  prepare() {
+    return {
+      bind() { return this; },
+      async run() { throw new Error('no such table: community_rate_limits'); },
+      async first() { throw new Error('no such table: community_rate_limits'); },
+      async all() { throw new Error('no such table: community_rate_limits'); },
+    };
+  },
+};
+const failedRegister = await worker.fetch(new Request('https://example.test/api/community/register', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', Origin: origin, 'CF-Connecting-IP': '198.51.100.78' },
+  body: JSON.stringify({ username: 'debug_member', displayName: 'Debug Member', email: 'debug@example.invalid', password: 'TestPassword123!' }),
+}), { ...env, DB: failingDb });
+assert.equal(failedRegister.status, 500);
+const failedPayload = await failedRegister.json();
+assert.equal(failedPayload.errorCode, 'D1_TABLE_MISSING');
+assert.ok(failedPayload.errorId);
+assert.doesNotMatch(failedPayload.error, /no such table|community_rate_limits/i, 'raw schema details must not be exposed to visitors');
+
 globalThis.fetch = originalFetch;
 console.log('PASS: email verification required before login; one-time token, Apps Script relay mock, PBKDF2 login, secure session, messages, validation, origin protection and missing-DB behavior');

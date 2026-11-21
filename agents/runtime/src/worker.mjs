@@ -1,10 +1,15 @@
 import { hasValidOperatorBearer } from "./operator-auth.mjs";
 import { hasValidStateStoreBearer } from "./internal-auth.mjs";
+import { readBoundedJson as readBoundedJsonBody, readBoundedText } from "./bounded-json-body.mjs";
+import { handleReviewerHttpRequest } from "./reviewer-http-routes.mjs";
 import { authorizeGitHubActionsOperator } from "./github-oidc-authorize.mjs";
 import { createReadOnlyAgentManager } from "./read-only-agent-manager.mjs";
 import { createReadOnlyTaskSnapshotAdapter } from "./task-snapshot-adapters.mjs";
 import { createPreviewReadOnlyReaders } from "./preview-read-only-sources.mjs";
 export { AgentStateStore } from "./state-store.mjs";
+export { AgentAIBankCandidateStore } from "./ai-bank-candidate-store.mjs";
+export { AgentDraftStore } from "./draft-artifact-store.mjs";
+export { AgentReviewerAuthStore } from "./google-reviewer-auth-store.mjs";
 
 const SECURITY_HEADERS = Object.freeze({
   "Cache-Control": "no-store",
@@ -89,42 +94,12 @@ function parseControlJson(text) {
   throw new Error("control_json_invalid");
 }
 
-async function readBoundedJsonRequest(request, maxBytes) {
-  const declared = request.headers.get("content-length");
-  if (declared !== null) {
-    if (!/^(0|[1-9][0-9]*)$/.test(declared)) return { ok: false, status: 400 };
-    if (Number(declared) > maxBytes) return { ok: false, status: 413 };
-  }
-  if (!request.body) return { ok: false, status: 400 };
-  const reader = request.body.getReader();
-  const chunks = [];
-  let total = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      total += value.byteLength;
-      if (total > maxBytes) {
-        try { await reader.cancel(); } catch {}
-        return { ok: false, status: 413 };
-      }
-      chunks.push(value);
-    }
-  } catch {
-    return { ok: false, status: 400 };
-  } finally {
-    try { reader.releaseLock(); } catch {}
-  }
-  const bytes = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
-  try {
-    return { ok: true, value: parseControlJson(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) };
-  } catch {
-    return { ok: false, status: 400 };
-  }
+async function readBoundedControlJson(request, maxBytes) {
+  const bounded = await readBoundedText(request, maxBytes);
+  if (!bounded.ok) return bounded;
+  try { return { ok: true, value: parseControlJson(bounded.value) }; }
+  catch { return { ok: false, status: 400, error: "invalid_control_json" }; }
 }
-
 async function readBoundedJsonValueRequest(request, maxBytes) {
   const declared = request.headers.get("content-length");
   if (declared !== null) {
@@ -160,7 +135,6 @@ async function readBoundedJsonValueRequest(request, maxBytes) {
     return { ok: false, status: 400 };
   }
 }
-
 async function writeStateStore(env, pathname, payload) {
   if (!await hasValidStateStoreBearer(
     new Request("https://state-store.internal/", {
@@ -223,32 +197,13 @@ export async function runWithLeaseHeartbeat(work, heartbeat, intervalMs = 120_00
 }
 
 async function readBoundedJson(response) {
-  const declared = Number(response.headers.get("content-length") || 0);
-  if (declared > MAX_INTERNAL_RESPONSE_BYTES) throw new Error("internal_response_too_large");
-  if (!response.body) throw new Error("internal_response_empty");
-  const reader = response.body.getReader();
-  const chunks = [];
-  let total = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      total += value.byteLength;
-      if (total > MAX_INTERNAL_RESPONSE_BYTES) {
-        await reader.cancel();
-        throw new Error("internal_response_too_large");
-      }
-      chunks.push(value);
-    }
-  } finally {
-    reader.releaseLock();
+  const parsed = await readBoundedJsonBody(response, MAX_INTERNAL_RESPONSE_BYTES);
+  if (!parsed.ok) {
+    const code = parsed.status === 413 ? "too_large" : "invalid";
+    throw new Error("internal_response_" + code);
   }
-  const bytes = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
-  return JSON.parse(new TextDecoder().decode(bytes));
+  return parsed.value;
 }
-
 /** Fixed-identity, allowlisted, server-to-DO call. Never forwards caller headers. */
 async function readStateStore(env, pathname) {
   if (!await hasValidStateStoreBearer(
@@ -279,6 +234,8 @@ async function readStateStore(env, pathname) {
 
 const worker = {
   async fetch(request, env = {}) {
+    const reviewerResponse = await handleReviewerHttpRequest(request, env);
+    if (reviewerResponse) return reviewerResponse;
     const url = new URL(request.url);
     if (url.pathname === "/health") {
       if (request.method !== "GET") return json({ ok: false, error: "method_not_allowed" }, 405);
@@ -287,6 +244,10 @@ const worker = {
         service: "ai-thuc-chien-agent-runtime-preview",
         enabled: isEnabled(env.AGENT_ENABLED),
         paused: env.AGENT_PAUSED !== "false",
+        scheduler: env.AGENT_SCHEDULE_MODE || "manual_only_no_cron",
+        task_execution_enabled: false,
+        quality_review_executor_registered: false,
+        quality_review_executor_enabled: false,
         execution: "operator_triggered_read_only_analysis",
       });
     }
@@ -613,7 +574,7 @@ const worker = {
       if (typeof actor !== "string" || !/^[a-zA-Z0-9._:-]{3,64}$/.test(actor)) {
         return json({ ok: false, error: "operator_identity_unavailable" }, 503);
       }
-      const parsedBody = await readBoundedJsonRequest(request, 1024);
+      const parsedBody = await readBoundedControlJson(request, 1024);
       if (!parsedBody.ok) {
         return json({ ok: false, error: parsedBody.status === 413 ? "request_body_too_large" : "request_invalid" }, parsedBody.status);
       }

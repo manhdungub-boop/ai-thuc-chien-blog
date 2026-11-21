@@ -50,6 +50,7 @@ test("readBoundedText validates strict UTF-8 and byte length", async () => {
   const invalid = new ReadableStream({ start(c) { c.enqueue(new Uint8Array([0xc3,0x28])); c.close(); } });
   assert.equal((await readBoundedText(requestFromStream(invalid), 16)).error, "invalid_json_encoding");
 });
+
 test("rejects missing and non-JSON media types before pulling the body", async () => {
   for (const headers of [null, { "Content-Type": "text/plain" }, { "Content-Type": "application/problem+json" }]) {
     let pulls = 0;

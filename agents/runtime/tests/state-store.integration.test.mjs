@@ -130,6 +130,8 @@ test("all state-store routes require the distinct internal credential", async ()
       ["/control/resume", {}],
       ["/task?id=missing", undefined],
       ["/usage", undefined],
+      ["/external-budget?day=2026-11-21&scope=ai_bank_discovery", undefined],
+      ["/external-budget/consume", { day: "2026-11-21", scope: "ai_bank_discovery" }],
       ["/__test/rollback", {}],
       ["/__test/downgrade-v1", {}],
     ]) {
@@ -438,7 +440,7 @@ test("fresh State Store initializes schema v5 paused with conservative lease def
   });
 });
 
-test("persisted v1 State Store migrates transactionally to v6 without losing task or usage", async () => {
+test("persisted v1 State Store migrates transactionally to v7 without losing task or usage", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "ai-thuc-chien-do-v1-migration-"));
   let first;
   let second;
@@ -629,16 +631,55 @@ test("expired leases are requeued after bounded delay and fail at the attempt ce
     const recovered2 = await call(stub, "/recover", { taskId, actor: "integration-test", requestId: crypto.randomUUID() }, { "x-test-now": "2026-11-19T10:10:30.000Z" });
     assert.equal(recovered2.status, 200);
     assert.equal(recovered2.body.outcome, "requeued");
+    assert.equal(recovered2.body.task.nextAttemptAt, Date.parse("2026-11-19T10:12:30.000Z"));
 
-    const third = await call(stub, "/claim", { taskId }, { "x-test-now": "2026-11-19T10:11:00.000Z" });
+    const beforeSecondRetryDue = await call(stub, "/claim", { taskId }, { "x-test-now": "2026-11-19T10:12:29.999Z" });
+    assert.equal(beforeSecondRetryDue.status, 409);
+    assert.equal(beforeSecondRetryDue.body.error, "retry_not_due");
+
+    const third = await call(stub, "/claim", { taskId }, { "x-test-now": "2026-11-19T10:12:30.000Z" });
     assert.equal(third.status, 200);
     const exhausted = await call(stub, "/recover", { taskId, actor: "integration-test", requestId: crypto.randomUUID() }, { "x-test-now": "2026-11-19T10:16:00.000Z" });
+
     assert.equal(exhausted.status, 200);
     assert.equal(exhausted.body.outcome, "failed");
     assert.equal(exhausted.body.task.state, "failed");
     assert.equal(exhausted.body.task.errorCode, "lease_expired_max_attempts");
     assert.equal(exhausted.body.task.attemptCount, 3);
     assert.equal((await call(stub, "/usage")).body.inFlight, 0);
+  });
+});
+
+test("five terminal failures within ten minutes durably open the circuit breaker", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    for (let index = 1; index <= 5; index++) {
+      const created = await call(stub, "/reserve", task("circuit-breaker-" + index));
+      assert.equal(created.status, 201);
+      const taskId = created.body.task.taskId;
+      const claimed = await call(stub, "/claim", { taskId });
+      assert.equal(claimed.status, 200);
+      const lease = claimed.body.lease;
+      const failed = await call(stub, "/complete", {
+        taskId,
+        leaseOwner: lease.owner,
+        leaseGeneration: lease.generation,
+        status: "failed",
+        errorCode: "simulated_failure",
+      });
+      assert.equal(failed.status, 200);
+      const control = await call(stub, "/control");
+      assert.equal(control.body.control.failureCountLast10m, index);
+      assert.equal(control.body.control.paused, index === 5);
+    }
+
+    const blocked = await call(stub, "/reserve", task("circuit-breaker-blocked"));
+    assert.equal(blocked.status, 503);
+    assert.equal(blocked.body.error, "agent_disabled_or_paused");
+    const control = await call(stub, "/control");
+    assert.equal(control.body.control.paused, true);
+    assert.equal(control.body.control.circuitBreakerThreshold, 5);
+    assert.equal(control.body.control.circuitBreakerWindowMs, 10 * 60 * 1000);
+
   });
 });
 
@@ -656,6 +697,7 @@ test("operator lease recovery is rate limited to ten requests per actor per minu
     assert.ok(outcomes.slice(0, 10).every((item) => item.status === 404));
     assert.equal(outcomes[10].status, 429);
     assert.equal(outcomes[10].body.error, "runtime_control_rate_limited");
+
   });
 });
 
@@ -865,6 +907,7 @@ test("all seven task mutation routes reject streamed bodies above the 16 KiB ing
   await withRuntime({}, async ({ stub }) => {
     const oversized = " ".repeat(16 * 1024 + 1);
     for (const pathname of ["/reserve", "/claim", "/claim-next", "/heartbeat", "/complete", "/recover", "/transition"]) {
+
       const response = await stub.fetch("http://do.local" + pathname, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + TEST_STATE_STORE_TOKEN },
@@ -876,9 +919,27 @@ test("all seven task mutation routes reject streamed bodies above the 16 KiB ing
   });
 });
 
+test("claim accepts a valid JSON request exactly at the 16 KiB ingress limit", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const prefix = JSON.stringify({ taskId: "missing" });
+    const body = prefix + " ".repeat(16 * 1024 - new TextEncoder().encode(prefix).byteLength);
+    assert.equal(new TextEncoder().encode(body).byteLength, 16 * 1024);
+    const response = await stub.fetch("http://do.local/claim", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Content-Length": String(16 * 1024), Authorization: "Bearer " + TEST_STATE_STORE_TOKEN },
+      body,
+    });
+    assert.equal(response.status, 404);
+    assert.equal((await response.json()).error, "task_not_found");
+  });
+});
+
+
+
 test("all seven task mutation routes reject non-JSON media types before mutation", async () => {
   await withRuntime({}, async ({ stub }) => {
     for (const pathname of ["/reserve", "/claim", "/claim-next", "/heartbeat", "/complete", "/recover", "/transition"]) {
+
       const response = await stub.fetch("http://do.local" + pathname, {
         method: "POST",
         headers: { "Content-Type": "text/plain", Authorization: "Bearer " + TEST_STATE_STORE_TOKEN },
@@ -887,5 +948,71 @@ test("all seven task mutation routes reject non-JSON media types before mutation
       assert.equal(response.status, 400, pathname);
       assert.equal((await response.json()).error, "request_invalid", pathname);
     }
+  });
+});
+
+
+test("outbound request budgets enforce daily per-scope caps and reset on the next UTC day", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const day = "2026-11-21";
+    for (let index = 1; index <= 10; index += 1) {
+      const consumed = await call(stub, "/external-budget/consume", { day, scope: "ai_bank_discovery" });
+      assert.equal(consumed.status, 200);
+      assert.equal(consumed.body.budget.allowed, true);
+      assert.equal(consumed.body.budget.used, index);
+      assert.equal(consumed.body.budget.limit, 10);
+    }
+    const exhausted = await call(stub, "/external-budget/consume", { day, scope: "ai_bank_discovery" });
+    assert.equal(exhausted.status, 200);
+    assert.equal(exhausted.body.budget.allowed, false);
+    assert.equal(exhausted.body.budget.remaining, 0);
+
+    const read = await call(stub, `/external-budget?day=${day}&scope=ai_bank_discovery`);
+    assert.equal(read.status, 200);
+    assert.equal(read.body.budget.used, 10);
+    assert.equal(read.body.budget.remaining, 0);
+
+    const nextDay = await call(stub, "/external-budget/consume", { day: "2026-11-22", scope: "ai_bank_discovery" });
+    assert.equal(nextDay.body.budget.allowed, true);
+    assert.equal(nextDay.body.budget.used, 1);
+  });
+});
+
+test("content research has its own eight-request daily budget and invalid scopes/dates fail closed", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    for (let index = 1; index <= 8; index += 1) {
+      const result = await call(stub, "/external-budget/consume", { day: "2026-11-21", scope: "content_research" });
+      assert.equal(result.status, 200);
+      assert.equal(result.body.budget.allowed, true);
+      assert.equal(result.body.budget.used, index);
+    }
+    const exhausted = await call(stub, "/external-budget/consume", { day: "2026-11-21", scope: "content_research" });
+    assert.equal(exhausted.body.budget.allowed, false);
+    assert.equal(exhausted.body.budget.limit, 8);
+
+    for (const body of [
+      { day: "2026-02-30", scope: "ai_bank_discovery" },
+      { day: "2026-11-21", scope: "unknown_scope" },
+    ]) {
+      const invalid = await call(stub, "/external-budget/consume", body);
+      assert.equal(invalid.status, 400);
+      assert.equal(invalid.body.error, "external_request_budget_input_invalid");
+    }
+    const missing = await call(stub, "/external-budget?scope=content_research");
+    assert.equal(missing.status, 400);
+    assert.equal(missing.body.error, "external_request_budget_input_invalid");
+  });
+});
+
+test("outbound budget rows are pruned after the 30-day retention window", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const oldDay = "2026-10-01";
+    const inserted = await call(stub, "/external-budget/consume", { day: oldDay, scope: "ai_bank_discovery" }, { "x-test-now": "2026-10-01T12:00:00.000Z" });
+    assert.equal(inserted.body.budget.used, 1);
+    const trigger = await call(stub, "/reserve", task("budget-prune-trigger"), { "x-test-now": "2026-11-21T12:00:00.000Z" });
+    assert.equal(trigger.status, 201, "a new reservation runs the bounded retention prune");
+    const after = await call(stub, `/external-budget?day=${oldDay}&scope=ai_bank_discovery`);
+    assert.equal(after.status, 200);
+    assert.equal(after.body.budget.used, 0);
   });
 });
