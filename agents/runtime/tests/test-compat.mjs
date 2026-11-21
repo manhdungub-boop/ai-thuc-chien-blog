@@ -1,5 +1,4 @@
-import assert from "node:assert/strict";
-import { isDeepStrictEqual } from "node:util";
+import assert from "node:assert";
 
 function partialMatch(actual, expected, path = "value") {
   if (expected && typeof expected === "object") {
