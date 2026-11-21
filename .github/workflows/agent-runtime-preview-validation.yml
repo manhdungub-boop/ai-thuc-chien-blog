@@ -125,7 +125,7 @@ jobs:
           assert.equal(preview.name, 'ai-thuc-chien-agent-runtime-preview');
           assert.equal(preview.main, './src/worker.mjs');
           assert.equal(preview.workers_dev, true);
-          assert.equal(preview.preview_urls, true);
+          assert.equal(preview.preview_urls, false);
           assert.equal(preview.vars.AGENT_ENABLED, 'false');
           assert.equal(preview.vars.AGENT_PAUSED, 'true');
           assert.equal(preview.vars.AGENT_SCHEDULER_ENABLED, 'false');
