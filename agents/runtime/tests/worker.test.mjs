@@ -226,6 +226,16 @@ function bridgeEnv({ responseBody = { ok: true, dayUtc: "2026-11-19", acceptedTo
   const stub = {
     async fetch(internalRequest) {
       calls.push(internalRequest);
+      const url = new URL(internalRequest.url);
+      if (url.pathname === "/external-budget") {
+        const scope = url.searchParams.get("scope");
+        const limit = scope === "ai_bank_discovery" ? 10 : scope === "content_research" ? 8 : 0;
+        const day = url.searchParams.get("day");
+        return Response.json({
+          ok: true,
+          budget: { ok: true, day, scope, used: 0, limit, remaining: limit },
+        });
+      }
       return response ?? Response.json(responseBody, { status: responseStatus });
     },
   };
@@ -280,13 +290,19 @@ test("usage bridge uses fixed DO identity and sends only the dedicated internal 
   assert.equal(response.status, 200);
   assert.equal(body.acceptedToday, 2);
   assert.equal(body.inFlight, 1);
-  assert.equal(calls.length, 1);
+  assert.equal(calls.length, 3);
   assert.equal(calls[0].url, "https://state-store.internal/usage");
-  assert.equal(calls[0].method, "GET");
-  assert.equal(calls[0].headers.get("authorization"), "Bearer " + STATE_TOKEN);
-  assert.equal(calls[0].headers.get("cookie"), null);
-  assert.equal(calls[0].headers.get("origin"), null);
-  assert.equal(calls[0].headers.get("x-arbitrary"), null);
+  assert.deepEqual(
+    calls.slice(1).map((call) => new URL(call.url).pathname + "?" + new URL(call.url).searchParams.get("scope")),
+    ["/external-budget?ai_bank_discovery", "/external-budget?content_research"],
+  );
+  for (const call of calls) {
+    assert.equal(call.method, "GET");
+    assert.equal(call.headers.get("authorization"), "Bearer " + STATE_TOKEN);
+    assert.equal(call.headers.get("cookie"), null);
+    assert.equal(call.headers.get("origin"), null);
+    assert.equal(call.headers.get("x-arbitrary"), null);
+  }
   assert.equal(JSON.stringify(body).includes(STATE_TOKEN), false);
 });
 
