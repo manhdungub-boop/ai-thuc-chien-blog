@@ -1,4 +1,5 @@
-import { describe, it } from "node:test";\nimport { expect } from "./test-compat.mjs";
+import { describe, it } from "node:test";
+import { expect } from "./test-compat.mjs";
 import { verifyGoogleReviewerIdToken } from "../src/google-oidc-reviewer-verifier.mjs";
 
 const audience = "test-google-oauth-client.apps.googleusercontent.com";

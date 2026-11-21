@@ -1,4 +1,5 @@
-import { describe, it } from "node:test";\nimport { expect } from "./test-compat.mjs";
+import { describe, it } from "node:test";
+import { expect } from "./test-compat.mjs";
 import { buildArticleAuthoringBrief } from "../src/article-authoring-brief.mjs";
 const evidence = [
   { source: "OpenAI News", title: "OpenAI research update", url: "https://openai.com/index/research-update", retrieved_at: "2026-11-19T00:00:00.000Z", status: "source_retrieved_not_fact_checked", excerpt: "A retrieved passage containing source context, method descriptions, limitations, and reported research details for later human inspection." },

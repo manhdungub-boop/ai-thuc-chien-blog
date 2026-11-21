@@ -1,4 +1,5 @@
-import { describe, it } from "node:test";\nimport { expect } from "./test-compat.mjs";
+import { describe, it } from "node:test";
+import { expect } from "./test-compat.mjs";
 import { buildHumanClaimReviewLedger } from "../src/human-claim-ledger-builder.mjs";
 
 const evidence = [

@@ -1,4 +1,5 @@
-import { describe, it } from "node:test";\nimport { expect } from "./test-compat.mjs";
+import { describe, it } from "node:test";
+import { expect } from "./test-compat.mjs";
 import { AI_BANK_RELEASE_SOURCES, discoverAiBankReleaseSignals } from "../src/ai-bank-discovery.mjs";
 
 const NOW = Date.parse("2026-11-18T12:00:00.000Z");
