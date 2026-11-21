@@ -107,6 +107,19 @@ async function createReviewerSessionToken() {
   return encoded + "." + base64Url(new Uint8Array(signature));
 }
 
+function draftStoreNamespace(stub) {
+  return {
+    idFromName(name) {
+      expect(name).toBe("agent-draft-store-primary");
+      return "agent-draft-store-id";
+    },
+    get(id) {
+      expect(id).toBe("agent-draft-store-id");
+      return stub;
+    }
+  };
+}
+
 describe("authenticated reviewer draft read routes", () => {
   it("passes the signed session to the Durable Object and returns bounded queue metadata only", async () => {
     const token = await createReviewerSessionToken();
@@ -114,17 +127,12 @@ describe("authenticated reviewer draft read routes", () => {
     let received;
     const env = {
       ...reviewerAuthEnv,
-      AGENT_DRAFT_STORE: {
-        getByName(name) {
-          expect(name).toBe("primary");
-          return {
-            async listPendingReviewsForReviewer(limit, sessionToken) {
-              received = [limit, sessionToken];
-              return { authorized: true, items: [item] };
-            }
-          };
+      AGENT_DRAFT_STORE: draftStoreNamespace({
+        async listPendingReviewsForReviewer(limit, sessionToken) {
+          received = [limit, sessionToken];
+          return { authorized: true, items: [item] };
         }
-      }
+      })
     };
     const response = await handleReviewerHttpRequest(new Request(base + "/api/reviewer/drafts?limit=5", {
       headers: { origin: base, cookie: "__Host-ai_reviewer_session=" + token }
@@ -141,14 +149,12 @@ describe("authenticated reviewer draft read routes", () => {
     let received;
     const env = {
       ...reviewerAuthEnv,
-      AGENT_DRAFT_STORE: {
-        getByName: () => ({
-          async getDraftForReviewer(...args) {
-            received = args;
-            return { authorized: true, artifact };
-          }
-        })
-      }
+      AGENT_DRAFT_STORE: draftStoreNamespace({
+        async getDraftForReviewer(...args) {
+          received = args;
+          return { authorized: true, artifact };
+        }
+      })
     };
     const response = await handleReviewerHttpRequest(new Request(base + "/api/reviewer/drafts/draft-review-12345678", {
       headers: { origin: base, cookie: "__Host-ai_reviewer_session=" + token }
@@ -163,9 +169,9 @@ describe("authenticated reviewer draft read routes", () => {
     let called = false;
     const env = {
       ...reviewerAuthEnv,
-      AGENT_DRAFT_STORE: { getByName: () => ({
+      AGENT_DRAFT_STORE: draftStoreNamespace({
         async listPendingReviewsForReviewer() { called = true; return { authorized: true, items: [] }; }
-      }) }
+      })
     };
     const response = await handleReviewerHttpRequest(new Request(base + "/api/reviewer/drafts?limit=21", {
       headers: { origin: base, cookie: "__Host-ai_reviewer_session=" + token }
@@ -179,10 +185,10 @@ describe("authenticated reviewer draft read routes", () => {
     let called = false;
     const env = {
       ...reviewerAuthEnv,
-      AGENT_DRAFT_STORE: { getByName: () => ({
+      AGENT_DRAFT_STORE: draftStoreNamespace({
         async reviseDraftForReviewer() { called = true; return { updated: true }; },
         async storeEvidenceLedger() { called = true; return { stored: true }; }
-      }) }
+      })
     };
     const response = await handleReviewerHttpRequest(new Request(base + "/api/reviewer/drafts/draft-review-12345678/authoring", {
       method: "POST",
