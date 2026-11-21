@@ -36,7 +36,7 @@ jobs:
           actual_sha="$(git rev-parse HEAD)"
           [[ "$actual_sha" == "$EXPECTED_SHA" ]]
           test -f agents/runtime/src/worker.mjs
-          test -f agents/runtime/wrangler.preview.jsonc
+          test -f agents/runtime/wrangler.jsonc
           echo "Validated immutable source: $TARGET_REF @ $actual_sha"
 
       - name: Set up Node.js 22
@@ -69,11 +69,11 @@ jobs:
         timeout-minutes: 8
         run: timeout --signal=TERM --kill-after=10s 420s node --test agents/runtime/tests/*.test.mjs
 
-      - name: Validate Preview types and Worker bundle without deployment
+      - name: Validate Worker types and bundle without deployment
         working-directory: agents/runtime
         run: |
-          npx --yes wrangler@4.166.0 types --config wrangler.preview.jsonc
-          npx --yes wrangler@4.166.0 deploy --dry-run --config wrangler.preview.jsonc --outdir "$RUNNER_TEMP/agent-runtime-dry-run"
+          npx --yes wrangler@4.166.0 types --config wrangler.jsonc
+          npx --yes wrangler@4.166.0 deploy --dry-run --config wrangler.jsonc --outdir "$RUNNER_TEMP/agent-runtime-dry-run"
 
       - name: Report safety boundary
         run: |
