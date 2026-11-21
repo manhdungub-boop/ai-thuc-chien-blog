@@ -151,6 +151,19 @@ async function handleOperatorControl(request, env, url) {
   return json(result.body, result.status);
 }
 
+export function isValidReviewerDraftAuthoringRequest(value) {
+  return Boolean(
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.keys(value).every(key => ["expected_version", "draft"].includes(key)) &&
+    Number.isSafeInteger(value.expected_version) &&
+    value.draft &&
+    typeof value.draft === "object" &&
+    !Array.isArray(value.draft)
+  );
+}
+
 async function handleReviewerApi(request, env, url) {
   if (!sameOrigin(request, request.method === "POST")) return json({ ok: false, error: "same_origin_required" }, 403);
   const auth = await reviewerSession(request, env);
@@ -173,13 +186,10 @@ async function handleReviewerApi(request, env, url) {
   if (authoringMatch && request.method === "POST") {
     const parsed = await readJson(request, 48 * 1024);
     if (!parsed.ok) return json({ ok: false, error: parsed.error }, parsed.status);
-    if (!Number.isSafeInteger(parsed.value.expected_version) || !parsed.value.draft || typeof parsed.value.draft !== "object" || Array.isArray(parsed.value.draft)) {
+    if (!isValidReviewerDraftAuthoringRequest(parsed.value)) {
       return json({ ok: false, error: "draft_authoring_request_invalid" }, 400);
     }
     const result = await store.reviseDraftForReviewer(authoringMatch[1], parsed.value.expected_version, parsed.value.draft, auth.token);
-    if (result.updated && Array.isArray(parsed.value.retrieved_evidence)) {
-      result.evidence_ledger = await store.storeEvidenceLedger(authoringMatch[1], result.artifact.version, parsed.value.retrieved_evidence);
-    }
     return json(result, resultStatus(result));
   }
 
