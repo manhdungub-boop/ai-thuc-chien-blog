@@ -449,22 +449,7 @@ if (url.pathname === "/task" && request.method === "GET") {
           body.actor, windowStart, requestCount + 1);
         const current = readRow(this.sql, "SELECT paused, changed_at, version FROM runtime_control WHERE singleton_id = 1");
         if (!current) return { status: 503, body: { ok: false, error: "runtime_control_unavailable" } };
-        if (current.paused === (paused ? 1 : 0)) {
-          return { status: 200, body: { ok: true, changed: false, control: this.controlState() } };
-        }
-        const version = current.version + 1;
-        this.sql.exec("UPDATE runtime_control SET paused = ?, changed_at = ?, version = ? WHERE singleton_id = 1 AND version = ?",
-          paused ? 1 : 0, now, version, current.version);
-        const updated = this.controlState();
-        if (updated.version !== version || updated.paused !== paused) {
-          return { status: 409, body: { ok: false, error: "runtime_control_conflict" } };
-        }
-        this.sql.exec("INSERT INTO runtime_control_audit (event_id, action, occurred_at, actor, reason, request_id) VALUES (?,?,?,?,?,?)",
-          crypto.randomUUID(), paused ? "pause" : "resume", now, body.actor, body.reason ?? "", body.requestId);
-
-        // Emergency pause atomically fences every in-flight lease. The worker's
-        // next heartbeat observes the cancelled lease and aborts cooperative work.
-        if (paused) {
+        const cancelRunningTasks = () => {
           const running = this.sql.exec(
             "SELECT task_id, task_type, lease_generation FROM tasks WHERE state='running'",
           ).toArray();
@@ -479,7 +464,26 @@ if (url.pathname === "/task" && request.method === "GET") {
               reason: "operator_paused",
             });
           }
+        };
+        if (current.paused === (paused ? 1 : 0)) {
+          // Repeated Pause is idempotent but still repairs any stale running
+          // lease left by an earlier runtime version or interrupted rollout.
+          if (paused) cancelRunningTasks();
+          return { status: 200, body: { ok: true, changed: false, control: this.controlState() } };
         }
+        const version = current.version + 1;
+        this.sql.exec("UPDATE runtime_control SET paused = ?, changed_at = ?, version = ? WHERE singleton_id = 1 AND version = ?",
+          paused ? 1 : 0, now, version, current.version);
+        const updated = this.controlState();
+        if (updated.version !== version || updated.paused !== paused) {
+          return { status: 409, body: { ok: false, error: "runtime_control_conflict" } };
+        }
+        this.sql.exec("INSERT INTO runtime_control_audit (event_id, action, occurred_at, actor, reason, request_id) VALUES (?,?,?,?,?,?)",
+          crypto.randomUUID(), paused ? "pause" : "resume", now, body.actor, body.reason ?? "", body.requestId);
+
+        // Emergency pause atomically fences every in-flight lease. The worker's
+        // next heartbeat observes the cancelled lease and aborts cooperative work.
+        if (paused) cancelRunningTasks();
         return { status: 200, body: { ok: true, changed: true, control: updated } };
       });
     } catch {
