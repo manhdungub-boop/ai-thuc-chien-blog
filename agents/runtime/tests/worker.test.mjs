@@ -110,11 +110,10 @@ test("run requires operator authentication if both safety flags are opened", asy
 
 const OPERATOR_TOKEN = "worker-bridge-operator-token-034252848589abcdef";
 const STATE_TOKEN = "worker-bridge-state-store-token-034252848589abcdef";
-function bridgeEnv({ responseBody = { ok: true, dayUtc: "2026-11-19", acceptedToday: 2, inFlight: 1 }, responseStatus = 200 } = {}) {
+function bridgeEnv({ responseBody = { ok: true, dayUtc: "2026-11-19", acceptedToday: 2, inFlight: 1 }, response = null, responseStatus = 200 } = {}) {
   const calls = [];
   const stub = {
     async fetch(internalRequest) {
-      calls.push(internalRequest);
       calls.push(internalRequest);
       return response ?? Response.json(responseBody, { status: responseStatus });
     },
