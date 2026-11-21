@@ -9,15 +9,22 @@ export const RESEARCH_FEED_SOURCES = [
   { name: "arXiv cs.AI", host: "arxiv.org", pathPrefix: "/abs/", feed: "https://rss.arxiv.org/rss/cs.AI" }
 ];
 
-function cleanText(value, max = 500) {
-  return value.replace(/<!\[CDATA\[|\]\]>/g, " ").replace(/<[^>]*>/g, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<").replace(/&gt;/gi, ">")
-    .replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'")
-    .replace(/&#\d+;|&#x[0-9a-f]+;/gi, " ")
-    .replace(/\s+/g, " ").trim().slice(0, max);
+function decodeHtmlEntities(value) {
+  return value.replace(/&(?:amp|lt|gt|quot|apos|#39|#\\d+|#x[0-9a-f]+);/gi, entity => {
+    const name = entity.slice(1, -1).toLowerCase();
+    if (name === "amp") return "&";
+    if (name === "lt") return "<";
+    if (name === "gt") return ">";
+    if (name === "quot") return '"';
+    if (name === "apos" || name === "#39") return "'";
+    return " ";
+  });
 }
 
+function cleanText(value, max = 500) {
+  return decodeHtmlEntities(value.replace(/<!\\[CDATA\\[|\\]\\]>/g, " ").replace(/<[^>]*>/g, " "))
+    .replace(/\\s+/g, " ").trim().slice(0, max);
+}
 function elementText(xml, name) {
   const match = xml.match(new RegExp("<" + name + "(?:\\s[^>]*)?>([\\s\\S]*?)</" + name + ">", "i"));
   return match ? match[1] : "";
