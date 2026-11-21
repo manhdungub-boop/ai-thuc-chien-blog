@@ -6,6 +6,7 @@ import { authorizeGitHubActionsOperator } from "./github-oidc-authorize.mjs";
 import { createReadOnlyAgentManager } from "./read-only-agent-manager.mjs";
 import { createReadOnlyTaskSnapshotAdapter } from "./task-snapshot-adapters.mjs";
 import { createPreviewReadOnlyReaders } from "./preview-read-only-sources.mjs";
+import { currentUtcBudgetDay } from "./utc-budget-day.mjs";
 export { AgentStateStore } from "./state-store.mjs";
 export { AgentAIBankCandidateStore } from "./ai-bank-candidate-store.mjs";
 export { AgentDraftStore } from "./draft-artifact-store.mjs";
@@ -790,9 +791,34 @@ const worker = {
       try {
         const result = await readStateStore(env, pathname);
         if (url.pathname === "/internal/usage") {
+          const budgetDay = currentUtcBudgetDay();
+          const externalBudgets = await Promise.all(
+            ["ai_bank_discovery", "content_research"].map(async (scope) => {
+              const snapshot = await readStateStore(
+                env,
+                "/external-budget?day=" + budgetDay + "&scope=" + scope,
+              );
+              const budget = snapshot?.budget;
+              if (!budget || budget.ok !== true || budget.day !== budgetDay ||
+                  budget.scope !== scope || !Number.isSafeInteger(budget.used) || budget.used < 0 ||
+                  !Number.isSafeInteger(budget.limit) || budget.limit < 1 ||
+                  !Number.isSafeInteger(budget.remaining) || budget.remaining < 0 ||
+                  budget.used + budget.remaining !== budget.limit) {
+                throw new Error("state_store_budget_response_invalid");
+              }
+              return {
+                day: budget.day,
+                scope: budget.scope,
+                used: budget.used,
+                limit: budget.limit,
+                remaining: budget.remaining,
+              };
+            }),
+          );
           return json({
-            ok: true, dayUtc: result.dayUtc,
+            ok: true, dayUtc: budgetDay,
             acceptedToday: result.acceptedToday, inFlight: result.inFlight,
+            externalBudgets,
           });
         }
         const task = result.task;
