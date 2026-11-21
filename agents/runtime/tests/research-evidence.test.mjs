@@ -39,6 +39,15 @@ describe("bounded research evidence retrieval", () => {
     expect(new TextEncoder().encode(JSON.stringify(result)).byteLength).toBeLessThan(8192);
   });
 
+  it("decodes HTML entities only once in retrieved excerpts", async () => {
+    const encodedHtml = '<main><article><p>' + 'Evidence text about AI systems and their evaluation. '.repeat(3) + 'Safe &amp;lt;script&amp;gt;</p></article></main>';
+    const result = await retrieveResearchEvidence([signal], {
+      fetchImpl: async () => new Response(encodedHtml, { headers: { "content-type": "text/html" } })
+    });
+    expect(result.evidence[0].excerpt).toContain('Safe &lt;script&gt;');
+    expect(result.evidence[0].excerpt).not.toContain('Safe <script>');
+  });
+
   it("rejects off-domain, non-HTTPS and non-allowlisted paths before making requests", async () => {
     let calls = 0;
     const result = await retrieveResearchEvidence([
