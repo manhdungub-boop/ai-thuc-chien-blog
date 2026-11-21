@@ -29,7 +29,7 @@ export class TestAgentStateStore extends AgentStateStore {
 
   async fetch(request) {
     const url = new URL(request.url);
-    if (url.pathname !== "/__test/rollback" && url.pathname !== "/__test/downgrade-v1") {
+    if (url.pathname !== "/__test/rollback" && url.pathname !== "/__test/downgrade-v1" && url.pathname !== "/__test/prune") {
       return super.fetch(request);
     }
     if (request.method !== "POST") return jsonResponse({ ok: false, error: "method_not_allowed" }, 405);
@@ -39,6 +39,12 @@ export class TestAgentStateStore extends AgentStateStore {
 
     try {
       await this.ready;
+      if (url.pathname === "/__test/prune") {
+        const body = await request.json();
+        if (!body || !Number.isSafeInteger(body.now) || body.now < 0) return jsonResponse({ ok: false, error: "test_prune_time_invalid" }, 400);
+        this.prune(body.now);
+        return jsonResponse({ ok: true });
+      }
       if (url.pathname === "/__test/downgrade-v1") {
         this.ctx.storage.transactionSync(() => {
           this.sql.exec("CREATE TABLE tasks_v1_fixture (task_id TEXT PRIMARY KEY, idempotency_key TEXT NOT NULL UNIQUE, task_type TEXT NOT NULL CHECK (task_type IN ('content.review','ai_bank.candidate_review','seo.audit')), payload_json TEXT NOT NULL, payload_hash TEXT NOT NULL, payload_bytes INTEGER NOT NULL CHECK (payload_bytes BETWEEN 1 AND 8192), state TEXT NOT NULL CHECK (state IN ('queued','running','succeeded','failed','cancelled')), created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, terminal_at INTEGER, error_code TEXT)");
@@ -47,6 +53,7 @@ export class TestAgentStateStore extends AgentStateStore {
           this.sql.exec("ALTER TABLE tasks_v1_fixture RENAME TO tasks");
           this.sql.exec("CREATE INDEX tasks_state_idx ON tasks(state)");
           this.sql.exec("CREATE INDEX tasks_terminal_idx ON tasks(terminal_at)");
+          this.sql.exec("DROP TABLE external_request_budgets");
           this.sql.exec("DROP TABLE oidc_jti_replay");
           this.sql.exec("DROP TABLE runtime_control_rate_limit");
           this.sql.exec("DROP TABLE runtime_control_audit");

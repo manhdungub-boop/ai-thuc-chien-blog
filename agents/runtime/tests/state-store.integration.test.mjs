@@ -80,8 +80,11 @@ test("all state-store routes require the distinct internal credential", async ()
       ["/control/resume", {}],
       ["/task?id=missing", undefined],
       ["/usage", undefined],
+      ["/external-budget?day=2026-11-21&scope=ai_bank_discovery", undefined],
+      ["/external-budget/consume", { day: "2026-11-21", scope: "ai_bank_discovery" }],
       ["/__test/rollback", {}],
       ["/__test/downgrade-v1", {}],
+      ["/__test/prune", { now: 1799999999000 }],
     ]) {
       const missing = await call(stub, pathname, body, { Authorization: "" });
       const invalid = await call(stub, pathname, body, { Authorization: "Bearer invalid-token" });
@@ -794,5 +797,71 @@ test("all six task mutation routes reject non-JSON media types before mutation",
       assert.equal(response.status, 400, pathname);
       assert.equal((await response.json()).error, "request_invalid", pathname);
     }
+  });
+});
+
+
+test("outbound request budgets enforce daily per-scope caps and reset on the next UTC day", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const day = "2026-11-21";
+    for (let index = 1; index <= 10; index += 1) {
+      const consumed = await call(stub, "/external-budget/consume", { day, scope: "ai_bank_discovery" });
+      assert.equal(consumed.status, 200);
+      assert.equal(consumed.body.budget.allowed, true);
+      assert.equal(consumed.body.budget.used, index);
+      assert.equal(consumed.body.budget.limit, 10);
+    }
+    const exhausted = await call(stub, "/external-budget/consume", { day, scope: "ai_bank_discovery" });
+    assert.equal(exhausted.status, 200);
+    assert.equal(exhausted.body.budget.allowed, false);
+    assert.equal(exhausted.body.budget.remaining, 0);
+
+    const read = await call(stub, `/external-budget?day=${day}&scope=ai_bank_discovery`);
+    assert.equal(read.status, 200);
+    assert.equal(read.body.budget.used, 10);
+    assert.equal(read.body.budget.remaining, 0);
+
+    const nextDay = await call(stub, "/external-budget/consume", { day: "2026-11-22", scope: "ai_bank_discovery" });
+    assert.equal(nextDay.body.budget.allowed, true);
+    assert.equal(nextDay.body.budget.used, 1);
+  });
+});
+
+test("content research has its own eight-request daily budget and invalid scopes/dates fail closed", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    for (let index = 1; index <= 8; index += 1) {
+      const result = await call(stub, "/external-budget/consume", { day: "2026-11-21", scope: "content_research" });
+      assert.equal(result.status, 200);
+      assert.equal(result.body.budget.allowed, true);
+      assert.equal(result.body.budget.used, index);
+    }
+    const exhausted = await call(stub, "/external-budget/consume", { day: "2026-11-21", scope: "content_research" });
+    assert.equal(exhausted.body.budget.allowed, false);
+    assert.equal(exhausted.body.budget.limit, 8);
+
+    for (const body of [
+      { day: "2026-02-30", scope: "ai_bank_discovery" },
+      { day: "2026-11-21", scope: "unknown_scope" },
+    ]) {
+      const invalid = await call(stub, "/external-budget/consume", body);
+      assert.equal(invalid.status, 400);
+      assert.equal(invalid.body.error, "external_request_budget_input_invalid");
+    }
+    const missing = await call(stub, "/external-budget?scope=content_research");
+    assert.equal(missing.status, 400);
+    assert.equal(missing.body.error, "external_request_budget_input_invalid");
+  });
+});
+
+test("outbound budget rows are pruned after the 30-day retention window", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const oldDay = "2026-10-01";
+    const inserted = await call(stub, "/external-budget/consume", { day: oldDay, scope: "ai_bank_discovery" }, { "x-test-now": "2026-10-01T12:00:00.000Z" });
+    assert.equal(inserted.body.budget.used, 1);
+    const pruned = await call(stub, "/__test/prune", { now: Date.parse("2026-11-21T12:00:00.000Z") });
+    assert.equal(pruned.status, 200);
+    const after = await call(stub, `/external-budget?day=${oldDay}&scope=ai_bank_discovery`);
+    assert.equal(after.status, 200);
+    assert.equal(after.body.budget.used, 0);
   });
 });
