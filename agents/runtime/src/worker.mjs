@@ -6,7 +6,6 @@ import { authorizeGitHubActionsOperator } from "./github-oidc-authorize.mjs";
 import { createReadOnlyAgentManager } from "./read-only-agent-manager.mjs";
 import { createReadOnlyTaskSnapshotAdapter } from "./task-snapshot-adapters.mjs";
 import { createPreviewReadOnlyReaders } from "./preview-read-only-sources.mjs";
-import { readBoundedJson as readBoundedJsonBody } from "./bounded-json-body.mjs";
 export { AgentStateStore } from "./state-store.mjs";
 export { AgentAIBankCandidateStore } from "./ai-bank-candidate-store.mjs";
 export { AgentDraftStore } from "./draft-artifact-store.mjs";
