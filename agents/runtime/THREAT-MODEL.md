@@ -18,7 +18,7 @@ Keep the Agent Runtime disabled and unreachable until its operator boundary, int
 | Task payload and idempotency key | Integrity, confidentiality, bounded retention | SQLite DO implementation; namespace not bound |
 | Daily quota and in-flight count | Integrity / abuse resistance | Atomic SQLite transaction; not deployed |
 | Audit metadata | Integrity and non-disclosure | SQLite implementation; not deployed |
-| Kill switch | Ability to stop admission and dispatch | Fail-closed flags exist; operational control not yet implemented |
+| Kill switch | Ability to stop admission and dispatch | Durable Pause and source-level cooperative cancellation are implemented/tested; live Preview operation not yet verified |
 | External publishing credentials / social accounts | Confidentiality and constrained side effects | Not connected to Agent Runtime |
 
 Trust boundaries:
@@ -68,7 +68,7 @@ Trust boundaries:
 ### T8 — Pause/kill switch bypass
 **Threat:** queued work starts after pause, or the operator cannot stop active dispatch.  
 **Current controls:** State Store persists pause state and rejects reservations, queued→running transitions, and lease recovery when disabled/paused; terminal bookkeeping remains available where explicitly allowed. Worker has authenticated pause/resume control routes. Both outer flags default closed in the dedicated Preview config.  
-**Residual risk:** a bounded scheduler path and dispatch gate now exist in source, and the Preview config declares a 30-minute cron. They remain inactive because `AGENT_SCHEDULER_ENABLED=false`, `AGENT_RECOVERY_ALARM_ENABLED=false`, `AGENT_ENABLED=false`, and `AGENT_PAUSED=true`. The GitHub OIDC operator workflow is manual and pause-only; it is not a resume or autonomous recovery authorization. Pause does not forcibly interrupt an in-flight external side effect. A complete kill switch still needs fault-injection evidence covering admission, claims, scheduled dispatch, in-flight work, and any future outbound effects. The shared bearer and static actor label are not a human identity control.
+**Residual risk:** a bounded scheduler path and dispatch gate now exist in source, but the Preview config has no Cron trigger. They remain inactive because `AGENT_SCHEDULER_ENABLED=false`, `AGENT_RECOVERY_ALARM_ENABLED=false`, `AGENT_ENABLED=false`, and `AGENT_PAUSED=true`. The GitHub OIDC operator workflow is manual and pause-only; it is not a resume or autonomous recovery authorization. Pause does not forcibly interrupt an in-flight external side effect. A complete kill switch still needs fault-injection evidence covering admission, claims, scheduled dispatch, in-flight work, and any future outbound effects. The shared bearer and static actor label are not a human identity control.
 
 ### T9 — External side-effect / publishing abuse
 **Threat:** an agent publishes unreviewed, duplicated, copyrighted, misleading, or malicious content to the official website or Facebook.  
@@ -83,12 +83,12 @@ Trust boundaries:
 ## 4. Current evidence (source-level only)
 
 - While the outer gates are closed, `/run` and `/internal/dispatch` return a fail-closed disabled/paused response. If explicitly enabled, `/run` accepts at most five tasks and `/internal/dispatch` processes at most five operator-requested tasks or one scheduled task per tick; both use the bounded read-only review manager and persist lease/result bookkeeping in the State Store. No mutating or publishing task handler is present.
-- `wrangler.preview.jsonc` is a standalone `ai-thuc-chien-agent-runtime-preview` config that declares a SQLite Durable Object binding/migration and a `*/30 * * * *` cron. The outer gates remain `AGENT_ENABLED=false`, `AGENT_SCHEDULER_ENABLED=false`, `AGENT_RECOVERY_ALARM_ENABLED=false`, `AGENT_PAUSED=true`, and `AGENT_OIDC_ENABLED=false`. The config has no route, custom domain, D1/KV/R2 binding, queue, or checked-in secret value. It remains undeployed; account-side namespace provisioning, secret configuration, and Free-plan headroom have not been verified.
+- `wrangler.preview.jsonc` is a standalone `ai-thuc-chien-agent-runtime-preview` config that declares a SQLite Durable Object binding/migration and no Cron trigger. The outer gates remain `AGENT_ENABLED=false`, `AGENT_SCHEDULER_ENABLED=false`, `AGENT_RECOVERY_ALARM_ENABLED=false`, `AGENT_PAUSED=true`, and `AGENT_OIDC_ENABLED=false`. The config has no route, custom domain, D1/KV/R2 binding, queue, or checked-in secret value. It remains undeployed; account-side namespace provisioning and secret configuration have not been performed; Workers and Durable Objects Free plan labels are verified from owner-supplied Billing pages, but service-level quota headroom remains unverified.
 - State Store routes authenticate with `AGENT_STATE_STORE_TOKEN` before parsing or routing.
 - Internal client uses a fixed DO identity and fixed operations, and creates a new request with only the internal token and required content type.
 - State Store and client tests cover auth separation, rotation, request bounds, strict query validation, quota/idempotency, transitions, pause behavior, and persistence.
 - A read-only Cloudflare inventory previously showed no Agent Runtime Worker script and no DO namespace. This is a point-in-time observation, not proof about future account state.
-- Cloudflare API schema search exposes namespace inventory and general analytics/billable-usage endpoints, but no dedicated Durable Objects usage endpoint that would resolve the account's current DO request, SQL-row, GB-second, or storage headroom. Billing Read remains unavailable to this connected session.
+- Owner-supplied Billing evidence confirms Workers Free tier and Durable Objects Free tier, no payment method, no invoices, and no spend-limit history activity. The Spectrum `No data` panel is Spectrum-only and does not establish Workers or Durable Objects usage. Current DO request, SQL-row, GB-second, storage and Worker CPU headroom remain unmeasured.
 
 ## 5. Mandatory gates before a Preview binding or deployment
 
@@ -98,10 +98,10 @@ Trust boundaries:
 - [ ] Add/verify global ingress and read-route rate limits, explicit response allowlisting, and negative tests for response leakage and missing/rotated secrets.
 - [ ] Add end-to-end negative tests for every unauthenticated route, operator/internal token confusion, arbitrary path/header injection, response leakage, missing binding, missing secret, and rotation.
 - [ ] Keep one operator only, or implement tenant ownership and cross-tenant isolation before multi-user access.
-- [ ] Obtain verifiable Free-plan usage/headroom and confirm no billing/payment/paid upgrade change; if unavailable, do not bind or deploy.
+- [x] Verify base plan labels from owner-supplied Billing evidence (Workers Free; Durable Objects Free; no payment method or invoices). [ ] Measure service-level request, SQL-row, GB-second, storage and CPU headroom before binding or deployment.
 - [x] Implement bounded read-only task review, idempotent task reservation, lease fencing/heartbeat, and bounded expired-lease recovery paths in source/tests.
 - [ ] Before any external write capability, independently review executor safety, per-side-effect idempotency, bounded retries, and reconciliation; no publishing executor is currently implemented.
-- [ ] Verify a complete emergency stop with fault-injection tests covering admission, claim, cron scheduling, dispatch, in-flight work, and future outbound effects; the current manual OIDC operator is pause-only.
+- [x] Source-level emergency-stop tests cover atomic cancellation of running read-only leases, late heartbeat/completion fencing and cooperative abort (260/260 tests on code head `093a8d2e98f9b0be4ce8b22be938d8392d6e50e1`). [ ] Complete live Preview OIDC and emergency-stop E2E, including dispatch/in-flight fault injection; the manual OIDC workflow remains pause-only.
 - [ ] Implement monitoring, redacted logs, alerts, storage/usage sampling, rollback and recovery runbooks.
 - [ ] Verify the Preview deployment is isolated from Production Worker, DNS, D1, secrets, and live user data.
 - [ ] Re-run only the affected runtime/security/release checks on the exact candidate SHA.
@@ -114,4 +114,4 @@ This document is not a penetration test, independent audit, compliance certifica
 
 ## Preview exposure note (2026-11-20)
 
-`wrangler.preview.jsonc` sets `workers_dev=true` and `preview_urls=true`, so the dedicated Worker is intended to have a public workers.dev/Preview URL if deployed. Public reachability is not access control. `/health` intentionally returns only non-sensitive service/gate state; every operator route must continue to require authentication, and no shared bearer may be placed in browser JavaScript. Before deployment, decide whether to add an already-entitled, no-cost Cloudflare Access boundary or another independently reviewed ingress control. Billing/plan status and remaining quota are not verified, so the separate Preview config must remain undeployed until those checks pass.
+`wrangler.preview.jsonc` sets `workers_dev=true` and `preview_urls=true`, so the dedicated Worker is intended to have a public workers.dev/Preview URL if deployed. Public reachability is not access control. `/health` intentionally returns only non-sensitive service/gate state; every operator route must continue to require authentication, and no shared bearer may be placed in browser JavaScript. Before deployment, decide whether to add an already-entitled, no-cost Cloudflare Access boundary or another independently reviewed ingress control. Workers and Durable Objects Free plan labels are verified, but service-level quota headroom is not; the separate Preview config must remain undeployed until those checks pass.
