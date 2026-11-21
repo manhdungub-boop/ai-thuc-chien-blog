@@ -195,7 +195,7 @@ export class AgentDraftStore extends DurableObject {
     this.ctx.storage.sql.exec("CREATE INDEX IF NOT EXISTS draft_artifacts_status_updated ON draft_artifacts(status, updated_at)");
   }
 
-  createDraft(id, draft, retrievedEvidence = []) {
+  async createDraft(id, draft, retrievedEvidence = []) {
     if (typeof id !== "string" || !ID_PATTERN.test(id)) return { accepted: false, reason: "invalid_artifact_id" };
     const validated = validateDraft(draft);
     if (!validated.ok) return { accepted: false, reason: validated.reason };
@@ -218,7 +218,7 @@ export class AgentDraftStore extends DurableObject {
     return { accepted: true, duplicate: false, artifact: safeArtifact(inserted[0]) };
   }
 
-  reviseDraft(id, expectedVersion, draft) {
+  async reviseDraft(id, expectedVersion, draft) {
     if (typeof id !== "string" || !ID_PATTERN.test(id) || !Number.isInteger(expectedVersion) || expectedVersion < 1) {
       return { updated: false, reason: "invalid_revision_request" };
     }
@@ -244,7 +244,7 @@ export class AgentDraftStore extends DurableObject {
     if (!session.authenticated) {
       return { authorized: false, updated: false, reason: session.status || "reviewer_session_invalid" };
     }
-    const result = this.reviseDraft(id, expectedVersion, draft);
+    const result = await this.reviseDraft(id, expectedVersion, draft);
     return { authorized: true, reviewer_ref: session.reviewer.reviewer_ref, ...result };
   }
 
@@ -253,7 +253,7 @@ export class AgentDraftStore extends DurableObject {
     if (!session.authenticated) {
       return { authorized: false, recorded: false, reason: session.status || "reviewer_session_invalid" };
     }
-    const current = this.getDraft(id);
+    const current = await this.getDraft(id);
     if (!current) return { authorized: true, recorded: false, reason: "artifact_not_found" };
     if (current.version !== expectedVersion) {
       return { authorized: true, recorded: false, reason: "version_conflict", current_version: current.version };
@@ -391,7 +391,7 @@ export class AgentDraftStore extends DurableObject {
     return {
       authorized: true,
       reviewer_ref: session.reviewer.reviewer_ref,
-      items: this.listPendingReviews(limit)
+      items: await this.listPendingReviews(limit)
     };
   }
 
@@ -401,19 +401,19 @@ export class AgentDraftStore extends DurableObject {
     return {
       authorized: true,
       reviewer_ref: session.reviewer.reviewer_ref,
-      items: this.listNeedsRevision(limit)
+      items: await this.listNeedsRevision(limit)
     };
   }
 
   async getDraftForReviewer(id, reviewerSessionToken) {
     const session = await verifyGoogleReviewerSessionToken(reviewerSessionToken, this.env, Date.now());
     if (!session.authenticated) return { authorized: false, reason: session.status || "reviewer_session_invalid" };
-    const artifact = this.getDraft(id);
+    const artifact = await this.getDraft(id);
     if (!artifact) return { authorized: true, artifact: null };
     return { authorized: true, reviewer_ref: session.reviewer.reviewer_ref, artifact };
   }
 
-  getDraft(id) {
+  async getDraft(id) {
     if (typeof id !== "string" || !ID_PATTERN.test(id)) return null;
     const row = this.ctx.storage.sql.exec("SELECT * FROM draft_artifacts WHERE id = ?", id).toArray()[0];
     return row ? safeArtifact(row) : null;
@@ -424,7 +424,7 @@ export class AgentDraftStore extends DurableObject {
    * artifact version. This internal RPC does not authenticate a human reviewer,
    * change article content, create a human decision, or authorize publication.
    */
-  reviewDraft(id, expectedVersion) {
+  async reviewDraft(id, expectedVersion) {
     if (typeof id !== "string" || !ID_PATTERN.test(id) ||
         !Number.isInteger(expectedVersion) || expectedVersion < 1) {
       return { reviewed: false, reason: "invalid_quality_review_request" };
@@ -453,7 +453,7 @@ export class AgentDraftStore extends DurableObject {
     };
   }
 
-  listPendingReviews(limit = 20) {
+  async listPendingReviews(limit = 20) {
     const boundedLimit = Number.isInteger(limit) ? Math.min(20, Math.max(1, limit)) : 20;
     const rows = this.ctx.storage.sql.exec(
       "SELECT * FROM draft_artifacts WHERE status = 'pending_human_review' ORDER BY updated_at DESC LIMIT ?",
@@ -462,7 +462,7 @@ export class AgentDraftStore extends DurableObject {
     return rows.map(queueItem);
   }
 
-  listNeedsRevision(limit = 20) {
+  async listNeedsRevision(limit = 20) {
     const boundedLimit = Number.isInteger(limit) ? Math.min(20, Math.max(1, limit)) : 20;
     const rows = this.ctx.storage.sql.exec(
       "SELECT * FROM draft_artifacts WHERE status = 'needs_revision' ORDER BY updated_at DESC LIMIT ?",
@@ -471,7 +471,7 @@ export class AgentDraftStore extends DurableObject {
     return rows.map(queueItem);
   }
 
-  listOwnerReleaseReviews(limit = 20) {
+  async listOwnerReleaseReviews(limit = 20) {
     const boundedLimit = Number.isInteger(limit) ? Math.min(20, Math.max(1, limit)) : 20;
     const rows = this.ctx.storage.sql.exec(
       "SELECT * FROM draft_artifacts WHERE status = 'pending_human_review' AND evidence_readiness_json IS NOT NULL ORDER BY updated_at DESC LIMIT ?",
@@ -480,7 +480,7 @@ export class AgentDraftStore extends DurableObject {
     return rows.map(queueItem).filter(item => item.release_review_status === "eligible_for_owner_release_review");
   }
 
-  stats() {
+  async stats() {
     const rows = this.ctx.storage.sql.exec("SELECT status, COUNT(*) AS count FROM draft_artifacts GROUP BY status").toArray();
     return Object.fromEntries(rows.map(row => [row.status, row.count]));
   }
