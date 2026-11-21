@@ -2,21 +2,111 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import worker, { runWithLeaseHeartbeat } from "../src/worker.mjs";
 
+test("required ingress limiter covers every route and keys by Cloudflare client IP", async () => {
+  let received;
+  const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/health", {
+    headers: { "cf-connecting-ip": "203.0.113.9" },
+  }), {
+    AGENT_ENABLED: "false",
+    AGENT_PAUSED: "true",
+    AGENT_RATE_LIMIT_REQUIRED: "true",
+    AGENT_INGRESS_RATE_LIMITER: { limit: async (input) => { received = input; return { success: true }; } },
+  });
+  assert.equal(response.status, 200);
+  assert.deepEqual(received, { key: "ip:203.0.113.9" });
+});
+
+test("ingress limiter rejects requests before route handling", async () => {
+  const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/health", {
+    headers: { "cf-connecting-ip": "203.0.113.10" },
+  }), {
+    AGENT_RATE_LIMIT_REQUIRED: "true",
+    AGENT_INGRESS_RATE_LIMITER: { limit: async () => ({ success: false }) },
+  });
+  assert.equal(response.status, 429);
+  assert.equal((await response.json()).error, "rate_limited");
+});
+
+
+test("required ingress limiter fails closed when the trusted client IP is missing or malformed", async () => {
+  let calls = 0;
+  const env = {
+    AGENT_RATE_LIMIT_REQUIRED: "true",
+    AGENT_INGRESS_RATE_LIMITER: { limit: async () => { calls += 1; return { success: true }; } },
+  };
+  const missing = await worker.fetch(request("/health"), env);
+  assert.equal(missing.status, 503);
+  assert.equal((await missing.json()).error, "client_ip_unavailable");
+
+  const malformed = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/health", {
+    headers: { "cf-connecting-ip": "203.0.113.10, 198.51.100.7" },
+  }), env);
+  assert.equal(malformed.status, 503);
+  assert.equal((await malformed.json()).error, "client_ip_unavailable");
+  assert.equal(calls, 0, "the limiter must not collapse unrelated callers into a shared fallback key");
+});
+
+test("ingress limiter accepts valid IPv4 and IPv6 addresses and rejects invalid IP syntax", async () => {
+  const accepted = [];
+  for (const address of ["198.51.100.42", "2001:db8::42"]) {
+    const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/health", {
+      headers: { "cf-connecting-ip": address },
+    }), {
+      AGENT_RATE_LIMIT_REQUIRED: "true",
+      AGENT_INGRESS_RATE_LIMITER: { limit: async ({ key }) => { accepted.push(key); return { success: true }; } },
+    });
+    assert.equal(response.status, 200);
+  }
+  assert.deepEqual(accepted, ["ip:198.51.100.42", "ip:2001:db8::42"]);
+
+  let calls = 0;
+  for (const address of ["not-an-ip", "999.1.1.1", "203.0.113", "2001:db8::zz", "2001:::1"]) {
+    const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/health", {
+      headers: { "cf-connecting-ip": address },
+    }), {
+      AGENT_RATE_LIMIT_REQUIRED: "true",
+      AGENT_INGRESS_RATE_LIMITER: { limit: async () => { calls += 1; return { success: true }; } },
+    });
+    assert.equal(response.status, 503, address);
+    assert.equal((await response.json()).error, "client_ip_unavailable", address);
+  }
+  assert.equal(calls, 0, "syntactically invalid addresses must never reach the limiter");
+});
+
+test("required ingress limiter fails closed when binding is missing or unavailable", async () => {
+  const missing = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/health", {
+    headers: { "cf-connecting-ip": "203.0.113.11" },
+  }), { AGENT_RATE_LIMIT_REQUIRED: "true" });
+  assert.equal(missing.status, 503);
+  assert.equal((await missing.json()).error, "rate_limit_unavailable");
+
+  const unavailable = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/health", {
+    headers: { "cf-connecting-ip": "203.0.113.12" },
+  }), {
+    AGENT_RATE_LIMIT_REQUIRED: "true",
+    AGENT_INGRESS_RATE_LIMITER: { limit: async () => { throw new Error("binding unavailable"); } },
+  });
+  assert.equal(unavailable.status, 503);
+  assert.equal((await unavailable.json()).error, "rate_limit_unavailable");
+});
+
 const request = (path, method = "GET") =>
   new Request("https://agent-runtime-preview.example.workers.dev" + path, { method });
 
 test("lease heartbeat keeps a long bounded review alive and stops when it completes", async () => {
   let heartbeats = 0;
+  let finishWork;
+  const work = new Promise((resolve) => { finishWork = resolve; });
   const result = await runWithLeaseHeartbeat(
+    () => work,
     async () => {
-      await new Promise((resolve) => setTimeout(resolve, 24));
-      return "review-complete";
+      heartbeats += 1;
+      if (heartbeats === 2) finishWork("review-complete");
     },
-    async () => { heartbeats += 1; },
     5,
   );
   assert.equal(result, "review-complete");
-  assert.ok(heartbeats >= 2, "a review longer than the heartbeat interval must renew its lease");
+  assert.equal(heartbeats, 2, "the work completes only after two successful lease renewals");
 });
 
 test("lease heartbeat does not add a write for a fast review", async () => {
@@ -28,6 +118,24 @@ test("lease heartbeat does not add a write for a fast review", async () => {
   );
   assert.equal(result, "fast-review");
   assert.equal(heartbeats, 0);
+});
+
+test("lease heartbeat aborts cooperative work immediately when renewal is denied", async () => {
+  let observedAbort = false;
+  await assert.rejects(
+    runWithLeaseHeartbeat(
+      (signal) => new Promise((resolve, reject) => {
+        signal.addEventListener("abort", () => {
+          observedAbort = true;
+          reject(signal.reason);
+        }, { once: true });
+      }),
+      async () => { throw new Error("lease fenced by emergency pause"); },
+      2,
+    ),
+    (error) => error.message === "task_lease_heartbeat_unavailable",
+  );
+  assert.equal(observedAbort, true, "the active work adapter must receive the abort signal");
 });
 
 test("lease heartbeat fails closed when renewal fails", async () => {
@@ -402,9 +510,9 @@ test("bridge maps malformed and oversized State Store responses to generic unava
     headers: { Authorization: "Bearer " + token },
   });
   for (const response of [
-    new Response("not-json", { status: 200 }),
-    new Response("x".repeat(16 * 1024 + 1), { status: 200 }),
-    new Response(JSON.stringify({ ok: false, error: "database_sql_detail" }), { status: 500 }),
+    new Response("not-json", { status: 200, headers: { "Content-Type": "application/json" } }),
+    new Response("x".repeat(16 * 1024 + 1), { status: 200, headers: { "Content-Type": "application/json" } }),
+    new Response(JSON.stringify({ ok: false, error: "database_sql_detail" }), { status: 500, headers: { "Content-Type": "application/json" } }),
   ]) {
     const env = {
       AGENT_OPERATOR_TOKEN: token,
@@ -781,6 +889,8 @@ test("scheduled dispatcher processes at most one queued read-only task per confi
   const { env, records, calls } = durableRunEnv();
   env.AGENT_SCHEDULER_ENABLED = "true";
   env.AGENT_RECOVERY_ALARM_ENABLED = "true";
+  env.AGENT_RATE_LIMIT_REQUIRED = "true";
+  // A scheduled event has no end-user IP; only its private in-process dispatch may bypass ingress IP limiting.
   for (const taskId of ["scheduled-1", "scheduled-2"]) {
     records.set(taskId, {
       taskId, type: "content.review",
@@ -844,6 +954,35 @@ test("operator queue dispatcher processes only a bounded number of already-queue
   }
 });
 
+test("operator queue dispatcher sanitizes failed review results and durably marks them failed", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => { throw new Error("private_source_adapter_failure"); };
+  const { env, records } = durableRunEnv();
+  records.set("dispatch-failed-1", {
+    taskId: "dispatch-failed-1", type: "content.review",
+    payload: { articlePath: "articles/demo-article.html" },
+    idempotencyKey: "dispatch-content-review-failed-0001", state: "queued",
+  });
+  try {
+    const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/dispatch", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + RUN_TOKEN, "Content-Type": "application/json" },
+      body: JSON.stringify({ maxTasks: 1 }),
+    }), env);
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, false);
+    assert.equal(body.summary.failed, 1);
+    assert.equal(body.items[0].ok, false);
+    assert.equal(body.items[0].state, "failed");
+    assert.deepEqual(body.items[0].result, { ok: false, errorCode: "read_only_review_failed" });
+    assert.equal(records.get("dispatch-failed-1").state, "failed");
+    assert.equal(JSON.stringify(body).includes("private_source_adapter_failure"), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("operator queue dispatcher requires authentication, explicit gates, and strict bounded input", async () => {
   const { env } = durableRunEnv();
   const url = "https://agent-runtime-preview.example.workers.dev/internal/dispatch";
@@ -886,7 +1025,10 @@ test("run durably marks unavailable SEO evidence as failed without inventing a p
     const body = await response.json();
     assert.equal(response.status, 200);
     assert.equal(body.ok, false);
-    assert.equal(body.items[0].result.error, "read_only_source_error");
+    assert.equal(body.items[0].result.ok, false);
+    assert.equal(body.items[0].result.errorCode, "read_only_review_failed");
+    assert.equal(Object.hasOwn(body.items[0].result, "error"), false);
+    assert.equal(JSON.stringify(body).includes("read_only_source_error"), false);
     assert.equal(body.items[0].state, "failed");
     assert.equal([...records.values()][0].state, "failed");
   } finally {
@@ -932,3 +1074,49 @@ test("run rejects oversized batches, malformed JSON, and unexpected query parame
   }), env);
   assert.equal(query.status, 400);
 });
+
+test("bridge rejects malformed Content-Length, mismatched lengths, and invalid UTF-8 State Store responses", async () => {
+  const token = OPERATOR_TOKEN;
+  const incoming = new Request("https://agent-runtime-preview.example.workers.dev/internal/usage", {
+    headers: { Authorization: "Bearer " + token },
+  });
+  let malformedLengthCancelled = false;
+  let oversizedDeclaredCancelled = false;
+  let chunkedOversizedCancelled = false;
+  const malformedLength = new Response(new ReadableStream({
+    start(controller) { controller.enqueue(new TextEncoder().encode("{}")); },
+    cancel() { malformedLengthCancelled = true; },
+  }), { headers: { "Content-Type": "application/json", "Content-Length": "2x" } });
+  const oversizedDeclared = new Response(new ReadableStream({
+    start(controller) { controller.enqueue(new TextEncoder().encode("{}")); },
+    cancel() { oversizedDeclaredCancelled = true; },
+  }), { headers: { "Content-Type": "application/json", "Content-Length": String(16 * 1024 + 1) } });
+  const chunkedOversized = new Response(new ReadableStream({
+    start(controller) { controller.enqueue(new Uint8Array(16 * 1024 + 1)); },
+    cancel() { chunkedOversizedCancelled = true; },
+  }), { headers: { "Content-Type": "application/json" } });
+  const mismatchedLength = new Response("{}", {
+    headers: { "Content-Type": "application/json", "Content-Length": "3" },
+  });
+  const invalidUtf8 = new Response(new Uint8Array([0xc3, 0x28]), {
+    headers: { "Content-Type": "application/json" },
+  });
+
+  for (const response of [malformedLength, oversizedDeclared, chunkedOversized, mismatchedLength, invalidUtf8]) {
+    const env = {
+      AGENT_OPERATOR_TOKEN: token,
+      AGENT_STATE_STORE_TOKEN: STATE_TOKEN,
+      AGENT_STATE_STORE: {
+        idFromName: () => "fixed-object-id",
+        get: () => ({ fetch: async () => response }),
+      },
+    };
+    const result = await worker.fetch(incoming, env);
+    assert.equal(result.status, 503);
+    assert.deepEqual(await result.json(), { ok: false, error: "state_store_unavailable" });
+  }
+  assert.equal(malformedLengthCancelled, true);
+  assert.equal(oversizedDeclaredCancelled, true);
+  assert.equal(chunkedOversizedCancelled, true);
+});
+
