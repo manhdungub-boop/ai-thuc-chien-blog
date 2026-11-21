@@ -87,7 +87,7 @@ Trust boundaries:
 - State Store routes authenticate with `AGENT_STATE_STORE_TOKEN` before parsing or routing.
 - Internal client uses a fixed DO identity and fixed operations, and creates a new request with only the internal token and required content type.
 - State Store and client tests cover auth separation, rotation, request bounds, strict query validation, quota/idempotency, transitions, pause behavior, and persistence.
-- A read-only Cloudflare inventory on 2026-11-21 showed no Agent Runtime Worker script and zero Durable Object namespaces. This is a point-in-time observation, not proof about future account state.
+- A read-only Cloudflare inventory on 2026-11-21 found the dedicated `ai-thuc-chien-agent-runtime-preview` script shell, but its uploaded code was still the default Hello World response with no Agent Runtime bindings; the Durable Object namespace inventory returned zero namespaces. Therefore no Agent Runtime implementation or DO-backed runtime is deployed. This is a point-in-time observation, not proof about future account state.
 - Owner-supplied Billing evidence confirms Workers Free tier, Durable Objects Free tier, no payment method and no invoices. The Spectrum `No data` view applies only to Spectrum. It does not establish Workers AI or Durable Objects usage/headroom.
 - No dedicated Durable Objects usage endpoint was available in the inspected API schema to establish current request, SQL-row, GB-second, or storage headroom.
 
@@ -103,7 +103,7 @@ Trust boundaries:
 - [ ] Keep one operator only, or implement tenant ownership and cross-tenant isolation before multi-user access.
 - [x] Verify base account plan labels from owner-supplied evidence: Workers Free tier and Durable Objects Free tier; no payment method and no invoices. Remaining service-level quota headroom is still unverified; do not deploy on estimates.
 - [x] Implement bounded read-only task review, idempotent task reservation, lease fencing/heartbeat, and bounded expired-lease recovery paths in source/tests.
-- [x] Source-level emergency-stop fault injection covers admission/claim blocking, atomic cancellation of in-flight read-only leases, late heartbeat/completion fencing, and cooperative AbortSignal propagation (260/260 tests on exact head `093a8d2e98f9b0be4ce8b22be938d8392d6e50e1`).
+- [x] Source-level emergency-stop fault injection covers admission/claim blocking, atomic cancellation of in-flight read-only leases, late heartbeat/completion fencing, and cooperative AbortSignal propagation. A historical 260/260-test run on `093a8d2e98f9b0be4ce8b22be938d8392d6e50e1` is earlier source evidence only; the current candidate's exact-head validation is tracked separately and is not a live Preview E2E.
 - [ ] Complete live Preview OIDC and emergency-stop E2E; do not treat source-level tests as deployment evidence.
 - [ ] Before any external write capability, independently review executor safety, per-side-effect idempotency, bounded retries, cancellation fences, and reconciliation; no publishing executor is currently implemented.
 - [ ] Implement monitoring, redacted logs, alerts, storage/usage sampling, rollback and recovery runbooks.
