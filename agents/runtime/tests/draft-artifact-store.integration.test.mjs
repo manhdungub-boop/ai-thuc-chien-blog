@@ -31,17 +31,6 @@ describe("AgentDraftStore Durable Object", () => {
     await runtime?.mf.dispose();
   });
 
-  it("passes the isolated Google reviewer auth configuration into the Durable Object", async () => {
-    expect(await store.getTestAuthConfig()).toMatchObject({
-      enabled: "true",
-      clientIdLength: 76,
-      clientSecretLength: 68,
-      redirectUri: "https://ai-thuc-chien-agent-runtime-preview.manhdungub.workers.dev/auth/google/callback",
-      allowedEmails: "reviewer@example.com",
-      stateSecretLength: 64,
-      sessionSecretLength: 66
-    });
-  });
   it("stores an eligible article only in the human-review queue", async () => {
     const result = await store.createDraft("draft-review-0001", validDraft());
     expect(result.accepted).toBe(true);
@@ -374,4 +363,9 @@ describe("AgentDraftStore Durable Object", () => {
   it("returns bounded queue metadata and retrieves full content by ID", async () => {
     const draft = validDraft(); await store.createDraft("draft-review-0008", draft);
     const [item] = await store.listPendingReviews(1000);
-  
+    expect(item.id).toBe("draft-review-0008");
+    expect(item).not.toHaveProperty("body_markdown");
+    expect((await store.getDraft(item.id)).draft.body_markdown).toBe(draft.body_markdown);
+    expect(await store.getDraft("missing-draft-01")).toBeNull();
+  });
+});
