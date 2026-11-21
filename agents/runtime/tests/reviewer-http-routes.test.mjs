@@ -143,6 +143,29 @@ describe("authenticated reviewer draft read routes", () => {
     expect(await response.json()).toEqual({ items: [item], count: 1, publication_authorized: false });
   });
 
+  it("does not expose queue data when the Durable Object independently rejects the session", async () => {
+    const token = await createReviewerSessionToken();
+    const env = {
+      ...reviewerAuthEnv,
+      AGENT_DRAFT_STORE: draftStoreNamespace({
+        async listPendingReviewsForReviewer(limit, sessionToken) {
+          expect(limit).toBe(20);
+          expect(sessionToken).toBe(token);
+          return { authorized: false, reason: "reviewer_session_invalid", items: [{ id: "must-not-leak" }] };
+        }
+      })
+    };
+    const response = await handleReviewerHttpRequest(new Request(base + "/api/reviewer/drafts", {
+      headers: { origin: base, cookie: "__Host-ai_reviewer_session=" + token }
+    }), env);
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({
+      ok: false,
+      error: "reviewer_session_invalid",
+      publication_authorized: false
+    });
+  });
+
   it("requires independent Durable Object authorization before returning full draft details", async () => {
     const token = await createReviewerSessionToken();
     const artifact = { id: "draft-review-12345678", version: 1, draft: { body_markdown: "private draft" } };
