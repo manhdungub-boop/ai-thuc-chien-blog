@@ -26,6 +26,15 @@ export const REVIEWER_CONSOLE_HTML = `<!doctype html>
       <h2>Chi tiết bài viết</h2>
       <p>Chọn một bài trong hàng chờ để xem nội dung và bằng chứng.</p>
     </section>
+    <section id="ai-bank-review">
+      <h2>Ngân hàng AI – công cụ chờ rà soát</h2>
+      <p id="ai-bank-status" role="status">Chưa tải danh sách công cụ.</p>
+      <ul id="ai-bank-queue"></ul>
+      <section id="ai-bank-detail" aria-live="polite">
+        <h2>Chi tiết công cụ AI</h2>
+        <p>Chọn một công cụ để xem hồ sơ và bằng chứng. Màn hình này chỉ đọc, không xác minh hoặc chỉnh sửa catalog.</p>
+      </section>
+    </section>
   </main>
   <script src="/reviewer-console.js" defer></script>
 </body>
@@ -40,6 +49,9 @@ export const REVIEWER_CONSOLE_JS = `"use strict";
   const authoringQueue = byId("authoring-queue");
   const authoringQueueStatus = byId("authoring-queue-status");
   const detail = byId("draft-detail");
+  const aiBankStatus = byId("ai-bank-status");
+  const aiBankQueue = byId("ai-bank-queue");
+  const aiBankDetail = byId("ai-bank-detail");
   const login = byId("login-link");
   const logout = byId("logout-button");
 
@@ -145,6 +157,54 @@ export const REVIEWER_CONSOLE_JS = `"use strict";
     } catch (error) {
       showError(queueStatus, error);
       showError(authoringQueueStatus, error);
+    }
+  }
+
+  function renderAIBankQueue(items) {
+    aiBankQueue.replaceChildren();
+    if (!items.length) {
+      add(aiBankQueue, "li", "Hiện chưa có công cụ AI chờ rà soát.");
+      return;
+    }
+    for (const item of items) {
+      const candidateId = String(item.candidate?.candidate_id || "");
+      const match = candidateId.match(/^github:([a-zA-Z0-9_.-]{1,100})\\/([a-zA-Z0-9_.-]{1,100})$/);
+      if (!match) continue;
+      const li = node("li");
+      const button = node("button", candidateId + " · chờ rà soát");
+      button.type = "button";
+      button.addEventListener("click", () => loadAIBankDetail(match[1], match[2]));
+      li.append(button);
+      aiBankQueue.append(li);
+    }
+  }
+
+  async function loadAIBankQueue() {
+    aiBankStatus.textContent = "Đang tải danh sách Ngân hàng AI…";
+    try {
+      const result = await getJson("/api/reviewer/ai-bank/candidates?limit=20");
+      renderAIBankQueue(result.items || []);
+      aiBankStatus.textContent = "Đã tải " + (result.count || 0) + " hồ sơ. Chỉ đọc; không xác minh, chỉnh sửa hoặc xuất bản.";
+    } catch (error) {
+      showError(aiBankStatus, error);
+    }
+  }
+
+  async function loadAIBankDetail(owner, repo) {
+    aiBankDetail.replaceChildren();
+    add(aiBankDetail, "h2", "Đang tải hồ sơ công cụ AI…");
+    try {
+      const result = await getJson("/api/reviewer/ai-bank/candidates/" +
+        encodeURIComponent(owner) + "/" + encodeURIComponent(repo));
+      aiBankDetail.replaceChildren();
+      add(aiBankDetail, "h2", "Hồ sơ " + owner + "/" + repo);
+      add(aiBankDetail, "p", "Bằng chứng đang chờ người rà soát; chưa được xác minh.");
+      add(aiBankDetail, "pre", JSON.stringify(result.packet || {}, null, 2));
+      add(aiBankDetail, "p", "Xem hồ sơ không đồng nghĩa với xác nhận công cụ, cập nhật catalog hoặc cho phép xuất bản.");
+    } catch (error) {
+      aiBankDetail.replaceChildren();
+      add(aiBankDetail, "h2", "Không thể mở hồ sơ công cụ AI");
+      add(aiBankDetail, "p", error.message || "request_failed");
     }
   }
 
@@ -346,6 +406,7 @@ export const REVIEWER_CONSOLE_JS = `"use strict";
       login.hidden = true;
       logout.hidden = false;
       await loadQueue();
+      await loadAIBankQueue();
     } catch (error) {
       status.textContent = error.status === 401
         ? "Chưa đăng nhập. Đăng nhập bằng tài khoản Google được cho phép để xem hàng chờ."
@@ -355,7 +416,10 @@ export const REVIEWER_CONSOLE_JS = `"use strict";
     }
   }
 
-  byId("refresh-button").addEventListener("click", loadQueue);
+  byId("refresh-button").addEventListener("click", async () => {
+    await loadQueue();
+    await loadAIBankQueue();
+  });
   logout.addEventListener("click", async () => {
     try { await fetch("/auth/google/logout", { method: "POST", credentials: "same-origin", cache: "no-store" }); }
     finally { window.location.reload(); }
