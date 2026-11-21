@@ -97,12 +97,12 @@ test("run remains unimplemented after valid operator authentication", async () =
 
 const OPERATOR_TOKEN = "worker-bridge-operator-token-0123456789abcdef";
 const STATE_TOKEN = "worker-bridge-state-store-token-0123456789abcdef";
-function bridgeEnv({ responseBody = { ok: true, dayUtc: "2026-11-19", acceptedToday: 2, inFlight: 1 } } = {}) {
+function bridgeEnv({ responseBody = { ok: true, dayUtc: "2026-11-19", acceptedToday: 2, inFlight: 1 }, response = null } = {}) {
   const calls = [];
   const stub = {
     async fetch(internalRequest) {
       calls.push(internalRequest);
-      return Response.json(responseBody);
+      return response ?? Response.json(responseBody);
     },
   };
   const env = {
@@ -344,4 +344,37 @@ test("control mutation rejects oversized declared and chunked request bodies bef
   assert.equal(duplicateField.status, 400);
   assert.equal((await duplicateField.json()).error, "request_invalid");
   assert.equal(calls.length, 0);
+});
+
+
+test("bridge rejects malformed and unsafe declared State Store response lengths", async () => {
+  const incoming = new Request("https://agent-runtime-preview.example.workers.dev/internal/usage", { headers: { Authorization: "Bearer " + OPERATOR_TOKEN } });
+  for (const contentLength of ["2x", "9007199254740992"]) {
+    const { env } = bridgeEnv({ response: new Response("{}", { headers: { "Content-Type": "application/json", "Content-Length": contentLength } }) });
+    const result = await worker.fetch(incoming, env);
+    assert.equal(result.status, 503);
+    assert.equal((await result.json()).error, "state_store_unavailable");
+  }
+});
+
+test("bridge cancels a State Store response stream declared over the byte cap", async () => {
+  let cancelled = false;
+  const stream = new ReadableStream({ pull(controller) { controller.enqueue(new TextEncoder().encode("{}")); }, cancel() { cancelled = true; } }, { highWaterMark: 0 });
+  const response = new Response(stream, { headers: { "Content-Type": "application/json", "Content-Length": String(16 * 1024 + 1) } });
+  const { env } = bridgeEnv({ response });
+  const incoming = new Request("https://agent-runtime-preview.example.workers.dev/internal/usage", { headers: { Authorization: "Bearer " + OPERATOR_TOKEN } });
+  const result = await worker.fetch(incoming, env);
+  assert.equal(result.status, 503);
+  assert.equal((await result.json()).error, "state_store_unavailable");
+  assert.equal(cancelled, true);
+});
+
+test("bridge rejects invalid UTF-8 and mismatched State Store response lengths", async () => {
+  const incoming = new Request("https://agent-runtime-preview.example.workers.dev/internal/usage", { headers: { Authorization: "Bearer " + OPERATOR_TOKEN } });
+  for (const response of [new Response(new Uint8Array([0xc3,0x28]), { headers: { "Content-Type": "application/json" } }), new Response("{}", { headers: { "Content-Type": "application/json", "Content-Length": "1" } })]) {
+    const { env } = bridgeEnv({ response });
+    const result = await worker.fetch(incoming, env);
+    assert.equal(result.status, 503);
+    assert.equal((await result.json()).error, "state_store_unavailable");
+  }
 });

@@ -750,3 +750,49 @@ test("OIDC replay ledger prunes expired entries and permits a later fresh token 
     assert.equal(later.status, 200);
   });
 });
+
+
+test("all six task mutation routes reject streamed request bodies above the 16 KiB ingress cap", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const oversized = " ".repeat(16 * 1024 + 1);
+    for (const pathname of ["/reserve", "/claim", "/heartbeat", "/complete", "/recover", "/transition"]) {
+      const response = await stub.fetch("http://do.local" + pathname, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + TEST_STATE_STORE_TOKEN },
+        body: oversized,
+      });
+      assert.equal(response.status, 413, pathname);
+      assert.equal((await response.json()).error, "request_body_too_large", pathname);
+    }
+  });
+});
+
+test("claim accepts a valid JSON request exactly at the 16 KiB ingress limit", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const prefix = JSON.stringify({ taskId: "missing" });
+    const body = prefix + " ".repeat(16 * 1024 - new TextEncoder().encode(prefix).byteLength);
+    assert.equal(new TextEncoder().encode(body).byteLength, 16 * 1024);
+    const response = await stub.fetch("http://do.local/claim", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Content-Length": String(16 * 1024), Authorization: "Bearer " + TEST_STATE_STORE_TOKEN },
+      body,
+    });
+    assert.equal(response.status, 404);
+    assert.equal((await response.json()).error, "task_not_found");
+  });
+});
+
+
+test("all six task mutation routes reject non-JSON media types before mutation", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    for (const pathname of ["/reserve", "/claim", "/heartbeat", "/complete", "/recover", "/transition"]) {
+      const response = await stub.fetch("http://do.local" + pathname, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain", Authorization: "Bearer " + TEST_STATE_STORE_TOKEN },
+        body: "{}",
+      });
+      assert.equal(response.status, 400, pathname);
+      assert.equal((await response.json()).error, "request_invalid", pathname);
+    }
+  });
+});
