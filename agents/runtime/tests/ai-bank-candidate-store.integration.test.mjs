@@ -235,23 +235,21 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     });
     expect(packet.checklist).toHaveLength(6);
     expect(packet.evidence).toHaveLength(2);
-    expect(packet.evidence).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        check_type: "pricing_and_free_limits",
-        source_title: "Pricing reference",
-        source_url: "https://ollama.com/pricing",
-        source_status: "submitted_source_not_verified",
-        review_status: "pending_human_review",
-        verified: false,
-        verification_authorized: false
-      }),
-      expect.objectContaining({
-        check_type: "license_scope",
-        source_title: "License reference",
-        verified: false,
-        verification_authorized: false
-      })
-    ]));
+    expect(packet.evidence.some(item =>
+      item.check_type === "pricing_and_free_limits" &&
+      item.source_title === "Pricing reference" &&
+      item.source_url === "https://ollama.com/pricing" &&
+      item.source_status === "submitted_source_not_verified" &&
+      item.review_status === "pending_human_review" &&
+      item.verified === false &&
+      item.verification_authorized === false
+    )).toBe(true);
+    expect(packet.evidence.some(item =>
+      item.check_type === "license_scope" &&
+      item.source_title === "License reference" &&
+      item.verified === false &&
+      item.verification_authorized === false
+    )).toBe(true);
     expect(packet.checklist.find(item => item.check_type === "pricing_and_free_limits")).toMatchObject({
       evidence_count: 1,
       status: "evidence_pending_human_review",
