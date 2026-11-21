@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import { expect } from "./test-compat.mjs";
 import { handleReviewerHttpRequest } from "../src/reviewer-http-routes.mjs";
 import { Script } from "node:vm";
+import assert from "node:assert/strict";
 import { REVIEWER_CONSOLE_JS } from "../src/reviewer-console.mjs";
 
 const base = "https://ai-thuc-chien-agent-runtime-preview.manhdungub.workers.dev";
@@ -246,7 +247,7 @@ function aiBankStoreNamespace(stub) {
 
 describe("reviewer console script", () => {
   it("parses as JavaScript and contains the read-only AI Bank queue", () => {
-    expect(() => new Script(REVIEWER_CONSOLE_JS)).not.toThrow();
+    assert.doesNotThrow(() => new Script(REVIEWER_CONSOLE_JS));
     expect(REVIEWER_CONSOLE_JS).toContain("/api/reviewer/ai-bank/candidates?limit=20");
     expect(REVIEWER_CONSOLE_JS).toContain("Chỉ đọc; không xác minh, chỉnh sửa hoặc xuất bản.");
   });
