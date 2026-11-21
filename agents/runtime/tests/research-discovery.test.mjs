@@ -64,6 +64,18 @@ describe("read-only AI research discovery", () => {
     expect(result.latest_signals).toEqual([]);
   });
 
+  it("decodes HTML entities only once in feed text", async () => {
+    const result = await discoverResearchSignals({
+      now: NOW,
+      fetchImpl: async url => {
+        const source = RESEARCH_FEED_SOURCES.find(item => item.feed === url);
+        const entry = '<item><title>Safe &amp;lt;script&amp;gt;</title><link>https://' + source.host + source.pathPrefix + 'entity-test</link><pubDate>2026-11-18T10:00:00.000Z</pubDate></item>';
+        return new Response('<rss><channel>' + entry + '</channel></rss>');
+      }
+    });
+    expect(result.latest_signals[0].title).toBe('Safe &lt;script&gt;');
+  });
+
   it("does not fabricate results when every source fails", async () => {
     const result = await discoverResearchSignals({ now: NOW, fetchImpl: async () => { throw new Error("offline"); } });
     expect(result.ok).toBe(false);
