@@ -151,10 +151,10 @@ describe("article evidence readiness", () => {
       now
     });
     expect(result.status).toBe("article_claim_evidence_not_ready");
-    expect(result.issues).toContainEqual(expect.objectContaining({
-      code: "unreviewed_quantitative_claim_candidate",
-      excerpt: "Tỷ lệ xử lý thành công đạt 95% trong năm 2026."
-    }));
+    expect(result.issues.some(issue =>
+      issue.code === "unreviewed_quantitative_claim_candidate" &&
+      issue.excerpt === "Tỷ lệ xử lý thành công đạt 95% trong năm 2026."
+    )).toBe(true);
     expect(result.publication_authorized).toBe(false);
   });
 
@@ -173,10 +173,10 @@ describe("article evidence readiness", () => {
       now
     });
     expect(result.status).toBe("article_claim_evidence_not_ready");
-    expect(result.issues).toContainEqual(expect.objectContaining({
-      code: "unreviewed_quantitative_claim_candidate",
-      excerpt: expect.stringContaining("95%")
-    }));
+    expect(result.issues.some(issue =>
+      issue.code === "unreviewed_quantitative_claim_candidate" &&
+      issue.excerpt.includes("95%")
+    )).toBe(true);
     expect(result.publication_authorized).toBe(false);
   });
 
