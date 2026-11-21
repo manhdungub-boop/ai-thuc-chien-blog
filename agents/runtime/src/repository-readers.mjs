@@ -19,7 +19,7 @@ async function readBounded(file, limit) {
 }
 
 export function decodeXml(value) {
-  return value.replace(/&(?:amp|lt|gt|quot|apos|#\\d+|#x[0-9a-f]+);/gi, (entity) => {
+  return value.replace(/&(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-f]+);/gi, (entity) => {
     const normalized = entity.toLowerCase();
     if (normalized === "&amp;") return "&";
     if (normalized === "&lt;") return "<";

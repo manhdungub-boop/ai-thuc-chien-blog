@@ -18,7 +18,7 @@ function boundedHtml(value) {
 }
 
 function decodeEntities(value) {
-  return value.replace(/&(?:nbsp|amp|quot|lt|gt|apos|#\\d+|#x[0-9a-f]+);/gi, (entity) => {
+  return value.replace(/&(?:nbsp|amp|quot|lt|gt|apos|#\d+|#x[0-9a-f]+);/gi, (entity) => {
     const normalized = entity.toLowerCase();
     if (normalized === "&nbsp;") return " ";
     if (normalized === "&amp;") return "&";
@@ -61,15 +61,15 @@ function canonicalUrl(html) {
 }
 
 function titleText(html) {
-  const match = html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i);
+  const match = html.match(/<title\b[^>]*>([\s\S]*?)<\/title\s*>/i);
   return match ? decodeEntities(match[1].replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim()) : "";
 }
 
 function visibleText(html) {
   return decodeEntities(html
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
-    .replace(/<svg\b[^>]*>[\s\S]*?<\/svg>/gi, " ")
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, " ")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, " ")
+    .replace(/<svg\b[^>]*>[\s\S]*?<\/svg\s*>/gi, " ")
     .replace(/<!--[\s\S]*?-->/g, " ")
     .replace(/<[^>]*>/g, " "))
     .replace(/\s+/g, " ").trim();
@@ -85,7 +85,7 @@ function countInternalLinks(html) {
 }
 
 function hasBlogPostingJsonLd(html) {
-  for (const match of html.matchAll(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
+  for (const match of html.matchAll(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script\s*>/gi)) {
     try {
       const data = JSON.parse(match[1]);
       const records = Array.isArray(data) ? data : [data];
