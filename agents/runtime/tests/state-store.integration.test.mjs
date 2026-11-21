@@ -95,7 +95,7 @@ test("lease recovery alarm is disabled by default and recovers only expired leas
   });
 });
 
-test("recovery alarm stops and clears itself while the durable operator pause is active", async () => {
+test("recovery alarm stops and clears itself while the durable operator pause cancels running work", async () => {
   await withRuntime({ recoveryAlarmEnabled: "true" }, async ({ stub }) => {
     const created = await call(stub, "/reserve", task("alarm-paused"));
     const taskId = created.body.task.taskId;
@@ -110,11 +110,11 @@ test("recovery alarm stops and clears itself while the durable operator pause is
     const fired = await call(stub, "/__test/fire-alarm", {});
     assert.equal(fired.body.alarmAt, null);
     const stored = await call(stub, "/task?id=" + encodeURIComponent(taskId));
-    assert.equal(stored.body.task.state, "running", "paused recovery must not mutate task state");
+    assert.equal(stored.body.task.state, "cancelled", "emergency pause must cancel the in-flight lease");
   });
 });
 
-test("pause clears the recovery alarm immediately and resume re-arms it for persisted leases", async () => {
+test("pause clears the recovery alarm and resume does not re-arm a cancelled lease", async () => {
   await withRuntime({ recoveryAlarmEnabled: "true" }, async ({ stub }) => {
     const created = await call(stub, "/reserve", task("alarm-pause-resume"));
     const taskId = created.body.task.taskId;
@@ -134,10 +134,11 @@ test("pause clears the recovery alarm immediately and resume re-arms it for pers
     });
     assert.equal(resumed.status, 200);
     const rearmed = await call(stub, "/__test/alarm-state");
-    assert.equal(typeof rearmed.body.alarmAt, "number",
-      "resume must re-arm recovery for leases that persisted through pause");
-    assert.equal((await call(stub, "/task?id=" + encodeURIComponent(taskId))).body.task.state, "running",
-      "resume schedules recovery but does not execute or mutate the task");
+    assert.equal(rearmed.body.alarmAt, null,
+      "cancelled in-flight work must not create a recovery alarm after resume");
+    assert.equal((await call(stub, "/task?id=" + encodeURIComponent(taskId))).body.task.state, "cancelled",
+      "resume must not revive a task cancelled by the emergency pause");
+    assert.equal((await call(stub, "/usage")).body.inFlight, 0);
   });
 });
 
