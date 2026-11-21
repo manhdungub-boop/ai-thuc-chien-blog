@@ -1,7 +1,7 @@
 const RAW_ORIGIN = "https://raw.githubusercontent.com/manhdungub-boop/ai-thuc-chien-blog/main/";
 const MAX_SOURCE_BYTES = 512 * 1024;
 
-async function readBoundedResponse(response, limit) {
+async function readBoundedResponse(response, limit, signal) {
   if (!response || !response.ok || !response.body) throw new Error("preview_source_unavailable");
   const declared = Number(response.headers.get("content-length") || 0);
   if (Number.isFinite(declared) && declared > limit) throw new Error("preview_source_too_large");
@@ -10,7 +10,9 @@ async function readBoundedResponse(response, limit) {
   let total = 0;
   try {
     while (true) {
+      if (signal?.aborted) throw new Error("task_execution_aborted");
       const { done, value } = await reader.read();
+      if (signal?.aborted) throw new Error("task_execution_aborted");
       if (done) break;
       total += value.byteLength;
       if (total > limit) {
@@ -28,18 +30,21 @@ async function readBoundedResponse(response, limit) {
   return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
 }
 
-async function readRepositoryText(relativePath) {
+async function readRepositoryText(relativePath, { signal } = {}) {
   if (typeof relativePath !== "string" ||
       !/^(?:articles\/[a-z0-9][a-z0-9-]{0,150}\.html|data\/ai-tools\.json)$/.test(relativePath)) {
     throw new Error("preview_source_path_not_allowlisted");
   }
   const url = RAW_ORIGIN + relativePath;
+  if (signal?.aborted) throw new Error("task_execution_aborted");
   const response = await fetch(url, {
     method: "GET",
     redirect: "error",
     headers: { Accept: "text/plain" },
+    signal,
   });
-  return readBoundedResponse(response, MAX_SOURCE_BYTES);
+  if (signal?.aborted) throw new Error("task_execution_aborted");
+  return readBoundedResponse(response, MAX_SOURCE_BYTES, signal);
 }
 
 /**
@@ -49,11 +54,11 @@ async function readRepositoryText(relativePath) {
  */
 export function createPreviewReadOnlyReaders() {
   return Object.freeze({
-    async readArticleHtml(articlePath) {
-      return readRepositoryText(articlePath);
+    async readArticleHtml(articlePath, options) {
+      return readRepositoryText(articlePath, options);
     },
-    async readAiBankCatalog() {
-      const text = await readRepositoryText("data/ai-tools.json");
+    async readAiBankCatalog(options) {
+      const text = await readRepositoryText("data/ai-tools.json", options);
       const catalog = JSON.parse(text);
       if (!catalog || typeof catalog !== "object" || Array.isArray(catalog) ||
           !Array.isArray(catalog.tools) || catalog.tools.length > 1000) {
