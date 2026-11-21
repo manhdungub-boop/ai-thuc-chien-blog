@@ -48,6 +48,8 @@ function expect(actual) {
       assert.ok(Array.isArray(actual) && actual.some(value => isDeepStrictEqual(value, expected)));
     },
     toBeUndefined() { assert.strictEqual(actual, undefined); },
+    toBeNull() { assert.strictEqual(actual, null); },
+    toBeTruthy() { assert.ok(actual); },
     toHaveProperty(property) { assert.ok(hasProperty(actual, property)); },
     toMatch(expected) {
       assert.ok((expected instanceof RegExp ? expected : new RegExp(expected)).test(String(actual)));
