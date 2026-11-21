@@ -1,0 +1,141 @@
+name: Agent Runtime Preview Deploy (Free Plan Guarded)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_preview_deploy:
+        description: "Confirm deployment to the isolated Agent Runtime Preview Worker only"
+        required: true
+        type: boolean
+        default: false
+      confirm_free_workers_plan:
+        description: "Confirm the account is expected to be on Workers Free; API verification below is still mandatory"
+        required: true
+        type: boolean
+        default: false
+  push:
+    branches:
+      - reconcile/agent-runtime-pr339-schema-v7-20261121
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-runtime-preview-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy-preview:
+    if: >-
+      (github.event_name == 'workflow_dispatch' &&
+       inputs.confirm_preview_deploy == true &&
+       inputs.confirm_free_workers_plan == true) ||
+      (github.event_name == 'push' &&
+       github.event.head_commit.message == 'DEPLOY_AGENT_RUNTIME_PREVIEW')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_ACCOUNT_ID: "92cf091bbac8b4879ec65feb30b4715b"
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+    steps:
+      - name: Enforce exact Preview branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="refs/heads/reconcile/agent-runtime-pr339-schema-v7-20261121"
+          if [[ "$GITHUB_REF" != "$expected" ]]; then
+            echo "::error::This workflow is restricted to the approved Agent Runtime Preview branch."
+            exit 1
+          fi
+          if [[ "$GITHUB_REPOSITORY" != "manhdungub-boop/ai-thuc-chien-blog" ]]; then
+            echo "::error::Unexpected repository; refusing deployment."
+            exit 1
+          fi
+
+      - name: Checkout the exact triggering commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@949feb2413d6458794dc... # v7.1.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+
+      - name: Validate isolated Worker configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          config="agents/runtime/wrangler.preview.jsonc"
+          test -f "$config"
+          node <<'NODE'
+          const fs = require("node:fs");
+          const c = JSON.parse(fs.readFileSync("agents/runtime/wrangler.preview.jsonc", "utf8"));
+          const fail = (m) => { console.error("::error::" + m); process.exit(1); };
+          if (c.name !== "ai-thuc-chien-agent-runtime-preview") fail("Unexpected Worker name.");
+          if (c.main !== "./src/worker.mjs" || c.workers_dev !== true || c.preview_urls !== false) fail("Unexpected Preview entrypoint or URL settings.");
+          if (c.vars?.AGENT_ENABLED !== "false" || c.vars?.AGENT_PAUSED !== "true") fail("Agent must remain disabled and paused.");
+          for (const k of ["AGENT_SCHEDULER_ENABLED", "AGENT_RECOVERY_ALARM_ENABLED", "AGENT_OIDC_ENABLED"]) {
+            if (c.vars?.[k] !== "false") fail(k + " must remain false.");
+          }
+          if (c.vars?.AGENT_RATE_LIMIT_REQUIRED !== "true") fail("Rate limiting must be required.");
+          if ((c.triggers?.crons ?? []).length !== 0) fail("Cron triggers are not permitted in this Preview deployment.");
+          for (const k of ["routes", "custom_domains", "d1_databases", "kv_namespaces", "r2_buckets", "queues", "services", "workflows"]) {
+            if (c[k] && (Array.isArray(c[k]) ? c[k].length : true)) fail("Unexpected binding or route configuration: " + k);
+          }
+          if (c.env) fail("Named Wrangler environments are not permitted.");
+          const doNames = (c.durable_objects?.bindings ?? []).map(x => x.name + ":" + x.class_name).sort();
+          const expectedDo = ["AGENT_DRAFT_STORE:AgentDraftStore", "AGENT_REVIEWER_AUTH_STORE:AgentReviewerAuthStore", "AGENT_STATE_STORE:AgentStateStore"].sort();
+          if (JSON.stringify(doNames) !== JSON.stringify(expectedDo)) fail("Unexpected Durable Object bindings.");
+          const migrationNames = (c.migrations ?? []).flatMap(x => x.new_sqlite_classes ?? []).sort();
+          if (JSON.stringify(migrationNames) !== JSON.stringify(["AgentDraftStore", "AgentReviewerAuthStore", "AgentStateStore"].sort())) fail("Only the three declared SQLite Durable Object classes are allowed.");
+          console.log("Preview-only config verified; no Production Worker, D1, DNS, Cron, or active agent path is configured.");
+          NODE
+
+      - name: Require Cloudflare token
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+            echo "::error::CLOUDFLARE_WORKERS_API_TOKEN is not configured."
+            exit 1
+          fi
+
+      - name: Verify Workers Free plan before any resource creation
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$RUNNER_TEMP/cloudflare-subscriptions.json"
+          status="$(curl --silent --show-error --output "$response" --write-out "%{http_code}" \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            --header "Accept: application/json" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/subscriptions")"
+          if [[ "$status" != "200" ]]; then
+            echo "::error::Cannot verify the Cloudflare account plan (HTTP $status). Billing Read access is required; deployment stopped before resource creation."
+            exit 1
+          fi
+          if ! jq -e '
+            [.result[]? |
+              [(.rate_plan.id // ""), (.rate_plan.public_name // ""), (.rate_plan.name // ""),
+               (.product.name // ""), (.product // "")] |
+              map(tostring | ascii_downcase) | join(" ") |
+              select(test("worker") and test("free"))
+            ] | length > 0
+          ' "$response" >/dev/null; then
+            echo "::error::The subscription response did not positively identify a Workers Free plan. Deployment stopped before resource creation."
+            exit 1
+          fi
+          echo "Cloudflare subscription response positively identifies Workers Free."
+
+      - name: Install pinned Wrangler CLI
+        run: npx --yes wrangler@4.166.0 --version
+
+      - name: Build and dry-run the isolated Preview Worker
+        working-directory: agents/runtime
+        run: npx --yes wrangler@4.166.0 deploy --dry-run --outdir "$RUNNER_TEMP/agent-runtime-preview-dry-run" --config wrangler.preview.jsonc
+
+      - name: Deploy only the isolated Preview Worker
+        working-directory: agents/runtime
+        run: npx --yes wrangler@4.166.0 deploy --config wrangler.preview.jsonc
