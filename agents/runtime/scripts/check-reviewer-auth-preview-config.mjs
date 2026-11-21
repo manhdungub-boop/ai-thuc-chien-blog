@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const REQUIRED_SECRET_NAMES = [
@@ -19,6 +19,7 @@ function hasNoProductionBindings(config) {
   return !config.account_id &&
     !config.routes?.length &&
     !config.custom_domain &&
+    !config.custom_domains?.length &&
     !config.triggers?.crons?.length &&
     !config.d1_databases?.length &&
     !config.kv_namespaces?.length &&
@@ -78,7 +79,7 @@ export function inspectReviewerAuthPreviewConfig(env = {}, previewConfig = {}) {
 }
 
 async function loadPreviewConfig() {
-  const path = resolve(fileURLToPath(import.meta.url), "../wrangler.preview.jsonc");
+  const path = resolve(dirname(fileURLToPath(import.meta.url)), "../wrangler.preview.jsonc");
   return JSON.parse(await readFile(path, "utf8"));
 }
 
