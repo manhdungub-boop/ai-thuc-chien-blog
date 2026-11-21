@@ -129,8 +129,14 @@ jobs:
           assert.equal(preview.vars.AGENT_ENABLED, 'false');
           assert.equal(preview.vars.AGENT_PAUSED, 'true');
           assert.equal(preview.vars.AGENT_SCHEDULER_ENABLED, 'false');
-          assert.equal('triggers' in preview, false);
+          assert.equal('triggers' in preview, false, 'do not configure recurring invocations until Free-plan headroom is verified and explicitly approved');
           assert.equal(preview.vars.AGENT_OIDC_ENABLED, 'false');
+          assert.equal(preview.vars.AGENT_RATE_LIMIT_REQUIRED, 'true');
+          assert.deepEqual(preview.ratelimits, [{
+            name: 'AGENT_INGRESS_RATE_LIMITER',
+            namespace_id: '20261121',
+            simple: { limit: 60, period: 60 }
+          }]);
           assert.equal(preview.durable_objects?.bindings?.length, 1);
           assert.deepEqual(preview.durable_objects.bindings[0], {
             name: 'AGENT_STATE_STORE',
@@ -151,7 +157,7 @@ jobs:
           assert.match(workerSource, /AGENT_SCHEDULER_ENABLED !== "true"/);
           assert.match(workerSource, /AGENT_RECOVERY_ALARM_ENABLED !== "true"/);
           assert.match(workerSource, /JSON\.stringify\(\{ maxTasks: 1 \}\)/);
-          console.log('PASS: Preview is isolated, no Cron trigger is configured, and the dormant scheduled handler remains fail-closed.');
+          console.log('PASS: Preview is isolated and has no recurring trigger; scheduled dispatch remains code-only until cost gates pass.');
           NODE
 
       - name: Assert workflow is validation-only
@@ -169,11 +175,14 @@ jobs:
           import { readFile } from 'node:fs/promises';
           const workflow = await readFile('.github/workflows/agent-runtime-operator.yml', 'utf8');
           assert.match(workflow, /workflow_dispatch:/);
-          assert.match(workflow, /id-token: write/);
-          assert.match(workflow, /contents: read/);
-          assert.match(workflow, /internal\/oidc\/pause/);
-          assert.doesNotMatch(workflow, /schedule:|repository_dispatch:|workflow_run:/);
-          assert.doesNotMatch(workflow, /internal\/oidc\/resume|wrangler\s+deploy|CLOUDFLARE_.*TOKEN/i);
+          assert.doesNotMatch(workflow, /schedule:|repository_dispatch:|workflow_run:|pull_request:|push:/);
+          assert.match(workflow, /permissions:[\s\S]*?contents: read[\s\S]*?id-token: write/);
+          assert.doesNotMatch(workflow, /contents: write|actions: write|packages: write|write-all/i);
+          assert.match(workflow, /if:\s*github\.ref\s*==\s*'refs\/heads\/main'/);
+          assert.match(workflow, /cancel-in-progress:\s*false/);
+          assert.match(workflow, /AGENT_RUNTIME_PREVIEW_URL/);
           assert.match(workflow, /ai-thuc-chien-agent-runtime-preview/);
-          console.log('PASS: OIDC workflow is manual, scoped to Preview, and pause-only.');
+          assert.match(workflow, /internal\/oidc\/pause/);
+          assert.doesNotMatch(workflow, /internal\/oidc\/resume|wrangler\s+deploy|CLOUDFLARE_.*TOKEN/i);
+          console.log('PASS: OIDC operator is manual-only, main-ref-only, minimally privileged, serialized, Preview-scoped, and pause-only.');
           NODE
