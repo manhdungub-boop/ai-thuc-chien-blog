@@ -40,23 +40,31 @@ async function readBounded(response) {
   return html + decoder.decode();
 }
 
-function extractExcerpt(html) {
-  const withoutNoise = html
-    .replace(/<!--[\s\S]*?-->/g, " ")
-    .replace(/<(script|style|nav|footer|header|form|noscript|iframe|svg)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, " ");
-  const article = withoutNoise.match(/<(article|main)\b[^>]*>([\s\S]*?)<\/\1\s*>/i)?.[2] || withoutNoise;
-  return article
-    .replace(/<br\s*\/?>/gi, " ")
-    .replace(/<\/(p|h[1-6]|li|section|div)>/gi, " ")
-    .replace(/<[^>]*>/g, " ")
-    .replace(/&nbsp;|&#160;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<").replace(/&gt;/gi, ">")
-    .replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'")
-    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Math.min(0x10ffff, Number(n))))
-    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(Math.min(0x10ffff, parseInt(n, 16)))).replace(/\s+/g, " ").trim().slice(0, MAX_EXCERPT_CHARS);
+function decodeHtmlEntities(value) {
+  return value.replace(/&(?:amp|lt|gt|quot|apos|#39|nbsp|#\\d+|#x[0-9a-f]+);/gi, entity => {
+    const name = entity.slice(1, -1).toLowerCase();
+    if (name === "amp") return "&";
+    if (name === "lt") return "<";
+    if (name === "gt") return ">";
+    if (name === "quot") return '"';
+    if (name === "apos" || name === "#39") return "'";
+    if (name === "nbsp" || name === "#160") return " ";
+    const codePoint = name.startsWith("#x") ? parseInt(name.slice(2), 16) : Number(name.slice(1));
+    return String.fromCodePoint(Math.min(0x10ffff, Math.max(0, codePoint)));
+  });
 }
 
+function extractExcerpt(html) {
+  const withoutNoise = html
+    .replace(/<!--[\\s\\S]*?-->/g, " ")
+    .replace(/<(script|style|nav|footer|header|form|noscript|iframe|svg)\\b[^>]*>[\\s\\S]*?<\\/\\1\\s*>/gi, " ");
+  const article = withoutNoise.match(/<(article|main)\\b[^>]*>([\\s\\S]*?)<\\/\\1\\s*>/i)?.[2] || withoutNoise;
+  return decodeHtmlEntities(article
+    .replace(/<br\\s*\\/?>/gi, " ")
+    .replace(/<\\/(p|h[1-6]|li|section|div)>/gi, " ")
+    .replace(/<[^>]*>/g, " "))
+    .replace(/\\s+/g, " ").trim().slice(0, MAX_EXCERPT_CHARS);
+}
 async function retrieveOne(signal, fetchImpl, now) {
   if (!signal || !allowedUrl(signal.url)) {
     return { source: signal?.source || "unknown", url: null, status: "rejected_url", excerpt: "" };
