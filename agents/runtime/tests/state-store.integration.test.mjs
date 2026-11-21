@@ -639,7 +639,7 @@ test("expired leases are requeued after bounded delay and fail at the attempt ce
 
     const third = await call(stub, "/claim", { taskId }, { "x-test-now": "2026-11-19T10:12:30.000Z" });
     assert.equal(third.status, 200);
-    const exhausted = await call(stub, "/recover", { taskId, actor: "integration-test", requestId: crypto.randomUUID() }, { "x-test-now": "2026-11-19T10:16:00.000Z" });
+    const exhausted = await call(stub, "/recover", { taskId, actor: "integration-test", requestId: crypto.randomUUID() }, { "x-test-now": "2026-11-19T10:17:30.000Z" });
 
     assert.equal(exhausted.status, 200);
     assert.equal(exhausted.body.outcome, "failed");
