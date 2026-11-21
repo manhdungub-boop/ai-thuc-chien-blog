@@ -173,7 +173,7 @@ export class AgentAIBankCandidateStore extends DurableObject {
     return { accepted: true, inserted, updated, unchanged, total, catalog_write_authorized: false };
   }
 
-  listCandidates(limit = 20) {
+  async listCandidates(limit = 20) {
     if (!Number.isInteger(limit) || limit < 1 || limit > 50) {
       throw new TypeError("invalid_candidate_list_limit");
     }
@@ -275,7 +275,7 @@ export class AgentAIBankCandidateStore extends DurableObject {
     };
   }
 
-  listReviewEvidence(candidateId, limit = 30) {
+  async listReviewEvidence(candidateId, limit = 30) {
     if (!this.getCandidate(candidateId)) return [];
     if (!Number.isInteger(limit) || limit < 1 || limit > 30) {
       throw new TypeError("invalid_evidence_list_limit");
