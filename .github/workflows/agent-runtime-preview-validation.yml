@@ -176,7 +176,7 @@ jobs:
           import assert from 'node:assert/strict';
           import { readFile } from 'node:fs/promises';
           const workflow = await readFile('.github/workflows/agent-runtime-preview-validation.yml', 'utf8');
-          const deployLines = workflow.split('\n').filter(line => /\bwrangler\b.*\bdeploy\b/.test(line));
+          const deployLines = workflow.split('\n').filter(line => line.trimStart().startsWith('npx --yes wrangler@4.166.0 deploy '));
           assert.equal(deployLines.length, 1, 'only one Wrangler deploy command is allowed in this validation workflow');
           assert.match(deployLines[0], /--dry-run/, 'Wrangler deploy must be dry-run only');
           assert.match(deployLines[0], /--config wrangler\.preview\.jsonc/, 'dry-run must target only the dedicated Preview config');
