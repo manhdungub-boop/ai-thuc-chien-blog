@@ -461,6 +461,25 @@ if (url.pathname === "/task" && request.method === "GET") {
         }
         this.sql.exec("INSERT INTO runtime_control_audit (event_id, action, occurred_at, actor, reason, request_id) VALUES (?,?,?,?,?,?)",
           crypto.randomUUID(), paused ? "pause" : "resume", now, body.actor, body.reason ?? "", body.requestId);
+
+        // Emergency pause atomically fences every in-flight lease. The worker's
+        // next heartbeat observes the cancelled lease and aborts cooperative work.
+        if (paused) {
+          const running = this.sql.exec(
+            "SELECT task_id, task_type, lease_generation FROM tasks WHERE state='running'",
+          ).toArray();
+          this.sql.exec(
+            "UPDATE tasks SET state='cancelled', updated_at=?, terminal_at=?, error_code='operator_paused', lease_owner=NULL, lease_expires_at=NULL, lease_max_expires_at=NULL, next_attempt_at=NULL, last_error_code='operator_paused' WHERE state='running'",
+            now, now,
+          );
+          for (const task of running) {
+            this.audit(task.task_id, "task.cancelled", now, {
+              taskType: task.task_type,
+              leaseGeneration: task.lease_generation,
+              reason: "operator_paused",
+            });
+          }
+        }
         return { status: 200, body: { ok: true, changed: true, control: updated } };
       });
     } catch {
