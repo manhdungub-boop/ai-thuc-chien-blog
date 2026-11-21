@@ -21,7 +21,7 @@ Status: **isolated validation scaffold with a code-only, opt-in scheduled dispat
 - The State Store `/control/pause` transaction atomically sets the durable pause flag, marks every currently running task `cancelled`, clears its lease fields, records `operator_paused`, and appends a per-task audit event. Queued tasks remain queued but cannot be claimed while paused. Repeated Pause is idempotent and also repairs stale running leases left by an earlier runtime version.
 - The Worker renews each active read-only review lease every 10 seconds. If the heartbeat is rejected, it aborts the task signal and waits for cooperative cleanup. The signal is checked before each task, before/after source retrieval, and while reading bounded GitHub response streams.
 - Late heartbeat and completion calls from the fenced lease are rejected; resuming the runtime does not revive tasks cancelled by Pause.
-- Exact final source head `093a8d2e98f9b0be4ce8b22be938d8392d6e50e1` passed 260/260 tests, including the pause-cancellation, late-lease fencing, cooperative abort, and no-subsequent-read tests. Cloudflare Preview build checks and Pages checks also passed.
+- A historical source-level run on `093a8d2e98f9b0be4ce8b22be938d8392d6e50e1` passed 260/260 tests, including pause cancellation, late-lease fencing, cooperative abort, and no-subsequent-read checks. This is earlier evidence, not validation of the current PR head. The current exact-head validation run is recorded in PR #358; neither run is a live Cloudflare Preview E2E.
 - This is cooperative cancellation for the current read-only executor only. It is not proof that an already-accepted external side effect can be undone, and no side-effecting/publishing handler may be connected without a separate pre-side-effect cancellation fence and fault-injection tests. The Agent Runtime Worker/DO are still not deployed; live Preview OIDC and kill-switch E2E remain release gates.
 
 ## Local integration validation
@@ -75,7 +75,7 @@ See [STATE-STORE-ADR.md](./STATE-STORE-ADR.md) for the design decision, Free-tie
 - `ai_bank.candidate_review` checks candidate identity, HTTPS website/source URLs, pricing metadata, verification date/status and a duplicate-record signal.
 - `seo.audit` checks HTTP status, title/description, HTTPS canonical, indexability, JSON-LD, sitemap presence and internal-link counts.
 - Snapshots are exact-schema, bounded to 16 KiB, and reports are bounded to 20 findings. Results contain only finding codes/messages and no copied source text.
-- This module is deliberately pure: it does not fetch files, access the State Store, call external services, mutate the catalog, edit articles, publish content, enqueue tasks, or invoke an executor. The read-only data adapters that would obtain snapshots are not implemented yet.
+- This task-handler module is deliberately pure: it does not fetch files, access the State Store, call external services, mutate the catalog, edit articles, publish content, enqueue tasks, or invoke an executor. Snapshot acquisition is handled separately by the read-only adapters described below.
 - All reports explicitly say `execution: not_started` and `sideEffects: []`. A finding is a review signal, not permission to auto-correct or publish.
 
 
@@ -134,7 +134,7 @@ See [STATE-STORE-ADR.md](./STATE-STORE-ADR.md) for the design decision, Free-tie
 - AI Bank snapshots use the repository catalog schema (`tools[].id/name/vendor/website/official_sources/pricing_model/pricing_status/last_verified/verification_status`) and detect duplicate names or website hostnames within that catalog.
 - SEO readers must explicitly supply HTTP status, sitemap membership, and broken-internal-link count alongside bounded HTML. The adapter does not guess sitemap or broken-link status.
 - Each HTML source is capped at 512 KiB; the AI catalog is capped at 512 KiB and 1,000 entries. Source failures, missing records, malformed results and oversize data fail closed with generic errors.
-- The adapter has no filesystem, network, `fetch`, Worker binding, write, publish, or executor capability. The injected reader functions are an interface contract only; production/Preview readers are not wired and no live repository or Worker data is being read by this module.
+- The snapshot adapter itself has no filesystem, network, `fetch`, Worker binding, write, publish, or executor capability. Separately, `src/preview-read-only-sources.mjs` supplies fixed, bounded GET reads from the public GitHub repository's `main` branch for allowlisted article paths and the AI Bank catalog; it accepts no caller-controlled URL or credentials and has no write capability. The Worker wires these readers into the snapshot adapter for operator-triggered read-only reviews. SEO evidence deliberately fails closed because trusted live HTTP-status and broken-link evidence is not implemented. This code path is not deployed to Cloudflare Preview.
 - Adapter tests use in-memory fixtures. Passing the adapter tests does not establish a deployed data connection.
 
 ## Remaining gates
