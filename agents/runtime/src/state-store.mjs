@@ -208,7 +208,6 @@ export class AgentStateStore {
           version = { value: "5" };
         }
         if (version.value === "5") {
-        if (version.value === "5") {
           // Reserve v6 for the union of the two independently developed changes.
           this.sql.exec("UPDATE runtime_meta SET value = '6' WHERE key = 'schema_version'");
           version = { value: "6" };
@@ -224,9 +223,6 @@ export class AgentStateStore {
           }
           this.sql.exec("UPDATE runtime_meta SET value = '7' WHERE key = 'schema_version'");
           version = { value: "7" };
-        }
-          this.sql.exec("UPDATE runtime_meta SET value = '6' WHERE key = 'schema_version'");
-          version = { value: "6" };
         }
         if (version.value !== String(SCHEMA_VERSION)) {
           throw new Error("runtime_schema_version_unsupported");
