@@ -225,6 +225,48 @@ test("pause switch blocks queued-to-running transitions but permits terminal can
   }
 });
 
+test("emergency pause atomically cancels running leases and fences late heartbeats/completions", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const runningCreated = await call(stub, "/reserve", task("pause-running-lease"));
+    const queuedCreated = await call(stub, "/reserve", task("pause-queued-task"));
+    assert.equal(runningCreated.status, 201);
+    assert.equal(queuedCreated.status, 201);
+    const taskId = runningCreated.body.task.taskId;
+    const queuedId = queuedCreated.body.task.taskId;
+    const claimed = await call(stub, "/claim", { taskId });
+    assert.equal(claimed.status, 200);
+
+    const paused = await call(stub, "/control/pause", {
+      actor: "emergency-stop-test",
+      requestId: crypto.randomUUID(),
+      reason: "fault injection: emergency stop",
+    });
+    assert.equal(paused.status, 200);
+    assert.equal(paused.body.control.paused, true);
+
+    const cancelled = await call(stub, "/task?id=" + encodeURIComponent(taskId));
+    assert.equal(cancelled.body.task.state, "cancelled");
+    assert.equal(cancelled.body.task.errorCode, "operator_paused");
+    assert.equal(cancelled.body.task.leaseExpiresAt, null);
+
+    const lateHeartbeat = await call(stub, "/heartbeat", {
+      taskId, leaseOwner: claimed.body.lease.owner, leaseGeneration: claimed.body.lease.generation,
+    });
+    assert.equal(lateHeartbeat.status, 409);
+
+    const lateCompletion = await call(stub, "/complete", {
+      taskId, leaseOwner: claimed.body.lease.owner,
+      leaseGeneration: claimed.body.lease.generation, status: "succeeded",
+    });
+    assert.equal(lateCompletion.status, 409);
+
+    assert.equal((await call(stub, "/task?id=" + encodeURIComponent(queuedId))).body.task.state, "queued",
+      "pause fences running work but preserves queued work for explicit later handling");
+    assert.equal((await call(stub, "/claim", { taskId: queuedId })).status, 503);
+    assert.equal((await call(stub, "/usage")).body.inFlight, 1);
+  });
+});
+
 test("durable pause is atomic, survives restart, and resume never dispatches queued work", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "ai-thuc-chien-do-durable-control-"));
   let active;
