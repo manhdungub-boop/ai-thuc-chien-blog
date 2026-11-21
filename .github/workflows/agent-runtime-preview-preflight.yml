@@ -3,11 +3,6 @@ name: Agent Runtime Preview Preflight (Read Only)
 on:
   workflow_dispatch:
     inputs:
-      target_branch:
-        description: "Exact Agent Runtime candidate branch"
-        required: true
-        type: string
-        default: reconcile/agent-runtime-pr339-schema-v7-20261121
       expected_sha:
         description: "Exact 40-character commit SHA to validate"
         required: true
@@ -34,18 +29,18 @@ jobs:
       - name: Check out the selected Agent Runtime branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.target_branch }}
+          ref: ${{ github.sha }}
           persist-credentials: false
 
       - name: Verify allowlisted branch and exact commit
         shell: bash
         env:
-          TARGET_BRANCH: ${{ inputs.target_branch }}
+          TARGET_REF: ${{ github.ref }}
           EXPECTED_SHA: ${{ inputs.expected_sha }}
         run: |
           set -euo pipefail
-          case "$TARGET_BRANCH" in
-            reconcile/agent-runtime-pr339-schema-v7-20261121) ;;
+          case "$TARGET_REF" in
+            refs/heads/reconcile/agent-runtime-pr339-schema-v7-20261121) ;;
             *)
               echo "::error::Selected branch is not in the explicit Preview preflight allowlist."
               exit 1
@@ -59,7 +54,7 @@ jobs:
           fi
           test -f agents/runtime/src/worker.mjs
           test -f agents/runtime/wrangler.preview.jsonc
-          echo "Validated exact source: $TARGET_BRANCH @ $actual_sha"
+          echo "Validated exact source: $TARGET_REF @ $actual_sha"
 
       - name: Set up Node.js 22
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
