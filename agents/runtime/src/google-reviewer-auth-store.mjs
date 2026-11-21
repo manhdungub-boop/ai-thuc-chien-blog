@@ -30,9 +30,22 @@ export class AgentReviewerAuthStore {
     return { created: Number(insertedRows) === 1 };
   }
   consumeTransaction(stateHash, browserHash, nowSeconds) {
-    const row = this.ctx.storage.sql.exec("SELECT * FROM reviewer_auth_transactions WHERE state_hash = ? AND browser_hash = ? AND expires_at > ?", stateHash, browserHash, nowSeconds).toArray()[0];
-    this.ctx.storage.sql.exec("DELETE FROM reviewer_auth_transactions WHERE state_hash = ? AND browser_hash = ? AND expires_at > ?", stateHash, browserHash, nowSeconds);
-    if (!row) return null;
+    if (typeof stateHash !== "string" || stateHash.length < 32 || stateHash.length > 128 ||
+        typeof browserHash !== "string" || browserHash.length < 32 || browserHash.length > 128 ||
+        !Number.isInteger(nowSeconds) || nowSeconds < 0) return null;
+    const row = this.ctx.storage.sql.exec(
+      "SELECT * FROM reviewer_auth_transactions WHERE state_hash = ? AND expires_at > ?",
+      stateHash,
+      nowSeconds
+    ).toArray()[0];
+    // A callback attempt consumes its one-time state even when the browser binding
+    // is wrong. This prevents retries from turning a stolen state value into a
+    // reusable login transaction; the browser binding is still required to accept it.
+    this.ctx.storage.sql.exec(
+      "DELETE FROM reviewer_auth_transactions WHERE state_hash = ?",
+      stateHash
+    );
+    if (!row || row.browser_hash !== browserHash) return null;
     return { nonce: row.nonce, code_verifier: row.code_verifier, created_at: row.created_at, expires_at: row.expires_at };
   }
 }
