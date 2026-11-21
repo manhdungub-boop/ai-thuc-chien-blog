@@ -8,6 +8,7 @@ on:
   pull_request:
     branches:
       - main
+      - integration/agent-runtime-v5-preview-20261120
   workflow_dispatch:
 
 permissions:
