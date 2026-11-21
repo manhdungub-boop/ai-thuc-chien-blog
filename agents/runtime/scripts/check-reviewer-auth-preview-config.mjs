@@ -41,7 +41,7 @@ export function inspectReviewerAuthPreviewConfig(env = {}, previewConfig = {}) {
     : [];
   const allowlistValid = emails.length === 1 &&
     emails[0].length <= 254 &&
-    /^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(emails[0]);
+    /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emails[0]);
   const secretsDistinct = validCredential(env.GOOGLE_REVIEWER_STATE_SECRET) &&
     validCredential(env.GOOGLE_REVIEWER_SESSION_SECRET) &&
     env.GOOGLE_REVIEWER_STATE_SECRET !== env.GOOGLE_REVIEWER_SESSION_SECRET;
@@ -86,6 +86,6 @@ async function loadPreviewConfig() {
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   const previewConfig = await loadPreviewConfig();
   const report = inspectReviewerAuthPreviewConfig(process.env, previewConfig);
-  process.stdout.write(JSON.stringify(report, null, 2) + "\\n");
+  process.stdout.write(JSON.stringify(report, null, 2) + "\n");
   if (!report.ready_for_manual_review) process.exitCode = 1;
 }
