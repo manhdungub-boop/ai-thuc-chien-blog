@@ -1,6 +1,7 @@
 import { hasValidOperatorBearer } from "./operator-auth.mjs";
 import { hasValidStateStoreBearer } from "./internal-auth.mjs";
 import { readBoundedJson as readBoundedJsonBody, readBoundedText } from "./bounded-json-body.mjs";
+import { handleReviewerHttpRequest } from "./reviewer-http-routes.mjs";
 export { AgentStateStore } from "./state-store.mjs";
 export { AgentAIBankCandidateStore } from "./ai-bank-candidate-store.mjs";
 export { AgentDraftStore } from "./draft-artifact-store.mjs";
@@ -163,6 +164,8 @@ async function readStateStore(env, pathname) {
 
 export default {
   async fetch(request, env = {}) {
+    const reviewerResponse = await handleReviewerHttpRequest(request, env);
+    if (reviewerResponse) return reviewerResponse;
     const url = new URL(request.url);
     if (url.pathname === "/health") {
       if (request.method !== "GET") return json({ ok: false, error: "method_not_allowed" }, 405);
@@ -171,6 +174,10 @@ export default {
         service: "ai-thuc-chien-agent-runtime-preview",
         enabled: isEnabled(env.AGENT_ENABLED),
         paused: env.AGENT_PAUSED !== "false",
+        scheduler: env.AGENT_SCHEDULE_MODE || "manual_only_no_cron",
+        task_execution_enabled: false,
+        quality_review_executor_registered: false,
+        quality_review_executor_enabled: false,
         execution: "not_implemented",
       });
     }
