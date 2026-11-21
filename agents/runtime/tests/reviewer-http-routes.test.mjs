@@ -196,7 +196,7 @@ describe("authenticated reviewer draft read routes", () => {
         async listPendingReviewsForReviewer() { called = true; return { authorized: true, items: [] }; }
       })
     };
-    const response = await handleReviewerHttpRequest(new Request(base + "/api/reviewer/drafts?limit=21", {
+    const response = await handleReviewerHttpRequest(new Request(base + "/api/reviewer/drafts?limit=101", {
       headers: { origin: base, cookie: "__Host-ai_reviewer_session=" + token }
     }), env);
     expect(response.status).toBe(400);
