@@ -63,6 +63,19 @@ function resultStatus(result, fallback = 200) {
   }
   return fallback;
 }
+function reviewerResultResponse(result) {
+  if (!result || typeof result !== "object") {
+    return json({ ok: false, error: "reviewer_store_response_invalid", publication_authorized: false }, 502);
+  }
+  const status = resultStatus(result);
+  if (result.authorized === false) {
+    return json({ ok: false, error: result.reason || "reviewer_session_invalid", publication_authorized: false }, status);
+  }
+  const { authorized, reviewer_ref, ...body } = result;
+  if (Array.isArray(body.items)) body.count = body.items.length;
+  return json({ ...body, publication_authorized: false }, status);
+}
+
 function controlView(control) {
   if (!control || typeof control !== "object") return null;
   return {
@@ -175,11 +188,11 @@ async function handleReviewerApi(request, env, url) {
 
   if (url.pathname === "/api/reviewer/drafts" && request.method === "GET") {
     const result = await store.listPendingReviewsForReviewer(limit, auth.token);
-    return json(result, resultStatus(result));
+    return reviewerResultResponse(result);
   }
   if (url.pathname === "/api/reviewer/drafts-needing-authoring" && request.method === "GET") {
     const result = await store.listNeedsRevisionForReviewer(limit, auth.token);
-    return json(result, resultStatus(result));
+    return reviewerResultResponse(result);
   }
 
   const authoringMatch = url.pathname.match(/^\/api\/reviewer\/drafts\/([a-zA-Z0-9._:-]{8,128})\/authoring$/);
@@ -190,7 +203,7 @@ async function handleReviewerApi(request, env, url) {
       return json({ ok: false, error: "draft_authoring_request_invalid" }, 400);
     }
     const result = await store.reviseDraftForReviewer(authoringMatch[1], parsed.value.expected_version, parsed.value.draft, auth.token);
-    return json(result, resultStatus(result));
+    return reviewerResultResponse(result);
   }
 
   const evidenceMatch = url.pathname.match(/^\/api\/reviewer\/drafts\/([a-zA-Z0-9._:-]{8,128})\/evidence-review$/);
@@ -201,13 +214,13 @@ async function handleReviewerApi(request, env, url) {
       return json({ ok: false, error: "evidence_review_request_invalid" }, 400);
     }
     const result = await store.recordReviewerClaimDecisions(evidenceMatch[1], parsed.value.expected_version, parsed.value.decisions, auth.token);
-    return json(result, resultStatus(result));
+    return reviewerResultResponse(result);
   }
 
   const detailMatch = url.pathname.match(/^\/api\/reviewer\/drafts\/([a-zA-Z0-9._:-]{8,128})$/);
   if (detailMatch && request.method === "GET") {
     const result = await store.getDraftForReviewer(detailMatch[1], auth.token);
-    return json(result, resultStatus(result));
+    return reviewerResultResponse(result);
   }
   return json({ ok: false, error: "not_found" }, 404);
 }
