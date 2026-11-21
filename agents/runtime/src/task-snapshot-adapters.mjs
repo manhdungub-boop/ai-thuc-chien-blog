@@ -194,13 +194,15 @@ export function createReadOnlyTaskSnapshotAdapter(readers) {
   }
 
   return Object.freeze({
-    async getSnapshot(taskInput) {
+    async getSnapshot(taskInput, { signal } = {}) {
+      if (signal?.aborted) throw new Error("task_execution_aborted");
       const validation = validateTaskRequest(taskInput);
       if (!validation.ok) return unavailable("task_invalid:" + validation.error);
       const task = validation.task;
       try {
         if (task.type === "content.review") {
-          const html = await readers.readArticleHtml(task.payload.articlePath);
+          const html = await readers.readArticleHtml(task.payload.articlePath, { signal });
+          if (signal?.aborted) throw new Error("task_execution_aborted");
           if (!boundedHtml(html)) return unavailable("article_source_unavailable");
           return Object.freeze({
             ok: true,
@@ -211,7 +213,8 @@ export function createReadOnlyTaskSnapshotAdapter(readers) {
           });
         }
         if (task.type === "ai_bank.candidate_review") {
-          const catalog = await readers.readAiBankCatalog();
+          const catalog = await readers.readAiBankCatalog({ signal });
+          if (signal?.aborted) throw new Error("task_execution_aborted");
           const snapshot = candidateSnapshot(task.payload.candidateId, catalog);
           if (!snapshot) return unavailable("candidate_source_unavailable");
           return Object.freeze({
@@ -223,7 +226,8 @@ export function createReadOnlyTaskSnapshotAdapter(readers) {
           });
         }
         if (task.type === "seo.audit") {
-          const result = await readers.readSeoPage(task.payload.path);
+          const result = await readers.readSeoPage(task.payload.path, { signal });
+          if (signal?.aborted) throw new Error("task_execution_aborted");
           const snapshot = seoSnapshot(task.payload.path, result);
           if (!snapshot) return unavailable("seo_source_unavailable");
           return Object.freeze({
@@ -234,7 +238,8 @@ export function createReadOnlyTaskSnapshotAdapter(readers) {
             sideEffects: Object.freeze([]),
           });
         }
-      } catch {
+      } catch (error) {
+        if (signal?.aborted || error?.name === "AbortError") throw new Error("task_execution_aborted");
         return unavailable("read_only_source_error");
       }
       return unavailable("task_type_not_allowed");
