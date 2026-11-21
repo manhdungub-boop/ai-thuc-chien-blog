@@ -4,9 +4,6 @@
   "compatibility_date": "2026-11-19",
   "workers_dev": true,
   "preview_urls": true,
-  "triggers": {
-    "crons": ["*/30 * * * *"]
-  },
   "durable_objects": {
     "bindings": [
       {
