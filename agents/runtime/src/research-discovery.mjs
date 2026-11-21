@@ -11,9 +11,10 @@ export const RESEARCH_FEED_SOURCES = [
 
 function cleanText(value, max = 500) {
   return value.replace(/<!\[CDATA\[|\]\]>/g, " ").replace(/<[^>]*>/g, " ")
-    .replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">")
+    .replace(/&lt;/gi, "<").replace(/&gt;/gi, ">")
     .replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'")
-    .replace(/&#\d+;|&#x[0-9a-f]+;/gi, " ").replace(/\s+/g, " ").trim().slice(0, max);
+    .replace(/&#\d+;|&#x[0-9a-f]+;/gi, " ").replace(/&amp;/gi, "&")
+    .replace(/\s+/g, " ").trim().slice(0, max);
 }
 
 function elementText(xml, name) {
