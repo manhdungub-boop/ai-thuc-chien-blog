@@ -15,6 +15,7 @@ const SECURITY_HEADERS = Object.freeze({
   "Referrer-Policy": "no-referrer",
 });
 const MAX_INTERNAL_RESPONSE_BYTES = 16 * 1024;
+const LEASE_HEARTBEAT_INTERVAL_MS = 10_000;
 const INTERNAL_SCHEDULED_DISPATCH = Symbol("internal-scheduled-dispatch");
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: SECURITY_HEADERS });
@@ -257,14 +258,15 @@ async function writeStateStore(env, pathname, payload) {
   return body;
 }
 
-export async function runWithLeaseHeartbeat(work, heartbeat, intervalMs = 120_000) {
+export async function runWithLeaseHeartbeat(work, heartbeat, intervalMs = 10_000) {
   if (typeof work !== "function" || typeof heartbeat !== "function" ||
       !Number.isSafeInteger(intervalMs) || intervalMs < 1 || intervalMs > 120_000) {
     throw new Error("lease_heartbeat_configuration_invalid");
   }
+  const controller = new AbortController();
   let finished = false;
   let heartbeatFailed = false;
-  const workPromise = Promise.resolve().then(work).then(
+  const workPromise = Promise.resolve().then(() => work(controller.signal)).then(
     (value) => { finished = true; return value; },
     (error) => { finished = true; throw error; },
   );
@@ -280,12 +282,17 @@ export async function runWithLeaseHeartbeat(work, heartbeat, intervalMs = 120_00
       await heartbeat();
     } catch {
       heartbeatFailed = true;
+      controller.abort(new Error("task_lease_heartbeat_unavailable"));
       break;
     }
   }
-  const result = await workPromise;
-  if (heartbeatFailed) throw new Error("task_lease_heartbeat_unavailable");
-  return result;
+  if (heartbeatFailed) {
+    // Work adapters must honor the signal before each source read/side effect.
+    // Wait for cooperative cleanup before returning control to the dispatcher.
+    try { await workPromise; } catch {}
+    throw new Error("task_lease_heartbeat_unavailable");
+  }
+  return await workPromise;
 }
 
 async function readBoundedJson(response) {
@@ -461,12 +468,13 @@ const worker = {
             throw new Error("state_store_lease_invalid");
           }
           const report = await runWithLeaseHeartbeat(
-            () => manager.reviewBatch([task]),
+            (signal) => manager.reviewBatch([task], { signal }),
             () => writeStateStore(env, "/heartbeat", {
               taskId: stored.taskId,
               leaseOwner: lease.owner,
               leaseGeneration: lease.generation,
             }),
+            LEASE_HEARTBEAT_INTERVAL_MS,
           );
           const item = report.items[0];
           const result = safeReviewResult(item);
@@ -606,16 +614,17 @@ const worker = {
             throw new Error("state_store_claim_invalid");
           }
           const report = await runWithLeaseHeartbeat(
-            () => manager.reviewBatch([{
+            (signal) => manager.reviewBatch([{
               type: task.type,
               idempotencyKey: task.idempotencyKey,
               payload: task.payload,
-            }]),
+            }], { signal }),
             () => writeStateStore(env, "/heartbeat", {
               taskId: task.taskId,
               leaseOwner: lease.owner,
               leaseGeneration: lease.generation,
             }),
+            LEASE_HEARTBEAT_INTERVAL_MS,
           );
           const item = report.items[0];
           const result = safeReviewResult(item);
