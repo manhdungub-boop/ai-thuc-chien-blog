@@ -4,8 +4,8 @@ import { recordHumanClaimReview } from "../src/human-claim-review.mjs";
 import { assessArticleEvidenceReadiness } from "../src/article-evidence-readiness.mjs";
 
 const sources = [
-  { source: "OpenAI", title: "A", url: "https://openai.com/index/a", host: "openai.com", excerpt: "A sufficiently long excerpt about the research topic, methods, limitations and reported observations. ".repeat(2).slice(0, 180) },
-  { source: "DeepMind", title: "B", url: "https://deepmind.google/blog/b", host: "deepmind.google", excerpt: "A second sufficiently long excerpt about the research topic, methods, limitations and reported observations. ".repeat(2).slice(0, 180) }
+  { source: "OpenAI News", title: "A", url: "https://openai.com/index/a", host: "openai.com", excerpt: "A sufficiently long excerpt about the research topic, methods, limitations and reported observations. ".repeat(2).slice(0, 180) },
+  { source: "Google DeepMind", title: "B", url: "https://deepmind.google/blog/b", host: "deepmind.google", excerpt: "A second sufficiently long excerpt about the research topic, methods, limitations and reported observations. ".repeat(2).slice(0, 180) }
 ];
 const ledger = {
   status: "all_claims_traceable_pending_human_review",
@@ -21,7 +21,14 @@ const reviewer = { reviewer_ref: "editor.dung", reviewed_at: "2026-11-18T12:00:0
 const decisions = [{
   claim_id: "claim-1",
   decision: "supported",
-  reviewer_note: "Both excerpts directly address the exact claim wording."
+  reviewer_note: "Both excerpts directly address the exact claim wording.",
+  evidence_reviews: sources.map((source, index) => ({
+    source_url: source.url,
+    decision: "supports",
+    reviewer_note: index === 0
+      ? "This source passage directly supports the exact claim wording."
+      : "This independent source passage directly supports the exact claim wording."
+  }))
 }];
 const now = Date.parse("2026-11-18T12:01:00.000Z");
 

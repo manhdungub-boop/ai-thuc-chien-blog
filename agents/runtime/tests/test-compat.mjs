@@ -74,7 +74,10 @@ function expect(actual) {
     }
   };
   const negative = {
-    toHaveProperty(property) { assert.ok(!hasProperty(actual, property)); }
+    toHaveProperty(property) { assert.ok(!hasProperty(actual, property)); },
+    toContain(expected) {
+      assert.ok(!(actual != null && typeof actual.includes === "function" && actual.includes(expected)));
+    }
   };
   return { ...matchers, rejects, not: negative };
 }

@@ -4,14 +4,14 @@ import { buildHumanClaimReviewLedger } from "../src/human-claim-ledger-builder.m
 
 const evidence = [
   {
-    source: "OpenAI",
+    source: "OpenAI News",
     title: "Research overview",
     url: "https://openai.com/index/research-overview",
     status: "source_retrieved_not_fact_checked",
     excerpt: "This source excerpt describes the research system, its stated methods, scope, limitations, and reported observations in enough detail for a human reviewer to inspect."
   },
   {
-    source: "DeepMind",
+    source: "Google DeepMind",
     title: "Research blog",
     url: "https://deepmind.google/blog/research-overview",
     status: "source_retrieved_not_fact_checked",
@@ -39,7 +39,7 @@ describe("human claim ledger builder", () => {
     });
     expect(result.claims[0].sources).toHaveLength(2);
     expect(result.claims[0].sources[0]).toMatchObject({
-      source: "OpenAI",
+      source: "OpenAI News",
       host: "openai.com",
       excerpt: evidence[0].excerpt
     });
@@ -57,7 +57,7 @@ describe("human claim ledger builder", () => {
   it("rejects duplicate publisher domains for one claim", () => {
     const sameDomain = [
       evidence[0],
-      { ...evidence[1], source: "OpenAI", url: "https://openai.com/index/another-page" }
+      { ...evidence[1], source: "OpenAI News", url: "https://openai.com/index/another-page" }
     ];
     const result = buildHumanClaimReviewLedger([{
       ...claims[0],
