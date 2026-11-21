@@ -18,23 +18,21 @@ function boundedHtml(value) {
 }
 
 function decodeEntities(value) {
-  return value
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;|&apos;/gi, "'")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&#(\d+);/g, (_, n) => {
-      const code = Number(n);
-      return Number.isSafeInteger(code) && code > 0 && code <= 0x10ffff
-        ? String.fromCodePoint(code) : " ";
-    })
-    .replace(/&#x([0-9a-f]+);/gi, (_, n) => {
-      const code = Number.parseInt(n, 16);
-      return Number.isSafeInteger(code) && code > 0 && code <= 0x10ffff
-        ? String.fromCodePoint(code) : " ";
-    });
+  return value.replace(/&(?:nbsp|amp|quot|lt|gt|apos|#\\d+|#x[0-9a-f]+);/gi, (entity) => {
+    const normalized = entity.toLowerCase();
+    if (normalized === "&nbsp;") return " ";
+    if (normalized === "&amp;") return "&";
+    if (normalized === "&quot;") return '"';
+    if (normalized === "&apos;" || normalized === "&#39;") return "'";
+    if (normalized === "&lt;") return "<";
+    if (normalized === "&gt;") return ">";
+    const code = normalized.startsWith("&#x")
+      ? Number.parseInt(normalized.slice(3, -1), 16)
+      : Number(normalized.slice(2, -1));
+    return Number.isSafeInteger(code) && code > 0 && code <= 0x10ffff &&
+      !(code >= 0xd800 && code <= 0xdfff)
+      ? String.fromCodePoint(code) : " ";
+  });
 }
 
 function attributes(tag) {

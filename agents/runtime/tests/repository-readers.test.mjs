@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createRepositoryReadOnlyReaders, REPOSITORY_READER_LIMITS } from "../src/repository-readers.mjs";
+import { createRepositoryReadOnlyReaders, REPOSITORY_READER_LIMITS, decodeXml } from "../src/repository-readers.mjs";
 import { createReadOnlyTaskSnapshotAdapter } from "../src/task-snapshot-adapters.mjs";
 import { handleReadOnlyTask } from "../src/task-handlers.mjs";
 
@@ -20,6 +20,11 @@ const seoTask = {
   idempotencyKey: taskKey,
   payload: { path: "/articles/activepieces-trigger-va-action" },
 };
+
+test("sitemap XML entities are decoded in one pass", () => {
+  assert.equal(decodeXml("&amp;lt;script&amp;gt;"), "&lt;script&gt;");
+  assert.equal(decodeXml("A&amp;B &lt;tag&gt; &amp;#47;"), "A&B <tag> &#47;");
+});
 
 test("repository readers inspect actual checked-out article and AI Bank sources without writes", async () => {
   const readers = await createRepositoryReadOnlyReaders({

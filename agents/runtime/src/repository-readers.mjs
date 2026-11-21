@@ -18,9 +18,21 @@ async function readBounded(file, limit) {
   return content;
 }
 
-function decodeXml(value) {
-  return value.replace(/&amp;/g, "&").replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'");
+export function decodeXml(value) {
+  return value.replace(/&(?:amp|lt|gt|quot|apos|#\\d+|#x[0-9a-f]+);/gi, (entity) => {
+    const normalized = entity.toLowerCase();
+    if (normalized === "&amp;") return "&";
+    if (normalized === "&lt;") return "<";
+    if (normalized === "&gt;") return ">";
+    if (normalized === "&quot;") return '"';
+    if (normalized === "&apos;") return "'";
+    const code = normalized.startsWith("&#x")
+      ? Number.parseInt(normalized.slice(3, -1), 16)
+      : Number(normalized.slice(2, -1));
+    return Number.isSafeInteger(code) && code > 0 && code <= 0x10ffff &&
+      !(code >= 0xd800 && code <= 0xdfff)
+      ? String.fromCodePoint(code) : " ";
+  });
 }
 
 function sitemapPaths(xml) {

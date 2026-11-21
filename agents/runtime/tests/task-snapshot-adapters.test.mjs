@@ -70,6 +70,24 @@ test("SEO adapter requires explicit sitemap and broken-link evidence", async () 
   assert.equal(report.status, "pass");
 });
 
+test("article parsing removes raw blocks with spaced end tags and decodes entities only once", async () => {
+  const source = `<html><head><title>&amp;lt;script&amp;gt;literal</title></head><body>
+    <p>Visible article text</p>
+    <script>hidden script payload</script   >
+    <style>hidden style payload</style >
+    <svg><text>hidden vector payload</text></svg   >
+  </body></html>`;
+  const adapter = createReadOnlyTaskSnapshotAdapter({
+    async readArticleHtml() { return source; },
+    async readAiBankCatalog() { throw new Error("unexpected"); },
+    async readSeoPage() { throw new Error("unexpected"); },
+  });
+  const result = await adapter.getSnapshot(contentTask);
+  assert.equal(result.ok, true);
+  assert.equal(result.snapshot.title, "&lt;script&gt;literal");
+  assert.equal(result.snapshot.wordCount, 4);
+});
+
 test("invalid tasks are rejected before invoking any source reader", async () => {
   let calls = 0;
   const adapter = createReadOnlyTaskSnapshotAdapter({
