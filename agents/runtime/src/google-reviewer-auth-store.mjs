@@ -21,7 +21,10 @@ export class AgentReviewerAuthStore {
     return { allowed: true, remaining: 9 - row.attempts };
   }
   createTransaction(stateHash, browserHash, nonce, codeVerifier, nowSeconds) {
-    if (![stateHash, browserHash, nonce, codeVerifier].every(x => typeof x === "string" && x.length >= 32 && x.length <= 128) || !Number.isInteger(nowSeconds)) return { created: false };
+    if (![stateHash, browserHash, nonce, codeVerifier].every(x => typeof x === "string" && x.length >= 32 && x.length <= 128) ||
+        !Number.isInteger(nowSeconds) || nowSeconds < 0) {
+      return { created: false, reason: "invalid_login_transaction" };
+    }
     this.ctx.storage.sql.exec("DELETE FROM reviewer_auth_transactions WHERE expires_at <= ?", nowSeconds);
     const active = this.ctx.storage.sql.exec("SELECT COUNT(*) AS total FROM reviewer_auth_transactions WHERE expires_at > ?", nowSeconds).toArray()[0]?.total || 0;
     if (active >= 100) return { created: false, reason: "login_transaction_capacity_reached" };
