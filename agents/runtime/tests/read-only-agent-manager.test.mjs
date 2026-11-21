@@ -91,6 +91,25 @@ test("source failures are isolated and later tasks continue sequentially", async
   assert.equal(report.summary.reviewRequired, 1);
 });
 
+test("manager aborts a blocked source read and does not continue to later tasks", async () => {
+  const controller = new AbortController();
+  let reads = 0;
+  const manager = createReadOnlyAgentManager({
+    snapshotAdapter: {
+      async getSnapshot(task, { signal } = {}) {
+        reads += 1;
+        return new Promise((resolve, reject) => {
+          signal.addEventListener("abort", () => reject(new Error("source fetch aborted")), { once: true });
+        });
+      },
+    },
+  });
+  const pending = manager.reviewBatch([article(), bank()], { signal: controller.signal });
+  controller.abort(new Error("operator pause"));
+  await assert.rejects(pending, /task_execution_aborted/);
+  assert.equal(reads, 1, "no subsequent task may start after cancellation");
+});
+
 test("manager enforces bounded batches and requires an injected reader", async () => {
   assert.throws(() => createReadOnlyAgentManager({}), /read_only_snapshot_adapter_required/);
   const manager = createReadOnlyAgentManager({ snapshotAdapter: { async getSnapshot() {} } });
