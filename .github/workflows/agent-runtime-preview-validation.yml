@@ -129,7 +129,7 @@ jobs:
           assert.equal(preview.vars.AGENT_ENABLED, 'false');
           assert.equal(preview.vars.AGENT_PAUSED, 'true');
           assert.equal(preview.vars.AGENT_SCHEDULER_ENABLED, 'false');
-          assert.deepEqual(preview.triggers?.crons, ['*/30 * * * *']);
+          assert.equal('triggers' in preview, false);
           assert.equal(preview.vars.AGENT_OIDC_ENABLED, 'false');
           assert.equal(preview.durable_objects?.bindings?.length, 1);
           assert.deepEqual(preview.durable_objects.bindings[0], {
@@ -151,7 +151,7 @@ jobs:
           assert.match(workerSource, /AGENT_SCHEDULER_ENABLED !== "true"/);
           assert.match(workerSource, /AGENT_RECOVERY_ALARM_ENABLED !== "true"/);
           assert.match(workerSource, /JSON\.stringify\(\{ maxTasks: 1 \}\)/);
-          console.log('PASS: Preview is isolated, scheduler cron is explicitly disabled by default, and each tick is code-bounded to one task.');
+          console.log('PASS: Preview is isolated, no Cron trigger is configured, and the dormant scheduled handler remains fail-closed.');
           NODE
 
       - name: Assert workflow is validation-only
