@@ -32,6 +32,11 @@ async function readJson(request, maxBytes) {
   if (!parsed.value || typeof parsed.value !== "object" || Array.isArray(parsed.value)) return { ok: false, status: 400, error: "request_object_required" };
   return parsed;
 }
+function aiBankCandidateStore(env) {
+  const namespace = env.AGENT_AI_BANK_CANDIDATE_STORE;
+  if (!namespace || typeof namespace.idFromName !== "function" || typeof namespace.get !== "function") return null;
+  return namespace.get(namespace.idFromName("agent-ai-bank-candidates-primary"));
+}
 function draftStore(env) {
   const namespace = env.AGENT_DRAFT_STORE;
   if (!namespace || typeof namespace.idFromName !== "function" || typeof namespace.get !== "function") return null;
@@ -177,7 +182,57 @@ export function isValidReviewerDraftAuthoringRequest(value) {
   );
 }
 
+async function handleAIBankReviewerApi(request, env, url) {
+  const collection = url.pathname === "/api/reviewer/ai-bank/candidates";
+  const detail = url.pathname.match(/^\/api\/reviewer\/ai-bank\/candidates\/([a-zA-Z0-9_.-]{1,100})\/([a-zA-Z0-9_.-]{1,100})$/);
+  if (!collection && !detail) return null;
+  if (request.method !== "GET") return json({ ok: false, error: "method_not_allowed" }, 405);
+  if (!sameOrigin(request)) return json({ ok: false, error: "review_request_origin_or_content_type_rejected" }, 403);
+  const auth = await reviewerSession(request, env);
+  if (!auth.ok) return json({ ok: false, error: auth.error }, auth.status);
+
+  let limit = 20;
+  if (collection) {
+    const values = url.searchParams.getAll("limit");
+    if (values.length > 1 || (values.length === 1 && !/^(?:[1-9]|1[0-9]|20)$/.test(values[0]))) {
+      return json({ ok: false, error: "invalid_ai_bank_candidate_limit" }, 400);
+    }
+    if (values.length === 1) limit = Number(values[0]);
+  }
+
+  const store = aiBankCandidateStore(env);
+  if (!store) return json({ ok: false, error: "ai_bank_candidate_store_unavailable" }, 503);
+  const safety = {
+    catalog_write_authorized: false,
+    evidence_verification_authorized: false,
+    public_publication_authorized: false
+  };
+  if (collection) {
+    const items = await store.listCandidates(limit);
+    if (!Array.isArray(items)) return json({ ok: false, error: "ai_bank_candidate_response_invalid", ...safety }, 502);
+    return json({
+      items,
+      count: items.length,
+      reviewer_ref: auth.reviewer.reviewer_ref,
+      ...safety
+    });
+  }
+
+  const candidateId = "github:" + detail[1] + "/" + detail[2];
+  const packet = await store.getReviewPacket(candidateId);
+  if (!packet) return json({ ok: false, error: "ai_bank_candidate_not_found", ...safety }, 404);
+  return json({
+    packet,
+    reviewer_ref: auth.reviewer.reviewer_ref,
+    ...safety
+  });
+}
+
 async function handleReviewerApi(request, env, url) {
+  if (url.pathname.startsWith("/api/reviewer/ai-bank/")) {
+    const aiBankResponse = await handleAIBankReviewerApi(request, env, url);
+    if (aiBankResponse) return aiBankResponse;
+  }
   if (!sameOrigin(request, request.method === "POST")) return json({ ok: false, error: "same_origin_required" }, 403);
   const auth = await reviewerSession(request, env);
   if (!auth.ok) return json({ ok: false, error: auth.error }, auth.status);
