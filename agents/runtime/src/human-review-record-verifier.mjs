@@ -152,6 +152,37 @@ export async function verifyHumanClaimReviewRecord(record, ledger, {
     }
   }
 
+  const evidenceSummary = {
+    claims_with_contradicting_evidence: [],
+    claims_with_insufficient_evidence: [],
+    contradicting_evidence: [],
+    insufficient_evidence: [],
+    evidence_decision_counts: { supports: 0, contradicts: 0, insufficient: 0 }
+  };
+  for (const reviewed of record.claims) {
+    const decisions = reviewed.evidence_reviews.map(review => review.decision);
+    for (const decision of decisions) evidenceSummary.evidence_decision_counts[decision] += 1;
+    if (decisions.includes("contradicts")) evidenceSummary.claims_with_contradicting_evidence.push(reviewed.claim_id);
+    if (decisions.includes("insufficient")) evidenceSummary.claims_with_insufficient_evidence.push(reviewed.claim_id);
+    for (const review of reviewed.evidence_reviews) {
+      if (review.decision === "contradicts") {
+        evidenceSummary.contradicting_evidence.push({
+          claim_id: reviewed.claim_id,
+          source_url: review.source_url,
+          reviewer_note: review.reviewer_note
+        });
+      } else if (review.decision === "insufficient") {
+        evidenceSummary.insufficient_evidence.push({
+          claim_id: reviewed.claim_id,
+          source_url: review.source_url,
+          reviewer_note: review.reviewer_note
+        });
+      }
+    }
+  }
+  evidenceSummary.contradiction_count = evidenceSummary.evidence_decision_counts.contradicts;
+  evidenceSummary.insufficient_count = evidenceSummary.evidence_decision_counts.insufficient;
+
   const reviewerIdentityAuthenticated = authenticatedReviewer?.authenticated === true &&
     typeof authenticatedReviewer.reviewer_ref === "string" &&
     authenticatedReviewer.reviewer_ref === record.reviewer_ref;
@@ -162,6 +193,7 @@ export async function verifyHumanClaimReviewRecord(record, ledger, {
     claims_verified: ledger.claims.length,
     reviewer_ref: record.reviewer_ref,
     reviewed_at: record.reviewed_at,
+    evidence_summary: evidenceSummary,
     limitations: [
       "Verification confirms that the record matches the supplied ledger snapshot. Reviewer identity is authenticated only when a server-verified Google session matches the record reviewer reference.",
       "Verification does not establish factual truth, source authority, semantic support, originality, licensing, or copyright clearance.",
