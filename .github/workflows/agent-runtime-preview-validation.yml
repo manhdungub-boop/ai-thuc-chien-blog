@@ -137,15 +137,15 @@ jobs:
             namespace_id: '20261121',
             simple: { limit: 60, period: 60 }
           }]);
-          assert.equal(preview.durable_objects?.bindings?.length, 1);
-          assert.deepEqual(preview.durable_objects.bindings[0], {
-            name: 'AGENT_STATE_STORE',
-            class_name: 'AgentStateStore'
-          });
-          assert.deepEqual(preview.migrations, [{
-            tag: 'v1',
-            new_sqlite_classes: ['AgentStateStore']
-          }]);
+          assert.deepEqual(preview.durable_objects?.bindings, [
+            { name: 'AGENT_STATE_STORE', class_name: 'AgentStateStore' },
+            { name: 'AGENT_REVIEWER_AUTH_STORE', class_name: 'AgentReviewerAuthStore' },
+            { name: 'AGENT_DRAFT_STORE', class_name: 'AgentDraftStore' }
+          ]);
+          assert.deepEqual(preview.migrations, [
+            { tag: 'v1', new_sqlite_classes: ['AgentStateStore'] },
+            { tag: 'v2', new_sqlite_classes: ['AgentReviewerAuthStore', 'AgentDraftStore'] }
+          ]);
           assert.equal('routes' in preview, false);
           assert.equal('d1_databases' in preview, false);
           assert.equal('queues' in preview, false);
