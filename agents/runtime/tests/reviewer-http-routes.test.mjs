@@ -68,3 +68,133 @@ describe("reviewer and operator HTTP routes", () => {
     expect(await handleReviewerHttpRequest(new Request(`${base}/run`, { method: "POST" }), {})).toBeNull();
   });
 });
+
+const reviewerAuthEnv = {
+  AGENT_REVIEWER_AUTH_ENABLED: "true",
+  GOOGLE_REVIEWER_CLIENT_ID: "preview-test-client-id-abcdefghijklmnopqrstuvwxyz0123456789.apps.googleusercontent.com",
+  GOOGLE_REVIEWER_CLIENT_SECRET: "test-google-client-secret-value-abcdefghijklmnopqrstuvwxyz0123456789",
+  GOOGLE_REVIEWER_REDIRECT_URI: base + "/auth/google/callback",
+  GOOGLE_REVIEWER_ALLOWED_EMAILS: "reviewer@example.com",
+  GOOGLE_REVIEWER_STATE_SECRET: "state-secret-for-tests-only-abcdefghijklmnopqrstuvwxyz0123456789",
+  GOOGLE_REVIEWER_SESSION_SECRET: "session-secret-for-tests-only-zyxwvutsrqponmlkjihgfedcba9876543210"
+};
+
+function base64Url(bytes) {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/=/g, "").replace(/\\+/g, "-").replace(/\\//g, "_");
+}
+
+async function createReviewerSessionToken() {
+  const now = Math.floor(Date.now() / 1000);
+  const payload = {
+    provider: "google",
+    sub: "reviewer-test-subject",
+    email: "reviewer@example.com",
+    reviewer_ref: "google:reviewer-test-subject",
+    iat: now,
+    exp: now + 1800
+  };
+  const encoded = base64Url(new TextEncoder().encode(JSON.stringify(payload)));
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(reviewerAuthEnv.GOOGLE_REVIEWER_SESSION_SECRET),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(encoded));
+  return encoded + "." + base64Url(new Uint8Array(signature));
+}
+
+describe("authenticated reviewer draft read routes", () => {
+  it("passes the signed session to the Durable Object and returns bounded queue metadata only", async () => {
+    const token = await createReviewerSessionToken();
+    const item = { id: "draft-review-12345678", status: "pending_human_review", version: 1, title: "Article", slug: "article", issue_count: 0, word_count: 700 };
+    let received;
+    const env = {
+      ...reviewerAuthEnv,
+      AGENT_DRAFT_STORE: {
+        getByName(name) {
+          expect(name).toBe("primary");
+          return {
+            async listPendingReviewsForReviewer(limit, sessionToken) {
+              received = [limit, sessionToken];
+              return { authorized: true, items: [item] };
+            }
+          };
+        }
+      }
+    };
+    const response = await handleReviewerHttpRequest(new Request(base + "/api/reviewer/drafts?limit=5", {
+      headers: { origin: base, cookie: "__Host-ai_reviewer_session=" + token }
+    }), env);
+    expect(response.status).toBe(200);
+    expect(received).toEqual([5, token]);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.json()).toEqual({ items: [item], count: 1, publication_authorized: false });
+  });
+
+  it("requires independent Durable Object authorization before returning full draft details", async () => {
+    const token = await createReviewerSessionToken();
+    const artifact = { id: "draft-review-12345678", version: 1, draft: { body_markdown: "private draft" } };
+    let received;
+    const env = {
+      ...reviewerAuthEnv,
+      AGENT_DRAFT_STORE: {
+        getByName: () => ({
+          async getDraftForReviewer(...args) {
+            received = args;
+            return { authorized: true, artifact };
+          }
+        })
+      }
+    };
+    const response = await handleReviewerHttpRequest(new Request(base + "/api/reviewer/drafts/draft-review-12345678", {
+      headers: { origin: base, cookie: "__Host-ai_reviewer_session=" + token }
+    }), env);
+    expect(received).toEqual(["draft-review-12345678", token]);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ artifact, publication_authorized: false });
+  });
+
+  it("rejects invalid queue limits before reading the Durable Object", async () => {
+    const token = await createReviewerSessionToken();
+    let called = false;
+    const env = {
+      ...reviewerAuthEnv,
+      AGENT_DRAFT_STORE: { getByName: () => ({
+        async listPendingReviewsForReviewer() { called = true; return { authorized: true, items: [] }; }
+      }) }
+    };
+    const response = await handleReviewerHttpRequest(new Request(base + "/api/reviewer/drafts?limit=21", {
+      headers: { origin: base, cookie: "__Host-ai_reviewer_session=" + token }
+    }), env);
+    expect(response.status).toBe(400);
+    expect(called).toBe(false);
+  });
+
+  it("rejects a client-supplied evidence ledger instead of trusting browser excerpts", async () => {
+    const token = await createReviewerSessionToken();
+    let called = false;
+    const env = {
+      ...reviewerAuthEnv,
+      AGENT_DRAFT_STORE: { getByName: () => ({
+        async reviseDraftForReviewer() { called = true; return { updated: true }; },
+        async storeEvidenceLedger() { called = true; return { stored: true }; }
+      }) }
+    };
+    const response = await handleReviewerHttpRequest(new Request(base + "/api/reviewer/drafts/draft-review-12345678/authoring", {
+      method: "POST",
+      headers: { origin: base, "content-type": "application/json", cookie: "__Host-ai_reviewer_session=" + token },
+      body: JSON.stringify({
+        expected_version: 1,
+        draft: { title: "A draft", claims: [] },
+        retrieved_evidence: [{ url: "https://openai.com/research", excerpt: "Untrusted browser text" }]
+      })
+    }), env);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: "draft_authoring_request_invalid" });
+    expect(called).toBe(false);
+  });
+});
