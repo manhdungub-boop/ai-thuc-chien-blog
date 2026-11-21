@@ -130,6 +130,19 @@ jobs:
             echo "::error::Cannot verify the Cloudflare account plan (HTTP $status). Billing Read access is required; deployment stopped before resource creation."
             exit 1
           fi
+          echo "Sanitized subscription plan metadata (no account secrets or identifiers):"
+          jq -c '
+            if .success == true then
+              [.result[]? | {
+                rate_plan_id: (.rate_plan.id // null),
+                rate_plan_public_name: (.rate_plan.public_name // null),
+                rate_plan_scope: (.rate_plan.scope // null),
+                rate_plan_sets: (.rate_plan.sets // []),
+                product_name: (if (.product | type) == "object" then (.product.name // .product.id // null) else (.product // null) end)
+              }]
+            else { success: false }
+            end
+          ' "$response"
           if ! jq -e '
             .success == true and
             ([.result[]? |
