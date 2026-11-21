@@ -137,3 +137,21 @@ The code-only Preview configuration now declares `*/30 * * * *` (48 scheduled in
 - No Cloudflare account plan or remaining quota is inferred from published platform limits. Actual Free plan, billing state, CPU, requests, SQL writes, storage and account-wide headroom remain unverified.
 
 **Decision remains NO-GO for deployment or activation.** Keep all four gates closed. Do not create a namespace, bind a DO, deploy Preview, add secrets, or activate Cron until read-only Billing/usage evidence confirms the account is Free with sufficient headroom, the CPU profile is measured against the 10 ms limit, and an independent review approves the implementation. If evidence cannot be obtained, leave the runtime unbound and disabled. No paid upgrade or billing setup is permitted.
+
+
+## Billing evidence reconciliation and scheduler hold (2026-11-21)
+
+The account owner subsequently supplied the Cloudflare Billing dashboard evidence. This supersedes the earlier historical statements above that the base plan could not be verified:
+
+- Workers: **Free tier / Active**.
+- Durable Objects: **Free tier**.
+- No payment method on file.
+- No invoices currently listed.
+- Spend-limits history: **No activity yet**.
+- Spectrum billable-usage panel: **No data**; this is Spectrum-only and is not evidence about Workers, Durable Objects, or Workers AI usage.
+
+This closes the **base plan-label verification** gate only. It does not measure current or remaining Workers requests, CPU, Durable Object requests, SQLite row reads/writes, GB-seconds, storage, or account-wide headroom. It also does not establish Workers AI model entitlement or Neurons quota. Workers AI inference remains disabled. No paid upgrade, payment method, spend limit, or billing change is permitted.
+
+The current `wrangler.preview.jsonc` candidate has been changed to contain **no Cron trigger**. The `scheduled()` handler remains dormant source code; there are no scheduled invocations from this Preview configuration. The former 48-invocation/day estimate above is a hypothetical historical planning model, not current configuration or observed usage. Do not reintroduce a schedule until live Preview usage, per-invocation CPU (including the Workers Free Cron CPU ceiling), DO/SQLite usage, pause behavior, recovery and rollback have been measured and independently reviewed.
+
+**Current decision remains NO-GO for Preview deployment or activation.** Keep `AGENT_ENABLED=false`, `AGENT_PAUSED=true`, `AGENT_SCHEDULER_ENABLED=false`, `AGENT_RECOVERY_ALARM_ENABLED=false`, and `AGENT_OIDC_ENABLED=false`. Do not create the DO namespace, bind/deploy the Worker, configure secrets, or activate schedules until the remaining quota/CPU, OIDC, rate-limit, emergency-stop and rollback gates are independently verified. No Production resource may be changed.
