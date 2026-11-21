@@ -27,6 +27,10 @@
       {
         "name": "AGENT_DRAFT_STORE",
         "class_name": "AgentDraftStore"
+      },
+      {
+        "name": "AGENT_AI_BANK_CANDIDATE_STORE",
+        "class_name": "AgentAIBankCandidateStore"
       }
     ]
   },
@@ -42,6 +46,12 @@
       "new_sqlite_classes": [
         "AgentReviewerAuthStore",
         "AgentDraftStore"
+      ]
+    },
+    {
+      "tag": "v3-ai-bank-candidate-store",
+      "new_sqlite_classes": [
+        "AgentAIBankCandidateStore"
       ]
     }
   ],
