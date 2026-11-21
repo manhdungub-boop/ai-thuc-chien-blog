@@ -28,7 +28,7 @@ jobs:
   validate-preview:
     if: >-
       github.repository == 'manhdungub-boop/ai-thuc-chien-blog' &&
-      github.ref == 'refs/heads/reconcile/agent-runtime-pr339-schema-v7-20261121'
+      (github.ref == 'refs/heads/reconcile/agent-runtime-pr339-schema-v7-20261121' || github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -57,6 +57,7 @@ jobs:
           if (c.name !== "ai-thuc-chien-agent-runtime-preview") fail("Unexpected Worker name.");
           if (c.main !== "./src/worker.mjs" || c.workers_dev !== true || c.preview_urls !== false) fail("Unexpected Preview entrypoint or URL settings.");
           if (c.vars?.AGENT_ENABLED !== "false" || c.vars?.AGENT_PAUSED !== "true") fail("Agent must remain disabled and paused.");
+          if (c.vars?.AGENT_REVIEWER_AUTH_ENABLED !== "false") fail("Reviewer authentication must remain disabled.");
           for (const k of ["AGENT_SCHEDULER_ENABLED", "AGENT_RECOVERY_ALARM_ENABLED", "AGENT_OIDC_ENABLED"]) {
             if (c.vars?.[k] !== "false") fail(k + " must remain false.");
           }
@@ -86,15 +87,16 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' &&
       github.repository == 'manhdungub-boop/ai-thuc-chien-blog' &&
-      github.ref == 'refs/heads/reconcile/agent-runtime-pr339-schema-v7-20261121' &&
+      (github.ref == 'refs/heads/reconcile/agent-runtime-pr339-schema-v7-20261121' || github.ref == 'refs/heads/main') &&
       inputs.confirm_preview_deploy == true &&
       inputs.confirm_free_workers_plan == true &&
       needs.validate-preview.result == 'success'
     runs-on: ubuntu-latest
+    environment: agent-runtime-preview
     timeout-minutes: 15
     env:
       CLOUDFLARE_ACCOUNT_ID: "92cf091bbac8b4879ec65feb30b4715b"
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}
     steps:
       - name: Checkout the exact triggering commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -113,7 +115,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
-            echo "::error::CLOUDFLARE_WORKERS_API_TOKEN is not configured."
+            echo "::error::CLOUDFLARE_AGENT_PREVIEW_API_TOKEN is not configured in the agent-runtime-preview environment."
             exit 1
           fi
 
@@ -162,3 +164,23 @@ jobs:
       - name: Deploy only the isolated Preview Worker
         working-directory: agents/runtime
         run: npx --yes wrangler@4.166.0 deploy --config wrangler.preview.jsonc
+
+      - name: Verify Preview health remains disabled and paused
+        shell: bash
+        run: |
+          set -euo pipefail
+          worker_url="https://ai-thuc-chien-agent-runtime-preview.manhdungub.workers.dev"
+          curl --fail --silent --show-error --max-time 20 "$worker_url/health" -o "$RUNNER_TEMP/agent-runtime-preview-health.json"
+          jq -e '
+            .ok == true and
+            .service == "ai-thuc-chien-agent-runtime-preview" and
+            .enabled == false and
+            .paused == true and
+            .scheduler == "manual_only_no_cron" and
+            .task_execution_enabled == false and
+            .quality_review_executor_enabled == false and
+            .reviewer_auth_enabled == false and
+            .publication_authorized == false and
+            .execution == "operator_triggered_read_only_analysis"
+          ' "$RUNNER_TEMP/agent-runtime-preview-health.json" >/dev/null
+          echo "Preview health confirms autonomous execution, reviewer authentication, and publication remain disabled."
