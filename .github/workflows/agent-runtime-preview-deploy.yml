@@ -117,12 +117,15 @@ jobs:
             exit 1
           fi
           if ! jq -e '
-            [.result[]? |
-              [(.rate_plan.id // ""), (.rate_plan.public_name // ""), (.rate_plan.name // ""),
-               (.product.name // ""), (.product // "")] |
-              map(tostring | ascii_downcase) | join(" ") |
+            .success == true and
+            ([.result[]? |
+              [
+                (.rate_plan // {} | [.id // "", .public_name // "", .name // ""] | map(tostring) | join(" ")),
+                (.product // "" | if type == "object" then (.name // .id // "") else . end | tostring)
+              ] |
+              map(ascii_downcase) | join(" ") |
               select(test("worker") and test("free"))
-            ] | length > 0
+            ] | length > 0)
           ' "$response" >/dev/null; then
             echo "::error::The subscription response did not positively identify a Workers Free plan. Deployment stopped before resource creation."
             exit 1
