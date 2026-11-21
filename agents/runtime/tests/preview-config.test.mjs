@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { AgentStateStore } from "../src/worker.mjs";
+import { AgentStateStore, AgentReviewerAuthStore, AgentDraftStore } from "../src/worker.mjs";
 
 const configPath = fileURLToPath(new URL("../wrangler.preview.jsonc", import.meta.url));
 const config = JSON.parse(readFileSync(configPath, "utf8"));
@@ -36,12 +36,16 @@ test("dedicated Agent Runtime Preview config binds its isolated State Store and 
     simple: { limit: 60, period: 60 },
   }]);
   assert.deepEqual(config.durable_objects, {
-    bindings: [{ name: "AGENT_STATE_STORE", class_name: "AgentStateStore" }],
+    bindings: [
+      { name: "AGENT_STATE_STORE", class_name: "AgentStateStore" },
+      { name: "AGENT_REVIEWER_AUTH_STORE", class_name: "AgentReviewerAuthStore" },
+      { name: "AGENT_DRAFT_STORE", class_name: "AgentDraftStore" },
+    ],
   });
-  assert.deepEqual(config.migrations, [{
-    tag: "v1",
-    new_sqlite_classes: ["AgentStateStore"],
-  }]);
+  assert.deepEqual(config.migrations, [
+    { tag: "v1", new_sqlite_classes: ["AgentStateStore"] },
+    { tag: "v2", new_sqlite_classes: ["AgentReviewerAuthStore", "AgentDraftStore"] },
+  ]);
   for (const forbidden of [
     "account_id", "routes", "route", "custom_domains", "d1_databases",
     "kv_namespaces", "r2_buckets", "services", "queues",
@@ -60,6 +64,8 @@ test("Preview config never enables autonomous execution by default", () => {
 
 test("Worker entrypoint exports the Durable Object class named by the Preview config", () => {
   assert.equal(typeof AgentStateStore, "function");
+  assert.equal(typeof AgentReviewerAuthStore, "function");
+  assert.equal(typeof AgentDraftStore, "function");
 });
 
 test("GitHub OIDC operator remains disabled while pinning only the observed GitHub actor", () => {
