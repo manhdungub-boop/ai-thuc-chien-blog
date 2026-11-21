@@ -39,13 +39,7 @@ export async function createLegacyStoresRuntime() {
       AGENT_REVIEWER_AUTH_STORE: { className: "TestAgentReviewerAuthStore", useSQLite: true }
     },
     bindings: {
-      AGENT_REVIEWER_AUTH_ENABLED: "true",
-      GOOGLE_REVIEWER_CLIENT_ID: "preview-test-client-id-abcdefghijklmnopqrstuvwxyz.apps.googleusercontent.com",
-      GOOGLE_REVIEWER_CLIENT_SECRET: "test-google-client-secret-value-abcdefghijklmnopqrstuvwxyz0123456789",
-      GOOGLE_REVIEWER_REDIRECT_URI: "https://ai-thuc-chien-agent-runtime-preview.manhdungub.workers.dev/auth/google/callback",
-      GOOGLE_REVIEWER_ALLOWED_EMAILS: "reviewer@example.com",
-      GOOGLE_REVIEWER_STATE_SECRET: "state-secret-for-tests-only-abcdefghijklmnopqrstuvwxyz0123456789",
-      GOOGLE_REVIEWER_SESSION_SECRET: "session-secret-for-tests-only-zyxwvutsrqponmlkjihgfedcba9876543210"
+      AGENT_REVIEWER_AUTH_ENABLED: "false"
     }
   });
   return {

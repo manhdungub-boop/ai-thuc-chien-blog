@@ -4,7 +4,7 @@ import { AgentReviewerAuthStore } from "../src/google-reviewer-auth-store.mjs";
 
 const METHODS = {
   AGENT_AI_BANK_CANDIDATE_STORE: new Set(["upsertCandidates", "listCandidates", "getCandidate", "submitReviewEvidence", "listReviewEvidence", "getReviewPacket", "stats"]),
-  AGENT_DRAFT_STORE: new Set(["createDraft", "reviseDraft", "reviseDraftForReviewer", "recordReviewerClaimDecisions", "storeEvidenceLedger", "recordEvidenceReview", "listPendingReviewsForReviewer", "listNeedsRevisionForReviewer", "getDraftForReviewer", "getDraft", "reviewDraft", "listPendingReviews", "listNeedsRevision", "listOwnerReleaseReviews", "stats", "getTestAuthConfig"]),
+  AGENT_DRAFT_STORE: new Set(["createDraft", "reviseDraft", "reviseDraftForReviewer", "recordReviewerClaimDecisions", "storeEvidenceLedger", "recordEvidenceReview", "listPendingReviewsForReviewer", "listNeedsRevisionForReviewer", "getDraftForReviewer", "getDraft", "reviewDraft", "listPendingReviews", "listNeedsRevision", "listOwnerReleaseReviews", "stats"]),
   AGENT_REVIEWER_AUTH_STORE: new Set(["consumeStartRateLimit", "createTransaction", "consumeTransaction"])
 };
 
@@ -29,19 +29,7 @@ function withRpcFetch(Base, binding) {
 }
 
 class TestAgentAIBankCandidateStore extends withRpcFetch(AgentAIBankCandidateStore, "AGENT_AI_BANK_CANDIDATE_STORE") {}
-class TestAgentDraftStore extends withRpcFetch(AgentDraftStore, "AGENT_DRAFT_STORE") {
-  async getTestAuthConfig() {
-    return {
-      enabled: this.env.AGENT_REVIEWER_AUTH_ENABLED,
-      clientIdLength: this.env.GOOGLE_REVIEWER_CLIENT_ID?.length ?? 0,
-      clientSecretLength: this.env.GOOGLE_REVIEWER_CLIENT_SECRET?.length ?? 0,
-      redirectUri: this.env.GOOGLE_REVIEWER_REDIRECT_URI,
-      allowedEmails: this.env.GOOGLE_REVIEWER_ALLOWED_EMAILS,
-      stateSecretLength: this.env.GOOGLE_REVIEWER_STATE_SECRET?.length ?? 0,
-      sessionSecretLength: this.env.GOOGLE_REVIEWER_SESSION_SECRET?.length ?? 0
-    };
-  }
-}
+class TestAgentDraftStore extends withRpcFetch(AgentDraftStore, "AGENT_DRAFT_STORE") {}
 class TestAgentReviewerAuthStore extends withRpcFetch(AgentReviewerAuthStore, "AGENT_REVIEWER_AUTH_STORE") {}
 
 export { TestAgentAIBankCandidateStore, TestAgentDraftStore, TestAgentReviewerAuthStore };
