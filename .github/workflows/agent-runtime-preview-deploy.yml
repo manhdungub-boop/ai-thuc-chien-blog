@@ -68,10 +68,10 @@ jobs:
           }
           if (c.env) fail("Named Wrangler environments are not permitted.");
           const doNames = (c.durable_objects?.bindings ?? []).map(x => x.name + ":" + x.class_name).sort();
-          const expectedDo = ["AGENT_DRAFT_STORE:AgentDraftStore", "AGENT_REVIEWER_AUTH_STORE:AgentReviewerAuthStore", "AGENT_STATE_STORE:AgentStateStore"].sort();
+          const expectedDo = ["AGENT_AI_BANK_CANDIDATE_STORE:AgentAIBankCandidateStore", "AGENT_DRAFT_STORE:AgentDraftStore", "AGENT_REVIEWER_AUTH_STORE:AgentReviewerAuthStore", "AGENT_STATE_STORE:AgentStateStore"].sort();
           if (JSON.stringify(doNames) !== JSON.stringify(expectedDo)) fail("Unexpected Durable Object bindings.");
           const migrationNames = (c.migrations ?? []).flatMap(x => x.new_sqlite_classes ?? []).sort();
-          if (JSON.stringify(migrationNames) !== JSON.stringify(["AgentDraftStore", "AgentReviewerAuthStore", "AgentStateStore"].sort())) fail("Only the three declared SQLite Durable Object classes are allowed.");
+          if (JSON.stringify(migrationNames) !== JSON.stringify(["AgentAIBankCandidateStore", "AgentDraftStore", "AgentReviewerAuthStore", "AgentStateStore"].sort())) fail("Only the four declared SQLite Durable Object classes are allowed.");
           console.log("Preview-only config verified; no Production Worker, D1, DNS, Cron, or active agent path is configured.");
           NODE
 
