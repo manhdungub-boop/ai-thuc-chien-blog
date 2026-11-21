@@ -52,7 +52,7 @@ async function createSignedToken(keyPair, kid = "trusted-key-1", overrides = {})
   const claims = {
     iss: issuer,
     aud: expected.audience,
-    sub: "repo:manhdungub-boop@342528485/ai-thuc-chien-blog@1423636651:ref:refs/heads/main",
+    sub: "repo:manhdungub-boop/ai-thuc-chien-blog:ref:refs/heads/main",
     repository: expected.repository,
     repository_owner: expected.repositoryOwner,
     repository_owner_id: expected.repositoryOwnerId,
