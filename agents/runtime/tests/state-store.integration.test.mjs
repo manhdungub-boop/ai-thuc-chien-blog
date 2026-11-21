@@ -66,6 +66,44 @@ async function call(stub, pathname, body, headers = {}) {
   return { status: response.status, body: await response.json() };
 }
 
+test("schema v7 repairs either historical v6 layout without losing the other migration", async () => {
+  for (const layout of ["budget-only", "result-only"]) {
+    const directory = await mkdtemp(path.join(tmpdir(), "ai-thuc-chien-schema-v6-"));
+    let first;
+    try {
+      first = await createRuntime({ persistDir: directory });
+      const initial = await call(first.stub, "/__test/schema-state");
+      assert.equal(initial.body.version, "7");
+      const downgraded = await call(first.stub, "/__test/downgrade-v6-" + layout, {});
+      assert.equal(downgraded.status, 200);
+      const beforeRestart = await call(first.stub, "/__test/schema-state");
+      assert.equal(beforeRestart.body.version, "6");
+      assert.equal(beforeRestart.body.hasExternalRequestBudgets, layout === "budget-only");
+      assert.equal(beforeRestart.body.hasResultJson, layout === "result-only");
+    } finally {
+      if (first) await first.mf.dispose();
+    }
+
+    let reopened;
+    try {
+      reopened = await createRuntime({ persistDir: directory, resumeControl: false });
+      const state = await call(reopened.stub, "/__test/schema-state");
+      assert.deepEqual(state.body, {
+        ok: true,
+        version: "7",
+        hasResultJson: true,
+        hasExternalRequestBudgets: true,
+      }, "migration must complete from the " + layout + " v6 layout");
+      const budget = await call(reopened.stub, "/external-budget?day=2026-11-21&scope=ai_bank_discovery");
+      assert.equal(budget.status, 200);
+      assert.equal(budget.body.budget.remaining, 10);
+    } finally {
+      if (reopened) await reopened.mf.dispose();
+      await rm(directory, { recursive: true, force: true });
+    }
+  }
+});
+
 test("lease recovery alarm is disabled by default and recovers only expired leases when explicitly enabled", async () => {
   await withRuntime({}, async ({ stub }) => {
     const created = await call(stub, "/reserve", task("alarm-disabled"));

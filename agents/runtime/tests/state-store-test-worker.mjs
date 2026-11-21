@@ -29,10 +29,10 @@ export class TestAgentStateStore extends AgentStateStore {
 
   async fetch(request) {
     const url = new URL(request.url);
-    if (!["/__test/rollback", "/__test/downgrade-v1", "/__test/prune", "/__test/alarm-state", "/__test/expire-and-fire", "/__test/fire-alarm"].includes(url.pathname)) {
+    if (!["/__test/rollback", "/__test/downgrade-v1", "/__test/prune", "/__test/downgrade-v6-budget-only", "/__test/downgrade-v6-result-only", "/__test/schema-state", "/__test/alarm-state", "/__test/expire-and-fire", "/__test/fire-alarm"].includes(url.pathname)) {
       return super.fetch(request);
     }
-    if (url.pathname === "/__test/alarm-state" ? request.method !== "GET" : request.method !== "POST") {
+    if (url.pathname === "/__test/alarm-state" || url.pathname === "/__test/schema-state" ? request.method !== "GET" : request.method !== "POST") {
       return jsonResponse({ ok: false, error: "method_not_allowed" }, 405);
     }
     if (!await hasValidStateStoreBearer(request, this.env)) {
@@ -41,6 +41,22 @@ export class TestAgentStateStore extends AgentStateStore {
 
     try {
       await this.ready;
+      if (url.pathname === "/__test/downgrade-v6-budget-only") {
+        this.sql.exec("ALTER TABLE tasks DROP COLUMN result_json");
+        this.sql.exec("UPDATE runtime_meta SET value = '6' WHERE key = 'schema_version'");
+        return jsonResponse({ ok: true });
+      }
+      if (url.pathname === "/__test/downgrade-v6-result-only") {
+        this.sql.exec("DROP TABLE external_request_budgets");
+        this.sql.exec("UPDATE runtime_meta SET value = '6' WHERE key = 'schema_version'");
+        return jsonResponse({ ok: true });
+      }
+      if (url.pathname === "/__test/schema-state" && request.method === "GET") {
+        const version = this.sql.exec("SELECT value FROM runtime_meta WHERE key = 'schema_version'").toArray()[0]?.value;
+        const columns = this.sql.exec("PRAGMA table_info(tasks)").toArray();
+        const budgetTable = this.sql.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='external_request_budgets'").toArray()[0];
+        return jsonResponse({ ok: true, version, hasResultJson: columns.some((column) => column.name === "result_json"), hasExternalRequestBudgets: Boolean(budgetTable) });
+      }
       if (url.pathname === "/__test/prune") {
         const body = await request.json();
         if (!body || !Number.isSafeInteger(body.now) || body.now < 0) return jsonResponse({ ok: false, error: "test_prune_time_invalid" }, 400);
