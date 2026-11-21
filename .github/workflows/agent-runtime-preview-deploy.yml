@@ -121,43 +121,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          response="$RUNNER_TEMP/cloudflare-subscriptions.json"
+          response="$RUNNER_TEMP/cloudflare-observability-plan.json"
           status="$(curl --silent --show-error --output "$response" --write-out "%{http_code}" \
             --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             --header "Accept: application/json" \
-            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/subscriptions")"
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/observability/usage/limit")"
           if [[ "$status" != "200" ]]; then
-            echo "::error::Cannot verify the Cloudflare account plan (HTTP $status). Billing Read access is required; deployment stopped before resource creation."
+            echo "::error::Cannot verify Workers Free plan from the Cloudflare usage-limit endpoint (HTTP $status). Deployment stopped before resource creation."
             exit 1
           fi
-          echo "Sanitized subscription plan metadata (no account secrets or identifiers):"
-          jq -c '
-            if .success == true then
-              [.result[]? | {
-                rate_plan_id: (.rate_plan.id // null),
-                rate_plan_public_name: (.rate_plan.public_name // null),
-                rate_plan_scope: (.rate_plan.scope // null),
-                rate_plan_sets: (.rate_plan.sets // []),
-                product_name: (if (.product | type) == "object" then (.product.name // .product.id // null) else (.product // null) end)
-              }]
-            else { success: false }
-            end
-          ' "$response"
-          if ! jq -e '
-            .success == true and
-            ([.result[]? |
-              [
-                (.rate_plan // {} | [.id // "", .public_name // "", .name // ""] | map(tostring) | join(" ")),
-                (.product // "" | if type == "object" then (.name // .id // "") else . end | tostring)
-              ] |
-              map(ascii_downcase) | join(" ") |
-              select(test("worker") and test("free"))
-            ] | length > 0)
-          ' "$response" >/dev/null; then
-            echo "::error::The subscription response did not positively identify a Workers Free plan. Deployment stopped before resource creation."
+          echo "Sanitized Workers plan evidence:"
+          jq -c 'if .success == true then {plan: .result.plan, status: .result.status, daily_limit: .result.limit.daily, limit_unit: .result.limit.unit} else {success: false} end' "$response"
+          if ! jq -e '.success == true and .result.plan == "free"' "$response" >/dev/null; then
+            echo "::error::Cloudflare did not positively identify this account as Workers Free. Deployment stopped before resource creation."
             exit 1
           fi
-          echo "Cloudflare subscription response positively identifies Workers Free."
+          echo "Cloudflare confirms no Workers Paid or Enterprise plan; Preview deployment may proceed only after the explicit workflow confirmations and all other gates pass."
 
       - name: Deploy only the isolated Preview Worker
         working-directory: agents/runtime
