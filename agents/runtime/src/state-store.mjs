@@ -7,6 +7,7 @@ const SCHEMA_VERSION = 5;
 const DEFAULT_LIMITS = Object.freeze({ daily: 100, concurrent: 5, payloadBytes: 8192 });
 const TERMINAL_STATES = new Set(["succeeded", "failed", "cancelled"]);
 const TASK_TYPES_SQL = "'content.review','ai_bank.candidate_review','seo.audit'";
+const CIRCUIT_BREAKER = Object.freeze({ threshold: 5, windowMs: 10 * 60 * 1000 });
 
 function boundedLimit(value, fallback, maximum) {
   if (value === undefined || value === null || value === "") return fallback;
@@ -303,7 +304,18 @@ export class AgentStateStore {
   controlState() {
     const row = readRow(this.sql, "SELECT paused, changed_at, version FROM runtime_control WHERE singleton_id = 1");
     if (!row) throw new Error("runtime_control_missing");
-    return { paused: row.paused === 1, changedAt: row.changed_at, version: row.version };
+    const failureCount = readRow(this.sql,
+      "SELECT COUNT(*) AS count FROM audit_events WHERE event_type = 'task.terminal_failure' AND occurred_at >= ?",
+      Date.now() - CIRCUIT_BREAKER.windowMs,
+    )?.count ?? 0;
+    return {
+      paused: row.paused === 1,
+      changedAt: row.changed_at,
+      version: row.version,
+      failureCountLast10m: failureCount,
+      circuitBreakerThreshold: CIRCUIT_BREAKER.threshold,
+      circuitBreakerWindowMs: CIRCUIT_BREAKER.windowMs,
+    };
   }
 
   async consumeOidcJti(body, now) {
@@ -528,6 +540,10 @@ export class AgentStateStore {
           taskType: row.task_type,
           leaseGeneration: row.lease_generation,
         });
+        if (fields.state === "failed" && fields.error_code !== "daily_external_request_budget_exhausted") {
+          this.audit(body.taskId, "task.terminal_failure", now, { errorCode: fields.error_code });
+          this.evaluateCircuitBreaker(body.taskId, now);
+        }
         return { status: 200, body: { ok: true, task: safeTask(updated) } };
       });
     } catch {
@@ -564,6 +580,10 @@ export class AgentStateStore {
           attempt: row.attempt_count,
           leaseGeneration: row.lease_generation,
         });
+        if (decision.outcome === "failed") {
+          this.audit(body.taskId, "task.terminal_failure", now, { errorCode: fields.error_code });
+          this.evaluateCircuitBreaker(body.taskId, now);
+        }
         return { status: 200, body: { ok: true, outcome: decision.outcome, task: safeTask(updated) } };
       });
     } catch {
@@ -609,6 +629,36 @@ export class AgentStateStore {
     } catch {
       return { status: 503, body: { ok: false, error: "state_store_unavailable" } };
     }
+  }
+
+  evaluateCircuitBreaker(taskId, now) {
+    const countRow = readRow(this.sql,
+      "SELECT COUNT(*) AS count FROM audit_events WHERE event_type = 'task.terminal_failure' AND occurred_at >= ?",
+      now - CIRCUIT_BREAKER.windowMs,
+    );
+    const failureCount = countRow?.count ?? 0;
+    if (failureCount < CIRCUIT_BREAKER.threshold) return;
+
+    const current = readRow(this.sql, "SELECT paused, version FROM runtime_control WHERE singleton_id = 1");
+    if (!current || current.paused === 1) return;
+    const nextVersion = current.version + 1;
+    this.sql.exec(
+      "UPDATE runtime_control SET paused = 1, changed_at = ?, version = ? WHERE singleton_id = 1 AND paused = 0 AND version = ?",
+      now, nextVersion, current.version,
+    );
+    const updated = readRow(this.sql, "SELECT paused, version FROM runtime_control WHERE singleton_id = 1");
+    if (!updated || updated.paused !== 1 || updated.version !== nextVersion) return;
+
+    this.sql.exec(
+      "INSERT INTO runtime_control_audit (event_id, action, occurred_at, actor, reason, request_id) VALUES (?,?,?,?,?,?)",
+      crypto.randomUUID(), "pause", now, "system:circuit_breaker",
+      "circuit_breaker:5_failures_in_10m", crypto.randomUUID(),
+    );
+    this.audit(taskId, "runtime.circuit_breaker_auto_pause", now, {
+      failureCount,
+      threshold: CIRCUIT_BREAKER.threshold,
+      windowMs: CIRCUIT_BREAKER.windowMs,
+    });
   }
 
   audit(taskId, eventType, now, metadata) {

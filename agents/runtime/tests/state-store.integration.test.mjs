@@ -518,6 +518,38 @@ test("expired leases are requeued after bounded delay and fail at the attempt ce
   });
 });
 
+test("five terminal failures within ten minutes durably open the circuit breaker", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    for (let index = 1; index <= 5; index++) {
+      const created = await call(stub, "/reserve", task("circuit-breaker-" + index));
+      assert.equal(created.status, 201);
+      const taskId = created.body.task.taskId;
+      const claimed = await call(stub, "/claim", { taskId });
+      assert.equal(claimed.status, 200);
+      const lease = claimed.body.lease;
+      const failed = await call(stub, "/complete", {
+        taskId,
+        leaseOwner: lease.owner,
+        leaseGeneration: lease.generation,
+        status: "failed",
+        errorCode: "simulated_failure",
+      });
+      assert.equal(failed.status, 200);
+      const control = await call(stub, "/control");
+      assert.equal(control.body.control.failureCountLast10m, index);
+      assert.equal(control.body.control.paused, index === 5);
+    }
+
+    const blocked = await call(stub, "/reserve", task("circuit-breaker-blocked"));
+    assert.equal(blocked.status, 503);
+    assert.equal(blocked.body.error, "agent_disabled_or_paused");
+    const control = await call(stub, "/control");
+    assert.equal(control.body.control.paused, true);
+    assert.equal(control.body.control.circuitBreakerThreshold, 5);
+    assert.equal(control.body.control.circuitBreakerWindowMs, 10 * 60 * 1000);
+  });
+});
+
 test("pause blocks new claims and expiry recovery but allows safe heartbeat and completion", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "ai-thuc-chien-do-pause-lease-"));
   let active;
