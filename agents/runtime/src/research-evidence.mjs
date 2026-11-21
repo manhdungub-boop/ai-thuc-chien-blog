@@ -41,7 +41,7 @@ async function readBounded(response) {
 }
 
 function decodeHtmlEntities(value) {
-  return value.replace(/&(?:amp|lt|gt|quot|apos|#39|nbsp|#\\d+|#x[0-9a-f]+);/gi, entity => {
+  return value.replace(/&(?:amp|lt|gt|quot|apos|#39|nbsp|#\d+|#x[0-9a-f]+);/gi, entity => {
     const name = entity.slice(1, -1).toLowerCase();
     if (name === "amp") return "&";
     if (name === "lt") return "<";
@@ -56,14 +56,14 @@ function decodeHtmlEntities(value) {
 
 function extractExcerpt(html) {
   const withoutNoise = html
-    .replace(/<!--[\\s\\S]*?-->/g, " ")
-    .replace(/<(script|style|nav|footer|header|form|noscript|iframe|svg)\\b[^>]*>[\\s\\S]*?<\\/\\1\\s*>/gi, " ");
-  const article = withoutNoise.match(/<(article|main)\\b[^>]*>([\\s\\S]*?)<\\/\\1\\s*>/i)?.[2] || withoutNoise;
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/<(script|style|nav|footer|header|form|noscript|iframe|svg)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, " ");
+  const article = withoutNoise.match(/<(article|main)\b[^>]*>([\s\S]*?)<\/\1\s*>/i)?.[2] || withoutNoise;
   return decodeHtmlEntities(article
-    .replace(/<br\\s*\\/?>/gi, " ")
-    .replace(/<\\/(p|h[1-6]|li|section|div)>/gi, " ")
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<\/(p|h[1-6]|li|section|div)>/gi, " ")
     .replace(/<[^>]*>/g, " "))
-    .replace(/\\s+/g, " ").trim().slice(0, MAX_EXCERPT_CHARS);
+    .replace(/\s+/g, " ").trim().slice(0, MAX_EXCERPT_CHARS);
 }
 async function retrieveOne(signal, fetchImpl, now) {
   if (!signal || !allowedUrl(signal.url)) {
