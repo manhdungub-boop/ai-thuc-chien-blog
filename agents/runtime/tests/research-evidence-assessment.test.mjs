@@ -26,7 +26,7 @@ describe("research evidence readiness assessment", () => {
       draft_created: false,
       content_published: false
     });
-    expect(result.limitations.join(" ")).toContain("do not prove");
+    expect(result.limitations.join(" ")).toContain("remain unassessed until human review");
   });
 
   it("rejects repeated publisher domains even when article URLs differ", () => {
@@ -80,7 +80,7 @@ describe("research evidence readiness assessment", () => {
       item("arXiv cs.AI", "arxiv.org"), item("OpenAI News", "openai.com")
     ], { now, minIndependentSources: 99, maxAgeDays: 999 });
     expect(result.accepted_sources).toHaveLength(4);
-    expect(result.required_independent_sources).toBe(4);
+    expect(result.required_distinct_publishers).toBe(4);
     expect(result.max_source_age_days).toBe(90);
   });
 
