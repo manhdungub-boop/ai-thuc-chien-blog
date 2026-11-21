@@ -361,6 +361,8 @@ const worker = {
         task_execution_enabled: false,
         quality_review_executor_registered: false,
         quality_review_executor_enabled: false,
+        reviewer_auth_enabled: env.AGENT_REVIEWER_AUTH_ENABLED === "true",
+        publication_authorized: false,
         execution: "operator_triggered_read_only_analysis",
       });
     }
