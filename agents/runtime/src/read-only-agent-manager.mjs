@@ -56,7 +56,7 @@ export function createReadOnlyAgentManager({ snapshotAdapter } = {}) {
   }
 
   return Object.freeze({
-    async reviewBatch(taskInputs) {
+    async reviewBatch(taskInputs, { signal } = {}) {
       if (!Array.isArray(taskInputs) || taskInputs.length === 0 ||
           taskInputs.length > MAX_BATCH_TASKS) {
         return Object.freeze({
@@ -73,6 +73,7 @@ export function createReadOnlyAgentManager({ snapshotAdapter } = {}) {
       const seenKeys = new Set();
       const items = [];
       for (const input of taskInputs) {
+        if (signal?.aborted) throw new Error("task_execution_aborted");
         const validation = validateTaskRequest(input);
         if (!validation.ok) {
           items.push(itemFailure(input?.type, "task_invalid:" + validation.error));
@@ -87,16 +88,21 @@ export function createReadOnlyAgentManager({ snapshotAdapter } = {}) {
 
         let source;
         try {
-          source = await snapshotAdapter.getSnapshot(task);
-        } catch {
+          source = await snapshotAdapter.getSnapshot(task, { signal });
+        } catch (error) {
+          if (signal?.aborted || error?.name === "AbortError") {
+            throw new Error("task_execution_aborted");
+          }
           source = null;
         }
+        if (signal?.aborted) throw new Error("task_execution_aborted");
         if (!source || source.ok !== true || !source.snapshot) {
           items.push(itemFailure(task.type,
             typeof source?.error === "string" ? source.error : "snapshot_unavailable"));
           continue;
         }
 
+        if (signal?.aborted) throw new Error("task_execution_aborted");
         const report = handleReadOnlyTask(task, source.snapshot);
         if (!report.ok) {
           items.push(itemFailure(task.type, report.error || "analysis_failed"));
