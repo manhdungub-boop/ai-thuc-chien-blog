@@ -92,3 +92,66 @@ A read-only Cloudflare API inspection was performed for the connected account:
 ### Decision
 
 **Do not create a Durable Object namespace or deploy the Agent Runtime yet.** Published Free-tier limits are not a substitute for confirming this account's actual plan and usage. The next safe prerequisite is a read-only verification of the account's Workers plan and Durable Objects usage through an authorized billing-read view (or the Cloudflare dashboard). If the plan/usage cannot be verified as Free with sufficient headroom, keep the runtime unbound and disabled; do not upgrade or enable billing.
+
+
+## Read-only Preview prerequisite recheck (2026-11-20)
+
+A second read-only Cloudflare API check confirmed:
+
+- The account's Durable Objects namespace list is still empty.
+- The Worker script list contains the existing website/Preview scripts but no `ai-thuc-chien-agent-runtime-preview` script.
+- No namespace was created, no Worker was deployed, and no secret or account setting was changed.
+- The prior Billing Read permission gap remains unresolved; the actual Workers plan, billing state, and remaining usage headroom are still unverified.
+
+**Decision unchanged:** keep `wrangler.preview.jsonc` as code-only. Do not create a namespace, inject secrets, or deploy until a read-only Free-plan/usage verification is available. Do not upgrade or enable billing to clear this gate.
+
+
+## OIDC pause path — additional resource/security notes (2026-11-20)
+
+- GitHub OIDC verification performs two fixed-host HTTPS GETs (issuer discovery and JWKS) per accepted token; no custom URL, redirect, or caller credential is allowed. This adds no paid AI provider dependency, but request latency and Worker CPU must be measured in Preview before operational use.
+- A successful token consumes one State Store replay-ledger write and one durable Pause control mutation/audit write. Invalid tokens should fail before State Store access; replayed tokens return conflict without a second Pause.
+- The manual workflow is disabled from operational use until the Preview URL repository variable and Preview deployment are confirmed. The actor allowlist is pinned to `342528485`, observed as the triggering actor in GitHub Actions run #317. The Worker config feature flag remains false.
+- This is not evidence of Cloudflare Free-tier entitlement. Namespace, Worker, secret, and deploy steps remain blocked until Billing Read or equivalent authoritative usage evidence is available. No paid upgrade or billing activation is permitted.
+
+
+## Cloudflare account read-only gate check (2026-11-20)
+
+A read-only Cloudflare account inspection was completed after the OIDC CI passed:
+
+- The authenticated Cloudflare account's Worker Scripts listing contains no `ai-thuc-chien-agent-runtime-preview` script. The existing site and other preview scripts are separate and were not modified.
+- The account's Durable Object namespace listing returned `total_count: 0`. No Agent Runtime namespace has been created.
+- The account Billing Usage endpoint returned HTTP 403 / Authentication error because the connected Cloudflare authorization has no `Billing Read` scope. Therefore actual Workers Free plan status, usage and remaining headroom cannot be confirmed from this connection.
+- No Cloudflare resource was created, updated, deleted, deployed, or configured during this inspection.
+
+**Gate decision:** do not create a namespace, upload a Worker, set secrets, or enable OIDC until the exact account plan and free-tier headroom are verified through an authorized read-only billing view, and the exact dedicated Preview hostname is pinned. This is a permission limitation, not evidence that the account is on a paid plan.
+
+## Scheduled dispatcher cost update (2026-11-20)
+
+The code-only Preview configuration now declares `*/30 * * * *` (48 scheduled invocations/day), but `AGENT_SCHEDULER_ENABLED=false`, `AGENT_RECOVERY_ALARM_ENABLED=false`, `AGENT_ENABLED=false`, and `AGENT_PAUSED=true`. The config has not been deployed, so these are design bounds, not observed usage.
+
+- Each scheduled invocation dispatches at most one already-queued task; it does not admit new work or publish content.
+- A full 15-minute review can cause up to seven two-minute lease heartbeats. Each heartbeat costs one Durable Object request and two SQL row writes (task update + audit event).
+- The shared recovery alarm checks at five-minute intervals. A long task may therefore cause up to four alarm invocations during/around a 15-minute review, depending on completion and scheduling races. Each alarm invocation costs one Durable Object request. Alarm set/re-arm/delete operations also count as SQL row writes; count the actual calls from traces rather than assuming they are free.
+- Conservative upper envelope for 48 full-duration task ticks: up to 624 Durable Object requests/day (48 × [claim + completion + seven heartbeats + four alarm invocations]). Heartbeat writes contribute up to 672 SQL row writes/day; alarm set/re-arm/delete may add up to approximately 240 more in this deliberately conservative model. Add normal task lifecycle writes (up to 336 rows for 48 tasks using the current seven-write lifecycle estimate), recovery/audit activity, retention deletes, operator/manual requests and all other account workloads. These are planning bounds, not measured values or guaranteed exact maxima.
+- Cloudflare Workers Free Cron CPU allowance is 10 ms per invocation. The scheduled handler awaits the full task-review path; CPU consumption for actual task handlers has not been measured. The 15-minute Cron wall-time limit does not override the CPU limit.
+- No Cloudflare account plan or remaining quota is inferred from published platform limits. Actual Free plan, billing state, CPU, requests, SQL writes, storage and account-wide headroom remain unverified.
+
+**Decision remains NO-GO for deployment or activation.** Keep all four gates closed. Do not create a namespace, bind a DO, deploy Preview, add secrets, or activate Cron until read-only Billing/usage evidence confirms the account is Free with sufficient headroom, the CPU profile is measured against the 10 ms limit, and an independent review approves the implementation. If evidence cannot be obtained, leave the runtime unbound and disabled. No paid upgrade or billing setup is permitted.
+
+
+## Billing evidence reconciliation and scheduler hold (2026-11-21)
+
+The account owner subsequently supplied the Cloudflare Billing dashboard evidence. This supersedes the earlier historical statements above that the base plan could not be verified:
+
+- Workers: **Free tier / Active**.
+- Durable Objects: **Free tier**.
+- No payment method on file.
+- No invoices currently listed.
+- Spend-limits history: **No activity yet**.
+- Spectrum billable-usage panel: **No data**; this is Spectrum-only and is not evidence about Workers, Durable Objects, or Workers AI usage.
+
+This closes the **base plan-label verification** gate only. It does not measure current or remaining Workers requests, CPU, Durable Object requests, SQLite row reads/writes, GB-seconds, storage, or account-wide headroom. It also does not establish Workers AI model entitlement or Neurons quota. Workers AI inference remains disabled. No paid upgrade, payment method, spend limit, or billing change is permitted.
+
+The current `wrangler.preview.jsonc` candidate has been changed to contain **no Cron trigger**. The `scheduled()` handler remains dormant source code; there are no scheduled invocations from this Preview configuration. The former 48-invocation/day estimate above is a hypothetical historical planning model, not current configuration or observed usage. Do not reintroduce a schedule until live Preview usage, per-invocation CPU (including the Workers Free Cron CPU ceiling), DO/SQLite usage, pause behavior, recovery and rollback have been measured and independently reviewed.
+
+**Current decision remains NO-GO for Preview deployment or activation.** Keep `AGENT_ENABLED=false`, `AGENT_PAUSED=true`, `AGENT_SCHEDULER_ENABLED=false`, `AGENT_RECOVERY_ALARM_ENABLED=false`, and `AGENT_OIDC_ENABLED=false`. Do not create the DO namespace, bind/deploy the Worker, configure secrets, or activate schedules until the remaining quota/CPU, OIDC, rate-limit, emergency-stop and rollback gates are independently verified. No Production resource may be changed.

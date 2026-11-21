@@ -131,7 +131,8 @@ function operationUrl(operation, input) {
 /**
  * Calls only fixed State Store operations through the dedicated internal token.
  * Caller headers, cookies, Origin, and caller-supplied URLs are never forwarded.
- * Lease operations are exposed only to trusted server-side runtime modules.
+ * The OIDC Pause route uses the replay-consumption operation. All other exposed
+ * operations remain constrained to their fixed allowlist and runtime gates.
  */
 export async function callStateStore(env = {}, operation, input = {}) {
   const namespace = env.AGENT_STATE_STORE;

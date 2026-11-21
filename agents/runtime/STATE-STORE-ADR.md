@@ -1,8 +1,8 @@
 # Agent Runtime state store — architecture decision
 
-Status: **Draft implementation is being validated through the Agent Runtime PR stack (#327 and dependent PRs); PR #329 supplies bounded JSON ingress and has 122/122 passing isolated tests on its latest head. The State Store remains unbound and undeployed; task execution is not implemented. This ADR is a design record, not deployment approval.**
+Status: **Draft implementation combines the Integration control plane, external request budgets, GitHub Actions OIDC operator pause, bounded task-result persistence, claim-next, and lease-recovery alarm support. These are unbound and undeployed code paths; all runtime gates remain fail-closed. No 24/7 service is claimed.**
 
-Date: 2026-11-19
+Date: 2026-11-20
 
 ## Decision
 
@@ -14,7 +14,7 @@ Do not use Workers KV for admission counters: its eventual-consistency behavior 
 
 ## Why SQLite-backed Durable Objects
 
-Cloudflare documents SQLite-backed Durable Objects as available on Workers Free. Published Free allowances include 100,000 Durable Object requests/day, 13,000 GB-s/day, 100,000 SQL rows written/day, and 5 GB of account storage. These are platform ceilings, not account-specific remaining quota. Exceeding a Free allowance causes operations of that type to fail; no paid upgrade is authorized.
+Cloudflare's current Durable Objects pricing documentation (last updated 2026-11-13) states that SQLite-backed Durable Objects are available on Workers Free. Published Free allowances include 100,000 Durable Object requests/day (alarm invocations count as requests), 13,000 GB-s/day, 5 million SQL rows read/day, 100,000 SQL rows written/day, and 5 GB of SQL storage. Each SQLite-backed `setAlarm()` is one SQL row write; deletes also count as row writes. Daily limits reset at 00:00 UTC and exceeding a Free limit causes further operations of that type to fail. These are platform ceilings, not evidence that this Cloudflare account is on Free or has remaining headroom. No paid upgrade or overage is authorized.
 
 Official references:
 - https://developers.cloudflare.com/durable-objects/platform/pricing/
@@ -40,24 +40,24 @@ Use Durable Object SQLite \`transactionSync(callback)\`; do not issue SQL \`BEGI
 
 - `runtime_meta`: schema version.
 - `daily_usage`: UTC day primary key and accepted count.
-- `tasks`: opaque task ID, unique idempotency key, allowlisted type, validated minimal payload JSON, payload hash/size, state, timestamps, bounded attempt count, maximum attempts, lease generation/owner/expiry/absolute expiry, next retry time, and bounded error codes.
+- `tasks`: opaque task ID, unique idempotency key, allowlisted type, validated minimal payload JSON, payload hash/size, state, timestamps, bounded attempt count, maximum attempts, lease generation/owner/expiry/absolute expiry, next retry time, bounded error codes, and an optional strict-schema review result JSON field capped at 4 KiB.
 - `audit_events`: event ID, task ID, event type, timestamp, and non-sensitive metadata only.
 - `runtime_control` and `runtime_control_audit`: durable fail-closed pause state and operator action audit.
 - `runtime_control_rate_limit`: persistent per-actor control mutation window and request count.
 - `oidc_jti_replay`: SHA-256 hashes of consumed GitHub OIDC `jti` values, retained until 24 hours after JWT expiry, with atomic single-use enforcement.
 
-Schema migrations v1-to-v5 are transactional and preserve existing task and daily-usage rows. Constraints include a unique idempotency key, CHECK constraints for task state/type and bounded lease fields, bounded payload size, and bounded audit metadata. No credentials, bearer tokens, article body contents, or personal data are stored in audit rows.
+Schema migrations v1-to-v6 are transactional and preserve existing task and daily-usage rows. Constraints include a unique idempotency key, CHECK constraints for task state/type and bounded lease fields, bounded payload size, and bounded audit metadata. No credentials, bearer tokens, article body contents, or personal data are stored in audit rows.
 
 ## State transitions
 
 - `queued -> running` occurs only through an atomic claim while `AGENT_ENABLED=true` and `AGENT_PAUSED=false`; generic `/transition` cannot bypass lease ownership. `queued -> cancelled` remains available while paused for operator cleanup.
 - Claim increments the attempt count and lease generation and assigns an opaque lease owner. Heartbeat and completion require the current owner/generation and an unexpired lease; stale owners are rejected by fencing checks.
 - A lease has a five-minute initial duration, a 15-minute maximum individual extension, and a 30-minute absolute lifetime. Heartbeat and completion may finish an already-owned in-flight task while admission is paused; new claims and recovery are blocked while paused.
-- Expired-lease recovery is bounded: it requeues before the attempt ceiling with a bounded retry delay, or marks the task failed at the ceiling. Recovery is an operator-invoked `POST /recover`; it is **not automatic**.
+- Expired-lease recovery is bounded: it requeues before the attempt ceiling with a bounded retry delay, or marks the task failed at the ceiling. An operator-invoked `POST /recover` remains available; a separate recovery-only Durable Object alarm can perform the same bounded lease recovery when explicitly enabled. The alarm is disabled in Preview config and does not dispatch queued tasks.
 - Repeating the same terminal completion for the same lease generation is idempotent; attempting to reopen or change a terminal state is rejected.
 - In-flight count is derived from durable task rows; terminal transitions do not decrement a separate counter.
 
-The implementation does not include an alarm, cron trigger, queue consumer, automatic recovery scheduler, task handler, or external-side-effect idempotency. An expired task can remain running until an authorized operator invokes recovery.
+The Worker source contains an opt-in `scheduled()` handler for one bounded queue-dispatch tick. It accepts only the exact 30-minute cron string, requires `AGENT_SCHEDULER_ENABLED=true`, `AGENT_RECOVERY_ALARM_ENABLED=true`, `AGENT_ENABLED=true`, `AGENT_PAUSED=false`, and a valid operator bearer, then reuses the authenticated dispatcher with a hard-coded batch size of one. No task is admitted by the scheduler, no retry loop is started, and no publishing or external write handler is available. **The checked-in `wrangler.preview.jsonc` does not declare any Cron trigger**, so this handler is dormant in the current Preview configuration. It has not been deployed or enabled.
 
 ## Retention and budgets
 
@@ -65,6 +65,10 @@ The implementation does not include an alarm, cron trigger, queue consumer, auto
 - Terminal task rows are retained for 30 days; audit and daily-usage rows are retained for 90 days. Idempotency protection is bounded by the 30-day task retention.
 - Admission, claim, heartbeat, recovery and terminal completion update task rows and append audit events in the same SQLite transaction. Heartbeats add two row writes apiece; actual heartbeat cadence and recovery rates must be measured before any live Preview binding.
 - These internal limits are conservative guardrails, not evidence of remaining account quota or guaranteed availability.
+- Hypothetical scheduler budget model (code-only, not measured or configured): if a `*/30 * * * *` Cron trigger were added later, it would produce 48 Worker Cron invocations/day. Each tick is hard-bounded to one task; a non-empty tick can issue one `/claim-next`, one `/complete`, and up to seven `/heartbeat` Durable Object requests if the review runs for the full 15-minute Cron wall-time window (heartbeats are every two minutes). Each heartbeat writes the task row and one audit row. A task claim may set one shared recovery alarm; `setAlarm()` consumes one SQL row write and each alarm invocation consumes one Durable Object request. Because the current alarm schedule rechecks active leases at five-minute intervals while the lease is renewed, a full 15-minute review can produce up to four alarm invocations (at approximately minutes 5, 10, 15, and 20, with the final one recovering the expired lease). A deliberately conservative envelope is therefore up to 624 DO requests/day for 48 full-duration task ticks (48 × [claim + completion + 7 heartbeats + 4 alarms]), before manual/operator traffic, retries, or other account workloads. Heartbeats add up to 672 SQL row writes/day; alarm set/re-arm/clear operations can add up to 240 more, plus task/audit/retention writes. Fast reviews incur no heartbeat writes. Cloudflare documents a 10 ms CPU limit per Workers Free Cron invocation and a 15-minute Cron wall-time limit; the task-review path has not been measured against the CPU ceiling. Published limits are not account headroom. The scheduled dispatcher requires the recovery alarm gate, so a scheduled task could not run without lease recovery enabled. **No Cron trigger is currently declared in `wrangler.preview.jsonc`; this budget is a hypothetical future scenario, not current scheduled usage.** No scheduler is enabled until the account plan/remaining quota and actual CPU/SQL usage are independently verified.
+- The Worker also exposes operator-authenticated `POST /internal/enqueue` for bounded, idempotent admission of one to five validated tasks; it only reserves queue entries and does not execute them. `POST /internal/dispatch` is a separate bounded operator action.
+- The State Store exposes authenticated `/claim-next`, which atomically selects the oldest due queued task and grants a fenced lease. Operator `POST /internal/dispatch` retains a hard maximum batch of five. The scheduled handler reuses this same path but hard-caps itself at one task per 30-minute tick. All review handlers remain read-only; no publishing/write handlers are wired.
+- A bounded lease-recovery alarm handler is now implemented in the isolated source branch. It is gated by `AGENT_RECOVERY_ALARM_ENABLED=true`, the existing outer enabled/unpaused flags, and the durable pause control. The checked-in Preview value is `false`. The handler uses one shared alarm with a five-minute minimum cadence, processes at most five expired leases per invocation, audits each recovery, and clears itself while disabled or paused. It only requeues/fails expired leases; it does not claim or execute queued tasks. This is not a scheduler or 24/7 execution path. It has not been deployed or enabled.
 
 ## Failure behavior
 
@@ -82,17 +86,15 @@ This primitive does not verify JWT signatures, fetch JWKS, validate claims, or a
 
 ## Operational control-plane gaps
 
-- The Worker shell in the current integration branch implements server-side, bearer-authenticated `GET /internal/control`, `POST /internal/control/pause`, and `POST /internal/control/resume` bridges. It generates the request ID and uses the configured `AGENT_OPERATOR_ID`; it does not accept a caller-supplied actor. The State Store enforces a persistent per-actor mutation rate limit and writes pause/resume audit events. These are code-level controls validated locally, not a live operational control plane: the checked-in Preview config still has no Durable Object binding or secrets, so the bridge cannot operate in a deployed Worker yet.
-- The Worker shell does **not** expose an operator recovery bridge. State Store `POST /recover` remains internal-only and is not operationally callable through the Worker surface. Recovery is manual at the State Store implementation level, not an automatic scheduler.
-- `AGENT_ENABLED` and `AGENT_PAUSED` remain independent outer deployment gates. The durable pause state can stop new claims/admissions when the State Store is connected, but it is not a substitute for an independently tested emergency procedure that can stop the Worker or revoke credentials if the control plane itself is unavailable. Do not claim an instant, end-to-end emergency kill switch.
-- There is no browser-facing operator UI, session-based admin access, MFA, or per-human identity. The current operator bearer is a shared secret and must remain server-side. Do not expose it or the internal State Store token to browser clients.
-- GitHub OIDC verification and replay-ledger primitives are not wired into Pause/Resume or any other control action. The current control bridge uses the operator bearer only. Do not describe OIDC as enabled or as a second factor.
-- Before any task execution, complete independent review of the control bridge, add an operator recovery path with bounded scope, document and test an emergency stop procedure including credential revocation/configuration rollback, and establish a tested rollback path. Until then, keep the Runtime disabled and unbound.
+- The State Store `POST /recover` route remains behind the dedicated Worker-to-DO internal bearer. The Worker source now contains an operator-authenticated `POST /internal/recover` bridge that injects a configured service actor and server-generated request ID, forwards only the dedicated internal credential, and returns a minimized task projection. The State Store validates the actor/request ID, applies a per-actor 10-per-60-second rate limit using the durable control-rate table, and records both fields in the recovery audit event. This bridge is implemented in source and covered by isolated Worker tests, but it is not operationally available until the dedicated Preview Worker is deployed with its Preview-only binding and secrets.
+- The current pause controls are environment flags (`AGENT_ENABLED` and `AGENT_PAUSED`), not a separately authenticated, dynamically mutable kill-switch API. A change to runtime flags requires a controlled configuration/deployment operation; do not describe this as an instant remote kill switch.
+- There is no operator UI, browser session, MFA, or per-human identity provider. The recovery bridge uses a configured service actor and a shared operator bearer; its audit identity is therefore a service identity, not proof of which human initiated the action. The bridge has a durable per-actor rate limit, but pause/resume and recovery share the same actor bucket. Do not expose the internal State Store token to a browser.
+- Before any task execution, independently review the shared rate-limit semantics, service-actor audit limitation, recovery bridge, explicit pause/resume behavior, and rollback path. Add a human-bound operator identity/MFA or an equivalent trusted administrative boundary before broader operational use. Until those gates pass, keep the Runtime disabled and unbound.
 ## Not approved by this ADR
 
-- No Durable Object namespace/binding or migration is added to the checked-in Preview Worker config.
-- No Cloudflare Agent Runtime deployment, secret configuration, alarm, cron trigger, queue consumer, or public endpoint is enabled.
-- No task execution, external side effects, backup/restore promise, or 24/7 claim is authorized.
+- No Durable Object namespace/binding or migration is added to the validation-only `wrangler.jsonc`. A separate `wrangler.preview.jsonc` now declares one SQLite `AgentStateStore` binding and its initial migration, with both runtime gates closed. This Preview config is code-only and has not been deployed; secrets, account identifiers, production routes, and schedules remain absent.
+- No Cloudflare Agent Runtime deployment, secret configuration, alarm activation, Cron Trigger, queue consumer, or public endpoint is enabled. The `scheduled()` handler exists in source, but no Cron expression/trigger is declared in the current Preview config and the handler remains gated off.
+- Only the bounded, operator-triggered, synchronous read-only review path exists in source; it has no publishing or other external write side effects. No automatic background execution, backup/restore promise, or 24/7 claim is authorized.
 - No Production Worker, DNS, D1, or live data is changed.
 
 ## Implementation gates
