@@ -227,3 +227,157 @@ describe("authenticated reviewer draft read routes", () => {
     expect(called).toBe(false);
   });
 });
+
+
+function aiBankStoreNamespace(stub) {
+  return {
+    idFromName(name) {
+      expect(name).toBe("agent-ai-bank-candidates-primary");
+      return "agent-ai-bank-candidates-id";
+    },
+    get(id) {
+      expect(id).toBe("agent-ai-bank-candidates-id");
+      return stub;
+    }
+  };
+}
+
+describe("authenticated read-only AI Bank reviewer routes", () => {
+  const collection = base + "/api/reviewer/ai-bank/candidates?limit=10";
+  const detail = base + "/api/reviewer/ai-bank/candidates/ollama/ollama";
+
+  it("rejects candidate reads without a reviewer session", async () => {
+    const response = await handleReviewerHttpRequest(new Request(collection), {});
+    expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({ error: "reviewer_session_required" });
+  });
+
+  it("rejects cross-origin requests before session verification or store access", async () => {
+    let storeAccesses = 0;
+    const response = await handleReviewerHttpRequest(new Request(collection, {
+      headers: { origin: "https://attacker.example", cookie: "__Host-ai_reviewer_session=forged" }
+    }), {
+      AGENT_AI_BANK_CANDIDATE_STORE: { idFromName() { storeAccesses += 1; }, get() { storeAccesses += 1; } }
+    });
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ error: "review_request_origin_or_content_type_rejected" });
+    expect(storeAccesses).toBe(0);
+  });
+
+  it("keeps AI Bank reviewer reads unavailable until reviewer auth is configured", async () => {
+    const response = await handleReviewerHttpRequest(new Request(collection, {
+      headers: { cookie: "__Host-ai_reviewer_session=forged" }
+    }), { AGENT_REVIEWER_AUTH_ENABLED: "false" });
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ error: "reviewer_auth_not_configured" });
+  });
+
+  it("rejects unsupported methods without touching the candidate store", async () => {
+    let storeAccesses = 0;
+    const env = {
+      ...reviewerAuthEnv,
+      AGENT_AI_BANK_CANDIDATE_STORE: {
+        idFromName() { storeAccesses += 1; return "unused"; },
+        get() { storeAccesses += 1; return {}; }
+      }
+    };
+    for (const path of [collection, detail]) {
+      for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
+        const response = await handleReviewerHttpRequest(new Request(path, { method }), env);
+        expect(response.status, method + " " + path).toBe(405);
+        expect(await response.json()).toMatchObject({ error: "method_not_allowed" });
+      }
+    }
+    expect(storeAccesses).toBe(0);
+  });
+
+  it("returns bounded candidate summaries with all write and publication permissions false", async () => {
+    const token = await createReviewerSessionToken();
+    const items = [{ candidate: { candidate_id: "github:ollama/ollama" }, review_status: "pending" }];
+    let receivedLimit;
+    const env = {
+      ...reviewerAuthEnv,
+      AGENT_AI_BANK_CANDIDATE_STORE: aiBankStoreNamespace({
+        async listCandidates(limit) { receivedLimit = limit; return items; }
+      })
+    };
+    const response = await handleReviewerHttpRequest(new Request(collection, {
+      headers: { origin: base, cookie: "__Host-ai_reviewer_session=" + token }
+    }), env);
+    expect(response.status).toBe(200);
+    expect(receivedLimit).toBe(10);
+    expect(await response.json()).toEqual({
+      items,
+      count: 1,
+      reviewer_ref: "google:reviewer-test-subject",
+      catalog_write_authorized: false,
+      evidence_verification_authorized: false,
+      public_publication_authorized: false
+    });
+    expect(response.headers.get("cache-control")).toBe("no-store");
+  });
+
+  it("returns a release-scoped review packet with pending evidence explicitly unverified", async () => {
+    const token = await createReviewerSessionToken();
+    const packet = {
+      candidate: { candidate: { candidate_id: "github:ollama/ollama" } },
+      evidence: [{ source_status: "submitted_source_not_verified", verified: false, verification_authorized: false }]
+    };
+    let received;
+    const env = {
+      ...reviewerAuthEnv,
+      AGENT_AI_BANK_CANDIDATE_STORE: aiBankStoreNamespace({
+        async getReviewPacket(candidateId) { received = candidateId; return packet; }
+      })
+    };
+    const response = await handleReviewerHttpRequest(new Request(detail, {
+      headers: { origin: base, cookie: "__Host-ai_reviewer_session=" + token }
+    }), env);
+    expect(response.status).toBe(200);
+    expect(received).toBe("github:ollama/ollama");
+    expect(await response.json()).toEqual({
+      packet,
+      reviewer_ref: "google:reviewer-test-subject",
+      catalog_write_authorized: false,
+      evidence_verification_authorized: false,
+      public_publication_authorized: false
+    });
+  });
+
+  it("rejects invalid limits before candidate-store access", async () => {
+    const token = await createReviewerSessionToken();
+    let storeAccesses = 0;
+    const env = {
+      ...reviewerAuthEnv,
+      AGENT_AI_BANK_CANDIDATE_STORE: {
+        idFromName() { storeAccesses += 1; return "unused"; },
+        get() { storeAccesses += 1; return {}; }
+      }
+    };
+    const response = await handleReviewerHttpRequest(new Request(base + "/api/reviewer/ai-bank/candidates?limit=21", {
+      headers: { origin: base, cookie: "__Host-ai_reviewer_session=" + token }
+    }), env);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: "invalid_ai_bank_candidate_limit" });
+    expect(storeAccesses).toBe(0);
+  });
+
+  it("does not expose an AI Bank evidence-write route", async () => {
+    const token = await createReviewerSessionToken();
+    let storeAccesses = 0;
+    const env = {
+      ...reviewerAuthEnv,
+      AGENT_AI_BANK_CANDIDATE_STORE: {
+        idFromName() { storeAccesses += 1; return "unused"; },
+        get() { storeAccesses += 1; return {}; }
+      }
+    };
+    const response = await handleReviewerHttpRequest(new Request(base + "/api/reviewer/ai-bank/candidates/ollama/ollama/evidence", {
+      method: "POST",
+      headers: { origin: base, "content-type": "application/json", cookie: "__Host-ai_reviewer_session=" + token },
+      body: JSON.stringify({ evidence: { source_url: "https://example.com" } })
+    }), env);
+    expect(response.status).toBe(404);
+    expect(storeAccesses).toBe(0);
+  });
+});
