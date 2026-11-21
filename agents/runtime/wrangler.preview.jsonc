@@ -19,6 +19,14 @@
       {
         "name": "AGENT_STATE_STORE",
         "class_name": "AgentStateStore"
+      },
+      {
+        "name": "AGENT_REVIEWER_AUTH_STORE",
+        "class_name": "AgentReviewerAuthStore"
+      },
+      {
+        "name": "AGENT_DRAFT_STORE",
+        "class_name": "AgentDraftStore"
       }
     ]
   },
@@ -27,6 +35,13 @@
       "tag": "v1",
       "new_sqlite_classes": [
         "AgentStateStore"
+      ]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": [
+        "AgentReviewerAuthStore",
+        "AgentDraftStore"
       ]
     }
   ],
