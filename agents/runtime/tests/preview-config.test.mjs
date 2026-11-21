@@ -28,7 +28,7 @@ test("dedicated Agent Runtime Preview config binds only its SQLite State Store a
     AGENT_OIDC_WORKFLOW_REF: "manhdungub-boop/ai-thuc-chien-blog/.github/workflows/agent-runtime-operator.yml@refs/heads/main",
     AGENT_OIDC_ACTOR_ID: "342528485",
   });
-  assert.deepEqual(config.triggers, { crons: ["*/30 * * * *"] });
+  assert.equal(Object.hasOwn(config, "triggers"), false);
   assert.deepEqual(config.durable_objects, {
     bindings: [{ name: "AGENT_STATE_STORE", class_name: "AgentStateStore" }],
   });
