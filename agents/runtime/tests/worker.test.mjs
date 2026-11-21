@@ -120,6 +120,24 @@ test("lease heartbeat does not add a write for a fast review", async () => {
   assert.equal(heartbeats, 0);
 });
 
+test("lease heartbeat aborts cooperative work immediately when renewal is denied", async () => {
+  let observedAbort = false;
+  await assert.rejects(
+    runWithLeaseHeartbeat(
+      (signal) => new Promise((resolve, reject) => {
+        signal.addEventListener("abort", () => {
+          observedAbort = true;
+          reject(signal.reason);
+        }, { once: true });
+      }),
+      async () => { throw new Error("lease fenced by emergency pause"); },
+      2,
+    ),
+    (error) => error.message === "task_lease_heartbeat_unavailable",
+  );
+  assert.equal(observedAbort, true, "the active work adapter must receive the abort signal");
+});
+
 test("lease heartbeat fails closed when renewal fails", async () => {
   await assert.rejects(
     runWithLeaseHeartbeat(
