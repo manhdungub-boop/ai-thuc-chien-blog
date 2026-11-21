@@ -6,6 +6,7 @@ import { authorizeGitHubActionsOperator } from "./github-oidc-authorize.mjs";
 import { createReadOnlyAgentManager } from "./read-only-agent-manager.mjs";
 import { createReadOnlyTaskSnapshotAdapter } from "./task-snapshot-adapters.mjs";
 import { createPreviewReadOnlyReaders } from "./preview-read-only-sources.mjs";
+import { readBoundedJson as readBoundedJsonBody } from "./bounded-json-body.mjs";
 export { AgentStateStore } from "./state-store.mjs";
 export { AgentAIBankCandidateStore } from "./ai-bank-candidate-store.mjs";
 export { AgentDraftStore } from "./draft-artifact-store.mjs";
@@ -19,10 +20,76 @@ const SECURITY_HEADERS = Object.freeze({
   "Referrer-Policy": "no-referrer",
 });
 const MAX_INTERNAL_RESPONSE_BYTES = 16 * 1024;
+const LEASE_HEARTBEAT_INTERVAL_MS = 10_000;
+const INTERNAL_SCHEDULED_DISPATCH = Symbol("internal-scheduled-dispatch");
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: SECURITY_HEADERS });
 }
 function isEnabled(value) { return value === "true"; }
+
+const SAFE_TASK_TYPES = new Set(["content.review", "ai_bank.candidate_review", "seo.audit"]);
+function safeReviewResult(item) {
+  if (!item || item.ok !== true || !SAFE_TASK_TYPES.has(item.taskType) ||
+      !["pass", "attention", "review_required"].includes(item.status) ||
+      !Number.isSafeInteger(item.findingCount) || item.findingCount < 0 || item.findingCount > 20 ||
+      !Array.isArray(item.findings) || item.findings.length !== item.findingCount) {
+    return { ok: false, errorCode: "read_only_review_failed" };
+  }
+  const findings = [];
+  for (const finding of item.findings) {
+    if (!finding || typeof finding !== "object" || Array.isArray(finding) ||
+        Object.keys(finding).sort().join(",") !== "code,message,severity" ||
+        typeof finding.code !== "string" || !/^[a-z][a-z0-9_]{1,79}$/.test(finding.code) ||
+        !["error", "warning"].includes(finding.severity) ||
+        typeof finding.message !== "string" || finding.message.length < 1 || finding.message.length > 256 ||
+        finding.message.trim() !== finding.message || /[\\u0000-\\u001f\\u007f]/.test(finding.message)) {
+      return { ok: false, errorCode: "read_only_review_failed" };
+    }
+    findings.push({ code: finding.code, severity: finding.severity, message: finding.message });
+  }
+  return {
+    ok: true,
+    taskType: item.taskType,
+    status: item.status,
+    findingCount: item.findingCount,
+    findings,
+  };
+}
+
+function isValidClientIp(address) {
+  if (address.includes(":")) {
+    try {
+      const hostname = new URL("http://[" + address + "]/").hostname;
+      return hostname.startsWith("[") && hostname.endsWith("]");
+    } catch {
+      return false;
+    }
+  }
+  const octets = address.split(".");
+  return octets.length === 4 && octets.every((octet) =>
+    /^(0|[1-9][0-9]{0,2})$/.test(octet) && Number(octet) <= 255
+  );
+}
+
+async function enforceIngressRateLimit(request, env) {
+  if (env.AGENT_RATE_LIMIT_REQUIRED !== "true") return null;
+  const limiter = env.AGENT_INGRESS_RATE_LIMITER;
+  if (!limiter || typeof limiter.limit !== "function") {
+    return json({ ok: false, error: "rate_limit_unavailable" }, 503);
+  }
+  const address = request.headers.get("cf-connecting-ip");
+  if (!address || address.length > 64 || address.trim() !== address || address.includes(",") || !isValidClientIp(address)) {
+    return json({ ok: false, error: "client_ip_unavailable" }, 503);
+  }
+  const key = "ip:" + address;
+  try {
+    const result = await limiter.limit({ key });
+    if (result?.success !== true) return json({ ok: false, error: "rate_limited" }, 429);
+    return null;
+  } catch {
+    return json({ ok: false, error: "rate_limit_unavailable" }, 503);
+  }
+}
 
 
 
@@ -202,14 +269,15 @@ async function writeStateStore(env, pathname, payload) {
   return body;
 }
 
-export async function runWithLeaseHeartbeat(work, heartbeat, intervalMs = 120_000) {
+export async function runWithLeaseHeartbeat(work, heartbeat, intervalMs = 10_000) {
   if (typeof work !== "function" || typeof heartbeat !== "function" ||
       !Number.isSafeInteger(intervalMs) || intervalMs < 1 || intervalMs > 120_000) {
     throw new Error("lease_heartbeat_configuration_invalid");
   }
+  const controller = new AbortController();
   let finished = false;
   let heartbeatFailed = false;
-  const workPromise = Promise.resolve().then(work).then(
+  const workPromise = Promise.resolve().then(() => work(controller.signal)).then(
     (value) => { finished = true; return value; },
     (error) => { finished = true; throw error; },
   );
@@ -225,12 +293,17 @@ export async function runWithLeaseHeartbeat(work, heartbeat, intervalMs = 120_00
       await heartbeat();
     } catch {
       heartbeatFailed = true;
+      controller.abort(new Error("task_lease_heartbeat_unavailable"));
       break;
     }
   }
-  const result = await workPromise;
-  if (heartbeatFailed) throw new Error("task_lease_heartbeat_unavailable");
-  return result;
+  if (heartbeatFailed) {
+    // Work adapters must honor the signal before each source read/side effect.
+    // Wait for cooperative cleanup before returning control to the dispatcher.
+    try { await workPromise; } catch {}
+    throw new Error("task_lease_heartbeat_unavailable");
+  }
+  return await workPromise;
 }
 
 async function readBoundedJson(response) {
@@ -270,7 +343,11 @@ async function readStateStore(env, pathname) {
 }
 
 const worker = {
-  async fetch(request, env = {}) {
+  async fetch(request, env = {}, context) {
+    if (context !== INTERNAL_SCHEDULED_DISPATCH) {
+      const limited = await enforceIngressRateLimit(request, env);
+      if (limited) return limited;
+    }
     const reviewerResponse = await handleReviewerHttpRequest(request, env);
     if (reviewerResponse) return reviewerResponse;
     const url = new URL(request.url);
@@ -400,27 +477,37 @@ const worker = {
           if (!lease || typeof lease.owner !== "string" || !Number.isSafeInteger(lease.generation)) {
             throw new Error("state_store_lease_invalid");
           }
-          const report = await manager.reviewBatch([task]);
+          const report = await runWithLeaseHeartbeat(
+            (signal) => manager.reviewBatch([task], { signal }),
+            () => writeStateStore(env, "/heartbeat", {
+              taskId: stored.taskId,
+              leaseOwner: lease.owner,
+              leaseGeneration: lease.generation,
+            }),
+            LEASE_HEARTBEAT_INTERVAL_MS,
+          );
           const item = report.items[0];
+          const result = safeReviewResult(item);
+          const reviewSucceeded = result.ok === true;
           const completion = await writeStateStore(env, "/complete", {
             taskId: stored.taskId,
             leaseOwner: lease.owner,
             leaseGeneration: lease.generation,
-            status: item?.ok === true ? "succeeded" : "failed",
-            ...(item?.ok === true ? {
+            status: reviewSucceeded ? "succeeded" : "failed",
+            ...(reviewSucceeded ? {
               result: {
-                taskType: item.taskType,
-                status: item.status,
-                findingCount: item.findingCount,
-                findings: item.findings,
+                taskType: result.taskType,
+                status: result.status,
+                findingCount: result.findingCount,
+                findings: result.findings,
               },
-            } : { errorCode: "read_only_review_failed" }),
+            } : { errorCode: result.errorCode }),
           });
           items.push({
-            ok: item?.ok === true,
+            ok: reviewSucceeded,
             taskId: stored.taskId,
-            state: completion.task?.state || (item?.ok === true ? "succeeded" : "failed"),
-            result: item,
+            state: completion.task?.state || (reviewSucceeded ? "succeeded" : "failed"),
+            result,
           });
         }
         const summary = {
@@ -537,37 +624,40 @@ const worker = {
             throw new Error("state_store_claim_invalid");
           }
           const report = await runWithLeaseHeartbeat(
-            () => manager.reviewBatch([{
+            (signal) => manager.reviewBatch([{
               type: task.type,
               idempotencyKey: task.idempotencyKey,
               payload: task.payload,
-            }]),
+            }], { signal }),
             () => writeStateStore(env, "/heartbeat", {
               taskId: task.taskId,
               leaseOwner: lease.owner,
               leaseGeneration: lease.generation,
             }),
+            LEASE_HEARTBEAT_INTERVAL_MS,
           );
           const item = report.items[0];
+          const result = safeReviewResult(item);
+          const reviewSucceeded = result.ok === true;
           const completion = await writeStateStore(env, "/complete", {
             taskId: task.taskId,
             leaseOwner: lease.owner,
             leaseGeneration: lease.generation,
-            status: item?.ok === true ? "succeeded" : "failed",
-            ...(item?.ok === true ? {
+            status: reviewSucceeded ? "succeeded" : "failed",
+            ...(reviewSucceeded ? {
               result: {
-                taskType: item.taskType,
-                status: item.status,
-                findingCount: item.findingCount,
-                findings: item.findings,
+                taskType: result.taskType,
+                status: result.status,
+                findingCount: result.findingCount,
+                findings: result.findings,
               },
-            } : { errorCode: "read_only_review_failed" }),
+            } : { errorCode: result.errorCode }),
           });
           items.push({
-            ok: item?.ok === true,
+            ok: reviewSucceeded,
             taskId: task.taskId,
-            state: completion.task?.state || (item?.ok === true ? "succeeded" : "failed"),
-            result: item,
+            state: completion.task?.state || (reviewSucceeded ? "succeeded" : "failed"),
+            result,
           });
         }
         const summary = {
@@ -738,7 +828,7 @@ const worker = {
       body: JSON.stringify({ maxTasks: 1 }),
     });
     try {
-      const response = await worker.fetch(request, env, ctx);
+      const response = await worker.fetch(request, env, INTERNAL_SCHEDULED_DISPATCH);
       if (!response.ok) console.warn("Agent Runtime scheduled tick deferred", response.status);
     } catch {
       // No retry loop or alarm is created here. The next scheduled tick retries
