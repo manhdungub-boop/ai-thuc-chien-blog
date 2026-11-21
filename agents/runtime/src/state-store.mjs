@@ -1,4 +1,5 @@
 import { validateTaskRequest } from "./task-contract.mjs";
+import { readBoundedJson, readBoundedText } from "./bounded-json-body.mjs";
 import { hasValidStateStoreBearer } from "./internal-auth.mjs";
 import { claimQueuedTask, heartbeatLease, recoverExpiredLease, completeLeasedTask } from "./lease-policy.mjs";
 
@@ -24,6 +25,11 @@ function jsonResponse(body, status = 200) {
   }});
 }
 function isObject(value) { return value !== null && typeof value === "object" && !Array.isArray(value); }
+function isValidUtcDay(day) {
+  if (typeof day !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return false;
+  const timestamp = Date.parse(day + "T00:00:00.000Z");
+  return Number.isFinite(timestamp) && new Date(timestamp).toISOString().slice(0, 10) === day;
+}
 
 
 
@@ -64,7 +70,7 @@ function parseControlJson(text) {
   skipWhitespace();
   if (text[index++] !== "{") throw new Error("control_json_invalid");
   const result = {};
-  const allowedKeys = new Set(["reason", "actor", "requestId", "jti", "expiresAt", "day", "scope"]);
+  const allowedKeys = new Set(["reason", "actor", "requestId", "jti", "expiresAt"]);
   skipWhitespace();
   if (text[index] === "}") {
     index++;
@@ -95,40 +101,11 @@ function parseControlJson(text) {
   throw new Error("control_json_invalid");
 }
 
-async function readBoundedJsonRequest(request, maxBytes) {
-  const declared = request.headers.get("content-length");
-  if (declared !== null) {
-    if (!/^(0|[1-9][0-9]*)$/.test(declared)) return { ok: false, status: 400 };
-    if (Number(declared) > maxBytes) return { ok: false, status: 413 };
-  }
-  if (!request.body) return { ok: false, status: 400 };
-  const reader = request.body.getReader();
-  const chunks = [];
-  let total = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      total += value.byteLength;
-      if (total > maxBytes) {
-        try { await reader.cancel(); } catch {}
-        return { ok: false, status: 413 };
-      }
-      chunks.push(value);
-    }
-  } catch {
-    return { ok: false, status: 400 };
-  } finally {
-    try { reader.releaseLock(); } catch {}
-  }
-  const bytes = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
-  try {
-    return { ok: true, value: parseControlJson(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) };
-  } catch {
-    return { ok: false, status: 400 };
-  }
+async function readBoundedControlJson(request, maxBytes) {
+  const bounded = await readBoundedText(request, maxBytes);
+  if (!bounded.ok) return bounded;
+  try { return { ok: true, value: parseControlJson(bounded.value) }; }
+  catch { return { ok: false, status: 400, error: "invalid_control_json" }; }
 }
 function readRow(sql, query, ...bindings) { return sql.exec(query, ...bindings).toArray()[0] ?? null; }
 function utcDay(timestamp) { return new Date(timestamp).toISOString().slice(0, 10); }
@@ -136,13 +113,6 @@ async function sha256Hex(value) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
-
-function isValidUtcDay(day) {
-  if (typeof day !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return false;
-  const timestamp = Date.parse(day + "T00:00:00.000Z");
-  return Number.isFinite(timestamp) && new Date(timestamp).toISOString().slice(0, 10) === day;
-}
-
 function safeTask(row) {
   if (!row) return null;
   return {
@@ -242,7 +212,7 @@ export class AgentStateStore {
         return jsonResponse({ ok: true, control: this.controlState() });
       }
       if (url.pathname === "/oidc/replay/consume" && request.method === "POST") {
-        const parsedBody = await readBoundedJsonRequest(request, 1024);
+        const parsedBody = await readBoundedControlJson(request, 1024);
         if (!parsedBody.ok) {
           return jsonResponse({ ok: false, error: parsedBody.status === 413 ? "request_body_too_large" : "request_invalid" }, parsedBody.status);
         }
@@ -250,7 +220,7 @@ export class AgentStateStore {
         return jsonResponse(result.body, result.status);
       }
       if ((url.pathname === "/control/pause" || url.pathname === "/control/resume") && request.method === "POST") {
-        const parsedBody = await readBoundedJsonRequest(request, 16 * 1024);
+        const parsedBody = await readBoundedControlJson(request, 16 * 1024);
         if (!parsedBody.ok) {
           return jsonResponse({ ok: false, error: parsedBody.status === 413 ? "request_body_too_large" : "request_invalid" }, parsedBody.status);
         }
@@ -258,44 +228,54 @@ export class AgentStateStore {
         return jsonResponse(result.body, result.status);
       }
       if (url.pathname === "/external-budget" && request.method === "GET") {
-        const day = url.searchParams.get("day") ?? utcDay(this.requestTime(request));
+        const day = url.searchParams.get("day");
         const scope = url.searchParams.get("scope");
         const result = await this.getExternalRequestBudget(day, scope);
         return jsonResponse(result.ok ? { ok: true, budget: result } : { ok: false, error: result.error }, result.ok ? 200 : 400);
       }
       if (url.pathname === "/external-budget/consume" && request.method === "POST") {
-        const parsedBody = await readBoundedJsonRequest(request, 1024);
-        if (!parsedBody.ok) {
-          return jsonResponse({ ok: false, error: parsedBody.status === 413 ? "request_body_too_large" : "request_invalid" }, parsedBody.status);
-        }
-        if (Object.keys(parsedBody.value).length !== 2 || !Object.hasOwn(parsedBody.value, "day") || !Object.hasOwn(parsedBody.value, "scope")) {
+        const parsedBody = await readBoundedJson(request, 1024);
+        if (!parsedBody.ok) return jsonResponse({ ok: false, error: parsedBody.status === 413 ? "request_body_too_large" : "request_invalid" }, parsedBody.status);
+        if (!isObject(parsedBody.value) || Object.keys(parsedBody.value).length !== 2 || !Object.hasOwn(parsedBody.value, "day") || !Object.hasOwn(parsedBody.value, "scope")) {
           return jsonResponse({ ok: false, error: "external_request_budget_input_invalid" }, 400);
         }
         const result = await this.consumeExternalRequestBudget(parsedBody.value.day, parsedBody.value.scope, this.requestTime(request));
         return jsonResponse(result.ok ? { ok: true, budget: result } : { ok: false, error: result.error }, result.ok ? 200 : 400);
       }
       if (url.pathname === "/reserve" && request.method === "POST") {
-        const result = await this.reserve(await request.json(), this.requestTime(request));
+        const parsedBody = await readBoundedJson(request, 16 * 1024);
+        if (!parsedBody.ok) return jsonResponse({ ok: false, error: parsedBody.status === 413 ? "request_body_too_large" : "request_invalid" }, parsedBody.status);
+        const result = await this.reserve(parsedBody.value, this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
       if (url.pathname === "/claim" && request.method === "POST") {
-        const result = this.claim(await request.json(), this.requestTime(request));
+        const parsedBody = await readBoundedJson(request, 16 * 1024);
+        if (!parsedBody.ok) return jsonResponse({ ok: false, error: parsedBody.status === 413 ? "request_body_too_large" : "request_invalid" }, parsedBody.status);
+        const result = this.claim(parsedBody.value, this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
       if (url.pathname === "/heartbeat" && request.method === "POST") {
-        const result = this.heartbeat(await request.json(), this.requestTime(request));
+        const parsedBody = await readBoundedJson(request, 16 * 1024);
+        if (!parsedBody.ok) return jsonResponse({ ok: false, error: parsedBody.status === 413 ? "request_body_too_large" : "request_invalid" }, parsedBody.status);
+        const result = this.heartbeat(parsedBody.value, this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
       if (url.pathname === "/complete" && request.method === "POST") {
-        const result = this.complete(await request.json(), this.requestTime(request));
+        const parsedBody = await readBoundedJson(request, 16 * 1024);
+        if (!parsedBody.ok) return jsonResponse({ ok: false, error: parsedBody.status === 413 ? "request_body_too_large" : "request_invalid" }, parsedBody.status);
+        const result = this.complete(parsedBody.value, this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
       if (url.pathname === "/recover" && request.method === "POST") {
-        const result = this.recover(await request.json(), this.requestTime(request));
+        const parsedBody = await readBoundedJson(request, 16 * 1024);
+        if (!parsedBody.ok) return jsonResponse({ ok: false, error: parsedBody.status === 413 ? "request_body_too_large" : "request_invalid" }, parsedBody.status);
+        const result = this.recover(parsedBody.value, this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
       if (url.pathname === "/transition" && request.method === "POST") {
-        const result = this.transition(await request.json(), this.requestTime(request));
+        const parsedBody = await readBoundedJson(request, 16 * 1024);
+        if (!parsedBody.ok) return jsonResponse({ ok: false, error: parsedBody.status === 413 ? "request_body_too_large" : "request_invalid" }, parsedBody.status);
+        const result = this.transition(parsedBody.value, this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
       if (url.pathname === "/task" && request.method === "GET") {
