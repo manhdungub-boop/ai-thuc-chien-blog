@@ -231,7 +231,7 @@ async function handleAIBankReviewerApi(request, env, url) {
 async function handleReviewerApi(request, env, url) {
   if (url.pathname.startsWith("/api/reviewer/ai-bank/")) {
     const aiBankResponse = await handleAIBankReviewerApi(request, env, url);
-    if (aiBankResponse) return aiBankResponse;
+    return aiBankResponse || json({ ok: false, error: "not_found" }, 404);
   }
   if (!sameOrigin(request, request.method === "POST")) return json({ ok: false, error: "same_origin_required" }, 403);
   const auth = await reviewerSession(request, env);
