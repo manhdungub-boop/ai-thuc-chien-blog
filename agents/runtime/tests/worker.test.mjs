@@ -290,6 +290,56 @@ test("usage bridge uses fixed DO identity and sends only the dedicated internal 
   assert.equal(JSON.stringify(body).includes(STATE_TOKEN), false);
 });
 
+test("operator usage bridge reports both read-only daily external request budgets", async () => {
+  const calls = [];
+  const day = new Date().toISOString().slice(0, 10);
+  const env = {
+    AGENT_OPERATOR_TOKEN: OPERATOR_TOKEN,
+    AGENT_STATE_STORE_TOKEN: STATE_TOKEN,
+    AGENT_STATE_STORE: {
+      idFromName(name) {
+        assert.equal(name, "agent-runtime-global");
+        return "fixed-object-id";
+      },
+      get(id) {
+        assert.equal(id, "fixed-object-id");
+        return {
+          async fetch(internalRequest) {
+            calls.push(internalRequest);
+            const url = new URL(internalRequest.url);
+            assert.equal(internalRequest.headers.get("authorization"), "Bearer " + STATE_TOKEN);
+            if (url.pathname === "/usage") {
+              return Response.json({ ok: true, dayUtc: day, acceptedToday: 2, inFlight: 1 });
+            }
+            assert.equal(url.pathname, "/external-budget");
+            assert.equal(url.searchParams.get("day"), day);
+            const scope = url.searchParams.get("scope");
+            if (scope === "ai_bank_discovery") {
+              return Response.json({ ok: true, budget: { ok: true, day, scope, used: 2, limit: 10, remaining: 8 } });
+            }
+            assert.equal(scope, "content_research");
+            return Response.json({ ok: true, budget: { ok: true, day, scope, used: 3, limit: 8, remaining: 5 } });
+          },
+        };
+      },
+    },
+  };
+  const incoming = new Request("https://agent-runtime-preview.example.workers.dev/internal/usage", {
+    headers: { Authorization: "Bearer " + OPERATOR_TOKEN, Cookie: "must-not-forward" },
+  });
+  const response = await worker.fetch(incoming, env);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.dayUtc, day);
+  assert.deepEqual(body.externalBudgets, [
+    { day, scope: "ai_bank_discovery", used: 2, limit: 10, remaining: 8 },
+    { day, scope: "content_research", used: 3, limit: 8, remaining: 5 },
+  ]);
+  assert.equal(calls.length, 3);
+  assert.equal(calls.some((call) => call.headers.get("cookie") !== null), false);
+  assert.equal(JSON.stringify(body).includes(STATE_TOKEN), false);
+});
+
 test("task inspection uses a fixed route and strips payload and lease secrets", async () => {
   const { env, calls } = bridgeEnv({
     responseBody: { ok: true, task: {
