@@ -183,3 +183,14 @@ Read-only review results returned by `/run` and `/internal/dispatch` are explici
 - It does not copy source excerpts into article prose, generate factual claims, or create a stored draft. Every article section remains an explicit human-authoring placeholder.
 - The deterministic article quality gate is run against the scaffold and is expected to return `needs_revision`; this is intentional and is not a publication-ready article.
 - The helper is not registered as a `content_draft` task executor and does not change task queue executability. No automatic article generation is claimed.
+
+
+### Authenticated read-only AI Bank reviewer API
+
+- `GET /api/reviewer/ai-bank/candidates` returns at most 20 candidate summaries; an optional `limit` must be a single integer from 1 through 20.
+- `GET /api/reviewer/ai-bank/candidates/{owner}/{repo}` returns the review packet for the exact `github:owner/repository` candidate.
+- Both routes require the signed Google reviewer session cookie and same-origin request checks. No candidate-store access occurs before method, origin, and session checks.
+- The Preview Worker binds a dedicated AI Bank Candidate Durable Object. Review packets are scoped to the current candidate release and evidence remains pending human review, unverified, and unauthorized for verification.
+- Responses explicitly keep catalog writes, evidence verification, and public publication unauthorized. No evidence-write route is exposed.
+- The reviewer console renders candidate IDs and packet data as text nodes; it does not interpret untrusted candidate content as HTML.
+- These routes do not enable reviewer OAuth, configure credentials, deploy the Preview Worker, or authorize AI Bank changes or public publication.
