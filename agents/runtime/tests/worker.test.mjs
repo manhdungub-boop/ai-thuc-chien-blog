@@ -9,6 +9,7 @@ test("required ingress limiter covers every route and keys by Cloudflare client 
   }), {
     AGENT_ENABLED: "false",
     AGENT_PAUSED: "true",
+    AGENT_REVIEWER_AUTH_ENABLED: "false",
     AGENT_RATE_LIMIT_REQUIRED: "true",
     AGENT_INGRESS_RATE_LIMITER: { limit: async (input) => { received = input; return { success: true }; } },
   });
@@ -163,6 +164,8 @@ test("health is read-only and reports the default closed state", async () => {
   assert.equal(body.ok, true);
   assert.equal(body.enabled, false);
   assert.equal(body.paused, true);
+  assert.equal(body.reviewer_auth_enabled, false);
+  assert.equal(body.publication_authorized, false);
   assert.equal(body.execution, "operator_triggered_read_only_analysis");
   assert.equal(response.headers.get("cache-control"), "no-store");
   assert.equal(response.headers.get("x-content-type-options"), "nosniff");
