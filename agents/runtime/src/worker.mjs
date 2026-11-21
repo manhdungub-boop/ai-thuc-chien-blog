@@ -2,6 +2,9 @@ import { hasValidOperatorBearer } from "./operator-auth.mjs";
 import { hasValidStateStoreBearer } from "./internal-auth.mjs";
 import { readBoundedJson as readBoundedJsonBody, readBoundedText } from "./bounded-json-body.mjs";
 export { AgentStateStore } from "./state-store.mjs";
+export { AgentAIBankCandidateStore } from "./ai-bank-candidate-store.mjs";
+export { AgentDraftStore } from "./draft-artifact-store.mjs";
+export { AgentReviewerAuthStore } from "./google-reviewer-auth-store.mjs";
 
 const SECURITY_HEADERS = Object.freeze({
   "Cache-Control": "no-store",

@@ -1,4 +1,3 @@
-import { DurableObject } from "cloudflare:workers";
 import { reviewArticleDraft } from "./article-quality-gate.mjs";
 import { selectProvider } from "./provider-policy.mjs";
 import { assessArticleEvidenceReadiness } from "./article-evidence-readiness.mjs";
@@ -176,9 +175,10 @@ function queueItem(row) {
   };
 }
 
-export class AgentDraftStore extends DurableObject {
+export class AgentDraftStore {
   constructor(ctx, env) {
-    super(ctx, env);
+    this.ctx = ctx;
+    this.env = env;
     this.env = env;
     this.ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS draft_artifacts (" +
