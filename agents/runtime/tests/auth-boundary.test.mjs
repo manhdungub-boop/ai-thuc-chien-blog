@@ -24,8 +24,8 @@ test("Worker ingress accepts only the external operator credential, never the in
     method: "POST",
     headers: { Authorization: "Bearer " + OPERATOR },
   }), env);
-  assert.equal(operator.status, 501);
-  assert.equal((await operator.json()).error, "execution_not_implemented");
+  assert.equal(operator.status, 400);
+  assert.equal((await operator.json()).error, "request_invalid");
 });
 
 test("Worker ingress fails closed when the operator credential is absent", async () => {

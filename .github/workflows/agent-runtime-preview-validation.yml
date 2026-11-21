@@ -13,6 +13,7 @@ on:
     paths:
       - "agents/runtime/**"
       - ".github/workflows/agent-runtime-preview-validation.yml"
+      - ".github/workflows/agent-runtime-operator.yml"
   workflow_dispatch:
 
 permissions:
@@ -90,18 +91,19 @@ jobs:
           NODE
 
       - name: Check syntax
-        run: node --check agents/runtime/src/worker.mjs && node --check agents/runtime/src/state-store.mjs && node --check agents/runtime/src/lease-policy.mjs && node --check agents/runtime/src/internal-auth.mjs && node --check agents/runtime/src/github-oidc-verify.mjs && node --check agents/runtime/src/state-store-client.mjs
+        run: node --check agents/runtime/src/worker.mjs && node --check agents/runtime/src/state-store.mjs && node --check agents/runtime/src/lease-policy.mjs && node --check agents/runtime/src/internal-auth.mjs && node --check agents/runtime/src/github-oidc-verify.mjs && node --check agents/runtime/src/github-oidc-jwks.mjs && node --check agents/runtime/src/github-oidc-trusted-verify.mjs && node --check agents/runtime/src/github-oidc-authorize.mjs && node --check agents/runtime/src/state-store-client.mjs && node --check agents/runtime/src/task-handlers.mjs && node --check agents/runtime/src/task-snapshot-adapters.mjs && node --check agents/runtime/src/repository-readers.mjs && node --check agents/runtime/src/read-only-agent-manager.mjs && node --check agents/runtime/src/agent-safety-supervisor.mjs && node --check agents/runtime/src/agent-priority-engine.mjs && node --check agents/runtime/src/agent-budget-guard.mjs && node --check agents/runtime/src/usage-evidence-collector.mjs && node --check agents/runtime/src/runtime-admission-controller.mjs && node --check agents/runtime/src/agent-health-monitor.mjs && node --check agents/runtime/src/agent-recovery-planner.mjs && node --check agents/runtime/src/audit-integrity-inspector.mjs
 
       - name: Run isolated Worker shell and contract tests
         timeout-minutes: 4
         run: timeout --signal=TERM --kill-after=10s 180s node --test agents/runtime/tests/*.test.mjs
 
-      - name: Verify preview config is isolated and has no execution triggers
+      - name: Verify Preview config is isolated and scheduled dispatcher remains disabled
         run: |
           node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
           import { readFile } from 'node:fs/promises';
           const config = JSON.parse(await readFile('agents/runtime/wrangler.jsonc', 'utf8'));
+          const preview = JSON.parse(await readFile('agents/runtime/wrangler.preview.jsonc', 'utf8'));
           const stateStoreSource = await readFile('agents/runtime/src/state-store.mjs', 'utf8');
           assert.equal(config.main, './src/worker.mjs');
           assert.equal(stateStoreSource.includes('/__test/'), false, 'test-only routes must stay outside deployable source');
@@ -120,7 +122,36 @@ jobs:
           assert.equal('durable_objects' in config, false);
           assert.equal('kv_namespaces' in config, false);
           assert.equal('r2_buckets' in config, false);
-          console.log('PASS: isolated preview configuration; no production bindings, secrets, or schedules.');
+          assert.equal(preview.name, 'ai-thuc-chien-agent-runtime-preview');
+          assert.equal(preview.main, './src/worker.mjs');
+          assert.equal(preview.workers_dev, true);
+          assert.equal(preview.preview_urls, true);
+          assert.equal(preview.vars.AGENT_ENABLED, 'false');
+          assert.equal(preview.vars.AGENT_PAUSED, 'true');
+          assert.equal(preview.vars.AGENT_SCHEDULER_ENABLED, 'false');
+          assert.equal('triggers' in preview, false);
+          assert.equal(preview.vars.AGENT_OIDC_ENABLED, 'false');
+          assert.equal(preview.durable_objects?.bindings?.length, 1);
+          assert.deepEqual(preview.durable_objects.bindings[0], {
+            name: 'AGENT_STATE_STORE',
+            class_name: 'AgentStateStore'
+          });
+          assert.deepEqual(preview.migrations, [{
+            tag: 'v1',
+            new_sqlite_classes: ['AgentStateStore']
+          }]);
+          assert.equal('routes' in preview, false);
+          assert.equal('d1_databases' in preview, false);
+          assert.equal('queues' in preview, false);
+          assert.equal('kv_namespaces' in preview, false);
+          assert.equal('r2_buckets' in preview, false);
+          assert.equal('vars' in preview && Object.keys(preview.vars).some(k => /TOKEN|SECRET|KEY/i.test(k)), false);
+          const workerSource = await readFile('agents/runtime/src/worker.mjs', 'utf8');
+          assert.match(workerSource, /controller\?\.cron !== "\*\/30 \* \* \* \*"/);
+          assert.match(workerSource, /AGENT_SCHEDULER_ENABLED !== "true"/);
+          assert.match(workerSource, /AGENT_RECOVERY_ALARM_ENABLED !== "true"/);
+          assert.match(workerSource, /JSON\.stringify\(\{ maxTasks: 1 \}\)/);
+          console.log('PASS: Preview is isolated, no Cron trigger is configured, and the dormant scheduled handler remains fail-closed.');
           NODE
 
       - name: Assert workflow is validation-only
@@ -130,3 +161,19 @@ jobs:
             exit 1
           fi
           echo "PASS: CI workflow contains no deployment command or Cloudflare secret."
+
+      - name: Verify OIDC operator workflow is manual and pause-only
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFile } from 'node:fs/promises';
+          const workflow = await readFile('.github/workflows/agent-runtime-operator.yml', 'utf8');
+          assert.match(workflow, /workflow_dispatch:/);
+          assert.match(workflow, /id-token: write/);
+          assert.match(workflow, /contents: read/);
+          assert.match(workflow, /internal\/oidc\/pause/);
+          assert.doesNotMatch(workflow, /schedule:|repository_dispatch:|workflow_run:/);
+          assert.doesNotMatch(workflow, /internal\/oidc\/resume|wrangler\s+deploy|CLOUDFLARE_.*TOKEN/i);
+          assert.match(workflow, /ai-thuc-chien-agent-runtime-preview/);
+          console.log('PASS: OIDC workflow is manual, scoped to Preview, and pause-only.');
+          NODE

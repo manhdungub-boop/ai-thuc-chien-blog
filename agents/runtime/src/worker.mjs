@@ -2,6 +2,10 @@ import { hasValidOperatorBearer } from "./operator-auth.mjs";
 import { hasValidStateStoreBearer } from "./internal-auth.mjs";
 import { readBoundedJson as readBoundedJsonBody, readBoundedText } from "./bounded-json-body.mjs";
 import { handleReviewerHttpRequest } from "./reviewer-http-routes.mjs";
+import { authorizeGitHubActionsOperator } from "./github-oidc-authorize.mjs";
+import { createReadOnlyAgentManager } from "./read-only-agent-manager.mjs";
+import { createReadOnlyTaskSnapshotAdapter } from "./task-snapshot-adapters.mjs";
+import { createPreviewReadOnlyReaders } from "./preview-read-only-sources.mjs";
 export { AgentStateStore } from "./state-store.mjs";
 export { AgentAIBankCandidateStore } from "./ai-bank-candidate-store.mjs";
 export { AgentDraftStore } from "./draft-artifact-store.mjs";
@@ -59,7 +63,7 @@ function parseControlJson(text) {
   skipWhitespace();
   if (text[index++] !== "{") throw new Error("control_json_invalid");
   const result = {};
-  const allowedKeys = new Set(["reason", "actor", "requestId"]);
+  const allowedKeys = new Set(["reason", "actor", "requestId", "taskId"]);
   skipWhitespace();
   if (text[index] === "}") {
     index++;
@@ -96,6 +100,42 @@ async function readBoundedControlJson(request, maxBytes) {
   try { return { ok: true, value: parseControlJson(bounded.value) }; }
   catch { return { ok: false, status: 400, error: "invalid_control_json" }; }
 }
+async function readBoundedJsonValueRequest(request, maxBytes) {
+  const declared = request.headers.get("content-length");
+  if (declared !== null) {
+    if (!/^(0|[1-9][0-9]*)$/.test(declared)) return { ok: false, status: 400 };
+    if (Number(declared) > maxBytes) return { ok: false, status: 413 };
+  }
+  if (!request.body) return { ok: false, status: 400 };
+  const reader = request.body.getReader();
+  const chunks = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        try { await reader.cancel(); } catch {}
+        return { ok: false, status: 413 };
+      }
+      chunks.push(value);
+    }
+  } catch {
+    return { ok: false, status: 400 };
+  } finally {
+    try { reader.releaseLock(); } catch {}
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  try {
+    return { ok: true, value: JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) };
+  } catch {
+    return { ok: false, status: 400 };
+  }
+}
+
 async function writeStateStore(env, pathname, payload) {
   if (!await hasValidStateStoreBearer(
     new Request("https://state-store.internal/", {
@@ -124,6 +164,37 @@ async function writeStateStore(env, pathname, payload) {
     throw Object.assign(new Error("state_store_request_failed"), { status });
   }
   return body;
+}
+
+export async function runWithLeaseHeartbeat(work, heartbeat, intervalMs = 120_000) {
+  if (typeof work !== "function" || typeof heartbeat !== "function" ||
+      !Number.isSafeInteger(intervalMs) || intervalMs < 1 || intervalMs > 120_000) {
+    throw new Error("lease_heartbeat_configuration_invalid");
+  }
+  let finished = false;
+  let heartbeatFailed = false;
+  const workPromise = Promise.resolve().then(work).then(
+    (value) => { finished = true; return value; },
+    (error) => { finished = true; throw error; },
+  );
+  while (!finished) {
+    let timer;
+    await Promise.race([
+      workPromise.then(() => undefined, () => undefined),
+      new Promise((resolve) => { timer = setTimeout(resolve, intervalMs); }),
+    ]);
+    if (timer !== undefined) clearTimeout(timer);
+    if (finished) break;
+    try {
+      await heartbeat();
+    } catch {
+      heartbeatFailed = true;
+      break;
+    }
+  }
+  const result = await workPromise;
+  if (heartbeatFailed) throw new Error("task_lease_heartbeat_unavailable");
+  return result;
 }
 
 async function readBoundedJson(response) {
@@ -162,7 +233,7 @@ async function readStateStore(env, pathname) {
   return body;
 }
 
-export default {
+const worker = {
   async fetch(request, env = {}) {
     const reviewerResponse = await handleReviewerHttpRequest(request, env);
     if (reviewerResponse) return reviewerResponse;
@@ -178,8 +249,69 @@ export default {
         task_execution_enabled: false,
         quality_review_executor_registered: false,
         quality_review_executor_enabled: false,
-        execution: "not_implemented",
+        execution: "operator_triggered_read_only_analysis",
       });
+    }
+    if (url.pathname === "/internal/oidc/pause") {
+      if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
+      if (env.AGENT_OIDC_ENABLED !== "true") return json({ ok: false, error: "oidc_operator_disabled" }, 503);
+      if ([...url.searchParams.keys()].length > 0) return json({ ok: false, error: "request_invalid" }, 400);
+
+      const parsedBody = await readBoundedJsonRequest(request, 1024);
+      if (!parsedBody.ok) {
+        return json({ ok: false, error: parsedBody.status === 413 ? "request_body_too_large" : "request_invalid" }, parsedBody.status);
+      }
+      const body = parsedBody.value;
+      if (body === null || typeof body !== "object" || Array.isArray(body) ||
+          Object.keys(body).some((key) => key !== "reason") ||
+          (body.reason !== undefined && (typeof body.reason !== "string" || body.reason.length > 160 ||
+            [...body.reason].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)))) {
+        return json({ ok: false, error: "request_invalid" }, 400);
+      }
+
+      const authorization = request.headers.get("authorization") || "";
+      const tokenMatch = /^Bearer ([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/.exec(authorization);
+      if (!tokenMatch || tokenMatch[1].length > 16384) return json({ ok: false, error: "github_oidc_token_required" }, 401);
+
+      const expected = {
+        audience: env.AGENT_OIDC_AUDIENCE,
+        repository: env.AGENT_OIDC_REPOSITORY,
+        repositoryOwner: env.AGENT_OIDC_REPOSITORY_OWNER,
+        repositoryId: env.AGENT_OIDC_REPOSITORY_ID,
+        repositoryOwnerId: env.AGENT_OIDC_REPOSITORY_OWNER_ID,
+        ref: env.AGENT_OIDC_REF,
+        workflowRef: env.AGENT_OIDC_WORKFLOW_REF,
+        actorId: env.AGENT_OIDC_ACTOR_ID,
+        eventName: "workflow_dispatch",
+      };
+      if (!Object.entries(expected).every(([key, value]) =>
+        typeof value === "string" && value.length > 0 && value.length <= (key === "workflowRef" ? 512 : 256)) ||
+        !/^\d{1,20}$/.test(expected.actorId) ||
+        !/^\d{1,20}$/.test(expected.repositoryId) ||
+        !/^\d{1,20}$/.test(expected.repositoryOwnerId)) {
+        return json({ ok: false, error: "github_oidc_policy_unconfigured" }, 503);
+      }
+      const authorized = await authorizeGitHubActionsOperator(tokenMatch[1], { env, expected });
+      if (!authorized.ok) {
+        if (authorized.error === "oidc_token_replayed") return json({ ok: false, error: "github_oidc_token_replayed" }, 409);
+        if (authorized.error?.includes("unavailable") || authorized.error === "oidc_replay_response_invalid") {
+          return json({ ok: false, error: "github_oidc_verification_unavailable" }, 503);
+        }
+        return json({ ok: false, error: "github_oidc_token_invalid" }, 401);
+      }
+
+      const actor = "github-actions:" + authorized.identity.actorId;
+      try {
+        const result = await writeStateStore(env, "/control/pause", {
+          actor,
+          requestId: crypto.randomUUID(),
+          ...(body.reason === undefined ? {} : { reason: body.reason }),
+        });
+        return json({ ok: true, changed: result.changed, control: result.control });
+      } catch (error) {
+        if (error?.status === 429) return json({ ok: false, error: "rate_limited" }, 429);
+        return json({ ok: false, error: "control_unavailable" }, 503);
+      }
     }
     if (url.pathname === "/run") {
       if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
@@ -187,7 +319,242 @@ export default {
         return json({ ok: false, error: "agent_disabled_or_paused" }, 503);
       }
       if (!await hasValidOperatorBearer(request, env)) return json({ ok: false, error: "operator_auth_required" }, 401);
-      return json({ ok: false, error: "execution_not_implemented" }, 501);
+      if ([...url.searchParams.keys()].length > 0) return json({ ok: false, error: "request_invalid" }, 400);
+      const parsed = await readBoundedJsonValueRequest(request, 16 * 1024);
+      if (!parsed.ok) {
+        return json({ ok: false, error: parsed.status === 413 ? "request_body_too_large" : "request_invalid" }, parsed.status);
+      }
+      const body = parsed.value;
+      if (!body || typeof body !== "object" || Array.isArray(body) ||
+          Object.keys(body).length !== 1 || !Array.isArray(body.tasks) ||
+          body.tasks.length < 1 || body.tasks.length > 5) {
+        return json({ ok: false, error: "request_invalid" }, 400);
+      }
+      try {
+        const snapshotAdapter = createReadOnlyTaskSnapshotAdapter(createPreviewReadOnlyReaders());
+        const manager = createReadOnlyAgentManager({ snapshotAdapter });
+        const items = [];
+        for (const task of body.tasks) {
+          const reserved = await writeStateStore(env, "/reserve", { task });
+          const stored = reserved.task;
+          if (!stored || typeof stored.taskId !== "string") {
+            throw new Error("state_store_reservation_invalid");
+          }
+          if (stored.state === "succeeded" || stored.state === "failed" || stored.state === "cancelled") {
+            items.push({ ok: stored.state === "succeeded", taskId: stored.taskId, state: stored.state, duplicate: true });
+            continue;
+          }
+          if (stored.state === "running") {
+            items.push({ ok: false, taskId: stored.taskId, state: "running", duplicate: true, error: "task_already_running" });
+            continue;
+          }
+          if (stored.state !== "queued") throw new Error("state_store_task_state_invalid");
+
+          let claimed;
+          try {
+            claimed = await writeStateStore(env, "/claim", { taskId: stored.taskId });
+          } catch (error) {
+            if (error?.status === 409) {
+              items.push({ ok: false, taskId: stored.taskId, state: "queued", error: "task_not_claimable" });
+              continue;
+            }
+            throw error;
+          }
+          const lease = claimed.lease;
+          if (!lease || typeof lease.owner !== "string" || !Number.isSafeInteger(lease.generation)) {
+            throw new Error("state_store_lease_invalid");
+          }
+          const report = await manager.reviewBatch([task]);
+          const item = report.items[0];
+          const completion = await writeStateStore(env, "/complete", {
+            taskId: stored.taskId,
+            leaseOwner: lease.owner,
+            leaseGeneration: lease.generation,
+            status: item?.ok === true ? "succeeded" : "failed",
+            ...(item?.ok === true ? {
+              result: {
+                taskType: item.taskType,
+                status: item.status,
+                findingCount: item.findingCount,
+                findings: item.findings,
+              },
+            } : { errorCode: "read_only_review_failed" }),
+          });
+          items.push({
+            ok: item?.ok === true,
+            taskId: stored.taskId,
+            state: completion.task?.state || (item?.ok === true ? "succeeded" : "failed"),
+            result: item,
+          });
+        }
+        const summary = {
+          total: items.length,
+          succeeded: items.filter((item) => item.state === "succeeded").length,
+          failed: items.filter((item) => item.state === "failed").length,
+          queued: items.filter((item) => item.state === "queued").length,
+          running: items.filter((item) => item.state === "running").length,
+        };
+        return json({
+          ok: summary.failed === 0 && summary.queued === 0 && summary.running === 0,
+          mode: "operator_triggered_durable_read_only_review",
+          execution: "synchronous_leased_read_only_review",
+          items,
+          summary,
+          limitations: [
+            "no_scheduler_or_background_execution",
+            "seo_live_evidence_unavailable",
+            "repository_source_is_public_main_branch",
+          ],
+        });
+      } catch (error) {
+        const status = [400, 401, 409, 429, 503].includes(error?.status) ? error.status : 503;
+        return json({ ok: false, error: status === 429 ? "runtime_capacity_limited" : "durable_review_unavailable" }, status);
+      }
+    }
+    if (url.pathname === "/internal/enqueue") {
+      if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
+      if (!isEnabled(env.AGENT_ENABLED) || env.AGENT_PAUSED !== "false") {
+        return json({ ok: false, error: "agent_disabled_or_paused" }, 503);
+      }
+      if (!await hasValidOperatorBearer(request, env)) return json({ ok: false, error: "operator_auth_required" }, 401);
+      if ([...url.searchParams.keys()].length > 0) return json({ ok: false, error: "request_invalid" }, 400);
+      const parsed = await readBoundedJsonValueRequest(request, 16 * 1024);
+      if (!parsed.ok) {
+        return json({ ok: false, error: parsed.status === 413 ? "request_body_too_large" : "request_invalid" }, parsed.status);
+      }
+      const body = parsed.value;
+      if (!body || typeof body !== "object" || Array.isArray(body) ||
+          Object.keys(body).length !== 1 || !Array.isArray(body.tasks) ||
+          body.tasks.length < 1 || body.tasks.length > 5) {
+        return json({ ok: false, error: "request_invalid" }, 400);
+      }
+      const items = [];
+      for (const task of body.tasks) {
+        try {
+          const reserved = await writeStateStore(env, "/reserve", { task });
+          if (!reserved.task || typeof reserved.task.taskId !== "string") {
+            return json({ ok: false, error: "queue_admission_unavailable", items }, 503);
+          }
+          items.push({
+            ok: true,
+            taskId: reserved.task.taskId,
+            state: reserved.task.state,
+            duplicate: reserved.duplicate === true,
+          });
+        } catch (error) {
+          const status = [400, 401, 409, 429, 503].includes(error?.status) ? error.status : 503;
+          return json({
+            ok: false,
+            error: status === 429 ? "runtime_capacity_limited" :
+              status === 400 ? "task_request_invalid" : "queue_admission_unavailable",
+            items,
+          }, status);
+        }
+      }
+      return json({
+        ok: true,
+        mode: "operator_triggered_queue_admission",
+        execution: "not_started",
+        items,
+        summary: {
+          submitted: items.length,
+          newlyQueued: items.filter((item) => !item.duplicate && item.state === "queued").length,
+          duplicates: items.filter((item) => item.duplicate).length,
+        },
+        limitations: [
+          "admission_only_no_task_execution",
+          "manual_operator_dispatch_required",
+          "no_scheduler_or_background_execution",
+          "read_only_review_handlers_only",
+        ],
+      });
+    }
+    if (url.pathname === "/internal/dispatch") {
+      if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
+      if (!isEnabled(env.AGENT_ENABLED) || env.AGENT_PAUSED !== "false") {
+        return json({ ok: false, error: "agent_disabled_or_paused" }, 503);
+      }
+      if (!await hasValidOperatorBearer(request, env)) return json({ ok: false, error: "operator_auth_required" }, 401);
+      if ([...url.searchParams.keys()].length > 0) return json({ ok: false, error: "request_invalid" }, 400);
+      const parsed = await readBoundedJsonValueRequest(request, 1024);
+      if (!parsed.ok) {
+        return json({ ok: false, error: parsed.status === 413 ? "request_body_too_large" : "request_invalid" }, parsed.status);
+      }
+      const body = parsed.value;
+      if (!body || typeof body !== "object" || Array.isArray(body) ||
+          Object.keys(body).some((key) => key !== "maxTasks") ||
+          (body.maxTasks !== undefined && (!Number.isSafeInteger(body.maxTasks) || body.maxTasks < 1 || body.maxTasks > 5))) {
+        return json({ ok: false, error: "request_invalid" }, 400);
+      }
+      const maxTasks = body.maxTasks ?? 1;
+      try {
+        const snapshotAdapter = createReadOnlyTaskSnapshotAdapter(createPreviewReadOnlyReaders());
+        const manager = createReadOnlyAgentManager({ snapshotAdapter });
+        const items = [];
+        for (let index = 0; index < maxTasks; index++) {
+          const claimed = await writeStateStore(env, "/claim-next", {});
+          if (!claimed.task) break;
+          const task = claimed.task;
+          const lease = claimed.lease;
+          if (!task || typeof task.taskId !== "string" ||
+              !lease || typeof lease.owner !== "string" || !Number.isSafeInteger(lease.generation)) {
+            throw new Error("state_store_claim_invalid");
+          }
+          const report = await runWithLeaseHeartbeat(
+            () => manager.reviewBatch([{
+              type: task.type,
+              idempotencyKey: task.idempotencyKey,
+              payload: task.payload,
+            }]),
+            () => writeStateStore(env, "/heartbeat", {
+              taskId: task.taskId,
+              leaseOwner: lease.owner,
+              leaseGeneration: lease.generation,
+            }),
+          );
+          const item = report.items[0];
+          const completion = await writeStateStore(env, "/complete", {
+            taskId: task.taskId,
+            leaseOwner: lease.owner,
+            leaseGeneration: lease.generation,
+            status: item?.ok === true ? "succeeded" : "failed",
+            ...(item?.ok === true ? {
+              result: {
+                taskType: item.taskType,
+                status: item.status,
+                findingCount: item.findingCount,
+                findings: item.findings,
+              },
+            } : { errorCode: "read_only_review_failed" }),
+          });
+          items.push({
+            ok: item?.ok === true,
+            taskId: task.taskId,
+            state: completion.task?.state || (item?.ok === true ? "succeeded" : "failed"),
+            result: item,
+          });
+        }
+        const summary = {
+          requested: maxTasks,
+          processed: items.length,
+          succeeded: items.filter((item) => item.state === "succeeded").length,
+          failed: items.filter((item) => item.state === "failed").length,
+        };
+        return json({
+          ok: summary.failed === 0,
+          mode: "operator_triggered_bounded_queue_dispatch",
+          execution: "synchronous_leased_read_only_review",
+          items,
+          summary,
+          limitations: [
+            "manual_operator_trigger_only",
+            "no_scheduler_or_background_execution",
+            "seo_live_evidence_unavailable",
+          ],
+        });
+      } catch {
+        return json({ ok: false, error: "queue_dispatch_unavailable" }, 503);
+      }
     }
     if (url.pathname === "/internal/control") {
       if (request.method !== "GET") return json({ ok: false, error: "method_not_allowed" }, 405);
@@ -234,6 +601,51 @@ export default {
         return json({ ok: false, error: "control_unavailable" }, 503);
       }
     }
+    if (url.pathname === "/internal/recover") {
+      if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
+      if (!await hasValidOperatorBearer(request, env)) return json({ ok: false, error: "operator_auth_required" }, 401);
+      if ([...url.searchParams.keys()].length > 0) return json({ ok: false, error: "request_invalid" }, 400);
+      if (env.AGENT_ENABLED !== "true" || env.AGENT_PAUSED !== "false") {
+        return json({ ok: false, error: "agent_disabled_or_paused" }, 503);
+      }
+      const actor = env.AGENT_OPERATOR_ID;
+      if (typeof actor !== "string" || !/^[a-zA-Z0-9._:-]{3,64}$/.test(actor)) {
+        return json({ ok: false, error: "operator_identity_unavailable" }, 503);
+      }
+      const parsedBody = await readBoundedJsonRequest(request, 1024);
+      if (!parsedBody.ok) {
+        return json({ ok: false, error: parsedBody.status === 413 ? "request_body_too_large" : "request_invalid" }, parsedBody.status);
+      }
+      const body = parsedBody.value;
+      if (body === null || typeof body !== "object" || Array.isArray(body) ||
+          Object.keys(body).length !== 1 || typeof body.taskId !== "string" ||
+          body.taskId.length < 1 || body.taskId.length > 64 ||
+          [...body.taskId].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)) {
+        return json({ ok: false, error: "request_invalid" }, 400);
+      }
+      try {
+        const result = await writeStateStore(env, "/recover", {
+          taskId: body.taskId,
+          actor,
+          requestId: crypto.randomUUID(),
+        });
+        const task = result.task;
+        if (!task || typeof task.taskId !== "string") {
+          return json({ ok: false, error: "state_store_response_invalid" }, 503);
+        }
+        return json({ ok: true, outcome: result.outcome, task: {
+          taskId: task.taskId, type: task.type, state: task.state,
+          attemptCount: task.attemptCount, maxAttempts: task.maxAttempts,
+          nextAttemptAt: task.nextAttemptAt, lastErrorCode: task.lastErrorCode,
+          result: task.result ?? null,
+        } });
+      } catch (error) {
+        if (error?.status === 404) return json({ ok: false, error: "task_not_found" }, 404);
+        if (error?.status === 409) return json({ ok: false, error: "task_recovery_conflict" }, 409);
+        if (error?.status === 429) return json({ ok: false, error: "rate_limited" }, 429);
+        return json({ ok: false, error: "state_store_unavailable" }, 503);
+      }
+    }
     if (url.pathname === "/internal/usage" || url.pathname === "/internal/task") {
       if (request.method !== "GET") return json({ ok: false, error: "method_not_allowed" }, 405);
       if (!await hasValidOperatorBearer(request, env)) return json({ ok: false, error: "operator_auth_required" }, 401);
@@ -263,6 +675,7 @@ export default {
           createdAt: task.createdAt, updatedAt: task.updatedAt,
           attemptCount: task.attemptCount, maxAttempts: task.maxAttempts,
           nextAttemptAt: task.nextAttemptAt, lastErrorCode: task.lastErrorCode,
+          result: task.result ?? null,
         } });
       } catch (error) {
         if (error?.status === 404) return json({ ok: false, error: "task_not_found" }, 404);
@@ -271,4 +684,31 @@ export default {
     }
     return json({ ok: false, error: "not_found" }, 404);
   },
+  async scheduled(controller, env, ctx) {
+    // Code-only scheduler: the dedicated Preview config owns the 30-minute
+    // trigger. All gates remain fail-closed; one due task maximum per tick.
+    if (controller?.cron !== "*/30 * * * *" ||
+        env.AGENT_SCHEDULER_ENABLED !== "true" ||
+        env.AGENT_RECOVERY_ALARM_ENABLED !== "true" ||
+        env.AGENT_ENABLED !== "true" || env.AGENT_PAUSED !== "false") return;
+    const token = env.AGENT_OPERATOR_TOKEN;
+    if (typeof token !== "string" || token.length < 32 || token.length > 512) return;
+    const request = new Request("https://agent-runtime-scheduler.internal/internal/dispatch", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer " + token,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ maxTasks: 1 }),
+    });
+    try {
+      const response = await worker.fetch(request, env, ctx);
+      if (!response.ok) console.warn("Agent Runtime scheduled tick deferred", response.status);
+    } catch {
+      // No retry loop or alarm is created here. The next scheduled tick retries
+      // admission; the durable lease/recovery policy remains authoritative.
+      console.warn("Agent Runtime scheduled tick unavailable");
+    }
+  },
 };
+export default worker;

@@ -11,7 +11,7 @@ const expected = Object.freeze({
   repositoryOwnerId: "342528485",
   ref: "refs/heads/main",
   workflowRef: "manhdungub-boop/ai-thuc-chien-blog/.github/workflows/agent-runtime-operator.yml@refs/heads/main",
-  actorId: "1234567",
+  actorId: "342528485",
   eventName: "workflow_dispatch",
 });
 const issuer = "https://token.actions.githubusercontent.com";

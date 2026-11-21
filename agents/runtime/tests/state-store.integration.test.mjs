@@ -11,7 +11,7 @@ const workerPath = path.resolve(here, "state-store-test-worker.mjs");
 const TEST_OPERATOR_TOKEN = "integration-test-operator-token-0123456789abcdef";
 const TEST_STATE_STORE_TOKEN = "integration-test-state-store-token-0123456789abcdef";
 
-async function createRuntime({ daily = 100, concurrent = 5, persistDir, enabled = "true", paused = "false", resumeControl = true } = {}) {
+async function createRuntime({ daily = 100, concurrent = 5, persistDir, enabled = "true", paused = "false", resumeControl = true, recoveryAlarmEnabled = "false" } = {}) {
   const directory = persistDir ?? await mkdtemp(path.join(tmpdir(), "ai-thuc-chien-do-"));
   const mf = new Miniflare({
     modules: true,
@@ -24,6 +24,7 @@ async function createRuntime({ daily = 100, concurrent = 5, persistDir, enabled 
     bindings: {
       AGENT_ENABLED: enabled,
       AGENT_PAUSED: paused,
+      AGENT_RECOVERY_ALARM_ENABLED: recoveryAlarmEnabled,
       AGENT_OPERATOR_TOKEN: TEST_OPERATOR_TOKEN,
       AGENT_STATE_STORE_TOKEN: TEST_STATE_STORE_TOKEN,
       RUNTIME_MAX_TASKS_PER_DAY: String(daily),
@@ -65,11 +66,60 @@ async function call(stub, pathname, body, headers = {}) {
   return { status: response.status, body: await response.json() };
 }
 
+test("lease recovery alarm is disabled by default and recovers only expired leases when explicitly enabled", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const created = await call(stub, "/reserve", task("alarm-disabled"));
+    const claimed = await call(stub, "/claim", { taskId: created.body.task.taskId });
+    assert.equal(claimed.status, 200);
+    const alarm = await call(stub, "/__test/alarm-state");
+    assert.equal(alarm.body.alarmAt, null, "default-off recovery alarm must not schedule billable events");
+  });
+
+  await withRuntime({ recoveryAlarmEnabled: "true" }, async ({ stub }) => {
+    const created = await call(stub, "/reserve", task("alarm-enabled"));
+    const taskId = created.body.task.taskId;
+    const claimed = await call(stub, "/claim", { taskId });
+    assert.equal(claimed.status, 200);
+    const scheduled = await call(stub, "/__test/alarm-state");
+    assert.equal(typeof scheduled.body.alarmAt, "number");
+    assert.ok(scheduled.body.alarmAt >= Date.now() + 4 * 60 * 1000);
+
+    const fired = await call(stub, "/__test/expire-and-fire", { taskId });
+    assert.equal(fired.body.task.state, "queued");
+    assert.equal(fired.body.task.lease_owner, null);
+    assert.equal(typeof fired.body.task.next_attempt_at, "number");
+    assert.equal(fired.body.alarmAt, null, "no running leases should leave no scheduled alarm");
+    const stored = await call(stub, "/task?id=" + encodeURIComponent(taskId));
+    assert.equal(stored.body.task.state, "queued");
+    assert.equal(stored.body.task.attemptCount, 1);
+  });
+});
+
+test("recovery alarm stops and clears itself while the durable operator pause is active", async () => {
+  await withRuntime({ recoveryAlarmEnabled: "true" }, async ({ stub }) => {
+    const created = await call(stub, "/reserve", task("alarm-paused"));
+    const taskId = created.body.task.taskId;
+    assert.equal((await call(stub, "/claim", { taskId })).status, 200);
+    assert.equal(typeof (await call(stub, "/__test/alarm-state")).body.alarmAt, "number");
+    const paused = await call(stub, "/control/pause", {
+      actor: "alarm-test-operator",
+      requestId: crypto.randomUUID(),
+      reason: "pause alarm test",
+    });
+    assert.equal(paused.status, 200);
+    const fired = await call(stub, "/__test/fire-alarm", {});
+    assert.equal(fired.body.alarmAt, null);
+    const stored = await call(stub, "/task?id=" + encodeURIComponent(taskId));
+    assert.equal(stored.body.task.state, "running", "paused recovery must not mutate task state");
+  });
+});
+
 test("all state-store routes require the distinct internal credential", async () => {
   await withRuntime({}, async ({ stub }) => {
     for (const [pathname, body] of [
       ["/reserve", task("unauth-reserve")],
       ["/claim", { taskId: "missing" }],
+      ["/claim-next", {}],
       ["/heartbeat", { taskId: "missing", leaseOwner: "a1b2c3d4-e5f6-4711-8123-abcdef012345", leaseGeneration: 1 }],
       ["/complete", { taskId: "missing", leaseOwner: "a1b2c3d4-e5f6-4711-8123-abcdef012345", leaseGeneration: 1, status: "succeeded" }],
       ["/recover", { taskId: "missing" }],
@@ -391,7 +441,7 @@ test("fresh State Store initializes schema v5 paused with conservative lease def
   });
 });
 
-test("persisted v1 State Store migrates transactionally to v5 without losing task or usage", async () => {
+test("persisted v1 State Store migrates transactionally to v6 without losing task or usage", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "ai-thuc-chien-do-v1-migration-"));
   let first;
   let second;
@@ -420,6 +470,7 @@ test("persisted v1 State Store migrates transactionally to v5 without losing tas
     assert.equal(restored.body.task.leaseMaxExpiresAt, null);
     assert.equal(restored.body.task.nextAttemptAt, null);
     assert.equal(restored.body.task.lastErrorCode, null);
+    assert.equal(restored.body.task.result, null, "legacy tasks must migrate without an invented result");
     assert.equal(usage.body.acceptedToday, 1);
     assert.equal(usage.body.inFlight, 1);
   } finally {
@@ -429,6 +480,40 @@ test("persisted v1 State Store migrates transactionally to v5 without losing tas
   }
 });
 
+
+test("bounded queue claim atomically selects the oldest due task and stops when empty or paused", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const first = await call(stub, "/reserve", task("dispatch-first"), { "x-test-now": "2026-11-19T10:00:00.000Z" });
+    const second = await call(stub, "/reserve", task("dispatch-second"), { "x-test-now": "2026-11-19T10:00:01.000Z" });
+    assert.equal(first.status, 201);
+    assert.equal(second.status, 201);
+
+    const claimedFirst = await call(stub, "/claim-next", {}, { "x-test-now": "2026-11-19T10:00:02.000Z" });
+    assert.equal(claimedFirst.status, 200);
+    assert.equal(claimedFirst.body.task.taskId, first.body.task.taskId);
+    assert.equal(claimedFirst.body.task.state, "running");
+    assert.equal(typeof claimedFirst.body.lease.owner, "string");
+
+    const claimedSecond = await call(stub, "/claim-next", {}, { "x-test-now": "2026-11-19T10:00:02.000Z" });
+    assert.equal(claimedSecond.status, 200);
+    assert.equal(claimedSecond.body.task.taskId, second.body.task.taskId);
+
+    const empty = await call(stub, "/claim-next", {}, { "x-test-now": "2026-11-19T10:00:02.000Z" });
+    assert.equal(empty.status, 200);
+    assert.equal(empty.body.task, null);
+    assert.equal(empty.body.lease, null);
+
+    const paused = await call(stub, "/control/pause", {
+      actor: "queue-dispatch-test",
+      requestId: crypto.randomUUID(),
+      reason: "verify dispatch stop",
+    });
+    assert.equal(paused.status, 200);
+    const blocked = await call(stub, "/claim-next", {}, { "x-test-now": "2026-11-19T10:00:03.000Z" });
+    assert.equal(blocked.status, 503);
+    assert.equal(blocked.body.error, "agent_disabled_or_paused");
+  });
+});
 
 test("atomic claim admits only one worker and stale lease generations cannot heartbeat or complete", async () => {
   await withRuntime({}, async ({ stub }) => {
@@ -462,9 +547,24 @@ test("atomic claim admits only one worker and stale lease generations cannot hea
 
     const completed = await call(stub, "/complete", {
       taskId, leaseOwner: lease.owner, leaseGeneration: lease.generation, status: "succeeded",
+      result: {
+        taskType: "seo.audit",
+        status: "attention",
+        findingCount: 1,
+        findings: [{ code: "seo_title_missing", severity: "error", message: "SEO title is missing." }],
+      },
     }, { "x-test-now": "2026-11-19T10:02:00.000Z" });
-    assert.equal(completed.status, 200);
+    assert.equal(completed.status, 200, JSON.stringify(completed.body));
     assert.equal(completed.body.task.state, "succeeded");
+    assert.deepEqual(completed.body.task.result, {
+      taskType: "seo.audit",
+      status: "attention",
+      findingCount: 1,
+      findings: [{ code: "seo_title_missing", severity: "error", message: "SEO title is missing." }],
+    });
+    const persisted = await call(stub, "/task?id=" + encodeURIComponent(taskId));
+    assert.equal(persisted.status, 200);
+    assert.deepEqual(persisted.body.task.result, completed.body.task.result);
     assert.equal(completed.body.task.leaseExpiresAt, null);
     assert.equal(completed.body.task.leaseMaxExpiresAt, null);
     const duplicate = await call(stub, "/complete", {
@@ -475,6 +575,35 @@ test("atomic claim admits only one worker and stale lease generations cannot hea
   });
 });
 
+test("completion rejects malformed or oversized persisted review results", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const created = await call(stub, "/reserve", task("result-validation"));
+    const taskId = created.body.task.taskId;
+    const claimed = await call(stub, "/claim", { taskId }, { "x-test-now": "2026-11-19T10:00:00.000Z" });
+    const lease = claimed.body.lease;
+    const invalid = await call(stub, "/complete", {
+      taskId, leaseOwner: lease.owner, leaseGeneration: lease.generation, status: "succeeded",
+      result: { taskType: "content.review", status: "pass", findingCount: 1, findings: [] },
+    });
+    assert.equal(invalid.status, 400);
+    assert.equal(invalid.body.error, "complete_result_invalid");
+    const wrongStatus = await call(stub, "/complete", {
+      taskId, leaseOwner: lease.owner, leaseGeneration: lease.generation, status: "failed",
+      result: { taskType: "content.review", status: "pass", findingCount: 0, findings: [] },
+    });
+    assert.equal(wrongStatus.status, 400);
+    assert.equal(wrongStatus.body.error, "complete_result_status_invalid");
+    const oversized = await call(stub, "/complete", {
+      taskId, leaseOwner: lease.owner, leaseGeneration: lease.generation, status: "succeeded",
+      result: { taskType: "content.review", status: "attention", findingCount: 1, findings: [
+        { code: "oversized_finding", severity: "warning", message: "x".repeat(5000) },
+      ] },
+    });
+    assert.equal(oversized.status, 400);
+    assert.equal(oversized.body.error, "complete_result_invalid");
+  });
+});
+
 test("expired leases are requeued after bounded delay and fail at the attempt ceiling", async () => {
   await withRuntime({}, async ({ stub }) => {
     const created = await call(stub, "/reserve", task("lease-retry"));
@@ -482,11 +611,11 @@ test("expired leases are requeued after bounded delay and fail at the attempt ce
     const first = await call(stub, "/claim", { taskId }, { "x-test-now": "2026-11-19T10:00:00.000Z" });
     assert.equal(first.status, 200);
 
-    const tooEarly = await call(stub, "/recover", { taskId }, { "x-test-now": "2026-11-19T10:04:59.999Z" });
+    const tooEarly = await call(stub, "/recover", { taskId, actor: "integration-test", requestId: crypto.randomUUID() }, { "x-test-now": "2026-11-19T10:04:59.999Z" });
     assert.equal(tooEarly.status, 409);
     assert.equal(tooEarly.body.error, "lease_not_expired");
 
-    const recovered1 = await call(stub, "/recover", { taskId }, { "x-test-now": "2026-11-19T10:05:00.000Z" });
+    const recovered1 = await call(stub, "/recover", { taskId, actor: "integration-test", requestId: crypto.randomUUID() }, { "x-test-now": "2026-11-19T10:05:00.000Z" });
     assert.equal(recovered1.status, 200);
     assert.equal(recovered1.body.outcome, "requeued");
     assert.equal(recovered1.body.task.state, "queued");
@@ -500,7 +629,7 @@ test("expired leases are requeued after bounded delay and fail at the attempt ce
 
     const second = await call(stub, "/claim", { taskId }, { "x-test-now": "2026-11-19T10:05:30.000Z" });
     assert.equal(second.status, 200);
-    const recovered2 = await call(stub, "/recover", { taskId }, { "x-test-now": "2026-11-19T10:10:30.000Z" });
+    const recovered2 = await call(stub, "/recover", { taskId, actor: "integration-test", requestId: crypto.randomUUID() }, { "x-test-now": "2026-11-19T10:10:30.000Z" });
     assert.equal(recovered2.status, 200);
     assert.equal(recovered2.body.outcome, "requeued");
     assert.equal(recovered2.body.task.nextAttemptAt, Date.parse("2026-11-19T10:12:30.000Z"));
@@ -511,7 +640,7 @@ test("expired leases are requeued after bounded delay and fail at the attempt ce
 
     const third = await call(stub, "/claim", { taskId }, { "x-test-now": "2026-11-19T10:12:30.000Z" });
     assert.equal(third.status, 200);
-    const exhausted = await call(stub, "/recover", { taskId }, { "x-test-now": "2026-11-19T10:17:30.000Z" });
+    const exhausted = await call(stub, "/recover", { taskId, actor: "integration-test", requestId: crypto.randomUUID() }, { "x-test-now": "2026-11-19T10:17:30.000Z" });
     assert.equal(exhausted.status, 200);
     assert.equal(exhausted.body.outcome, "failed");
     assert.equal(exhausted.body.task.state, "failed");
@@ -550,6 +679,23 @@ test("five terminal failures within ten minutes durably open the circuit breaker
     assert.equal(control.body.control.paused, true);
     assert.equal(control.body.control.circuitBreakerThreshold, 5);
     assert.equal(control.body.control.circuitBreakerWindowMs, 10 * 60 * 1000);
+  });
+});
+
+test("operator lease recovery is rate limited to ten requests per actor per minute", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const actor = "recovery-rate-test";
+    const outcomes = [];
+    for (let index = 0; index < 11; index++) {
+      outcomes.push(await call(stub, "/recover", {
+        taskId: "missing-task",
+        actor,
+        requestId: crypto.randomUUID(),
+      }, { "x-test-now": "2026-11-19T10:00:00.000Z" }));
+    }
+    assert.ok(outcomes.slice(0, 10).every((item) => item.status === 404));
+    assert.equal(outcomes[10].status, 429);
+    assert.equal(outcomes[10].body.error, "runtime_control_rate_limited");
   });
 });
 
@@ -863,5 +1009,35 @@ test("outbound budget rows are pruned after the 30-day retention window", async 
     const after = await call(stub, `/external-budget?day=${oldDay}&scope=ai_bank_discovery`);
     assert.equal(after.status, 200);
     assert.equal(after.body.budget.used, 0);
+  });
+});
+
+
+test("all seven task mutation routes reject streamed bodies above the 16 KiB ingress cap", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const oversized = " ".repeat(16 * 1024 + 1);
+    for (const pathname of ["/reserve", "/claim", "/claim-next", "/heartbeat", "/complete", "/recover", "/transition"]) {
+      const response = await stub.fetch("http://do.local" + pathname, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + TEST_STATE_STORE_TOKEN },
+        body: oversized,
+      });
+      assert.equal(response.status, 413, pathname);
+      assert.equal((await response.json()).error, "request_body_too_large", pathname);
+    }
+  });
+});
+
+test("all seven task mutation routes reject non-JSON media types before mutation", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    for (const pathname of ["/reserve", "/claim", "/claim-next", "/heartbeat", "/complete", "/recover", "/transition"]) {
+      const response = await stub.fetch("http://do.local" + pathname, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain", Authorization: "Bearer " + TEST_STATE_STORE_TOKEN },
+        body: "{}",
+      });
+      assert.equal(response.status, 400, pathname);
+      assert.equal((await response.json()).error, "request_invalid", pathname);
+    }
   });
 });
