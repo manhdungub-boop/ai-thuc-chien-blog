@@ -1,0 +1,87 @@
+name: Agent Runtime PR327 Exact-SHA Preflight (Read Only)
+
+on:
+  push:
+    branches:
+      - validation/agent-runtime-pr327-exact-sha-20261121
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-runtime-pr327-exact-sha-preflight
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    if: github.ref == 'refs/heads/validation/agent-runtime-pr327-exact-sha-20261121'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out the exact event commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Verify exact branch and immutable commit
+        shell: bash
+        env:
+          TARGET_REF: ${{ github.ref }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$TARGET_REF" == "refs/heads/validation/agent-runtime-pr327-exact-sha-20261121" ]]
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          actual_sha="$(git rev-parse HEAD)"
+          [[ "$actual_sha" == "$EXPECTED_SHA" ]]
+          test -f agents/runtime/src/worker.mjs
+          test -f agents/runtime/wrangler.preview.jsonc
+          echo "Validated immutable source: $TARGET_REF @ $actual_sha"
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+
+      - name: Install isolated Worker test simulator
+        run: |
+          mkdir -p "$RUNNER_TEMP/agent-runtime-audit"
+          cat > "$RUNNER_TEMP/agent-runtime-audit/package.json" <<'JSON'
+          {
+            "private": true,
+            "dependencies": {
+              "miniflare": "4.20260730.0"
+            },
+            "overrides": {
+              "miniflare": {
+                "sharp": "0.35.5",
+                "undici": "7.30.2"
+              }
+            }
+          }
+          JSON
+          npm install --prefix "$RUNNER_TEMP/agent-runtime-audit" --ignore-scripts --no-audit --no-fund
+          ln -s "$RUNNER_TEMP/agent-runtime-audit/node_modules" "$GITHUB_WORKSPACE/node_modules"
+
+      - name: Run complete Agent Runtime test suite
+        timeout-minutes: 8
+        run: timeout --signal=TERM --kill-after=10s 420s node --test agents/runtime/tests/*.test.mjs
+
+      - name: Validate Preview types and Worker bundle without deployment
+        working-directory: agents/runtime
+        run: |
+          npx --yes wrangler@4.166.0 types --config wrangler.preview.jsonc
+          npx --yes wrangler@4.166.0 deploy --dry-run --config wrangler.preview.jsonc --outdir "$RUNNER_TEMP/agent-runtime-dry-run"
+
+      - name: Report safety boundary
+        run: |
+          {
+            echo "## Agent Runtime PR327 Exact-SHA Preflight"
+            echo "- Branch and immutable event SHA: verified"
+            echo "- Complete tests and Wrangler dry-run: completed"
+            echo "- Cloudflare credentials: not provided"
+            echo "- Deployment, Durable Object migration, Cron, OAuth, AI inference and publication: not performed"
+            echo "- Production Worker, D1 and DNS: not accessed"
+          } >> "$GITHUB_STEP_SUMMARY"
