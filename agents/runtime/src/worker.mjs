@@ -256,7 +256,7 @@ const worker = {
       if (env.AGENT_OIDC_ENABLED !== "true") return json({ ok: false, error: "oidc_operator_disabled" }, 503);
       if ([...url.searchParams.keys()].length > 0) return json({ ok: false, error: "request_invalid" }, 400);
 
-      const parsedBody = await readBoundedJsonRequest(request, 1024);
+      const parsedBody = await readBoundedJsonValueRequest(request, 1024);
       if (!parsedBody.ok) {
         return json({ ok: false, error: parsedBody.status === 413 ? "request_body_too_large" : "request_invalid" }, parsedBody.status);
       }
@@ -611,7 +611,7 @@ const worker = {
       if (typeof actor !== "string" || !/^[a-zA-Z0-9._:-]{3,64}$/.test(actor)) {
         return json({ ok: false, error: "operator_identity_unavailable" }, 503);
       }
-      const parsedBody = await readBoundedJsonRequest(request, 1024);
+      const parsedBody = await readBoundedJsonValueRequest(request, 1024);
       if (!parsedBody.ok) {
         return json({ ok: false, error: parsedBody.status === 413 ? "request_body_too_large" : "request_invalid" }, parsedBody.status);
       }
