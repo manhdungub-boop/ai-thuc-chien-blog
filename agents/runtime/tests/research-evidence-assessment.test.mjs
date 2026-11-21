@@ -1,4 +1,5 @@
-import { describe, it } from "node:test";\nimport { expect } from "./test-compat.mjs";
+import { describe, it } from "node:test";
+import { expect } from "./test-compat.mjs";
 import { assessResearchEvidence } from "../src/research-evidence-assessment.mjs";
 
 const now = Date.parse("2026-11-18T12:00:00.000Z");

@@ -1,4 +1,5 @@
-import { describe, it } from "node:test";\nimport { expect } from "./test-compat.mjs";
+import { describe, it } from "node:test";
+import { expect } from "./test-compat.mjs";
 import { currentUtcBudgetDay } from "../src/utc-budget-day.mjs";
 
 describe("execution-day UTC budget key", () => {

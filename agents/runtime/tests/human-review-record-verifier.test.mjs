@@ -1,4 +1,5 @@
-import { describe, it } from "node:test";\nimport { expect } from "./test-compat.mjs";
+import { describe, it } from "node:test";
+import { expect } from "./test-compat.mjs";
 import { recordHumanClaimReview } from "../src/human-claim-review.mjs";
 import { verifyHumanClaimReviewRecord } from "../src/human-review-record-verifier.mjs";
 
