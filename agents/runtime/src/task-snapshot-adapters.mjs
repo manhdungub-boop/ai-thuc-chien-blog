@@ -61,15 +61,15 @@ function canonicalUrl(html) {
 }
 
 function titleText(html) {
-  const match = html.match(/<title\b[^>]*>([\s\S]*?)<\/title\s*>/i);
+  const match = html.match(/<title\b[^>]*>([\s\S]*?)<\/title\b[^>]*>/i);
   return match ? decodeEntities(match[1].replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim()) : "";
 }
 
 function visibleText(html) {
   return decodeEntities(html
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, " ")
-    .replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, " ")
-    .replace(/<svg\b[^>]*>[\s\S]*?<\/svg\s*>/gi, " ")
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script\b[^>]*>/gi, " ")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style\b[^>]*>/gi, " ")
+    .replace(/<svg\b[^>]*>[\s\S]*?<\/svg\b[^>]*>/gi, " ")
     .replace(/<!--[\s\S]*?-->/g, " ")
     .replace(/<[^>]*>/g, " "))
     .replace(/\s+/g, " ").trim();
@@ -85,7 +85,7 @@ function countInternalLinks(html) {
 }
 
 function hasBlogPostingJsonLd(html) {
-  for (const match of html.matchAll(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script\s*>/gi)) {
+  for (const match of html.matchAll(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script\b[^>]*>/gi)) {
     try {
       const data = JSON.parse(match[1]);
       const records = Array.isArray(data) ? data : [data];

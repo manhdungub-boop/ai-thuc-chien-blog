@@ -73,7 +73,8 @@ test("SEO adapter requires explicit sitemap and broken-link evidence", async () 
 test("article parsing removes raw blocks with spaced end tags and decodes entities only once", async () => {
   const source = `<html><head><title>&amp;lt;script&amp;gt;literal</title></head><body>
     <p>Visible article text</p>
-    <script>hidden script payload</script   >
+    <script>hidden script payload</script 	
+ bar>
     <style>hidden style payload</style >
     <svg><text>hidden vector payload</text></svg   >
   </body></html>`;
