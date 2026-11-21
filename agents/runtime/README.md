@@ -168,3 +168,18 @@ This is a code-level emergency-pause path only. It is not human MFA, it cannot r
 ### Operator response minimization
 
 Read-only review results returned by `/run` and `/internal/dispatch` are explicitly allowlisted. Failed or malformed result objects return only the fixed `read_only_review_failed` error code; raw adapter/internal error strings and unrecognized fields are not reflected in the operator response.
+
+### Research-to-draft evidence preparation boundary
+
+- `prepareDraftEvidenceLedger({ draftStore, artifactId, fetchImpl })` reads only exact source URLs already present in the stored human-authored draft manifest.
+- The caller must supply a budget-enforcing fetch implementation; there is no unbudgeted network fallback. Preparation is capped at four unique sources and refuses partial persistence.
+- A complete evidence ledger is persisted against the exact draft version read before retrieval. Stale-version conflicts remain blocked and visible.
+- Retrieved excerpts remain `source_retrieved_not_fact_checked`; this helper does not create claims, assess semantic support, authorize owner release, publish content, or post to social networks.
+- This is an internal helper only. It is not wired to a public endpoint, scheduled invocation, or content-draft executor.
+
+### Human article-authoring brief boundary
+
+- `buildArticleAuthoringBrief({ topic, researchEvidence })` creates a Vietnamese editorial scaffold only when at least three distinct source URLs pass the fixed publisher-label/host/path policy and carry successful retrieval metadata.
+- It does not copy source excerpts into article prose, generate factual claims, or create a stored draft. Every article section remains an explicit human-authoring placeholder.
+- The deterministic article quality gate is run against the scaffold and is expected to return `needs_revision`; this is intentional and is not a publication-ready article.
+- The helper is not registered as a `content_draft` task executor and does not change task queue executability. No automatic article generation is claimed.
