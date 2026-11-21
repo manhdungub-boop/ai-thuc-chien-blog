@@ -20,7 +20,10 @@ describe("research evidence readiness assessment", () => {
     ], { now });
     expect(result.status).toBe("evidence_packet_ready_for_claim_review");
     expect(result.ready_for_claim_review).toBe(true);
-    expect(result.independent_source_count).toBe(2);
+    expect(result.distinct_publisher_count).toBe(2);
+    expect(result.required_distinct_publishers).toBe(2);
+    expect(result.independent_source_count).toBe(0);
+    expect(result.independence_assessment).toBe("not_assessed_requires_human_review");
     expect(result.safety).toMatchObject({
       publication_authorized: false,
       draft_created: false,
