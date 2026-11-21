@@ -12,7 +12,7 @@ test("dedicated Agent Runtime Preview config binds its isolated State Store and 
   assert.equal(config.name, "ai-thuc-chien-agent-runtime-preview");
   assert.equal(config.main, "./src/worker.mjs");
   assert.equal(config.workers_dev, true);
-  assert.equal(config.preview_urls, true);
+  assert.equal(config.preview_urls, false);
   assert.deepEqual(config.vars, {
     AGENT_ENABLED: "false",
     AGENT_SCHEDULER_ENABLED: "false",
