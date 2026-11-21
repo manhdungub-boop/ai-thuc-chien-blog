@@ -183,7 +183,7 @@ export class AgentAIBankCandidateStore extends DurableObject {
     ).toArray().map(safeCandidate);
   }
 
-  getCandidate(candidateId) {
+  async getCandidate(candidateId) {
     if (typeof candidateId !== "string" || !/^github:[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(candidateId)) {
       return null;
     }
@@ -194,8 +194,8 @@ export class AgentAIBankCandidateStore extends DurableObject {
     return row ? safeCandidate(row) : null;
   }
 
-  submitReviewEvidence(candidateId, evidence, now = Date.now()) {
-    const candidate = this.getCandidate(candidateId);
+  async submitReviewEvidence(candidateId, evidence, now = Date.now()) {
+    const candidate = await this.getCandidate(candidateId);
     if (!candidate) return { accepted: false, reason: "candidate_not_found" };
     if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) {
       return { accepted: false, reason: "invalid_evidence" };
@@ -276,7 +276,7 @@ export class AgentAIBankCandidateStore extends DurableObject {
   }
 
   async listReviewEvidence(candidateId, limit = 30) {
-    if (!this.getCandidate(candidateId)) return [];
+    if (!(await this.getCandidate(candidateId))) return [];
     if (!Number.isInteger(limit) || limit < 1 || limit > 30) {
       throw new TypeError("invalid_evidence_list_limit");
     }
@@ -286,8 +286,8 @@ export class AgentAIBankCandidateStore extends DurableObject {
     ).toArray().map(row => ({ ...row }));
   }
 
-  getReviewPacket(candidateId) {
-    const stored = this.getCandidate(candidateId);
+  async getReviewPacket(candidateId) {
+    const stored = await this.getCandidate(candidateId);
     if (!stored) return null;
     const rows = this.ctx.storage.sql.exec(
       "SELECT e.check_type, COUNT(*) AS evidence_count FROM ai_bank_review_evidence e JOIN ai_bank_review_evidence_releases r ON r.evidence_id = e.evidence_id WHERE e.candidate_id = ? AND r.candidate_release_url = ? GROUP BY e.check_type",
@@ -314,7 +314,7 @@ export class AgentAIBankCandidateStore extends DurableObject {
     };
   }
 
-  stats() {
+  async stats() {
     return {
       total: this.ctx.storage.sql.exec("SELECT COUNT(*) AS count FROM ai_bank_candidates").one().count,
       awaiting_official_review: this.ctx.storage.sql.exec(

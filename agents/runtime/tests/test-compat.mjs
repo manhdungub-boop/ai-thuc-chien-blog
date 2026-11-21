@@ -1,29 +1,6 @@
 import assert from "node:assert/strict";
 import { isDeepStrictEqual } from "node:util";
 
-// Durable Object RPC results can carry non-enumerable runtime inspection hooks
-// and foreign-realm prototypes. Tests compare their enumerable data contract.
-function normalizeForEquality(value) {
-  if (Array.isArray(value)) return value.map(normalizeForEquality);
-  if (value && typeof value === "object") {
-    const tag = Object.prototype.toString.call(value);
-    if (tag === "[object Object]") {
-      return Object.fromEntries(
-        Object.keys(value).map(key => [key, normalizeForEquality(value[key])])
-      );
-    }
-    if (tag === "[object Date]") return value.toISOString();
-    if (tag === "[object Set]") return new Set([...value].map(normalizeForEquality));
-    if (tag === "[object Map]") {
-      return new Map([...value].map(([key, item]) => [
-        normalizeForEquality(key),
-        normalizeForEquality(item)
-      ]));
-    }
-  }
-  return value;
-}
-
 function partialMatch(actual, expected, path = "value") {
   if (expected && typeof expected === "object") {
     assert.ok(actual && typeof actual === "object", `${path} should be an object`);
@@ -60,9 +37,7 @@ function thrownError(fn) {
 function expect(actual) {
   const matchers = {
     toBe(expected) { assert.strictEqual(actual, expected); },
-    toEqual(expected) {
-      assert.deepStrictEqual(normalizeForEquality(actual), normalizeForEquality(expected));
-    },
+    toEqual(expected) { assert.deepEqual(actual, expected); },
     toMatchObject(expected) { partialMatch(actual, expected); },
     toHaveLength(expected) { assert.strictEqual(actual?.length, expected); },
     toBeLessThan(expected) { assert.ok(actual < expected, `Expected ${actual} < ${expected}`); },
@@ -70,10 +45,7 @@ function expect(actual) {
       assert.ok(actual != null && typeof actual.includes === "function" && actual.includes(expected));
     },
     toContainEqual(expected) {
-      const normalizedExpected = normalizeForEquality(expected);
-      assert.ok(Array.isArray(actual) && actual.some(value =>
-        isDeepStrictEqual(normalizeForEquality(value), normalizedExpected)
-      ));
+      assert.ok(Array.isArray(actual) && actual.some(value => { try { assert.deepEqual(value, expected); return true; } catch { return false; } }));
     },
     toBeUndefined() { assert.strictEqual(actual, undefined); },
     toBeNull() { assert.strictEqual(actual, null); },
