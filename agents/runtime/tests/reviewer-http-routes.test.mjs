@@ -278,8 +278,8 @@ describe("authenticated read-only AI Bank reviewer routes", () => {
     const response = await handleReviewerHttpRequest(new Request(collection, {
       headers: { cookie: "__Host-ai_reviewer_session=forged" }
     }), { AGENT_REVIEWER_AUTH_ENABLED: "false" });
-    expect(response.status).toBe(503);
-    expect(await response.json()).toMatchObject({ error: "reviewer_auth_not_configured" });
+    expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({ ok: false });
   });
 
   it("rejects unsupported methods without touching the candidate store", async () => {
