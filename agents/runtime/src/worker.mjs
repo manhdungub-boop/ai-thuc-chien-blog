@@ -810,8 +810,9 @@ const worker = {
     return json({ ok: false, error: "not_found" }, 404);
   },
   async scheduled(controller, env, ctx) {
-    // Code-only scheduler: the dedicated Preview config owns the 30-minute
-    // trigger. All gates remain fail-closed; one due task maximum per tick.
+    // The handler is dormant unless an environment explicitly declares a
+    // matching Cron trigger; the checked-in Preview config currently declares none.
+    // All gates remain fail-closed; one due task maximum per tick.
     if (controller?.cron !== "*/30 * * * *" ||
         env.AGENT_SCHEDULER_ENABLED !== "true" ||
         env.AGENT_RECOVERY_ALARM_ENABLED !== "true" ||
