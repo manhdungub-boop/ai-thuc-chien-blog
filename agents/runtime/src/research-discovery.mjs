@@ -10,7 +10,7 @@ export const RESEARCH_FEED_SOURCES = [
 ];
 
 function decodeHtmlEntities(value) {
-  return value.replace(/&(?:amp|lt|gt|quot|apos|#39|#\\d+|#x[0-9a-f]+);/gi, entity => {
+  return value.replace(/&(?:amp|lt|gt|quot|apos|#39|#\d+|#x[0-9a-f]+);/gi, entity => {
     const name = entity.slice(1, -1).toLowerCase();
     if (name === "amp") return "&";
     if (name === "lt") return "<";
@@ -22,8 +22,8 @@ function decodeHtmlEntities(value) {
 }
 
 function cleanText(value, max = 500) {
-  return decodeHtmlEntities(value.replace(/<!\\[CDATA\\[|\\]\\]>/g, " ").replace(/<[^>]*>/g, " "))
-    .replace(/\\s+/g, " ").trim().slice(0, max);
+  return decodeHtmlEntities(value.replace(/<!\[CDATA\[|\]\]>/g, " ").replace(/<[^>]*>/g, " "))
+    .replace(/\s+/g, " ").trim().slice(0, max);
 }
 function elementText(xml, name) {
   const match = xml.match(new RegExp("<" + name + "(?:\\s[^>]*)?>([\\s\\S]*?)</" + name + ">", "i"));
