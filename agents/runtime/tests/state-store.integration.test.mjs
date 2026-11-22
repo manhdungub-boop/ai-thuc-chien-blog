@@ -170,9 +170,9 @@ test("dead-letter inspection returns bounded failed-task metadata with stable cu
       assert.equal(second.status, 200);
       const recovered2 = await call(stub, "/recover", recoveryBody(taskId), { "x-test-now": new Date(start + 10.5 * 60_000).toISOString() });
       assert.equal(recovered2.body.outcome, "requeued");
-      const third = await call(stub, "/claim", { taskId }, { "x-test-now": new Date(start + 11 * 60_000).toISOString() });
+      const third = await call(stub, "/claim", { taskId }, { "x-test-now": new Date(start + 25 * 60_000).toISOString() });
       assert.equal(third.status, 200);
-      const failed = await call(stub, "/recover", recoveryBody(taskId), { "x-test-now": new Date(start + 16 * 60_000).toISOString() });
+      const failed = await call(stub, "/recover", recoveryBody(taskId), { "x-test-now": new Date(start + 30 * 60_000).toISOString() });
       assert.equal(failed.status, 200);
       assert.equal(failed.body.outcome, "failed");
       return taskId;
