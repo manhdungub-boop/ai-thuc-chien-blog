@@ -3,7 +3,7 @@ import { AgentDraftStore } from "../src/draft-artifact-store.mjs";
 import { AgentReviewerAuthStore } from "../src/google-reviewer-auth-store.mjs";
 
 const METHODS = {
-  AGENT_AI_BANK_CANDIDATE_STORE: new Set(["upsertCandidates", "listCandidates", "getCandidate", "submitReviewEvidence", "listReviewEvidence", "getReviewPacket", "stats"]),
+  AGENT_AI_BANK_CANDIDATE_STORE: new Set(["upsertCandidates", "listCandidates", "getCandidate", "submitReviewEvidence", "listReviewEvidence", "getReviewPacket", "stats", "testFetch"]),
   AGENT_DRAFT_STORE: new Set(["createDraft", "reviseDraft", "reviseDraftForReviewer", "recordReviewerClaimDecisions", "storeEvidenceLedger", "recordEvidenceReview", "listPendingReviewsForReviewer", "listNeedsRevisionForReviewer", "getDraftForReviewer", "getDraft", "reviewDraft", "listPendingReviews", "listNeedsRevision", "listOwnerReleaseReviews", "stats"]),
   AGENT_REVIEWER_AUTH_STORE: new Set(["consumeStartRateLimit", "createTransaction", "consumeTransaction"])
 };
@@ -19,7 +19,18 @@ function withRpcFetch(Base, binding) {
         return Response.json({ ok: false, error: "invalid_rpc_request" }, { status: 400 });
       }
       try {
-        const result = await this[input.method](...input.args);
+        let result;
+        if (input.method === "testFetch") {
+          const [url, method, headers] = input.args;
+          const response = await Base.prototype.fetch.call(this, new Request(url, { method, headers }));
+          result = {
+            status: response.status,
+            headers: Object.fromEntries(response.headers),
+            body: await response.text()
+          };
+        } else {
+          result = await this[input.method](...input.args);
+        }
         return Response.json({ ok: true, result });
       } catch (error) {
         return Response.json({ ok: false, error: error instanceof Error ? error.message : "rpc_failed" }, { status: 400 });
