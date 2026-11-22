@@ -203,3 +203,13 @@ Read-only review results returned by `/run` and `/internal/dispatch` are explici
 - The workflow has `contents: read` only, checks the ten fixed public GitHub Atom feeds, and stores a bounded report as a 30-day workflow artifact.
 - It does not write AI Bank catalog records, article files, Worker state, D1, DNS, or Production configuration. It uses no secrets and makes no paid API/provider calls.
 - The schedule exists in this Preview PR branch only; GitHub scheduled workflows run from the default branch after an approved merge. No schedule is active from this PR branch alone.
+
+
+### Authenticated read-only runtime operations
+
+- `GET /internal/metrics` requires the operator bearer and returns bounded aggregate task counts, queue ages, internal admission quota pressure, circuit-breaker state, and up to 20 audit-event aggregates from the last 24 hours. It rejects query parameters and never returns task IDs, payloads, or provider/account quota claims.
+- `GET /internal/dead-letter` requires the operator bearer and returns at most 50 failed-task metadata records, ordered newest first. Cursor pagination uses the pair `beforeTerminalAt` and `beforeTaskId`; both must be supplied together. Payloads, idempotency keys, lease owners, and other private task fields are never returned.
+- Failure classification is advisory and uses a fixed allowlist of error codes. Unknown codes produce low-confidence manual review; classification never changes retries, task state, admission, or circuit-breaker behavior.
+- Quota-pressure labels describe only the Agent Runtime's own daily admission and concurrent-task limits: normal, warning (80%), critical (90%), and exhausted (100%). They are not measurements of Cloudflare or external provider quotas.
+- State Store retention work is bounded per invocation and oldest-first: up to 100 task/control/rate-limit/daily-usage/budget rows and up to 250 audit events. Repeated reservations drain larger backlogs over multiple turns.
+- These endpoints are read-only. They do not enable scheduled execution, external providers, task retries, or publication.
