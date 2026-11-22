@@ -70,6 +70,34 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     });
   });
 
+  it("exposes only bounded read-only fetch routes for the reviewer Worker", async () => {
+    await store.upsertCandidates([candidate()], Date.parse("2026-11-19T08:06:00.000Z"));
+
+    const listResponse = await store.fetch(new Request("https://candidate-store.internal/candidates?limit=1"));
+    expect(listResponse.status).toBe(200);
+    const list = await listResponse.json();
+    expect(list.ok).toBe(true);
+    expect(list.items).toHaveLength(1);
+    expect(list.items[0].candidate.candidate_id).toBe("github:ollama/ollama");
+
+    const detailResponse = await store.fetch(new Request(
+      "https://candidate-store.internal/candidate?id=" + encodeURIComponent("github:ollama/ollama")
+    ));
+    expect(detailResponse.status).toBe(200);
+    const detail = await detailResponse.json();
+    expect(detail.ok).toBe(true);
+    expect(detail.packet.candidate.candidate.candidate_id).toBe("github:ollama/ollama");
+    expect(detail.packet.catalog_write_authorized).toBe(false);
+    expect(detail.packet.publication_authorized).not.toBe(true);
+
+    const oversized = await store.fetch(new Request("https://candidate-store.internal/candidates?limit=51"));
+    expect(oversized.status).toBe(400);
+    const write = await store.fetch(new Request("https://candidate-store.internal/candidates", { method: "POST" }));
+    expect(write.status).toBe(405);
+    const unknown = await store.fetch(new Request("https://candidate-store.internal/write"));
+    expect(unknown.status).toBe(404);
+  });
+
   it("deduplicates repeat scans and only replaces a record with a newer release", async () => {
     await store.upsertCandidates([candidate()], Date.parse("2026-11-19T08:06:00.000Z"));
     const repeated = await store.upsertCandidates([candidate()], Date.parse("2026-11-19T09:00:00.000Z"));
