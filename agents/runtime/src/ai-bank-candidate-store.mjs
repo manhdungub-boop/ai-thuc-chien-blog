@@ -1,3 +1,4 @@
+import { DurableObject } from "cloudflare:workers";
 import { AI_BANK_RELEASE_SOURCES } from "./ai-bank-discovery.mjs";
 
 const ALLOWED_REPOSITORIES = new Set(AI_BANK_RELEASE_SOURCES.map(source => source.repo));
@@ -85,8 +86,9 @@ function safeCandidate(row) {
   };
 }
 
-export class AgentAIBankCandidateStore {
+export class AgentAIBankCandidateStore extends DurableObject {
   constructor(ctx, env) {
+    super(ctx, env);
     this.ctx = ctx;
     this.env = env;
     this.ctx.storage.sql.exec(
