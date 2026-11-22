@@ -58,7 +58,8 @@ jobs:
           if (c.main !== "./src/worker.mjs" || c.workers_dev !== true || c.preview_urls !== false) fail("Unexpected Preview entrypoint or URL settings.");
           if (c.vars?.AGENT_ENABLED !== "false" || c.vars?.AGENT_PAUSED !== "true") fail("Agent must remain disabled and paused.");
           if (c.vars?.AGENT_REVIEWER_AUTH_ENABLED !== "false") fail("Reviewer authentication must remain disabled.");
-          for (const k of ["AGENT_SCHEDULER_ENABLED", "AGENT_RECOVERY_ALARM_ENABLED", "AGENT_OIDC_ENABLED"]) {
+          if (c.vars?.AGENT_OIDC_ENABLED !== "true") fail("Only the pause-only GitHub OIDC operator may be enabled in this Preview deployment.");
+          for (const k of ["AGENT_SCHEDULER_ENABLED", "AGENT_RECOVERY_ALARM_ENABLED"]) {
             if (c.vars?.[k] !== "false") fail(k + " must remain false.");
           }
           if (c.vars?.AGENT_RATE_LIMIT_REQUIRED !== "true") fail("Rate limiting must be required.");
