@@ -1075,17 +1075,17 @@ if (url.pathname === "/task" && request.method === "GET") {
   prune(now) {
     const taskCutoff = now - 30 * 24 * 60 * 60 * 1000;
     const auditCutoff = now - 90 * 24 * 60 * 60 * 1000;
-    const boundedDelete = (table, key, predicate, cutoff) => this.sql.exec(
-      `DELETE FROM ${table} WHERE ${key} IN (SELECT ${key} FROM ${table} WHERE ${predicate} ORDER BY ${key} LIMIT 100)`,
-      cutoff
+    const boundedDelete = (table, key, predicate, orderBy, cutoff, limit = 100) => this.sql.exec(
+      `DELETE FROM ${table} WHERE ${key} IN (SELECT ${key} FROM ${table} WHERE ${predicate} ORDER BY ${orderBy} LIMIT ?)`,
+      cutoff, limit
     );
-    // Keep each admission-triggered cleanup bounded. A large stale backlog is
-    // drained over subsequent reservations instead of monopolizing one DO turn.
-    boundedDelete("tasks", "task_id", "state IN ('succeeded','failed','cancelled') AND terminal_at < ?", taskCutoff);
-    boundedDelete("audit_events", "event_id", "occurred_at < ?", auditCutoff);
-    boundedDelete("runtime_control_audit", "event_id", "occurred_at < ?", auditCutoff);
-    boundedDelete("runtime_control_rate_limit", "actor", "window_started_at < ?", now - 24 * 60 * 60 * 1000);
-    boundedDelete("daily_usage", "day_utc", "day_utc < ?", utcDay(auditCutoff));
-    this.sql.exec("DELETE FROM external_request_budgets WHERE rowid IN (SELECT rowid FROM external_request_budgets WHERE budget_day < ? ORDER BY budget_day LIMIT 100)", utcDay(now - 30 * 24 * 60 * 60 * 1000));
+    // Keep each admission-triggered cleanup bounded and oldest-first. A large
+    // stale backlog drains over subsequent reservations instead of monopolizing one DO turn.
+    boundedDelete("tasks", "task_id", "state IN ('succeeded','failed','cancelled') AND terminal_at < ?", "terminal_at ASC,task_id ASC", taskCutoff);
+    boundedDelete("audit_events", "event_id", "occurred_at < ?", "occurred_at ASC,event_id ASC", auditCutoff, 250);
+    boundedDelete("runtime_control_audit", "event_id", "occurred_at < ?", "occurred_at ASC,event_id ASC", auditCutoff);
+    boundedDelete("runtime_control_rate_limit", "actor", "window_started_at < ?", "window_started_at ASC,actor ASC", now - 24 * 60 * 60 * 1000);
+    boundedDelete("daily_usage", "day_utc", "day_utc < ?", "day_utc ASC", utcDay(auditCutoff));
+    this.sql.exec("DELETE FROM external_request_budgets WHERE rowid IN (SELECT rowid FROM external_request_budgets WHERE budget_day < ? ORDER BY budget_day ASC LIMIT 100)", utcDay(now - 30 * 24 * 60 * 60 * 1000));
   }
 }
