@@ -1254,6 +1254,39 @@ test("content research has its own eight-request daily budget and invalid scopes
   });
 });
 
+test("State Store retention cleanup removes at most 100 rows per table per invocation", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const now = Date.parse("2026-11-21T12:00:00.000Z");
+    const seeded = await call(stub, "/__test/seed-prune-fixture", { now });
+    assert.equal(seeded.status, 200);
+    assert.equal(seeded.body.seeded, 101);
+
+    const first = await call(stub, "/__test/prune", { now });
+    assert.equal(first.status, 200);
+    const afterFirst = await call(stub, "/__test/prune-counts");
+    assert.deepEqual(afterFirst.body.counts, {
+      tasks: 1,
+      auditEvents: 1,
+      controlAudit: 1,
+      rateLimits: 1,
+      dailyUsage: 1,
+      externalBudgets: 1,
+    });
+
+    const second = await call(stub, "/__test/prune", { now });
+    assert.equal(second.status, 200);
+    const afterSecond = await call(stub, "/__test/prune-counts");
+    assert.deepEqual(afterSecond.body.counts, {
+      tasks: 0,
+      auditEvents: 0,
+      controlAudit: 0,
+      rateLimits: 0,
+      dailyUsage: 0,
+      externalBudgets: 0,
+    });
+  });
+});
+
 test("outbound budget rows are pruned after the 30-day retention window", async () => {
   await withRuntime({}, async ({ stub }) => {
     const oldDay = "2026-10-01";
