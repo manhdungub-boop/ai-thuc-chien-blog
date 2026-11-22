@@ -42,7 +42,7 @@ function jsonResponse(value) {
 function makeGitHubFetch(jwks) {
   return async (url, options) => {
     assert.equal(options.method, "GET");
-    assert.equal(options.redirect, "error");
+    assert.equal(options.redirect, "manual");
     assert.equal(options.credentials, "omit");
     if (url === DISCOVERY_URL) {
       return jsonResponse({ issuer: ISSUER, jwks_uri: JWKS_URL });

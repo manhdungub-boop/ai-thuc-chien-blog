@@ -127,8 +127,8 @@ test("OIDC pause verifies GitHub signature, consumes jti, and records only the v
   assert.equal(body.control.paused, true);
   assert.equal(internalCalls.length, 2);
   assert.equal(fetchCalls.length, 2);
-  assert.equal(fetchCalls[0].options.redirect, "error");
-  assert.equal(fetchCalls[1].options.redirect, "error");
+  assert.equal(fetchCalls[0].options.redirect, "manual");
+  assert.equal(fetchCalls[1].options.redirect, "manual");
   assert.equal(fetchCalls[0].options.headers.Authorization, undefined);
   assert.equal(JSON.stringify(body).includes(STATE_TOKEN), false);
 });

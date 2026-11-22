@@ -34,7 +34,7 @@ function jsonResponse(value, status = 200) {
 function fetchSequence(responses) {
   let index = 0;
   return async (url, options) => {
-    if (url === jwksUrl) assert.equal(options.redirect, "error");
+    if (url === jwksUrl) assert.equal(options.redirect, "manual");
     const response = responses[index++];
     if (response instanceof Error) throw response;
     if (!response) throw new Error("unexpected_fetch");
