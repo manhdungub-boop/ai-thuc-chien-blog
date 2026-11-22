@@ -156,6 +156,9 @@ test("quota pressure reports daily 80/90/100 and concurrent 80/100 boundaries wi
 
 test("dead-letter inspection returns bounded failed-task metadata with stable cursor pagination", async () => {
   await withRuntime({}, async ({ stub }) => {
+    const recoveryBody = (taskId) => ({
+      taskId, actor: "integration-test", requestId: crypto.randomUUID(),
+    });
     async function failAfterLeaseRetries(id, start) {
       const created = await call(stub, "/reserve", task(id));
       const taskId = created.body.task.taskId;
