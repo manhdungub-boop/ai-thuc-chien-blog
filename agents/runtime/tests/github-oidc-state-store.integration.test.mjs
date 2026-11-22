@@ -80,7 +80,7 @@ async function makeSignedFixture(jti) {
   const claims = {
     iss: ISSUER,
     aud: EXPECTED.audience,
-    sub: "repo:manhdungub-boop/ai-thuc-chien-blog:ref:refs/heads/main",
+    sub: "repo:manhdungub-boop@342528485/ai-thuc-chien-blog@1423636651:ref:refs/heads/main",
     repository: EXPECTED.repository,
     repository_owner: EXPECTED.repositoryOwner,
     repository_owner_id: EXPECTED.repositoryOwnerId,
