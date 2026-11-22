@@ -37,6 +37,20 @@ function aiBankCandidateStore(env) {
   if (!namespace || typeof namespace.idFromName !== "function" || typeof namespace.get !== "function") return null;
   return namespace.get(namespace.idFromName("agent-ai-bank-candidates-primary"));
 }
+
+async function aiBankCandidateStoreRequest(store, path) {
+  try {
+    if (!store || typeof store.fetch !== "function") return { ok: false, status: 503, body: null };
+    const response = await store.fetch(new Request("https://ai-bank-candidate-store.internal" + path, { method: "GET" }));
+    const parsed = await readBoundedJson(response, 256 * 1024);
+    if (!parsed.ok || !parsed.value || typeof parsed.value !== "object" || Array.isArray(parsed.value)) {
+      return { ok: false, status: 502, body: null };
+    }
+    return { ok: response.ok, status: response.status, body: parsed.value };
+  } catch {
+    return { ok: false, status: 503, body: null };
+  }
+}
 function draftStore(env) {
   const namespace = env.AGENT_DRAFT_STORE;
   if (!namespace || typeof namespace.idFromName !== "function" || typeof namespace.get !== "function") return null;
@@ -208,8 +222,11 @@ async function handleAIBankReviewerApi(request, env, url) {
     public_publication_authorized: false
   };
   if (collection) {
-    const items = await store.listCandidates(limit);
-    if (!Array.isArray(items)) return json({ ok: false, error: "ai_bank_candidate_response_invalid", ...safety }, 502);
+    const result = await aiBankCandidateStoreRequest(store, "/candidates?limit=" + limit);
+    const items = result.body?.items;
+    if (!result.ok || !Array.isArray(items) || items.length > limit) {
+      return json({ ok: false, error: "ai_bank_candidate_response_invalid", ...safety }, result.status === 503 ? 503 : 502);
+    }
     return json({
       items,
       count: items.length,
@@ -219,8 +236,11 @@ async function handleAIBankReviewerApi(request, env, url) {
   }
 
   const candidateId = "github:" + detail[1] + "/" + detail[2];
-  const packet = await store.getReviewPacket(candidateId);
-  if (!packet) return json({ ok: false, error: "ai_bank_candidate_not_found", ...safety }, 404);
+  const result = await aiBankCandidateStoreRequest(store, "/candidate?id=" + encodeURIComponent(candidateId));
+  const packet = result.body?.packet;
+  if (!result.ok || !packet || typeof packet !== "object" || Array.isArray(packet)) {
+    return json({ ok: false, error: result.status === 404 ? "ai_bank_candidate_not_found" : "ai_bank_candidate_response_invalid", ...safety }, result.status === 404 ? 404 : 502);
+  }
   return json({
     packet,
     reviewer_ref: auth.reviewer.reviewer_ref,
