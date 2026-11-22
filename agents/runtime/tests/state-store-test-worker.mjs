@@ -97,8 +97,15 @@ export class TestAgentStateStore extends AgentStateStore {
               day(body.now - (31 + index) * 86400000), body.now - (31 + index) * 86400000
             );
           }
+          for (let index = 101; index < 251; index += 1) {
+            this.sql.exec(
+              "INSERT INTO audit_events (event_id,task_id,event_type,occurred_at,metadata_json) VALUES (?,?,?,?,?)",
+              "prune-audit-" + String(index).padStart(3, "0"), "prune-fixture-extra", "test.prune",
+              body.now - 100 * 86400000, "{}"
+            );
+          }
         });
-        return jsonResponse({ ok: true, seeded: 101 });
+        return jsonResponse({ ok: true, seeded: 101, auditRowsSeeded: 251 });
       }
       if (url.pathname === "/__test/prune-counts" && request.method === "GET") {
         const counts = {};
