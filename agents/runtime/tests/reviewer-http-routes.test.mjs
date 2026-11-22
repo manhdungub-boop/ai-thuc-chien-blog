@@ -245,6 +245,18 @@ function aiBankStoreNamespace(stub) {
   };
 }
 
+function aiBankStoreFetchStub(handler) {
+  return {
+    async fetch(request) {
+      const result = await handler(new URL(request.url));
+      return new Response(JSON.stringify(result), {
+        status: result.status || 200,
+        headers: { "content-type": "application/json; charset=utf-8" }
+      });
+    }
+  };
+}
+
 describe("reviewer console script", () => {
   it("parses as JavaScript and contains the read-only AI Bank queue", () => {
     assert.doesNotThrow(() => new Script(REVIEWER_CONSOLE_JS));
@@ -308,9 +320,11 @@ describe("authenticated read-only AI Bank reviewer routes", () => {
     let receivedLimit;
     const env = {
       ...reviewerAuthEnv,
-      AGENT_AI_BANK_CANDIDATE_STORE: aiBankStoreNamespace({
-        async listCandidates(limit) { receivedLimit = limit; return items; }
-      })
+      AGENT_AI_BANK_CANDIDATE_STORE: aiBankStoreNamespace(aiBankStoreFetchStub((url) => {
+        expect(url.pathname).toBe("/candidates");
+        receivedLimit = Number(url.searchParams.get("limit"));
+        return { ok: true, items };
+      }))
     };
     const response = await handleReviewerHttpRequest(new Request(collection, {
       headers: { origin: base, cookie: "__Host-ai_reviewer_session=" + token }
@@ -337,9 +351,11 @@ describe("authenticated read-only AI Bank reviewer routes", () => {
     let received;
     const env = {
       ...reviewerAuthEnv,
-      AGENT_AI_BANK_CANDIDATE_STORE: aiBankStoreNamespace({
-        async getReviewPacket(candidateId) { received = candidateId; return packet; }
-      })
+      AGENT_AI_BANK_CANDIDATE_STORE: aiBankStoreNamespace(aiBankStoreFetchStub((url) => {
+        expect(url.pathname).toBe("/candidate");
+        received = url.searchParams.get("id");
+        return { ok: true, packet };
+      }))
     };
     const response = await handleReviewerHttpRequest(new Request(detail, {
       headers: { origin: base, cookie: "__Host-ai_reviewer_session=" + token }
