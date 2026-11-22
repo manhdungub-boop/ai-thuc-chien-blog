@@ -66,6 +66,145 @@ async function call(stub, pathname, body, headers = {}) {
   return { status: response.status, body: await response.json() };
 }
 
+test("read-only metrics report bounded aggregate task, quota, age, and audit data", async () => {
+  await withRuntime({ daily: 10, concurrent: 4 }, async ({ stub }) => {
+    const created = await call(stub, "/reserve", task("metrics-queued"));
+    assert.equal(created.status, 201);
+    const metrics = await call(stub, "/metrics");
+    assert.equal(metrics.status, 200);
+    assert.equal(metrics.body.ok, true);
+    assert.equal(metrics.body.tasks.totalRetained, 1);
+    assert.equal(metrics.body.tasks.queued, 1);
+    assert.equal(metrics.body.tasks.queuedDue, 1);
+    assert.equal(metrics.body.tasks.running, 0);
+    assert.equal(metrics.body.tasks.oldestQueuedAgeMs >= 0, true);
+    assert.equal(metrics.body.tasks.oldestRunningUpdateAgeMs, null);
+    assert.equal(metrics.body.quota.acceptedToday, 1);
+    assert.equal(metrics.body.quota.dailyLimit, 10);
+    assert.equal(metrics.body.quota.dailyUtilizationPercent, 10);
+    assert.equal(metrics.body.quota.dailyPressure, "normal");
+    assert.equal(metrics.body.quota.concurrentPressure, "normal");
+    assert.equal(metrics.body.quota.overallPressure, "normal");
+    assert.equal(metrics.body.quota.inFlight, 1);
+    assert.equal(metrics.body.quota.concurrentLimit, 4);
+    assert.equal(metrics.body.quota.concurrentUtilizationPercent, 25);
+    assert.ok(Array.isArray(metrics.body.auditLast24h));
+    assert.ok(metrics.body.auditLast24h.length <= 20);
+    assert.match(metrics.body.note, /not a measurement of provider or Cloudflare account quota/);
+    assert.equal((await call(stub, "/metrics?day=2026-11-20")).status, 400);
+    assert.equal(JSON.stringify(metrics.body).includes("integration-test-key"), false);
+  });
+});
+
+test("quota pressure reports daily 80/90/100 and concurrent 80/100 boundaries without changing admission policy", async () => {
+  await withRuntime({ daily: 10, concurrent: 5 }, async ({ stub }) => {
+    for (let index = 0; index < 8; index++) {
+      const created = await call(stub, "/reserve", task(`daily-pressure-${index}`));
+      assert.equal(created.status, 201);
+      const claimed = await call(stub, "/claim", { taskId: created.body.task.taskId });
+      assert.equal(claimed.status, 200);
+      const completed = await call(stub, "/complete", {
+        taskId: created.body.task.taskId, leaseOwner: claimed.body.lease.owner,
+        leaseGeneration: claimed.body.lease.generation, status: "succeeded",
+      });
+      assert.equal(completed.status, 200);
+    }
+    let metrics = await call(stub, "/metrics");
+    assert.equal(metrics.body.quota.dailyUtilizationPercent, 80);
+    assert.equal(metrics.body.quota.dailyPressure, "warning");
+    for (let index = 8; index < 9; index++) {
+      const created = await call(stub, "/reserve", task(`daily-pressure-${index}`));
+      assert.equal(created.status, 201);
+      const claimed = await call(stub, "/claim", { taskId: created.body.task.taskId });
+      const completed = await call(stub, "/complete", {
+        taskId: created.body.task.taskId, leaseOwner: claimed.body.lease.owner,
+        leaseGeneration: claimed.body.lease.generation, status: "succeeded",
+      });
+      assert.equal(completed.status, 200);
+    }
+    metrics = await call(stub, "/metrics");
+    assert.equal(metrics.body.quota.dailyUtilizationPercent, 90);
+    assert.equal(metrics.body.quota.dailyPressure, "critical");
+    assert.equal(metrics.body.quota.overallPressure, "critical");
+    const last = await call(stub, "/reserve", task("daily-pressure-9"));
+    assert.equal(last.status, 201);
+    const lastClaim = await call(stub, "/claim", { taskId: last.body.task.taskId });
+    await call(stub, "/complete", {
+      taskId: last.body.task.taskId, leaseOwner: lastClaim.body.lease.owner,
+      leaseGeneration: lastClaim.body.lease.generation, status: "succeeded",
+    });
+    metrics = await call(stub, "/metrics");
+    assert.equal(metrics.body.quota.dailyUtilizationPercent, 100);
+    assert.equal(metrics.body.quota.dailyPressure, "exhausted");
+    assert.equal(metrics.body.quota.overallPressure, "exhausted");
+    assert.equal((await call(stub, "/reserve", task("daily-pressure-blocked"))).body.error, "daily_quota_exhausted");
+  });
+  await withRuntime({ daily: 20, concurrent: 5 }, async ({ stub }) => {
+    for (let index = 0; index < 4; index++) assert.equal((await call(stub, "/reserve", task(`concurrent-pressure-${index}`))).status, 201);
+    let metrics = await call(stub, "/metrics");
+    assert.equal(metrics.body.quota.concurrentUtilizationPercent, 80);
+    assert.equal(metrics.body.quota.concurrentPressure, "warning");
+    assert.equal(metrics.body.quota.overallPressure, "warning");
+    assert.equal((await call(stub, "/reserve", task("concurrent-pressure-4"))).status, 201);
+    metrics = await call(stub, "/metrics");
+    assert.equal(metrics.body.quota.concurrentUtilizationPercent, 100);
+    assert.equal(metrics.body.quota.concurrentPressure, "exhausted");
+    assert.equal(metrics.body.quota.overallPressure, "exhausted");
+    assert.equal((await call(stub, "/reserve", task("concurrent-pressure-blocked"))).body.error, "concurrency_limit_reached");
+  });
+});
+
+test("dead-letter inspection returns bounded failed-task metadata with stable cursor pagination", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    async function failAfterLeaseRetries(id, start) {
+      const created = await call(stub, "/reserve", task(id));
+      const taskId = created.body.task.taskId;
+      const first = await call(stub, "/claim", { taskId }, { "x-test-now": new Date(start).toISOString() });
+      assert.equal(first.status, 200);
+      const recovered1 = await call(stub, "/recover", recoveryBody(taskId), { "x-test-now": new Date(start + 5 * 60_000).toISOString() });
+      assert.equal(recovered1.body.outcome, "requeued");
+      const second = await call(stub, "/claim", { taskId }, { "x-test-now": new Date(start + 5.5 * 60_000).toISOString() });
+      assert.equal(second.status, 200);
+      const recovered2 = await call(stub, "/recover", recoveryBody(taskId), { "x-test-now": new Date(start + 10.5 * 60_000).toISOString() });
+      assert.equal(recovered2.body.outcome, "requeued");
+      const third = await call(stub, "/claim", { taskId }, { "x-test-now": new Date(start + 11 * 60_000).toISOString() });
+      assert.equal(third.status, 200);
+      const failed = await call(stub, "/recover", recoveryBody(taskId), { "x-test-now": new Date(start + 16 * 60_000).toISOString() });
+      assert.equal(failed.status, 200);
+      assert.equal(failed.body.outcome, "failed");
+      return taskId;
+    }
+
+    const base = Date.parse("2026-11-19T10:00:00.000Z");
+    const olderTaskId = await failAfterLeaseRetries("dead-letter-older", base);
+    const newerTaskId = await failAfterLeaseRetries("dead-letter-newer", base + 60 * 60_000);
+    const first = await call(stub, "/dead-letter?limit=1");
+    assert.equal(first.status, 200);
+    assert.equal(first.body.items.length, 1);
+    assert.equal(first.body.items[0].taskId, newerTaskId);
+    assert.equal(first.body.items[0].errorCode, "lease_expired_max_attempts");
+    assert.deepEqual(first.body.items[0].classification, {
+      category: "transient", confidence: "high", recommendedAction: "inspect_provider_or_network_health",
+    });
+    assert.equal(first.body.items[0].attemptCount, 3);
+    assert.equal(first.body.nextCursor.taskId, newerTaskId);
+    assert.equal("payload" in first.body.items[0], false);
+    assert.equal("idempotencyKey" in first.body.items[0], false);
+
+    const cursor = first.body.nextCursor;
+    const second = await call(stub, "/dead-letter?limit=1&beforeTerminalAt=" + cursor.terminalAt + "&beforeTaskId=" + encodeURIComponent(cursor.taskId));
+    assert.equal(second.status, 200);
+    assert.equal(second.body.items.length, 1);
+    assert.equal(second.body.items[0].taskId, olderTaskId);
+    assert.equal(second.body.nextCursor, null);
+
+    assert.equal((await call(stub, "/dead-letter?limit=0")).status, 400);
+    assert.equal((await call(stub, "/dead-letter?limit=1&beforeTerminalAt=123")).status, 400);
+    assert.equal((await call(stub, "/dead-letter?limit=1&limit=2")).status, 400);
+    assert.equal((await call(stub, "/dead-letter?limit=51")).status, 400);
+  });
+});
+
 test("schema v7 repairs either historical v6 layout without losing the other migration", async () => {
   for (const layout of ["budget-only", "result-only"]) {
     const directory = await mkdtemp(path.join(tmpdir(), "ai-thuc-chien-schema-v6-"));
