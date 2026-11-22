@@ -146,11 +146,13 @@ jobs:
           assert.deepEqual(preview.durable_objects?.bindings, [
             { name: 'AGENT_STATE_STORE', class_name: 'AgentStateStore' },
             { name: 'AGENT_REVIEWER_AUTH_STORE', class_name: 'AgentReviewerAuthStore' },
-            { name: 'AGENT_DRAFT_STORE', class_name: 'AgentDraftStore' }
+            { name: 'AGENT_DRAFT_STORE', class_name: 'AgentDraftStore' },
+            { name: 'AGENT_AI_BANK_CANDIDATE_STORE', class_name: 'AgentAIBankCandidateStore' }
           ]);
           assert.deepEqual(preview.migrations, [
             { tag: 'v1', new_sqlite_classes: ['AgentStateStore'] },
-            { tag: 'v2', new_sqlite_classes: ['AgentReviewerAuthStore', 'AgentDraftStore'] }
+            { tag: 'v2', new_sqlite_classes: ['AgentReviewerAuthStore', 'AgentDraftStore'] },
+            { tag: 'v3-ai-bank-candidate-store', new_sqlite_classes: ['AgentAIBankCandidateStore'] }
           ]);
           assert.equal('routes' in preview, false);
           assert.equal('d1_databases' in preview, false);
