@@ -60,7 +60,7 @@
     "AGENT_SCHEDULER_ENABLED": "false",
     "AGENT_PAUSED": "true",
     "AGENT_RECOVERY_ALARM_ENABLED": "false",
-    "AGENT_OIDC_ENABLED": "false",
+    "AGENT_OIDC_ENABLED": "true",
     "AGENT_REVIEWER_AUTH_ENABLED": "false",
     "AGENT_RATE_LIMIT_REQUIRED": "true",
     "AGENT_OIDC_AUDIENCE": "ai-thuc-chien-agent-runtime-preview",
