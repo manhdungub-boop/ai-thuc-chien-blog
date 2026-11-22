@@ -68,7 +68,7 @@ jobs:
             workflow_ref: 'manhdungub-boop/ai-thuc-chien-blog/.github/workflows/agent-runtime-operator.yml@refs/heads/main',
             event_name: 'workflow_dispatch',
             actor_id: '342528485',
-            sub: 'repo:manhdungub-boop/ai-thuc-chien-blog:ref:refs/heads/main',
+            sub: 'repo:manhdungub-boop@342528485/ai-thuc-chien-blog@1423636651:ref:refs/heads/main',
           };
           const mismatches = Object.entries(expectedClaims)
             .filter(([key, expected]) => {
