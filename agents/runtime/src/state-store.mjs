@@ -2,6 +2,7 @@ import { validateTaskRequest } from "./task-contract.mjs";
 import { readBoundedJson, readBoundedText } from "./bounded-json-body.mjs";
 import { hasValidStateStoreBearer } from "./internal-auth.mjs";
 import { currentUtcBudgetDay } from "./utc-budget-day.mjs";
+import { classifyTaskFailure } from "./failure-classification.mjs";
 import { claimQueuedTask, heartbeatLease, recoverExpiredLease, completeLeasedTask } from "./lease-policy.mjs";
 
 const SCHEMA_VERSION = 7;
@@ -30,6 +31,18 @@ function isValidUtcDay(day) {
   if (typeof day !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return false;
   const timestamp = Date.parse(day + "T00:00:00.000Z");
   return Number.isFinite(timestamp) && new Date(timestamp).toISOString().slice(0, 10) === day;
+}
+
+function quotaPressure(percent) {
+  if (percent >= 100) return "exhausted";
+  if (percent >= 90) return "critical";
+  if (percent >= 80) return "warning";
+  return "normal";
+}
+
+function highestQuotaPressure(daily, concurrent) {
+  const rank = { normal: 0, warning: 1, critical: 2, exhausted: 3 };
+  return rank[daily] >= rank[concurrent] ? daily : concurrent;
 }
 
 
@@ -314,6 +327,139 @@ if (url.pathname === "/task" && request.method === "GET") {
         if (!taskId || taskId.length > 64) return jsonResponse({ ok: false, error: "task_id_invalid" }, 400);
         const row = readRow(this.sql, "SELECT * FROM tasks WHERE task_id = ?", taskId);
         return row ? jsonResponse({ ok: true, task: safeTask(row) }) : jsonResponse({ ok: false, error: "task_not_found" }, 404);
+      }
+      if (url.pathname === "/dead-letter" && request.method === "GET") {
+        const allowed = new Set(["limit", "beforeTerminalAt", "beforeTaskId"]);
+        const keys = [...url.searchParams.keys()];
+        if (keys.some((key) => !allowed.has(key)) ||
+            keys.some((key) => url.searchParams.getAll(key).length !== 1) ||
+            (url.searchParams.has("beforeTerminalAt") !== url.searchParams.has("beforeTaskId"))) {
+          return jsonResponse({ ok: false, error: "dead_letter_query_invalid" }, 400);
+        }
+        const limitText = url.searchParams.get("limit") ?? "25";
+        if (!/^\\d{1,2}$/.test(limitText)) return jsonResponse({ ok: false, error: "dead_letter_limit_invalid" }, 400);
+        const limit = Number(limitText);
+        if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50) {
+          return jsonResponse({ ok: false, error: "dead_letter_limit_invalid" }, 400);
+        }
+        let beforeTerminalAt = null;
+        let beforeTaskId = null;
+        if (url.searchParams.has("beforeTerminalAt")) {
+          const timestamp = url.searchParams.get("beforeTerminalAt");
+          beforeTaskId = url.searchParams.get("beforeTaskId");
+          if (!/^\\d{1,16}$/.test(timestamp) || !Number.isSafeInteger(Number(timestamp)) ||
+              Number(timestamp) < 0 || typeof beforeTaskId !== "string" ||
+              beforeTaskId.length < 1 || beforeTaskId.length > 64 ||
+              [...beforeTaskId].some((character) => character.charCodeAt(0) < 33 || character.charCodeAt(0) === 127)) {
+            return jsonResponse({ ok: false, error: "dead_letter_cursor_invalid" }, 400);
+          }
+          beforeTerminalAt = Number(timestamp);
+        }
+        const rows = beforeTerminalAt === null
+          ? this.sql.exec(
+            "SELECT task_id,task_type,created_at,terminal_at,error_code,last_error_code,attempt_count,max_attempts " +
+            "FROM tasks WHERE state='failed' ORDER BY terminal_at DESC,task_id DESC LIMIT ?",
+            limit + 1,
+          ).toArray()
+          : this.sql.exec(
+            "SELECT task_id,task_type,created_at,terminal_at,error_code,last_error_code,attempt_count,max_attempts " +
+            "FROM tasks WHERE state='failed' AND (terminal_at<? OR (terminal_at=? AND task_id<?)) " +
+            "ORDER BY terminal_at DESC,task_id DESC LIMIT ?",
+            beforeTerminalAt, beforeTerminalAt, beforeTaskId, limit + 1,
+          ).toArray();
+        const hasMore = rows.length > limit;
+        const page = rows.slice(0, limit).map((row) => ({
+          taskId: row.task_id,
+          type: row.task_type,
+          createdAt: row.created_at,
+          terminalAt: row.terminal_at,
+          errorCode: row.error_code,
+          lastErrorCode: row.last_error_code,
+          classification: classifyTaskFailure(row.error_code, row.last_error_code),
+          attemptCount: row.attempt_count,
+          maxAttempts: row.max_attempts,
+        }));
+        const last = page[page.length - 1];
+        return jsonResponse({
+          ok: true,
+          items: page,
+          nextCursor: hasMore && last ? { terminalAt: last.terminalAt, taskId: last.taskId } : null,
+        });
+      }
+      if (url.pathname === "/metrics" && request.method === "GET") {
+        if ([...url.searchParams.keys()].length > 0) {
+          return jsonResponse({ ok: false, error: "metrics_query_invalid" }, 400);
+        }
+        const now = this.requestTime(request);
+        const day = utcDay(now);
+        const usage = readRow(this.sql, "SELECT accepted_count FROM daily_usage WHERE day_utc = ?", day);
+        const limits = this.limits();
+        const counts = readRow(this.sql,
+          "SELECT COUNT(*) AS total, " +
+          "COALESCE(SUM(CASE WHEN state='queued' THEN 1 ELSE 0 END),0) AS queued, " +
+          "COALESCE(SUM(CASE WHEN state='running' THEN 1 ELSE 0 END),0) AS running, " +
+          "COALESCE(SUM(CASE WHEN state='succeeded' THEN 1 ELSE 0 END),0) AS succeeded, " +
+          "COALESCE(SUM(CASE WHEN state='failed' THEN 1 ELSE 0 END),0) AS failed, " +
+          "COALESCE(SUM(CASE WHEN state='cancelled' THEN 1 ELSE 0 END),0) AS cancelled, " +
+          "COALESCE(SUM(CASE WHEN state='queued' AND (next_attempt_at IS NULL OR next_attempt_at<=?) THEN 1 ELSE 0 END),0) AS queuedDue, " +
+          "MIN(CASE WHEN state='queued' THEN created_at END) AS oldestQueuedAt, " +
+          "MIN(CASE WHEN state='running' THEN updated_at END) AS oldestRunningAt, " +
+          "COALESCE(SUM(CASE WHEN state='failed' AND terminal_at>=? THEN 1 ELSE 0 END),0) AS failedLast24h " +
+          "FROM tasks", now, now - 24 * 60 * 60 * 1000);
+        const audit = this.sql.exec(
+          "SELECT event_type AS eventType, COUNT(*) AS count FROM audit_events WHERE occurred_at>=? GROUP BY event_type ORDER BY count DESC, event_type ASC LIMIT 20",
+          now - 24 * 60 * 60 * 1000,
+        ).toArray();
+        const failureCountLast10m = readRow(this.sql,
+          "SELECT COUNT(*) AS count FROM tasks WHERE state='failed' AND terminal_at>=?", now - CIRCUIT_BREAKER.windowMs).count;
+        const control = this.controlState();
+        const latestPause = readRow(this.sql,
+          "SELECT reason FROM runtime_control_audit WHERE action='pause' ORDER BY occurred_at DESC,event_id DESC LIMIT 1");
+        const acceptedToday = usage?.accepted_count ?? 0;
+        const dailyUtilizationPercent = Math.round((acceptedToday / limits.daily) * 10000) / 100;
+        const concurrentUtilizationPercent = Math.round(((counts.queued + counts.running) / limits.concurrent) * 10000) / 100;
+        const dailyPressure = quotaPressure(dailyUtilizationPercent);
+        const concurrentPressure = quotaPressure(concurrentUtilizationPercent);
+        const autoPaused = control.paused && latestPause?.reason === "circuit_breaker:5_failures_in_10m";
+        return jsonResponse({
+          ok: true,
+          observedAt: now,
+          dayUtc: day,
+          tasks: {
+            totalRetained: counts.total,
+            queued: counts.queued,
+            queuedDue: counts.queuedDue,
+            running: counts.running,
+            succeededRetained: counts.succeeded,
+            failedRetained: counts.failed,
+            cancelledRetained: counts.cancelled,
+            failedLast24h: counts.failedLast24h,
+            oldestQueuedAgeMs: counts.oldestQueuedAt === null ? null : Math.max(0, now - counts.oldestQueuedAt),
+            oldestRunningUpdateAgeMs: counts.oldestRunningAt === null ? null : Math.max(0, now - counts.oldestRunningAt),
+          },
+          circuitBreaker: {
+            state: autoPaused ? "open" : "closed",
+            autoPaused,
+            paused: control.paused,
+            failureCountLast10m,
+            threshold: CIRCUIT_BREAKER.threshold,
+            windowMs: CIRCUIT_BREAKER.windowMs,
+          },
+          quota: {
+            acceptedToday,
+            dailyLimit: limits.daily,
+            dailyUtilizationPercent,
+            dailyPressure,
+            inFlight: counts.queued + counts.running,
+            concurrentLimit: limits.concurrent,
+            concurrentUtilizationPercent,
+            concurrentPressure,
+            overallPressure: highestQuotaPressure(dailyPressure, concurrentPressure),
+            payloadLimitBytes: limits.payloadBytes,
+          },
+          auditLast24h: audit,
+          note: "Internal admission guardrails only; not a measurement of provider or Cloudflare account quota.",
+        });
       }
       if (url.pathname === "/usage" && request.method === "GET") {
         const day = url.searchParams.get("day") ?? utcDay(this.requestTime(request));
