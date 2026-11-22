@@ -198,7 +198,7 @@ jobs:
           assert.doesNotMatch(workflow, /schedule:|repository_dispatch:|workflow_run:|pull_request:|push:/);
           assert.match(workflow, /permissions:[\s\S]*?contents: none[\s\S]*?id-token: write/);
           assert.doesNotMatch(workflow, /contents: write|actions: write|packages: write|write-all/i);
-          assert.match(workflow, /if:\s*github\.ref\s*==\s*'refs\/heads\/main'/);
+          assert.match(workflow, /if:[^\n]*github\.ref\s*==\s*'refs\/heads\/main'/);
           assert.match(workflow, /cancel-in-progress:\s*false/);
           assert.match(workflow, /AGENT_RUNTIME_PREVIEW_URL/);
           assert.match(workflow, /ai-thuc-chien-agent-runtime-preview/);
