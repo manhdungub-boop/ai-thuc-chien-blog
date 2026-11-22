@@ -79,8 +79,8 @@ jobs:
             })
             .map(([key]) => key);
           if (!claims.jti) mismatches.push('jti');
-          if (!/^\\d+$/.test(String(claims.run_id ?? ''))) mismatches.push('run_id');
-          if (!/^\\d+$/.test(String(claims.run_attempt ?? ''))) mismatches.push('run_attempt');
+          if (!/^\d+$/.test(String(claims.run_id ?? ''))) mismatches.push('run_id');
+          if (!/^\d+$/.test(String(claims.run_attempt ?? ''))) mismatches.push('run_attempt');
           if (!Number.isSafeInteger(claims.iat)) mismatches.push('iat');
           if (!Number.isSafeInteger(claims.exp)) mismatches.push('exp');
           if (mismatches.length) throw new Error('GitHub OIDC claim mismatch keys: ' + mismatches.join(', '));
