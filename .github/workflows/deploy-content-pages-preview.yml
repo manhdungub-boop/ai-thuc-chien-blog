@@ -61,8 +61,10 @@ jobs:
               ".github/workflows/auto-publish-articles.yml",
               ".github/workflows/deploy-content-pages-preview.yml",
           }
+          pages_fallback_only = {"sitemap.xml", "feed.xml"}
           changed = {item.get("filename", "") for item in files}
-          print("false" if changed and changed.issubset(workflow_only) else "true")
+          worker_preview_exempt = workflow_only | pages_fallback_only
+          print("false" if changed and changed.issubset(worker_preview_exempt) else "true")
           PY
           )"
           echo "preview_required=$preview_required" >> "$GITHUB_OUTPUT"
