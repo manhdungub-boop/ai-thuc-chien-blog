@@ -921,11 +921,17 @@ if (url.pathname === "/task" && request.method === "GET") {
   prune(now) {
     const taskCutoff = now - 30 * 24 * 60 * 60 * 1000;
     const auditCutoff = now - 90 * 24 * 60 * 60 * 1000;
-    this.sql.exec("DELETE FROM tasks WHERE state IN ('succeeded','failed','cancelled') AND terminal_at < ?", taskCutoff);
-    this.sql.exec("DELETE FROM audit_events WHERE occurred_at < ?", auditCutoff);
-    this.sql.exec("DELETE FROM runtime_control_audit WHERE occurred_at < ?", auditCutoff);
-    this.sql.exec("DELETE FROM runtime_control_rate_limit WHERE window_started_at < ?", now - 24 * 60 * 60 * 1000);
-    this.sql.exec("DELETE FROM daily_usage WHERE day_utc < ?", utcDay(auditCutoff));
+    const boundedDelete = (table, key, predicate, cutoff) => this.sql.exec(
+      `DELETE FROM ${table} WHERE ${key} IN (SELECT ${key} FROM ${table} WHERE ${predicate} ORDER BY ${key} LIMIT 100)`,
+      cutoff
+    );
+    // Keep each admission-triggered cleanup bounded. A large stale backlog is
+    // drained over subsequent reservations instead of monopolizing one DO turn.
+    boundedDelete("tasks", "task_id", "state IN ('succeeded','failed','cancelled') AND terminal_at < ?", taskCutoff);
+    boundedDelete("audit_events", "event_id", "occurred_at < ?", auditCutoff);
+    boundedDelete("runtime_control_audit", "event_id", "occurred_at < ?", auditCutoff);
+    boundedDelete("runtime_control_rate_limit", "actor", "window_started_at < ?", now - 24 * 60 * 60 * 1000);
+    boundedDelete("daily_usage", "day_utc", "day_utc < ?", utcDay(auditCutoff));
     this.sql.exec("DELETE FROM external_request_budgets WHERE rowid IN (SELECT rowid FROM external_request_budgets WHERE budget_day < ? ORDER BY budget_day LIMIT 100)", utcDay(now - 30 * 24 * 60 * 60 * 1000));
   }
 }
