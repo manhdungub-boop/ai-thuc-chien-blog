@@ -55,6 +55,37 @@ jobs:
           if (typeof tokenPayload.value !== 'string' || tokenPayload.value.length < 100 ||
               tokenPayload.value.length > 16384) throw new Error('GitHub OIDC token response is invalid');
 
+          // Emit only failed claim names, never token material or claim values.
+          const claims = JSON.parse(Buffer.from(tokenPayload.value.split('.')[1], 'base64url').toString('utf8'));
+          const expectedClaims = {
+            iss: 'https://token.actions.githubusercontent.com',
+            aud: process.env.OIDC_AUDIENCE,
+            repository: 'manhdungub-boop/ai-thuc-chien-blog',
+            repository_owner: 'manhdungub-boop',
+            repository_id: '1423636651',
+            repository_owner_id: '342528485',
+            ref: 'refs/heads/main',
+            workflow_ref: 'manhdungub-boop/ai-thuc-chien-blog/.github/workflows/agent-runtime-operator.yml@refs/heads/main',
+            event_name: 'workflow_dispatch',
+            actor_id: '342528485',
+            sub: 'repo:manhdungub-boop/ai-thuc-chien-blog:ref:refs/heads/main',
+          };
+          const mismatches = Object.entries(expectedClaims)
+            .filter(([key, expected]) => {
+              const actual = key.endsWith('_id') ? String(claims[key] ?? '') : claims[key];
+              return key === 'aud'
+                ? !(actual === expected || (Array.isArray(actual) && actual.length === 1 && actual[0] === expected))
+                : actual !== expected;
+            })
+            .map(([key]) => key);
+          if (!claims.jti) mismatches.push('jti');
+          if (!/^\d+$/.test(String(claims.run_id ?? ''))) mismatches.push('run_id');
+          if (!/^\d+$/.test(String(claims.run_attempt ?? ''))) mismatches.push('run_attempt');
+          if (!Number.isSafeInteger(claims.iat)) mismatches.push('iat');
+          if (!Number.isSafeInteger(claims.exp)) mismatches.push('exp');
+          if (mismatches.length) throw new Error('GitHub OIDC claim mismatch keys: ' + mismatches.join(', '));
+          console.log('GitHub OIDC claims match the pinned Preview policy.');
+
           const response = await fetch(new URL('/internal/oidc/pause', target), {
             method: 'POST',
             headers: {
