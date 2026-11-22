@@ -1,6 +1,7 @@
 import { validateTaskRequest } from "./task-contract.mjs";
 import { readBoundedJson, readBoundedText } from "./bounded-json-body.mjs";
 import { hasValidStateStoreBearer } from "./internal-auth.mjs";
+import { currentUtcBudgetDay } from "./utc-budget-day.mjs";
 import { claimQueuedTask, heartbeatLease, recoverExpiredLease, completeLeasedTask } from "./lease-policy.mjs";
 
 const SCHEMA_VERSION = 7;
@@ -429,6 +430,13 @@ if (url.pathname === "/task" && request.method === "GET") {
     const limit = EXTERNAL_REQUEST_LIMITS[scope];
     if (!isValidUtcDay(day) || !Number.isSafeInteger(limit) || !Number.isSafeInteger(now) || now < 0) {
       return { ok: false, error: "external_request_budget_input_invalid" };
+    }
+    let executionDay;
+    try { executionDay = currentUtcBudgetDay(now); } catch {
+      return { ok: false, error: "external_request_budget_timestamp_invalid" };
+    }
+    if (day !== executionDay) {
+      return { ok: false, error: "external_request_budget_day_mismatch" };
     }
     const consumed = readRow(this.sql,
       "INSERT INTO external_request_budgets (budget_day,scope,used,updated_at) VALUES (?,?,1,?) ON CONFLICT(budget_day,scope) DO UPDATE SET used = external_request_budgets.used + 1, updated_at = excluded.updated_at WHERE external_request_budgets.used < ? RETURNING used",
