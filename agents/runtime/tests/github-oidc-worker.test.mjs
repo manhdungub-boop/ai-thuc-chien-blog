@@ -38,7 +38,7 @@ async function makeToken() {
   const claims = {
     iss: ISSUER,
     aud: AUDIENCE,
-    sub: "repo:manhdungub-boop/ai-thuc-chien-blog:ref:refs/heads/main",
+    sub: "repo:manhdungub-boop@342528485/ai-thuc-chien-blog@1423636651:ref:refs/heads/main",
     repository: EXPECTED.repository,
     repository_owner: EXPECTED.repositoryOwner,
     repository_id: EXPECTED.repositoryId,
