@@ -194,3 +194,12 @@ Read-only review results returned by `/run` and `/internal/dispatch` are explici
 - Responses explicitly keep catalog writes, evidence verification, and public publication unauthorized. No evidence-write route is exposed.
 - The reviewer console renders candidate IDs and packet data as text nodes; it does not interpret untrusted candidate content as HTML.
 - These routes do not enable reviewer OAuth, configure credentials, deploy the Preview Worker, or authorize AI Bank changes or public publication.
+
+
+### Free GitHub Actions AI Bank discovery report
+
+- `.github/workflows/ai-bank-readonly-discovery.yml` runs weekly on GitHub-hosted runners and supports manual dispatch with a 1–90 day lookback.
+- It calls the shared `discoverAiBankReleaseSignals` implementation; it does not maintain a second feed allowlist or parser.
+- The workflow has `contents: read` only, checks the ten fixed public GitHub Atom feeds, and stores a bounded report as a 30-day workflow artifact.
+- It does not write AI Bank catalog records, article files, Worker state, D1, DNS, or Production configuration. It uses no secrets and makes no paid API/provider calls.
+- The schedule exists in this Preview PR branch only; GitHub scheduled workflows run from the default branch after an approved merge. No schedule is active from this PR branch alone.
