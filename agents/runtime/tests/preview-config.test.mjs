@@ -73,7 +73,12 @@ test("Worker entrypoint exports the Durable Object class named by the Preview co
   assert.equal(typeof AgentAIBankCandidateStore, "function");
 });
 
-test("GitHub OIDC operator remains disabled while pinning only the observed GitHub actor", () => {
-  assert.equal(config.vars.AGENT_OIDC_ENABLED, "false");
+test("GitHub OIDC is enabled only for the pause-only Preview operator", () => {
+  assert.equal(config.vars.AGENT_OIDC_ENABLED, "true");
+  assert.equal(config.vars.AGENT_ENABLED, "false");
+  assert.equal(config.vars.AGENT_PAUSED, "true");
+  assert.equal(config.vars.AGENT_SCHEDULER_ENABLED, "false");
+  assert.equal(config.vars.AGENT_RECOVERY_ALARM_ENABLED, "false");
+  assert.equal(config.vars.AGENT_REVIEWER_AUTH_ENABLED, "false");
   assert.equal(config.vars.AGENT_OIDC_ACTOR_ID, "342528485");
 });
