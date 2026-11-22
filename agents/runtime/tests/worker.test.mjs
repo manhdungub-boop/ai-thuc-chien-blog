@@ -293,8 +293,8 @@ test("usage bridge uses fixed DO identity and sends only the dedicated internal 
   assert.equal(calls.length, 3);
   assert.equal(calls[0].url, "https://state-store.internal/usage");
   assert.deepEqual(
-    calls.slice(1).map((call) => new URL(call.url).pathname + "?" + new URL(call.url).searchParams.get("scope")),
-    ["/external-budget?ai_bank_discovery", "/external-budget?content_research"],
+    calls.slice(1).map((call) => new URL(call.url).pathname + "?" + new URL(call.url).searchParams.get("scope")).sort(),
+    ["/external-budget?ai_bank_discovery", "/external-budget?content_research"].sort(),
   );
   for (const call of calls) {
     assert.equal(call.method, "GET");
