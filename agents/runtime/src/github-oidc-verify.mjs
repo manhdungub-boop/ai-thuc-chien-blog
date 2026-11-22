@@ -25,6 +25,15 @@ function isNonEmptyString(value, maximum = 512) {
   return typeof value === "string" && value.length > 0 && value.length <= maximum;
 }
 
+function immutableRepositorySubject(expected) {
+  const separator = expected.repository.indexOf("/");
+  if (separator <= 0 || expected.repository.indexOf("/", separator + 1) !== -1 ||
+      expected.repository.slice(0, separator) !== expected.repositoryOwner) return null;
+  const repositoryName = expected.repository.slice(separator + 1);
+  return "repo:" + expected.repositoryOwner + "@" + expected.repositoryOwnerId + "/" +
+    repositoryName + "@" + expected.repositoryId + ":ref:" + expected.ref;
+}
+
 function expectedConfigurationIsValid(expected) {
   return expected !== null && typeof expected === "object" &&
     isNonEmptyString(expected.audience, 256) &&
@@ -118,6 +127,7 @@ export async function verifyGitHubActionsOidcToken(token, {
 
   const now = nowSeconds;
   const skew = clockSkewSeconds;
+  const expectedSubject = immutableRepositorySubject(expected);
   if (!claims || typeof claims !== "object" || Array.isArray(claims) ||
       claims.iss !== GITHUB_OIDC_ISSUER ||
       !(claims.aud === expected.audience ||
@@ -130,7 +140,8 @@ export async function verifyGitHubActionsOidcToken(token, {
       claims.workflow_ref !== expected.workflowRef ||
       claims.event_name !== expected.eventName ||
       String(claims.actor_id ?? "") !== expected.actorId ||
-      claims.sub !== "repo:" + expected.repositoryOwner + "@" + expected.repositoryOwnerId + "/" + expected.repository + "@" + expected.repositoryId + ":ref:" + expected.ref ||
+      expectedSubject === null ||
+      claims.sub !== expectedSubject ||
       !isNonEmptyString(claims.jti, 128) ||
       !/^\d+$/.test(String(claims.run_id ?? "")) ||
       !/^\d+$/.test(String(claims.run_attempt ?? "")) ||
