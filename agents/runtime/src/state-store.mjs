@@ -337,7 +337,7 @@ if (url.pathname === "/task" && request.method === "GET") {
           return jsonResponse({ ok: false, error: "dead_letter_query_invalid" }, 400);
         }
         const limitText = url.searchParams.get("limit") ?? "25";
-        if (!/^\\d{1,2}$/.test(limitText)) return jsonResponse({ ok: false, error: "dead_letter_limit_invalid" }, 400);
+        if (!/^\d{1,2}$/.test(limitText)) return jsonResponse({ ok: false, error: "dead_letter_limit_invalid" }, 400);
         const limit = Number(limitText);
         if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50) {
           return jsonResponse({ ok: false, error: "dead_letter_limit_invalid" }, 400);
@@ -347,7 +347,7 @@ if (url.pathname === "/task" && request.method === "GET") {
         if (url.searchParams.has("beforeTerminalAt")) {
           const timestamp = url.searchParams.get("beforeTerminalAt");
           beforeTaskId = url.searchParams.get("beforeTaskId");
-          if (!/^\\d{1,16}$/.test(timestamp) || !Number.isSafeInteger(Number(timestamp)) ||
+          if (!/^\d{1,16}$/.test(timestamp) || !Number.isSafeInteger(Number(timestamp)) ||
               Number(timestamp) < 0 || typeof beforeTaskId !== "string" ||
               beforeTaskId.length < 1 || beforeTaskId.length > 64 ||
               [...beforeTaskId].some((character) => character.charCodeAt(0) < 33 || character.charCodeAt(0) === 127)) {
