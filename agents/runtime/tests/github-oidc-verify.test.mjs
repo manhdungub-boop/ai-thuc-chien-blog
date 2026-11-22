@@ -38,7 +38,7 @@ async function signedToken(overrides = {}, headerOverrides = {}) {
   const claims = {
     iss: "https://token.actions.githubusercontent.com",
     aud: expected.audience,
-    sub: "repo:" + expected.repositoryOwner + "@" + expected.repositoryOwnerId + "/" + expected.repository + "@" + expected.repositoryId + ":ref:" + expected.ref,
+    sub: "repo:" + expected.repositoryOwner + "@" + expected.repositoryOwnerId + "/" + expected.repository.slice(expected.repository.indexOf("/") + 1) + "@" + expected.repositoryId + ":ref:" + expected.ref,
     repository: expected.repository,
     repository_owner: expected.repositoryOwner,
     repository_owner_id: expected.repositoryOwnerId,
