@@ -1,4 +1,3 @@
-import { DurableObject } from "cloudflare:workers";
 import { AI_BANK_RELEASE_SOURCES } from "./ai-bank-discovery.mjs";
 
 const ALLOWED_REPOSITORIES = new Set(AI_BANK_RELEASE_SOURCES.map(source => source.repo));
@@ -86,9 +85,8 @@ function safeCandidate(row) {
   };
 }
 
-export class AgentAIBankCandidateStore extends DurableObject {
+export class AgentAIBankCandidateStore {
   constructor(ctx, env) {
-    super(ctx, env);
     this.ctx = ctx;
     this.env = env;
     this.ctx.storage.sql.exec(
@@ -127,6 +125,42 @@ export class AgentAIBankCandidateStore extends DurableObject {
       "INSERT OR IGNORE INTO ai_bank_review_evidence_releases (evidence_id, candidate_release_url, associated_at) " +
       "SELECT evidence_id, candidate_release_url, submitted_at FROM ai_bank_review_evidence WHERE candidate_release_url <> ''"
     );
+  }
+
+  async fetch(request) {
+    const url = new URL(request.url);
+    const respond = (body, status = 200) => new Response(JSON.stringify(body), {
+      status,
+      headers: {
+        "Cache-Control": "no-store",
+        "Content-Type": "application/json; charset=utf-8",
+        "X-Content-Type-Options": "nosniff"
+      }
+    });
+    if (request.method !== "GET") return respond({ ok: false, error: "method_not_allowed" }, 405);
+    if (url.pathname === "/candidates") {
+      if ([...url.searchParams.keys()].some(key => key !== "limit") ||
+          url.searchParams.getAll("limit").length > 1) {
+        return respond({ ok: false, error: "candidate_query_invalid" }, 400);
+      }
+      const raw = url.searchParams.get("limit");
+      const limit = raw === null ? 20 : (/^[0-9]{1,2}$/.test(raw) ? Number(raw) : null);
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50) {
+        return respond({ ok: false, error: "candidate_limit_invalid" }, 400);
+      }
+      return respond({ ok: true, items: await this.listCandidates(limit) });
+    }
+    if (url.pathname === "/candidate") {
+      if ([...url.searchParams.keys()].some(key => key !== "id") ||
+          url.searchParams.getAll("id").length !== 1) {
+        return respond({ ok: false, error: "candidate_id_invalid" }, 400);
+      }
+      const candidateId = url.searchParams.get("id");
+      const packet = await this.getReviewPacket(candidateId);
+      if (!packet) return respond({ ok: false, error: "candidate_not_found" }, 404);
+      return respond({ ok: true, packet });
+    }
+    return respond({ ok: false, error: "not_found" }, 404);
   }
 
   upsertCandidates(candidates, now = Date.now()) {
