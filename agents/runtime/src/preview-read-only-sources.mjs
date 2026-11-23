@@ -2,7 +2,8 @@ const RAW_ORIGIN = "https://raw.githubusercontent.com/manhdungub-boop/ai-thuc-ch
 const MAX_SOURCE_BYTES = 512 * 1024;
 
 async function readBoundedResponse(response, limit, signal) {
-  if (!response || !response.ok || !response.body) throw new Error("preview_source_unavailable");
+  if (!response || !response.ok) throw new Error("preview_source_http_error");
+  if (!response.body) throw new Error("preview_source_body_unavailable");
   const declared = Number(response.headers.get("content-length") || 0);
   if (Number.isFinite(declared) && declared > limit) throw new Error("preview_source_too_large");
   const reader = response.body.getReader();
@@ -27,7 +28,11 @@ async function readBoundedResponse(response, limit, signal) {
   const bytes = new Uint8Array(total);
   let offset = 0;
   for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
-  return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    throw new Error("preview_source_invalid_utf8");
+  }
 }
 
 async function readRepositoryText(relativePath, { signal } = {}) {
@@ -37,12 +42,18 @@ async function readRepositoryText(relativePath, { signal } = {}) {
   }
   const url = RAW_ORIGIN + relativePath;
   if (signal?.aborted) throw new Error("task_execution_aborted");
-  const response = await fetch(url, {
-    method: "GET",
-    redirect: "error",
-    headers: { Accept: "text/plain" },
-    signal,
-  });
+  let response;
+  try {
+    response = await fetch(url, {
+      method: "GET",
+      redirect: "error",
+      headers: { Accept: "text/plain" },
+      signal,
+    });
+  } catch (error) {
+    if (signal?.aborted || error?.name === "AbortError") throw new Error("task_execution_aborted");
+    throw new Error("preview_source_fetch_failed");
+  }
   if (signal?.aborted) throw new Error("task_execution_aborted");
   return readBoundedResponse(response, MAX_SOURCE_BYTES, signal);
 }
