@@ -344,7 +344,7 @@ jobs:
             exit 1
           fi
           response="$RUNNER_TEMP/cloudflare-subscriptions.json"
-          status="$(curl --silent --show-error --output "$response" --write-out "%{http_code}" \
+          status="$(curl --silent --show-error --max-time 15 --output "$response" --write-out "%{http_code}" \
             --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             --header "Accept: application/json" \
             "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/subscriptions")"
@@ -410,15 +410,15 @@ jobs:
           assert.equal((config.triggers?.crons ?? []).length, 0);
           await writeFile(process.env.GENERATED_CONFIG, JSON.stringify(config, null, 2) + '\n', { mode: 0o600 });
           NODE
-          timeout --signal=TERM --kill-after=10s 180s npx --yes wrangler@4.166.0 deploy --config "$generated_config" \
+          timeout --signal=TERM --kill-after=10s 120s npx --yes wrangler@4.166.0 deploy --config "$generated_config" \
             --message "One-shot OIDC read-only E2E; automatic disable/restore follows"
 
       - name: Wait for the expected enabled Preview configuration before invoking the task
-        timeout-minutes: 2
+        timeout-minutes: 1
         run: |
           set -euo pipefail
           ready=false
-          for attempt in $(seq 1 10); do
+          for attempt in $(seq 1 8); do
             if curl --fail --silent --show-error --max-time 5 "$AGENT_RUNTIME_PREVIEW_URL/health" -o "$RUNNER_TEMP/preview-health.json" 2>/dev/null &&
               node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
@@ -436,7 +436,7 @@ jobs:
               ready=true
               break
             fi
-            echo "The expected enabled Preview version is not serving yet (attempt $attempt/10)."
+            echo "The expected enabled Preview version is not serving yet (attempt $attempt/8)."
             sleep 2
           done
           if [[ "$ready" != "true" ]]; then
@@ -445,7 +445,7 @@ jobs:
           fi
 
       - name: Invoke exactly one allowlisted task with a short-lived GitHub OIDC token
-        timeout-minutes: 2
+        timeout-minutes: 1
         env:
           OIDC_AUDIENCE: ai-thuc-chien-agent-runtime-preview
         run: |
@@ -519,7 +519,7 @@ jobs:
             echo "::error::Cannot restore Preview because the Cloudflare deployment credential is unavailable."
             exit 1
           fi
-          timeout --signal=TERM --kill-after=10s 180s npx --yes wrangler@4.166.0 deploy --config wrangler.preview.jsonc \
+          timeout --signal=TERM --kill-after=10s 120s npx --yes wrangler@4.166.0 deploy --config wrangler.preview.jsonc \
             --message "Restore Agent Runtime Preview disabled and paused after one-shot E2E"
           restored=false
           for attempt in $(seq 1 10); do
