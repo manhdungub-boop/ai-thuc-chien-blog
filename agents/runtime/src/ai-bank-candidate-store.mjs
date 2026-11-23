@@ -366,13 +366,15 @@ export class AgentAIBankCandidateStore {
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(fingerprintPayload));
     const requestSha256 = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
     return this.ctx.storage.transactionSync(() => {
-      const prior = this.ctx.storage.sql.exec(
-        "SELECT actor_subject, request_sha256 FROM ai_bank_evidence_audit_events WHERE lower(event_id) = ? LIMIT 1",
+      const priorRows = this.ctx.storage.sql.exec(
+        "SELECT actor_subject, request_sha256 FROM ai_bank_evidence_audit_events WHERE lower(event_id) = ?",
         auditEventId
-      ).toArray()[0];
-      if (prior) {
-        const sameRequest = prior.actor_subject === authorization.actor.subject &&
-          prior.request_sha256 === requestSha256;
+      ).toArray();
+      if (priorRows.length) {
+        const sameRequest = priorRows.every(prior =>
+          prior.actor_subject === authorization.actor.subject &&
+          prior.request_sha256 === requestSha256
+        );
         return { accepted: false, reason: sameRequest ? "duplicate_audit_event" : "audit_event_id_reused" };
       }
       const totalAuditCount = this.ctx.storage.sql.exec(
