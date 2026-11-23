@@ -267,6 +267,25 @@ describe("read-only AI research discovery", () => {
     }
   });
 
+  it("rejects bare ampersands and undeclared entity references in XML text and attributes", async () => {
+    const malformed = [
+      "<rss><channel>A & B</channel></rss>",
+      '<rss label="A & B"><channel/></rss>',
+      "<rss><channel>A &unknown;</channel></rss>",
+      "<rss><channel>A &#0; B</channel></rss>"
+    ];
+    for (const document of malformed) {
+      const result = await discoverResearchSignals({
+        now: NOW,
+        fetchImpl: async () => new Response(document, { status: 200 })
+      });
+      expect(result.ok).toBe(false);
+      expect(result.sources_succeeded).toBe(0);
+      expect(result.sources_failed).toHaveLength(4);
+      expect(result.sources_failed.every(item => item.error === "invalid_feed_document")).toBe(true);
+    }
+  });
+
   it("accepts a valid XML declaration only at the beginning of a feed", async () => {
     const result = await discoverResearchSignals({
       now: NOW,
