@@ -2,7 +2,7 @@ name: Agent Runtime Preview Shell Validation
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, labeled]
     branches:
     - main
     - integration/agent-runtime-v5-preview-20261120
@@ -15,12 +15,6 @@ on:
       - "agents/runtime/**"
       - ".github/workflows/agent-runtime-preview-validation.yml"
       - ".github/workflows/agent-runtime-operator.yml"
-  push:
-    branches:
-      - security/fence-leases-on-circuit-breaker-pause-20261123
-    paths:
-      - "agents/runtime/**"
-      - ".github/workflows/agent-runtime-preview-validation.yml"
   workflow_dispatch:
 permissions:
   contents: read
@@ -209,10 +203,11 @@ jobs:
           assert.ok(deployLines[0].includes('--config wrangler.preview.jsonc'));
           assert.doesNotMatch(validateJobSource, /CLOUDFLARE_API_TOKEN:\\s*\\$\\{\\{\\s*secrets\\./i, 'validation job must not bind a Cloudflare token');
           assert.doesNotMatch(validateJobSource, /secrets\\.[A-Z0-9_]+/, 'validation job must not reference a secret value');
-          assert.ok(e2eWorkflow.includes("github.event_name == 'push'"));
-          assert.ok(e2eWorkflow.includes("[one-shot-preview-e2e]"));
+          assert.ok(e2eWorkflow.includes("github.event_name == 'pull_request'"));
+          assert.ok(e2eWorkflow.includes("github.event.action == 'labeled'"));
+          assert.ok(e2eWorkflow.includes("github.event.label.name == 'agent-runtime'"));
           assert.ok(e2eWorkflow.includes("github.actor_id == '342528485'"), 'one-shot E2E must be restricted to repository owner actor');
-          assert.ok(e2eWorkflow.includes("github.ref == 'refs/heads/security/fence-leases-on-circuit-breaker-pause-20261123'"));
+          assert.ok(e2eWorkflow.includes("github.event.pull_request.head.ref == 'security/fence-leases-on-circuit-breaker-pause-20261123'"));
           assert.ok(e2eWorkflow.includes('id-token: write'));
           assert.ok(e2eWorkflow.includes('AGENT_OIDC_RUN_ENABLED:true'));
           assert.ok(e2eWorkflow.includes('AGENT_OIDC_RUN_REF:$GITHUB_REF'));
@@ -242,10 +237,13 @@ jobs:
           NODE
   one-shot-preview-e2e:
     if: >-
-      github.event_name == 'push' &&
-      contains(github.event.head_commit.message, '[one-shot-preview-e2e]') &&
+      github.event_name == 'pull_request' &&
+      github.event.action == 'labeled' &&
+      github.event.label.name == 'agent-runtime' &&
       github.repository == 'manhdungub-boop/ai-thuc-chien-blog' &&
-      github.ref == 'refs/heads/security/fence-leases-on-circuit-breaker-pause-20261123' &&
+      github.event.pull_request.head.repo.full_name == 'manhdungub-boop/ai-thuc-chien-blog' &&
+      github.event.pull_request.head.ref == 'security/fence-leases-on-circuit-breaker-pause-20261123' &&
+      github.event.pull_request.base.ref == 'integration/agent-runtime-v5-preview-20261120' &&
       github.actor_id == '342528485'
     needs: validate
     runs-on: ubuntu-latest
@@ -264,20 +262,24 @@ jobs:
       - name: Check out the exact authorized PR commit
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
 
       - name: Verify exact branch, actor, and commit pin
         env:
-          EXPECTED_SHA: ${{ github.sha }}
-          EVENT_MESSAGE: ${{ github.event.head_commit.message }}
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+          EXPECTED_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          EVENT_ACTION: ${{ github.event.action }}
+          EVENT_LABEL: ${{ github.event.label.name }}
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "manhdungub-boop/ai-thuc-chien-blog"
-          test "$GITHUB_EVENT_NAME" = "push"
-          test "$GITHUB_REF" = "refs/heads/security/fence-leases-on-circuit-breaker-pause-20261123"
+          test "$GITHUB_EVENT_NAME" = "pull_request"
+          test "$EVENT_ACTION" = "labeled"
+          test "$EVENT_LABEL" = "agent-runtime"
+          test "$EXPECTED_HEAD_REF" = "security/fence-leases-on-circuit-breaker-pause-20261123"
           test "$GITHUB_ACTOR_ID" = "342528485"
-          [[ "$EVENT_MESSAGE" == *"[one-shot-preview-e2e]"* ]]
+          [[ "$GITHUB_REF" =~ ^refs/pull/[0-9]+/merge$ ]]
           test "$GITHUB_WORKFLOW_REF" = "$GITHUB_REPOSITORY/.github/workflows/agent-runtime-preview-validation.yml@$GITHUB_REF"
           [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
