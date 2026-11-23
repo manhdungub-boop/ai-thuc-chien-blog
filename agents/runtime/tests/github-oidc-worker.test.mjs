@@ -156,7 +156,7 @@ test("AI Bank ingestion requires exact GitHub OIDC, consumes replay state, and w
     AGENT_OIDC_REPOSITORY_ID: EXPECTED.repositoryId,
     AGENT_OIDC_REPOSITORY_OWNER_ID: EXPECTED.repositoryOwnerId,
     AGENT_OIDC_REF: EXPECTED.ref,
-    AGENT_OIDC_WORKFLOW_REF: EXPECTED.workflowRef,
+    AGENT_AI_BANK_OIDC_WORKFLOW_REF: EXPECTED.workflowRef,
     AGENT_OIDC_ACTOR_ID: EXPECTED.actorId,
     AGENT_STATE_STORE_TOKEN: STATE_TOKEN,
     AGENT_STATE_STORE: {
@@ -226,5 +226,30 @@ test("AI Bank ingestion remains disabled by default and does not verify tokens o
   assert.equal(response.status, 503);
   assert.equal((await response.json()).error, "ai_bank_ingestion_disabled");
   assert.equal(externalCalled, false);
+  assert.equal(storeCalled, false);
+});
+
+test("AI Bank ingestion rejects the pause-only workflow allowlist as insufficient trust", async () => {
+  let storeCalled = false;
+  const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/oidc/ai-bank-ingest", {
+    method: "POST",
+    headers: { Authorization: "Bearer a.b.c", "Content-Type": "application/json" },
+    body: JSON.stringify({ candidates: [], cursor: "2026-11-19T08:06:00.000Z", scanId: "run-125-attempt-1" }),
+  }), {
+    AGENT_AI_BANK_INGESTION_ENABLED: "true",
+    AGENT_OIDC_ENABLED: "true",
+    AGENT_OIDC_AUDIENCE: AUDIENCE,
+    AGENT_OIDC_REPOSITORY: EXPECTED.repository,
+    AGENT_OIDC_REPOSITORY_OWNER: EXPECTED.repositoryOwner,
+    AGENT_OIDC_REPOSITORY_ID: EXPECTED.repositoryId,
+    AGENT_OIDC_REPOSITORY_OWNER_ID: EXPECTED.repositoryOwnerId,
+    AGENT_OIDC_REF: EXPECTED.ref,
+    AGENT_OIDC_WORKFLOW_REF: EXPECTED.workflowRef,
+    AGENT_OIDC_ACTOR_ID: EXPECTED.actorId,
+    AGENT_STATE_STORE: { idFromName: () => "unused", get: () => ({ fetch: async () => { storeCalled = true; } }) },
+    AGENT_AI_BANK_CANDIDATE_STORE: { idFromName: () => "unused", get: () => ({ upsertCandidatesAndAdvanceCursor: async () => { storeCalled = true; } }) },
+  });
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).error, "github_oidc_policy_unconfigured");
   assert.equal(storeCalled, false);
 });

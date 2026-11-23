@@ -528,7 +528,7 @@ const worker = {
         repositoryId: env.AGENT_OIDC_REPOSITORY_ID,
         repositoryOwnerId: env.AGENT_OIDC_REPOSITORY_OWNER_ID,
         ref: env.AGENT_OIDC_REF,
-        workflowRef: env.AGENT_OIDC_WORKFLOW_REF,
+        workflowRef: env.AGENT_AI_BANK_OIDC_WORKFLOW_REF,
         actorId: env.AGENT_OIDC_ACTOR_ID,
         eventName: "workflow_dispatch",
       };
