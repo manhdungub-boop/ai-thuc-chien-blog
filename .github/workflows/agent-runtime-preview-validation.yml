@@ -303,7 +303,6 @@ jobs:
       - name: Verify Workers Free plan before deployment
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}
-          CONFIRM_FREE_WORKERS_PLAN: "true"
         run: |
           set -euo pipefail
           if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
@@ -337,8 +336,8 @@ jobs:
           case "$plan_check" in
             free) echo "Workers subscription positively identifies Free." ;;
             no-worker-subscription)
-              test "$CONFIRM_FREE_WORKERS_PLAN" = "true"
-              echo "No Workers subscription record; owner explicitly confirms default Workers Free."
+              echo "::error::No Worker subscription record; the Workers plan cannot be proven Free. Stopped before deployment."
+              exit 1
               ;;
             *) echo "::error::Workers plan is not proven Free; deployment stopped."; exit 1 ;;
           esac
@@ -354,9 +353,9 @@ jobs:
             --var "AGENT_ENABLED:true" \
             --var "AGENT_PAUSED:false" \
             --var "AGENT_OIDC_RUN_ENABLED:true" \
-            --var "AGENT_OIDC_RUN_REF:$GITHUB_REF" \\
-            --var "AGENT_OIDC_RUN_WORKFLOW_REF:$GITHUB_WORKFLOW_REF" \\
-            --var "AGENT_OIDC_RUN_ACTOR_ID:$GITHUB_ACTOR_ID" \\
+            --var "AGENT_OIDC_RUN_REF:$GITHUB_REF" \
+            --var "AGENT_OIDC_RUN_WORKFLOW_REF:$GITHUB_WORKFLOW_REF" \
+            --var "AGENT_OIDC_RUN_ACTOR_ID:$GITHUB_ACTOR_ID" \
             --message "One-shot OIDC read-only E2E; automatic disable/restore follows"
 
       - name: Verify the isolated Preview is temporarily open only for the one-shot test
