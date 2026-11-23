@@ -1,4 +1,4 @@
-const RAW_ORIGIN = "https://raw.githubusercontent.com/manhdungub-boop/ai-thuc-chien-blog/main/";
+const GITHUB_CONTENTS_ORIGIN = "https://api.github.com/repos/manhdungub-boop/ai-thuc-chien-blog/contents/";
 const MAX_SOURCE_BYTES = 512 * 1024;
 
 async function readBoundedResponse(response, limit, signal) {
@@ -40,14 +40,17 @@ async function readRepositoryText(relativePath, { signal } = {}) {
       !/^(?:articles\/[a-z0-9][a-z0-9-]{0,150}\.html|data\/ai-tools\.json)$/.test(relativePath)) {
     throw new Error("preview_source_path_not_allowlisted");
   }
-  const url = RAW_ORIGIN + relativePath;
+  const url = GITHUB_CONTENTS_ORIGIN + relativePath + "?ref=main";
   if (signal?.aborted) throw new Error("task_execution_aborted");
   let response;
   try {
     response = await fetch(url, {
       method: "GET",
       redirect: "error",
-      headers: { Accept: "text/plain" },
+      headers: {
+        Accept: "application/vnd.github.raw+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
       signal,
     });
   } catch (error) {
