@@ -323,8 +323,8 @@ describe("authenticated read-only AI Bank reviewer routes", () => {
     const response = await handleReviewerHttpRequest(new Request(collection, {
       headers: { cookie: "__Host-ai_reviewer_session=forged" }
     }), { AGENT_REVIEWER_AUTH_ENABLED: "false" });
-    expect(response.status).toBe(401);
-    expect(await response.json()).toMatchObject({ ok: false });
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ ok: false, error: "reviewer_auth_not_configured" });
   });
 
   it("rejects unsupported methods without touching the candidate store", async () => {
@@ -552,7 +552,7 @@ it("reports unavailable operator usage separately from a measured zero", async (
     available: false,
     accepted_today: null,
     in_flight: null,
-    daily_limit: 100,
-    concurrency_limit: 5
+    daily_limit: null,
+    concurrency_limit: null
   });
 });
