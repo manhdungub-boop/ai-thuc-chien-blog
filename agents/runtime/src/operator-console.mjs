@@ -51,6 +51,7 @@ export const OPERATOR_CONSOLE_JS = `"use strict";
   const logout = byId("logout-button");
   let operatorAuthorized = false;
   let actionInProgress = false;
+  let refreshSequence = 0;
 
   function node(tag, value) {
     const element = document.createElement(tag);
@@ -91,7 +92,12 @@ export const OPERATOR_CONSOLE_JS = `"use strict";
     resumeButton.disabled = !canAct;
   }
 
-  function renderRuntime(health, control) {
+  function renderRuntime(health, operator) {
+    const control = operator.control;
+    const admission = operator.health?.task_admission;
+    const admissionText = admission?.available === true && Number.isSafeInteger(admission.accepted_today)
+      ? admission.accepted_today + " / " + admission.daily_limit
+      : "Unavailable";
     runtimeDetails.replaceChildren();
     const items = [
       ["Environment enabled", health.enabled],
@@ -103,24 +109,27 @@ export const OPERATOR_CONSOLE_JS = `"use strict";
       ["Durable Task Store paused", control.paused],
       ["Terminal failures in last 10 minutes", control.failure_count_last_10m],
       ["Circuit-breaker threshold", control.circuit_breaker_threshold],
-      ["Task admissions today (UTC)", health.task_admission && (health.task_admission.accepted + " / " + health.task_admission.limit)]
+      ["Task admissions today (UTC)", admissionText]
     ];
     for (const [label, value] of items) add(runtimeDetails, "li", label + ": " + value);
     runtimeStatus.textContent = "Đã tải trạng thái lúc " + (control.changed_at ? new Date(control.changed_at).toISOString() : "chưa có lần thay đổi") + ".";
   }
 
   async function refresh() {
+    const requestSequence = ++refreshSequence;
     runtimeStatus.textContent = "Đang tải trạng thái…";
     try {
       const [health, operator] = await Promise.all([
         requestJson("/health"),
         requestJson("/api/operator/runtime-control")
       ]);
+      if (requestSequence !== refreshSequence) return;
       operatorAuthorized = true;
-      renderRuntime(health, operator.control);
+      renderRuntime(health, operator);
       setControlsEnabled(true);
       actionStatus.textContent = "Đã xác thực quyền operator. Mọi thao tác sẽ được ghi audit.";
     } catch (error) {
+      if (requestSequence !== refreshSequence) return;
       operatorAuthorized = false;
       setControlsEnabled(false);
       runtimeDetails.replaceChildren();
@@ -184,10 +193,14 @@ export const OPERATOR_CONSOLE_JS = `"use strict";
   pauseButton.addEventListener("click", () => act("pause"));
   resumeButton.addEventListener("click", () => act("resume"));
   logout.addEventListener("click", async () => {
+    logout.disabled = true;
     try {
-      await fetch("/auth/google/logout", { method: "POST", credentials: "same-origin", cache: "no-store" });
-    } finally {
+      const response = await fetch("/auth/google/logout", { method: "POST", credentials: "same-origin", cache: "no-store" });
+      if (!response.ok) throw new Error("logout_failed");
       window.location.reload();
+    } catch {
+      status.textContent = "Không thể đăng xuất do yêu cầu chưa được xác nhận. Anh/chị có thể thử lại.";
+      logout.disabled = false;
     }
   });
   init();
