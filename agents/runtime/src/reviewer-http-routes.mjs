@@ -135,7 +135,7 @@ async function handleOperatorControl(request, env, url) {
   if (!sameOrigin(request)) return json({ ok: false, error: "same_origin_required" }, 403);
   if (env.AGENT_OPERATOR_CONTROL_ENABLED !== "true") return json({ ok: false, error: "operator_control_disabled" }, 503);
   const auth = await reviewerSession(request, env);
-  if (!auth.ok) return json({ ok: false, error: auth.error }, auth.status);
+  if (!auth.ok) return json({ ok: false, error: auth.error, publication_authorized: false }, auth.status);
   const allowed = String(env.AGENT_OPERATOR_ALLOWED_EMAILS || "").split(/[\s,]+/).map((email) => email.trim().toLowerCase()).filter(Boolean);
   const email = String(auth.reviewer?.email || "").toLowerCase();
   if (!email || !allowed.includes(email)) return json({ ok: false, error: "operator_not_allowlisted" }, 403);
@@ -274,7 +274,7 @@ async function handleAIBankReviewerApi(request, env, url) {
   if (request.method !== "GET") return json({ ok: false, error: "method_not_allowed" }, 405);
   if (!sameOrigin(request)) return json({ ok: false, error: "review_request_origin_or_content_type_rejected" }, 403);
   const auth = await reviewerSession(request, env);
-  if (!auth.ok) return json({ ok: false, error: auth.error }, auth.status);
+  if (!auth.ok) return json({ ok: false, error: auth.error, publication_authorized: false }, auth.status);
 
   let limit = 20;
   if (collection) {
@@ -326,7 +326,7 @@ async function handleReviewerApi(request, env, url) {
   }
   if (!sameOrigin(request, request.method === "POST")) return json({ ok: false, error: "same_origin_required" }, 403);
   const auth = await reviewerSession(request, env);
-  if (!auth.ok) return json({ ok: false, error: auth.error }, auth.status);
+  if (!auth.ok) return json({ ok: false, error: auth.error, publication_authorized: false }, auth.status);
   const store = draftStore(env);
   if (!store) return json({ ok: false, error: "draft_store_not_configured" }, 503);
   const limit = parseLimit(url);
