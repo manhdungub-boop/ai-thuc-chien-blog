@@ -207,25 +207,39 @@ jobs:
           const parts = workflow.split('  one-shot-preview-e2e:\n');
           assert.equal(parts.length, 2, 'the separately gated one-shot E2E job must exist exactly once');
           const e2eWorkflow = parts[1];
-          const validateJobSource = getValidationJobSource(workflow);
-          const deployLines = validateJobSource.split('\n').filter(line => /^\s*npx --yes wrangler@4\.166\.0 deploy\b/.test(line));
-          assert.equal(deployLines.length, 1, 'validation job must contain exactly one Wrangler command');
-          assert.match(deployLines[0], /--dry-run/, 'validation Wrangler command must be dry-run only');
-          assert.ok(deployLines[0].includes('--config wrangler.preview.jsonc'));
-          const assertNoSecretReferences = source => {
-            if (/CLOUDFLARE_API_TOKEN:\s*\$\{\{\s*secrets\./i.test(source) ||
-                /secrets\.[A-Z0-9_]+/.test(source)) {
-              throw new Error('validation job must not reference secret values');
-            }
+          const assertValidationOnly = source => {
+            const validateJobSource = getValidationJobSource(source);
+            const deployLines = validateJobSource.split('\\n').filter(line => /^\\s*npx --yes wrangler@4\\.166\\.0 deploy\\b/.test(line));
+            assert.equal(deployLines.length, 1, 'validation job must contain exactly one Wrangler command');
+            assert.match(deployLines[0], /--dry-run/, 'validation Wrangler command must be dry-run only');
+            assert.ok(deployLines[0].includes('--config wrangler.preview.jsonc'));
+            assertNoSecretReferences(validateJobSource);
           };
-          assertNoSecretReferences(validateJobSource);
-          const secretFixture = 'env:\n  CLOUDFLARE_API_TOKEN: ' + '$' + '{{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}';
-          assert.throws(() => assertNoSecretReferences(secretFixture), /must not reference secret values/,
-            'secret-reference guard must reject a real GitHub Actions secret expression');
-          const injectedStepFixture = [
-            '      - name: injected regression step',
+          assertValidationOnly(workflow);
+          const injectValidationStep = (source, step) => source.replace(
+            '      - name: Verify OIDC operator workflow is manual and pause-only',
+            step + '\\n      - name: Verify OIDC operator workflow is manual and pause-only'
+          );
+          const injectedDeployStep = [
+            '      - name: injected deployment regression step',
+            '        run: npx --yes wrangler@4.166.0 deploy --config wrangler.preview.jsonc'
+          ].join('\\n');
+          assert.throws(
+            () => assertValidationOnly(injectValidationStep(workflow, injectedDeployStep)),
+            /validation job must contain exactly one Wrangler command/,
+            'validation-only guard must inspect steps after its own assertion'
+          );
+          const injectedSecretStep = [
+            '      - name: injected secret regression step',
             '        env:',
-            '          CLOUDFLARE_API_TOKEN: ' + '
+            '          CLOUDFLARE_API_TOKEN: ' + '$' + '{{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}',
+            '        run: echo test'
+          ].join('\\n');
+          assert.throws(
+            () => assertValidationOnly(injectValidationStep(workflow, injectedSecretStep)),
+            /must not reference secret values/,
+            'secret guard must inspect steps after its own assertion'
+          );
           assert.ok(e2eWorkflow.includes("github.event.action == 'labeled'"));
           assert.ok(e2eWorkflow.includes("github.event.action == 'synchronize'"));
           assert.ok(e2eWorkflow.includes("github.event.label.name == 'agent-runtime'"));
