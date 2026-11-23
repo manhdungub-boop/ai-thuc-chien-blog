@@ -154,7 +154,7 @@ describe("read-only AI research discovery", () => {
     expect(result.ok).toBe(true);
     expect(result.sources_succeeded).toBe(4);
     expect(result.sources_failed).toEqual([]);
-    expect(result.latest_signals.some(item => item.url.endsWith("/prefixed-root"))).toBe(true);
+    expect(result.latest_signals.some(item => item.url.endsWith("/research-update-prefixed-root"))).toBe(true);
   });
 
   it("rejects Atom feed roots bound to an unrelated namespace", async () => {
