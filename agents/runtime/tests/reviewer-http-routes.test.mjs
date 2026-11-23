@@ -261,6 +261,7 @@ describe("reviewer console script", () => {
   it("parses as JavaScript and contains the read-only AI Bank queue", () => {
     assert.doesNotThrow(() => new Script(REVIEWER_CONSOLE_JS));
     expect(REVIEWER_CONSOLE_JS).toContain("/api/reviewer/ai-bank/candidates?limit=20");
+    expect(REVIEWER_CONSOLE_JS).toContain("Release đang được rà soát:");
     expect(REVIEWER_CONSOLE_JS).toContain("Chỉ đọc; không xác minh, chỉnh sửa hoặc xuất bản.");
   });
 });
