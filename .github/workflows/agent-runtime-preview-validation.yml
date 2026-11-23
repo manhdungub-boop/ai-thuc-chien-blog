@@ -10,6 +10,7 @@ on:
     - "fix/agent-runtime-**"
     - "test/agent-runtime-**"
     - "security/agent-runtime-**"
+    - "security/fence-leases-on-circuit-breaker-pause-20261123"
     - "chore/agent-runtime-**"
     paths:
       - "agents/runtime/**"
