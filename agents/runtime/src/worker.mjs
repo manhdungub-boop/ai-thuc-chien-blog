@@ -740,11 +740,12 @@ const worker = {
           total: items.length,
           succeeded: items.filter((item) => item.state === "succeeded").length,
           failed: items.filter((item) => item.state === "failed").length,
+          cancelled: items.filter((item) => item.state === "cancelled").length,
           queued: items.filter((item) => item.state === "queued").length,
           running: items.filter((item) => item.state === "running").length,
         };
         return json({
-          ok: summary.failed === 0 && summary.queued === 0 && summary.running === 0,
+          ok: summary.succeeded === summary.total,
           mode: "operator_triggered_durable_read_only_review",
           execution: "synchronous_leased_read_only_review",
           items,
