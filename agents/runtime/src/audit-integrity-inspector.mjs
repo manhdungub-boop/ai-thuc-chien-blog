@@ -126,7 +126,7 @@ export function inspectAuditIntegrity(snapshot, { nowMs = Date.now() } = {}) {
         state = event.eventType === "task.lease_expired_requeued" ? "queued" : "failed";
       } else {
         const next = event.eventType.slice("task.".length);
-        const allowed = next === "cancelled" ? state === "queued" : state === "running";
+        const allowed = next === "cancelled" ? state === "queued" || state === "running" : state === "running";
         if (!allowed || (state === "running" && meta.leaseGeneration !== generation)) {
           findings.push(finding("terminal_event_transition_invalid", "error", taskId, event.eventId));
         }
@@ -138,6 +138,10 @@ export function inspectAuditIntegrity(snapshot, { nowMs = Date.now() } = {}) {
     if (events.some(event => event.occurredAt > task.updatedAt)) {
       findings.push(finding("audit_event_after_task_update", "error", taskId));
     }
+  }
+
+  for (const taskId of tasks.keys()) {
+    if (!grouped.has(taskId)) findings.push(finding("task_without_audit_events", "error", taskId));
   }
 
   const errors = findings.filter(item => item.severity === "error").length;
