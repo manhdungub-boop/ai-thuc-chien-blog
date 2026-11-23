@@ -95,7 +95,8 @@ export const OPERATOR_CONSOLE_JS = `"use strict";
   function renderRuntime(health, operator) {
     const control = operator.control;
     const admission = operator.health?.task_admission;
-    const admissionText = admission?.available === true && Number.isSafeInteger(admission.accepted_today)
+    const admissionText = admission?.available === true && Number.isSafeInteger(admission.accepted_today) &&
+      Number.isSafeInteger(admission.daily_limit)
       ? admission.accepted_today + " / " + admission.daily_limit
       : "Unavailable";
     runtimeDetails.replaceChildren();
