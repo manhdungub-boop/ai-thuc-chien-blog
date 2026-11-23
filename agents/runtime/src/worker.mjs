@@ -531,10 +531,22 @@ const worker = {
       let response = null;
       let pauseVerified = false;
       try {
+        let observedControl;
+        try {
+          observedControl = await readStateStore(env, "/control");
+        } catch {
+          return json({ ok: false, error: "oidc_run_control_state_unavailable" }, 503);
+        }
+        if (observedControl?.control?.paused !== true ||
+            !Number.isSafeInteger(observedControl.control.version) ||
+            observedControl.control.version < 0) {
+          return json({ ok: false, error: "oidc_run_control_state_invalid" }, 503);
+        }
         await writeStateStore(env, "/control/resume", {
           actor,
           requestId: requestId(),
           reason: "one-shot OIDC Preview E2E",
+          expectedVersion: observedControl.control.version,
         });
 
         // The private symbol cannot be supplied by an HTTP caller. It authorizes
