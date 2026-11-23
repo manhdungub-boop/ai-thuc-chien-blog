@@ -98,7 +98,7 @@ test("OIDC pause verifies GitHub signature, consumes jti, and records only the v
             assert.equal(internalRequest.headers.get("cookie"), null);
             if (new URL(internalRequest.url).pathname === "/oidc/replay/consume") {
               assert.deepEqual(await internalRequest.json(), {
-                jti,
+                jti: "worker-oidc-pause-jti-000001",
                 expiresAt: String(expiresAt),
               });
               return Response.json({ ok: true, consumed: true });
