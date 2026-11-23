@@ -208,6 +208,27 @@ function parseItems(xml, source, cutoff, now) {
   }).filter(Boolean);
 }
 
+function hasInvalidXmlEntityReference(value) {
+  let index = 0;
+  while ((index = value.indexOf("&", index)) !== -1) {
+    const match = value.slice(index).match(/^&(?:amp|lt|gt|apos|quot);|^&#(?:[0-9]+|x[0-9a-fA-F]+);/);
+    if (!match) return true;
+    if (match[0].startsWith("&#")) {
+      const reference = match[0].slice(2, -1);
+      const codePoint = reference[0].toLowerCase() === "x"
+        ? Number.parseInt(reference.slice(1), 16)
+        : Number.parseInt(reference, 10);
+      const validXmlCharacter = codePoint === 0x9 || codePoint === 0xA || codePoint === 0xD ||
+        (codePoint >= 0x20 && codePoint <= 0xD7FF) ||
+        (codePoint >= 0xE000 && codePoint <= 0xFFFD) ||
+        (codePoint >= 0x10000 && codePoint <= 0x10FFFF);
+      if (!validXmlCharacter) return true;
+    }
+    index += match[0].length;
+  }
+  return false;
+}
+
 function isFeedDocument(xml) {
   const document = xml.replace(/^\uFEFF/, "");
   let index = 0;
@@ -238,7 +259,7 @@ function isFeedDocument(xml) {
       const end = next === -1 ? document.length : next;
       const text = document.slice(index, end);
       if (!stack.length && text.trim()) return false;
-      if (text.includes("]]>")) return false;
+      if (text.includes("]]>") || hasInvalidXmlEntityReference(text)) return false;
       index = end;
       continue;
     }
@@ -327,7 +348,7 @@ function isFeedDocument(xml) {
       const match = attributes.match(/^\s+([A-Za-z_:][A-Za-z0-9_.:-]*)\s*=\s*("[^"]*"|'[^']*')/);
       if (!match || seenAttributes.has(match[1])) return false;
       const attributeValue = match[2].slice(1, -1);
-      if (attributeValue.includes("<")) return false;
+      if (attributeValue.includes("<") || hasInvalidXmlEntityReference(attributeValue)) return false;
       seenAttributes.add(match[1]);
       if (match[1] === "xmlns") namespaceDeclarations.set("", attributeValue);
       else if (match[1].startsWith("xmlns:")) namespaceDeclarations.set(match[1].slice(6), attributeValue);
