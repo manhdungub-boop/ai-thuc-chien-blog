@@ -144,7 +144,7 @@ test("reader interface is mandatory and source bounds are explicit", () => {
 });
 
 
-test("Preview repository reader uses the fixed GitHub Contents endpoint with Cloudflare-compatible manual redirects", async () => {
+test("Preview repository reader uses the fixed raw GitHub URL without API credentials or redirects", async () => {
   const originalFetch = globalThis.fetch;
   let requestedUrl;
   let requestedOptions;
@@ -161,77 +161,20 @@ test("Preview repository reader uses the fixed GitHub Contents endpoint with Clo
     const result = await readers.readArticleHtml("articles/example.html");
     assert.equal(result, "<html><title>Preview source</title></html>");
     assert.equal(requestedUrl,
-      "https://api.github.com/repos/manhdungub-boop/ai-thuc-chien-blog/contents/articles/example.html?ref=main");
+      "https://raw.githubusercontent.com/manhdungub-boop/ai-thuc-chien-blog/main/articles/example.html");
     assert.equal(requestedOptions.method, "GET");
     assert.equal(requestedOptions.redirect, "manual");
-    assert.equal(requestedOptions.headers.Accept, "application/vnd.github.raw+json");
-    assert.equal(requestedOptions.headers["X-GitHub-Api-Version"], "2022-11-28");
+    assert.deepEqual(requestedOptions.headers, { Accept: "text/plain" });
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
 
-test("Preview repository reader follows only the exact allowlisted GitHub raw redirect", async () => {
-  const originalFetch = globalThis.fetch;
-  const calls = [];
-  globalThis.fetch = async (url, options) => {
-    calls.push({ url: String(url), options });
-    if (calls.length === 1) {
-      return new Response(null, {
-        status: 302,
-        headers: { Location: "https://raw.githubusercontent.com/manhdungub-boop/ai-thuc-chien-blog/main/articles/example.html" },
-      });
-    }
-    return new Response("<html><title>Redirected source</title></html>", { status: 200 });
-  };
-  try {
-    const readers = createPreviewReadOnlyReaders();
-    const result = await readers.readArticleHtml("articles/example.html");
-    assert.equal(result, "<html><title>Redirected source</title></html>");
-    assert.equal(calls.length, 2);
-    assert.equal(calls[0].options.redirect, "manual");
-    assert.equal(calls[1].url,
-      "https://raw.githubusercontent.com/manhdungub-boop/ai-thuc-chien-blog/main/articles/example.html");
-    assert.equal(calls[1].options.redirect, "manual");
-    assert.equal(calls[1].options.headers.Accept, "text/plain");
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-});
-
-test("Preview repository reader rejects redirects outside the exact repository path", async () => {
+test("Preview repository reader rejects all redirects without making a second request", async () => {
   const originalFetch = globalThis.fetch;
   let calls = 0;
   globalThis.fetch = async () => {
     calls += 1;
-    return new Response(null, {
-      status: 302,
-      headers: { Location: "https://raw.githubusercontent.com/other-owner/other-repo/main/articles/example.html" },
-    });
-  };
-  try {
-    const readers = createPreviewReadOnlyReaders();
-    await assert.rejects(
-      readers.readArticleHtml("articles/example.html"),
-      /preview_source_redirect_rejected_contents_302/,
-    );
-    assert.equal(calls, 1, "untrusted redirect targets must never be fetched");
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-});
-
-test("Preview repository reader rejects a second redirect instead of following it", async () => {
-  const originalFetch = globalThis.fetch;
-  let calls = 0;
-  globalThis.fetch = async () => {
-    calls += 1;
-    if (calls === 1) {
-      return new Response(null, {
-        status: 302,
-        headers: { Location: "https://raw.githubusercontent.com/manhdungub-boop/ai-thuc-chien-blog/main/articles/example.html" },
-      });
-    }
     return new Response(null, {
       status: 302,
       headers: { Location: "https://attacker.example/redirect" },
@@ -243,7 +186,7 @@ test("Preview repository reader rejects a second redirect instead of following i
       readers.readArticleHtml("articles/example.html"),
       /preview_source_redirect_rejected_raw_302/,
     );
-    assert.equal(calls, 2, "a second redirect must be rejected without another request");
+    assert.equal(calls, 1, "redirects must never be followed");
   } finally {
     globalThis.fetch = originalFetch;
   }
