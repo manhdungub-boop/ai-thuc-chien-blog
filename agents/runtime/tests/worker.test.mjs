@@ -471,7 +471,7 @@ test("operator resume bridge sends the observed control version and preserves st
         return Response.json({ ok: true, control: { paused: true, version: 7 } });
       }
       if (url.pathname === "/control/resume") {
-        const body = await internalRequest.json();
+        const body = await internalRequest.clone().json();
         assert.equal(body.expectedVersion, 7);
         return Response.json({ ok: true, changed: true, control: { paused: false, version: 8 } });
       }
