@@ -113,6 +113,18 @@ test("source exceptions and oversized or malformed snapshots fail closed", async
     async readSeoPage() { return { html: "<html></html>", statusCode: 200, sitemapIncluded: "yes", brokenInternalLinkCount: 0 }; },
   });
   assert.equal((await adapter.getSnapshot(contentTask)).error, "read_only_source_error");
+  const classified = createReadOnlyTaskSnapshotAdapter({
+    async readArticleHtml() { throw new Error("preview_source_fetch_failed"); },
+    async readAiBankCatalog() { return catalog; },
+    async readSeoPage() { return {}; },
+  });
+  assert.equal((await classified.getSnapshot(contentTask)).error, "preview_source_fetch_failed");
+  const untrusted = createReadOnlyTaskSnapshotAdapter({
+    async readArticleHtml() { throw new Error("private token and upstream response body"); },
+    async readAiBankCatalog() { return catalog; },
+    async readSeoPage() { return {}; },
+  });
+  assert.equal((await untrusted.getSnapshot(contentTask)).error, "read_only_source_error");
   assert.equal((await adapter.getSnapshot(bankTask)).error, "candidate_source_unavailable");
   assert.equal((await adapter.getSnapshot(seoTask)).error, "seo_source_unavailable");
 
