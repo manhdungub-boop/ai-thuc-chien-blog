@@ -3,6 +3,7 @@ import { hasValidStateStoreBearer } from "./internal-auth.mjs";
 import { readBoundedJson as readBoundedJsonBody, readBoundedText } from "./bounded-json-body.mjs";
 import { handleReviewerHttpRequest } from "./reviewer-http-routes.mjs";
 import { authorizeGitHubActionsOperator } from "./github-oidc-authorize.mjs";
+import { validateTaskRequest } from "./task-contract.mjs";
 import { createReadOnlyAgentManager } from "./read-only-agent-manager.mjs";
 import { createReadOnlyTaskSnapshotAdapter } from "./task-snapshot-adapters.mjs";
 import { createPreviewReadOnlyReaders } from "./preview-read-only-sources.mjs";
@@ -26,6 +27,7 @@ const SECURITY_HEADERS = Object.freeze({
 const MAX_INTERNAL_RESPONSE_BYTES = 16 * 1024;
 const LEASE_HEARTBEAT_INTERVAL_MS = 10_000;
 const INTERNAL_SCHEDULED_DISPATCH = Symbol("internal-scheduled-dispatch");
+const INTERNAL_OIDC_RUN = Symbol("internal-oidc-run");
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: SECURITY_HEADERS });
 }
@@ -416,7 +418,7 @@ function authoringArtifactSummary(artifact) {
 
 const worker = {
   async fetch(request, env = {}, context) {
-    if (context !== INTERNAL_SCHEDULED_DISPATCH) {
+    if (context !== INTERNAL_SCHEDULED_DISPATCH && context !== INTERNAL_OIDC_RUN) {
       const limited = await enforceIngressRateLimit(request, env);
       if (limited) return limited;
     }
@@ -438,6 +440,69 @@ const worker = {
         publication_authorized: false,
         execution: "operator_triggered_read_only_analysis",
       });
+    }
+    if (url.pathname === "/internal/oidc/run") {
+      if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
+      if (env.AGENT_OIDC_RUN_ENABLED !== "true") return json({ ok: false, error: "oidc_run_disabled" }, 503);
+      if (env.AGENT_OIDC_ENABLED !== "true") return json({ ok: false, error: "oidc_operator_disabled" }, 503);
+      if (!isEnabled(env.AGENT_ENABLED) || env.AGENT_PAUSED !== "false") {
+        return json({ ok: false, error: "agent_disabled_or_paused" }, 503);
+      }
+      if ([...url.searchParams.keys()].length > 0) return json({ ok: false, error: "request_invalid" }, 400);
+
+      const parsedBody = await readBoundedJsonValueRequest(request, 2048);
+      if (!parsedBody.ok) return json({ ok: false, error: "request_invalid" }, parsedBody.status);
+      const body = parsedBody.value;
+      if (!body || typeof body !== "object" || Array.isArray(body) ||
+          Object.keys(body).length !== 1 || !Object.hasOwn(body, "task")) {
+        return json({ ok: false, error: "oidc_run_request_invalid" }, 400);
+      }
+      const validation = validateTaskRequest(body.task);
+      if (!validation.ok || validation.task.type !== "content.review" ||
+          validation.task.payload.articlePath !== "articles/ai-agent-thuc-hanh-tu-thiet-ke-den-kiem-soat.html" ||
+          !validation.task.idempotencyKey.startsWith("oidc-preview-e2e:")) {
+        return json({ ok: false, error: "oidc_run_task_not_allowlisted" }, 400);
+      }
+
+      const authorization = request.headers.get("authorization") || "";
+      const tokenMatch = /^Bearer ([A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+)$/.exec(authorization);
+      if (!tokenMatch || tokenMatch[1].length > 16384) {
+        return json({ ok: false, error: "github_oidc_token_required" }, 401);
+      }
+      const expected = {
+        audience: env.AGENT_OIDC_AUDIENCE,
+        repository: env.AGENT_OIDC_REPOSITORY,
+        repositoryOwner: env.AGENT_OIDC_REPOSITORY_OWNER,
+        repositoryId: env.AGENT_OIDC_REPOSITORY_ID,
+        repositoryOwnerId: env.AGENT_OIDC_REPOSITORY_OWNER_ID,
+        ref: env.AGENT_OIDC_RUN_REF,
+        workflowRef: env.AGENT_OIDC_RUN_WORKFLOW_REF,
+        actorId: env.AGENT_OIDC_RUN_ACTOR_ID,
+        eventName: "workflow_dispatch",
+      };
+      if (!Object.entries(expected).every(([key, value]) =>
+        typeof value === "string" && value.length > 0 && value.length <= (key === "workflowRef" ? 512 : 256)) ||
+        !/^\\d{1,20}$/.test(expected.actorId) ||
+        !/^\\d{1,20}$/.test(expected.repositoryId) ||
+        !/^\\d{1,20}$/.test(expected.repositoryOwnerId)) {
+        return json({ ok: false, error: "github_oidc_run_policy_unconfigured" }, 503);
+      }
+      const authorized = await authorizeGitHubActionsOperator(tokenMatch[1], { env, expected });
+      if (!authorized.ok) {
+        if (authorized.error === "oidc_token_replayed") return json({ ok: false, error: "github_oidc_token_replayed" }, 409);
+        if (authorized.error?.includes("unavailable") || authorized.error === "oidc_replay_response_invalid") {
+          return json({ ok: false, error: "github_oidc_verification_unavailable" }, 503);
+        }
+        return json({ ok: false, error: "github_oidc_token_invalid" }, 401);
+      }
+
+      // The private symbol cannot be supplied by an HTTP caller. It authorizes
+      // exactly this in-process handoff to the existing leased /run implementation.
+      return worker.fetch(new Request("https://agent-runtime.internal/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tasks: [validation.task] }),
+      }), env, INTERNAL_OIDC_RUN);
     }
     if (url.pathname === "/internal/oidc/pause") {
       if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
@@ -657,7 +722,7 @@ const worker = {
       if (!isEnabled(env.AGENT_ENABLED) || env.AGENT_PAUSED !== "false") {
         return json({ ok: false, error: "agent_disabled_or_paused" }, 503);
       }
-      if (!await hasValidOperatorBearer(request, env)) return json({ ok: false, error: "operator_auth_required" }, 401);
+      if (context !== INTERNAL_OIDC_RUN && !await hasValidOperatorBearer(request, env)) return json({ ok: false, error: "operator_auth_required" }, 401);
       if ([...url.searchParams.keys()].length > 0) return json({ ok: false, error: "request_invalid" }, 400);
       const parsed = await readBoundedJsonValueRequest(request, 16 * 1024);
       if (!parsed.ok) {
