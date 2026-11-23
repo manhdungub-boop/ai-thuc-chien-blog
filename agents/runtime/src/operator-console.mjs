@@ -12,7 +12,7 @@ export const OPERATOR_CONSOLE_HTML = `<!doctype html>
     <p>Preview riêng biệt · Bảng điều khiển operator · Không có quyền xuất bản hoặc triển khai Production</p>
     <p id="session-status" role="status">Đang kiểm tra phiên đăng nhập…</p>
     <p>
-      <a id="login-link" href="/auth/google/start">Đăng nhập Google</a>
+      <a id="login-link" href="/auth/google/start?return_to=%2Foperator-console">Đăng nhập Google</a>
       <button id="logout-button" type="button" hidden>Đăng xuất</button>
       <button id="refresh-button" type="button">Làm mới trạng thái</button>
     </p>
