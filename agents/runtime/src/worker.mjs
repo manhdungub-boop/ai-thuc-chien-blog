@@ -465,7 +465,7 @@ const worker = {
       }
 
       const authorization = request.headers.get("authorization") || "";
-      const tokenMatch = /^Bearer ([A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+)$/.exec(authorization);
+      const tokenMatch = /^Bearer ([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/.exec(authorization);
       if (!tokenMatch || tokenMatch[1].length > 16384) {
         return json({ ok: false, error: "github_oidc_token_required" }, 401);
       }
@@ -482,9 +482,9 @@ const worker = {
       };
       if (!Object.entries(expected).every(([key, value]) =>
         typeof value === "string" && value.length > 0 && value.length <= (key === "workflowRef" ? 512 : 256)) ||
-        !/^\\d{1,20}$/.test(expected.actorId) ||
-        !/^\\d{1,20}$/.test(expected.repositoryId) ||
-        !/^\\d{1,20}$/.test(expected.repositoryOwnerId)) {
+        !/^\d{1,20}$/.test(expected.actorId) ||
+        !/^\d{1,20}$/.test(expected.repositoryId) ||
+        !/^\d{1,20}$/.test(expected.repositoryOwnerId)) {
         return json({ ok: false, error: "github_oidc_run_policy_unconfigured" }, 503);
       }
       const authorized = await authorizeGitHubActionsOperator(tokenMatch[1], { env, expected });
