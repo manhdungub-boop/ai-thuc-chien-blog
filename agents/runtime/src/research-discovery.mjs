@@ -53,6 +53,8 @@ function isFeedDocument(xml) {
   const document = xml.replace(/^\uFEFF/, "");
   let index = 0;
   let rootName = null;
+  let rootLocalName = null;
+  let rootNamespaceURI = null;
   const stack = [];
   let doctypeSeen = false;
 
@@ -151,26 +153,39 @@ function isFeedDocument(xml) {
     const name = nameMatch[1];
     let attributes = nameMatch[2];
     const seenAttributes = new Set();
+    const namespaceDeclarations = new Map();
     while (attributes.trim().length) {
       if (!/^\s/.test(attributes)) return false;
       const match = attributes.match(/^\s+([A-Za-z_:][A-Za-z0-9_.:-]*)\s*=\s*("[^"]*"|'[^']*')/);
       if (!match || seenAttributes.has(match[1])) return false;
-      if (match[2].slice(1, -1).includes("<")) return false;
+      const attributeValue = match[2].slice(1, -1);
+      if (attributeValue.includes("<")) return false;
       seenAttributes.add(match[1]);
+      if (match[1] === "xmlns") namespaceDeclarations.set("", attributeValue);
+      else if (match[1].startsWith("xmlns:")) namespaceDeclarations.set(match[1].slice(6), attributeValue);
       attributes = attributes.slice(match[0].length);
     }
 
     if (!stack.length) {
       if (rootName !== null) return false;
       rootName = name;
+      const separator = name.indexOf(":");
+      const prefix = separator === -1 ? "" : name.slice(0, separator);
+      rootLocalName = separator === -1 ? name : name.slice(separator + 1);
+      rootNamespaceURI = namespaceDeclarations.get(prefix) || "";
+      if (prefix && !namespaceDeclarations.has(prefix)) return false;
     }
     if (!selfClosing) stack.push(name);
     index = end + 1;
   }
 
-  return rootName !== null &&
-    ["rss", "feed", "rdf:rdf"].includes(rootName.toLowerCase()) &&
-    stack.length === 0;
+  const localName = String(rootLocalName || "").toLowerCase();
+  const namespaceURI = String(rootNamespaceURI || "");
+  const supportedRoot =
+    (localName === "rss" && namespaceURI === "") ||
+    (localName === "feed" && (namespaceURI === "" || namespaceURI === "http://www.w3.org/2005/Atom")) ||
+    (localName === "rdf" && namespaceURI === "http://www.w3.org/1999/02/22-rdf-syntax-ns#");
+  return rootName !== null && supportedRoot && stack.length === 0;
 }
 
 async function fetchFeed(source, fetchImpl, cutoff, now) {
