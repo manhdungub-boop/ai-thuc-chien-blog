@@ -253,3 +253,66 @@ test("AI Bank ingestion rejects the pause-only workflow allowlist as insufficien
   assert.equal((await response.json()).error, "github_oidc_policy_unconfigured");
   assert.equal(storeCalled, false);
 });
+
+test("AI Bank cursor read uses the separate OIDC trust and returns only durable cursor metadata", async (t) => {
+  const { token, jwks, expiresAt } = await makeToken("worker-oidc-cursor-jti-000001");
+  const fetchCalls = [];
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    fetchCalls.push({ url: String(url), options });
+    if (String(url) === ISSUER + "/.well-known/openid-configuration") {
+      return Response.json({ issuer: ISSUER, jwks_uri: ISSUER + "/.well-known/jwks" });
+    }
+    if (String(url) === ISSUER + "/.well-known/jwks") return Response.json(jwks);
+    throw new Error("unexpected_external_request");
+  });
+  const replayCalls = [];
+  const env = {
+    AGENT_AI_BANK_INGESTION_ENABLED: "true", AGENT_OIDC_ENABLED: "true",
+    AGENT_OIDC_AUDIENCE: AUDIENCE, AGENT_OIDC_REPOSITORY: EXPECTED.repository,
+    AGENT_OIDC_REPOSITORY_OWNER: EXPECTED.repositoryOwner,
+    AGENT_OIDC_REPOSITORY_ID: EXPECTED.repositoryId,
+    AGENT_OIDC_REPOSITORY_OWNER_ID: EXPECTED.repositoryOwnerId,
+    AGENT_OIDC_REF: EXPECTED.ref, AGENT_AI_BANK_OIDC_WORKFLOW_REF: EXPECTED.workflowRef,
+    AGENT_OIDC_ACTOR_ID: EXPECTED.actorId, AGENT_STATE_STORE_TOKEN: STATE_TOKEN,
+    AGENT_STATE_STORE: {
+      idFromName(name) { assert.equal(name, "agent-runtime-global"); return "fixed-id"; },
+      get(id) { assert.equal(id, "fixed-id"); return { async fetch(internalRequest) {
+        replayCalls.push(internalRequest);
+        assert.equal(internalRequest.headers.get("authorization"), "Bearer " + STATE_TOKEN);
+        assert.equal(internalRequest.headers.get("cookie"), null);
+        assert.equal(new URL(internalRequest.url).pathname, "/oidc/replay/consume");
+        assert.deepEqual(await internalRequest.json(), {
+          jti: "worker-oidc-cursor-jti-000001", expiresAt: String(expiresAt),
+        });
+        return Response.json({ ok: true, consumed: true });
+      } }; },
+    },
+    AGENT_AI_BANK_CANDIDATE_STORE: {
+      idFromName(name) { assert.equal(name, "ai-bank-discovery-global"); return "candidate-store-id"; },
+      get(id) { assert.equal(id, "candidate-store-id"); return { async getDiscoveryCursor() {
+        return { cursor: "2026-11-23T09:00:00.000Z", scan_id: "run-123-attempt-1", updated_at: "2026-11-23T09:00:01.000Z" };
+      } }; },
+    },
+  };
+  const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/oidc/ai-bank-cursor", {
+    method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: "{}",
+  }), env);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.deepEqual(body, { ok: true, cursor: "2026-11-23T09:00:00.000Z", scan_id: "run-123-attempt-1" });
+  assert.equal(replayCalls.length, 1);
+  assert.equal(fetchCalls.length, 2);
+});
+
+test("AI Bank cursor read remains disabled until the ingestion feature flag is enabled", async () => {
+  let storeCalled = false;
+  const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/oidc/ai-bank-cursor", {
+    method: "POST", headers: { Authorization: "Bearer a.b.c", "Content-Type": "application/json" }, body: "{}",
+  }), {
+    AGENT_OIDC_ENABLED: "true",
+    AGENT_AI_BANK_CANDIDATE_STORE: { idFromName: () => "unused", get: () => ({ getDiscoveryCursor: async () => { storeCalled = true; } }) },
+  });
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).error, "ai_bank_ingestion_disabled");
+  assert.equal(storeCalled, false);
+});
