@@ -106,7 +106,9 @@ export function inspectAuditIntegrity(snapshot, { nowMs = Date.now(), findingOff
       ));
       continue;
     }
-    events.sort((a, b) => a.occurredAt - b.occurredAt ||\n      (EVENT_ORDER.get(a.eventType) ?? 100) - (EVENT_ORDER.get(b.eventType) ?? 100) ||\n      a.eventId.localeCompare(b.eventId));
+    events.sort((a, b) => a.occurredAt - b.occurredAt ||
+      (EVENT_ORDER.get(a.eventType) ?? 100) - (EVENT_ORDER.get(b.eventType) ?? 100) ||
+      a.eventId.localeCompare(b.eventId));
     for (let i = 1; i < events.length; i++) {
       if (events[i].occurredAt === events[i - 1].occurredAt) {
         findings.push(finding("audit_timestamp_tie_order_ambiguous", "warning", taskId, events[i].eventId));
