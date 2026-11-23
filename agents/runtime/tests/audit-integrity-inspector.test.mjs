@@ -91,3 +91,24 @@ test("queued cancellation lifecycle is recognized without a lease", () => {
   }, { nowMs: NOW });
   assert.equal(result.status, "consistent");
 });
+
+test("audit inspector paginates every task missing audit events without losing IDs", () => {
+  const tasks = Array.from({ length: 101 }, (_, index) => task({ taskId: "task-" + String(index + 1).padStart(3, "0") }));
+  const snapshot = { tasks, events: [] };
+  const first = inspectAuditIntegrity(snapshot, { nowMs: NOW });
+  assert.equal(first.findings.length, 100);
+  assert.equal(first.pagination.total, 101);
+  assert.equal(first.pagination.hasMore, true);
+  assert.equal(first.pagination.nextOffset, 100);
+  const second = inspectAuditIntegrity(snapshot, { nowMs: NOW, findingOffset: first.pagination.nextOffset });
+  assert.equal(second.findings.length, 1);
+  assert.equal(second.findings[0].taskId, "task-101");
+  assert.equal(second.pagination.hasMore, false);
+  assert.equal(second.pagination.nextOffset, null);
+  assert.equal(second.summary.errors, 101);
+});
+
+test("audit inspector rejects unbounded finding page requests", () => {
+  assert.equal(inspectAuditIntegrity({ tasks: [], events: [] }, { nowMs: NOW, findingLimit: 101 }).status, "evidence_incomplete");
+  assert.equal(inspectAuditIntegrity({ tasks: [], events: [] }, { nowMs: NOW, findingOffset: -1 }).status, "evidence_incomplete");
+});
