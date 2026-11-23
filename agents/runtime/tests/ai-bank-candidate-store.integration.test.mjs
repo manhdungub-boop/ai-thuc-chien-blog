@@ -503,13 +503,14 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     await store.upsertCandidates([candidate()]);
     const now = Date.parse("2026-11-19T12:00:00.000Z");
     const token = await writerSessionToken(now);
-    const eventId = crypto.randomUUID();
+    const eventId = crypto.randomUUID().toUpperCase();
+    const canonicalEventId = eventId.toLowerCase();
     const evidence = { check_type: "license_scope", source_title: "Official license", source_url: "https://ollama.com/license", excerpt: "Pending human review." };
     const reviewedReleaseUrl = "https://github.com/ollama/ollama/releases/tag/v1.2.3";
     const first = await store.submitAuthorizedReviewEvidence("github:ollama/ollama", evidence, token, eventId, reviewedReleaseUrl, writerAuthEnv, now);
-    expect(first).toMatchObject({ accepted: true, replay_protected: true, audit_event_id: eventId, verification_authorized: false, catalog_write_authorized: false, public_publication_authorized: false });
-    expect(await store.submitAuthorizedReviewEvidence("github:ollama/ollama", evidence, token, eventId, reviewedReleaseUrl, writerAuthEnv, now)).toEqual({ accepted: false, reason: "duplicate_audit_event" });
-    expect(await store.submitAuthorizedReviewEvidence("github:ollama/ollama", { ...evidence, excerpt: "Changed payload." }, token, eventId, reviewedReleaseUrl, writerAuthEnv, now)).toEqual({ accepted: false, reason: "audit_event_id_reused" });
+    expect(first).toMatchObject({ accepted: true, replay_protected: true, audit_event_id: canonicalEventId, verification_authorized: false, catalog_write_authorized: false, public_publication_authorized: false });
+    expect(await store.submitAuthorizedReviewEvidence("github:ollama/ollama", evidence, token, canonicalEventId, reviewedReleaseUrl, writerAuthEnv, now)).toEqual({ accepted: false, reason: "duplicate_audit_event" });
+    expect(await store.submitAuthorizedReviewEvidence("github:ollama/ollama", { ...evidence, excerpt: "Changed payload." }, token, canonicalEventId, reviewedReleaseUrl, writerAuthEnv, now)).toEqual({ accepted: false, reason: "audit_event_id_reused" });
     expect(await store.listReviewEvidence("github:ollama/ollama")).toHaveLength(1);
   });
 });
