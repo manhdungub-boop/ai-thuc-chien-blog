@@ -1099,7 +1099,6 @@ test("five terminal failures open the circuit breaker and fence every in-flight 
       leaseOwner: inFlightLease.owner,
       leaseGeneration: inFlightLease.generation,
       status: "succeeded",
-      result: { ok: true },
     });
     assert.equal(lateCompletion.status, 409);
     assert.equal((await call(stub, "/usage")).body.inFlight, 0);
