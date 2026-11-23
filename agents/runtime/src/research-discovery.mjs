@@ -93,7 +93,16 @@ function isFeedDocument(xml) {
 
     if (document.startsWith("<?", index)) {
       const end = document.indexOf("?>", index + 2);
-      if (end === -1 || !/^[A-Za-z_][A-Za-z0-9_.:-]*(?:\s|$)/.test(document.slice(index + 2, end) + " ")) return false;
+      if (end === -1) return false;
+      const instruction = document.slice(index, end + 2);
+      const targetMatch = instruction.match(/^<\?([A-Za-z_][A-Za-z0-9_.:-]*)(?:\s|\?>)/);
+      if (!targetMatch) return false;
+      const target = targetMatch[1];
+      if (target.toLowerCase() === "xml") {
+        const validDeclaration =
+          /^<\?xml\s+version\s*=\s*(["'])1\.[01]\1(?:\s+encoding\s*=\s*(["'])[A-Za-z][A-Za-z0-9._-]*\2)?(?:\s+standalone\s*=\s*(["'])(?:yes|no)\3)?\s*\?>$/.test(instruction);
+        if (index !== 0 || target !== "xml" || !validDeclaration) return false;
+      }
       index = end + 2;
       continue;
     }
