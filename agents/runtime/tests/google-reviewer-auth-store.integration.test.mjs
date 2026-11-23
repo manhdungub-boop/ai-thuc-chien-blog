@@ -25,12 +25,23 @@ describe("AgentReviewerAuthStore Durable Object", () => {
 
   it("stores OAuth transactions once and consumes them exactly once", async () => {
     const values = ["s".repeat(43), "b".repeat(43), "n".repeat(43), "v".repeat(64)];
-    expect(await store.createTransaction(...values, 2000)).toEqual({ created: true });
-    expect(await store.createTransaction(...values, 2000)).toEqual({ created: false });
+    expect(await store.createTransaction(...values, 2000, "/reviewer-console")).toEqual({ created: true });
+    expect(await store.createTransaction(...values, 2000, "/reviewer-console")).toEqual({ created: false });
     expect(await store.consumeTransaction(values[0], values[1], 2001)).toMatchObject({
-      nonce: values[2], code_verifier: values[3], created_at: 2000, expires_at: 2300
+      nonce: values[2], code_verifier: values[3], created_at: 2000, expires_at: 2300, return_path: "/reviewer-console"
     });
     expect(await store.consumeTransaction(values[0], values[1], 2001)).toBeNull();
+  });
+
+  it("accepts only the two console return paths and keeps direct sign-in on the fixed root", async () => {
+    const values = ["r".repeat(43), "c".repeat(43), "o".repeat(43), "p".repeat(64)];
+    expect(await store.createTransaction(...values, 2500, "/operator-console")).toEqual({ created: true });
+    expect(await store.consumeTransaction(values[0], values[1], 2501)).toMatchObject({ return_path: "/operator-console" });
+    const invalid = ["i".repeat(43), "d".repeat(43), "n".repeat(43), "v".repeat(64)];
+    expect(await store.createTransaction(...invalid, 2600, "https://attacker.example")).toMatchObject({ created: false });
+    const direct = ["x".repeat(43), "y".repeat(43), "z".repeat(43), "w".repeat(64)];
+    expect(await store.createTransaction(...direct, 2700)).toEqual({ created: true });
+    expect(await store.consumeTransaction(direct[0], direct[1], 2701)).toMatchObject({ return_path: "/" });
   });
 
   it("rejects expired or mismatched browser transactions", async () => {
