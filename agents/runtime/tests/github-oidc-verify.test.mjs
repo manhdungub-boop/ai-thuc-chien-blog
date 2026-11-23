@@ -106,9 +106,9 @@ test("accepts an owner-pinned pull_request workflow using the exact Preview envi
 test("rejects pull_request OIDC tokens without the exact environment-bound subject", async () => {
   const pushExpected = Object.freeze({
     ...expected,
-    ref: "refs/heads/security/fence-leases-on-circuit-breaker-pause-20261123",
-    workflowRef: "manhdungub-boop/ai-thuc-chien-blog/.github/workflows/agent-runtime-preview-validation.yml@refs/heads/security/fence-leases-on-circuit-breaker-pause-20261123",
-    eventName: "push",
+    ref: "refs/pull/368/merge",
+    workflowRef: "manhdungub-boop/ai-thuc-chien-blog/.github/workflows/agent-runtime-preview-validation.yml@refs/pull/368/merge",
+    eventName: "pull_request",
     environment: "agent-runtime-preview",
   });
   const token = await signedToken({
