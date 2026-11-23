@@ -32,7 +32,7 @@ function json(data, status = 200) {
 function isEnabled(value) { return value === "true"; }
 
 const SAFE_TASK_TYPES = new Set(["content.review", "ai_bank.candidate_review", "seo.audit"]);
-function safeReviewResult(item) {
+export function safeReviewResult(item) {
   if (!item || item.ok !== true || !SAFE_TASK_TYPES.has(item.taskType) ||
       !["pass", "attention", "review_required"].includes(item.status) ||
       !Number.isSafeInteger(item.findingCount) || item.findingCount < 0 || item.findingCount > 20 ||
@@ -51,13 +51,17 @@ function safeReviewResult(item) {
     }
     findings.push({ code: finding.code, severity: finding.severity, message: finding.message });
   }
-  return {
+  const result = {
     ok: true,
     taskType: item.taskType,
     status: item.status,
     findingCount: item.findingCount,
     findings,
   };
+  if (new TextEncoder().encode(JSON.stringify(result)).byteLength > 4096) {
+    return { ok: false, errorCode: "read_only_review_failed" };
+  }
+  return result;
 }
 
 function isValidClientIp(address) {
