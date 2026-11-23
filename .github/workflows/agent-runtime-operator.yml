@@ -32,9 +32,9 @@ jobs:
           const base = process.env.AGENT_RUNTIME_PREVIEW_URL;
           if (!base) throw new Error('AGENT_RUNTIME_PREVIEW_URL repository variable is not configured');
           const target = new URL(base);
-          if (target.protocol !== 'https:' || target.username || target.password ||
-              target.pathname !== '/' || target.search || target.hash ||
-              !/^(?:[a-f0-9]{8}-)?ai-thuc-chien-agent-runtime-preview\.[a-z0-9-]+\.workers\.dev$/i.test(target.hostname)) {
+          if (target.origin !== 'https://ai-thuc-chien-agent-runtime-preview.manhdungub.workers.dev' ||
+              target.username || target.password || target.pathname !== '/' ||
+              target.search || target.hash) {
             throw new Error('Preview URL must be the dedicated Agent Runtime workers.dev hostname');
           }
 
