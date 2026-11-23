@@ -1,5 +1,4 @@
 const GITHUB_CONTENTS_ORIGIN = "https://api.github.com/repos/manhdungub-boop/ai-thuc-chien-blog/contents/";
-const GITHUB_RAW_ORIGIN = "https://raw.githubusercontent.com/manhdungub-boop/ai-thuc-chien-blog/main/";
 const MAX_SOURCE_BYTES = 512 * 1024;
 
 async function readBoundedResponse(response, limit, signal) {
