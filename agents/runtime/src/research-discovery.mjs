@@ -34,27 +34,26 @@ function elementText(xml, name) {
 function maskNonElementMarkup(xml) {
   let output = "";
   let index = 0;
+  const cdataPayloads = [];
   while (index < xml.length) {
     if (xml.startsWith("<!--", index)) {
       const end = xml.indexOf("-->", index + 4);
-      if (end === -1) return "";
+      if (end === -1) return null;
       output += " ".repeat(end + 3 - index);
       index = end + 3;
       continue;
     }
     if (xml.startsWith("<![CDATA[", index)) {
       const end = xml.indexOf("]]>", index + 9);
-      if (end === -1) return "";
-      const content = xml.slice(index + 9, end)
-        .replace(/</g, "&amp;lt;")
-        .replace(/>/g, "&amp;gt;");
-      output += content;
+      if (end === -1) return null;
+      const payloadIndex = cdataPayloads.push(xml.slice(index + 9, end)) - 1;
+      output += "\u0000CDATA_" + payloadIndex + "\u0000";
       index = end + 3;
       continue;
     }
     if (xml.startsWith("<?", index)) {
       const end = xml.indexOf("?>", index + 2);
-      if (end === -1) return "";
+      if (end === -1) return null;
       output += " ".repeat(end + 2 - index);
       index = end + 2;
       continue;
@@ -78,14 +77,14 @@ function maskNonElementMarkup(xml) {
           break;
         }
       }
-      if (end === -1) return "";
+      if (end === -1) return null;
       output += " ".repeat(end + 1 - index);
       index = end + 1;
       continue;
     }
     output += xml[index++];
   }
-  return output;
+  return { xml: output, cdataPayloads };
 }
 
 function extractFeedEntryBodies(xml) {
@@ -175,10 +174,11 @@ function extractFeedEntryBodies(xml) {
     const localName = name.slice(name.lastIndexOf(":") + 1).toLowerCase();
     const parentLocalName = stack.at(-1)?.localName ?? null;
     if (stack.length === 0) rootLocalName = localName;
+    const depth = stack.length;
     const isEntry =
-      (rootLocalName === "feed" && parentLocalName === "feed" && localName === "entry") ||
-      (rootLocalName === "rss" && parentLocalName === "channel" && localName === "item") ||
-      (rootLocalName === "rdf" && parentLocalName === "rdf" && localName === "item");
+      (rootLocalName === "feed" && depth === 1 && parentLocalName === "feed" && localName === "entry") ||
+      (rootLocalName === "rss" && depth === 2 && parentLocalName === "channel" && localName === "item") ||
+      (rootLocalName === "rdf" && depth === 1 && parentLocalName === "rdf" && localName === "item");
     if (!selfClosing) stack.push({ name, localName, isEntry, bodyStart: end + 1 });
     index = end + 1;
   }
@@ -187,11 +187,16 @@ function extractFeedEntryBodies(xml) {
 
 function parseItems(xml, source, cutoff, now) {
   return extractFeedEntryBodies(xml).map(rawBody => {
-    const body = maskNonElementMarkup(rawBody);
-    const title = cleanText(elementText(body, "title"), 120);
-    const summary = cleanText(elementText(body, "description") || elementText(body, "summary") || elementText(body, "content:encoded"), 160);
-    const rawLink = body.match(/<link\b[^>]*href="([^"]+)"/i)?.[1] || cleanText(elementText(body, "link"), 300);
-    const rawDate = elementText(body, "published") || elementText(body, "updated") || elementText(body, "pubDate") || elementText(body, "dc:date");
+    const masked = maskNonElementMarkup(rawBody);
+    if (!masked) return null;
+    const { xml: body, cdataPayloads } = masked;
+    const restoreCdata = value => value.replace(/\u0000CDATA_(\d+)\u0000/g, (token, index) =>
+      cdataPayloads[Number(index)] ?? token
+    );
+    const title = cleanText(restoreCdata(elementText(body, "title")), 120);
+    const summary = cleanText(restoreCdata(elementText(body, "description") || elementText(body, "summary") || elementText(body, "content:encoded")), 160);
+    const rawLink = body.match(/<link\b[^>]*href="([^"]+)"/i)?.[1] || cleanText(restoreCdata(elementText(body, "link")), 300);
+    const rawDate = restoreCdata(elementText(body, "published") || elementText(body, "updated") || elementText(body, "pubDate") || elementText(body, "dc:date"));
     const date = new Date(cleanText(rawDate, 100));
     if (!title || !rawLink || rawLink.length > 300 || !Number.isFinite(date.getTime()) ||
         date.getTime() < cutoff || date.getTime() > now + MAX_FUTURE_CLOCK_SKEW_MS) return null;
