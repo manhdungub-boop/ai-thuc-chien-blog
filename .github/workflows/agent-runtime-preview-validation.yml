@@ -214,6 +214,8 @@ jobs:
           assert.ok(e2eWorkflow.includes('AGENT_OIDC_RUN_WORKFLOW_REF:$GITHUB_WORKFLOW_REF'));
           assert.ok(e2eWorkflow.includes('--config wrangler.preview.jsonc'));
           assert.ok(e2eWorkflow.includes('if: always()'), 'rollback must run even after an E2E failure');
+          assert.ok(e2eWorkflow.includes('(.result | type)'), 'subscription API responses must be validated before classification');
+          assert.ok(e2eWorkflow.includes('free-default'), 'an empty paid-subscription list must map to Cloudflare Workers Free, its documented default plan');
           console.log('PASS: validation remains credential-free; the separately gated owner-only job uses OIDC, Preview-only deployment, and automatic rollback.');
           NODE
 
@@ -318,8 +320,9 @@ jobs:
             echo "::error::Workers plan could not be verified (HTTP $status); stopped before deployment."
             exit 1
           fi
+          # Cloudflare documents Workers Free as the default plan. A successful subscription-list response with no paid Workers subscription therefore means Workers Free.
           plan_check="$(jq -r '
-            if .success != true then "invalid"
+            if .success != true or (.result | type) != "array" then "invalid"
             else
               [.result[]? |
                 [
@@ -327,17 +330,15 @@ jobs:
                   (.product // "" | if type == "object" then (.name // .id // "") else . end | tostring)
                 ] | map(ascii_downcase) | join(" ") | select(test("worker"))
               ] as $worker_plans |
-              if ($worker_plans | length) == 0 then "no-worker-subscription"
+              if ($worker_plans | length) == 0 then "free-default"
               elif all($worker_plans[]; test("free")) then "free"
               else "non-free"
               end
             end
           ' "$response")"
           case "$plan_check" in
-            free) echo "Workers subscription positively identifies Free." ;;
-            no-worker-subscription)
-              echo "::error::No Worker subscription record; the Workers plan cannot be proven Free. Stopped before deployment."
-              exit 1
+            free|free-default)
+              echo "Workers Free plan verified (explicit Free subscription or Cloudflare default Free plan with no paid Workers subscription)."
               ;;
             *) echo "::error::Workers plan is not proven Free; deployment stopped."; exit 1 ;;
           esac
