@@ -213,6 +213,10 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
       cursor: firstCursor, cursor_advanced: false, total: 1 });
 
     expect(await store.upsertCandidatesAndAdvanceCursor(
+      [candidate(sources[1])], firstCursor, "run-100-attempt-1", Date.parse("2026-11-19T08:08:30.000Z")
+    )).toMatchObject({ accepted: false, reason: "discovery_scan_id_reused", cursor_advanced: false });
+
+    expect(await store.upsertCandidatesAndAdvanceCursor(
       [], "2026-11-19T08:05:00.000Z", "run-101-attempt-1", Date.parse("2026-11-19T08:09:00.000Z")
     )).toMatchObject({ accepted: false, reason: "discovery_cursor_not_monotonic", cursor_advanced: false });
     expect(await store.upsertCandidatesAndAdvanceCursor(
