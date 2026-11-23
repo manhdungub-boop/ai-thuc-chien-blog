@@ -49,7 +49,7 @@ const SAFE_OIDC_DIAGNOSTIC_CODES = new Set([
 ]);
 function isSafeOidcDiagnosticCode(value) {
   return SAFE_OIDC_DIAGNOSTIC_CODES.has(value) ||
-    (typeof value === "string" && /^preview_source_(?:http_error|redirect_rejected)_(?:contents|raw|body)_\\d{3}$/.test(value));
+    (typeof value === "string" && /^preview_source_(?:http_error|redirect_rejected)_(?:contents|raw|body)_\d{3}$/.test(value));
 }
 export function safeReviewResult(item) {
   if (!item || item.ok !== true || !SAFE_TASK_TYPES.has(item.taskType) ||
