@@ -304,7 +304,7 @@ export class AgentAIBankCandidateStore {
     return row ? safeCandidate(row) : null;
   }
 
-  async submitAuthorizedReviewEvidence(candidateId, evidence, sessionToken, eventId, authConfig, now = Date.now()) {
+  async submitAuthorizedReviewEvidence(candidateId, evidence, sessionToken, eventId, reviewedReleaseUrl, authConfig, now = Date.now()) {
     const authorization = await authorizeAIBankEvidenceWriter(sessionToken, authConfig, eventId, now);
     if (!authorization.authorized) {
       return { accepted: false, reason: authorization.reason || "evidence_writer_not_authorized" };
@@ -316,6 +316,7 @@ export class AgentAIBankCandidateStore {
     }
     const fingerprintPayload = JSON.stringify({
       candidate_id: candidateId,
+      reviewed_release_url: reviewedReleaseUrl,
       check_type: evidence.check_type,
       source_title: typeof evidence.source_title === "string" ? evidence.source_title.trim() : null,
       source_url: evidence.source_url,
@@ -348,7 +349,7 @@ export class AgentAIBankCandidateStore {
       if (dailyAuditCount >= MAX_AUDIT_EVENTS_PER_UTC_DAY) {
         return { accepted: false, reason: "evidence_audit_daily_limit_reached" };
       }
-      const result = this.#submitReviewEvidence(candidateId, evidence, now);
+      const result = this.#submitReviewEvidence(candidateId, evidence, reviewedReleaseUrl, now);
       if (!result.accepted) return result;
       this.ctx.storage.sql.exec(
         "INSERT INTO ai_bank_evidence_audit_events (event_id, actor_subject, actor_email, request_sha256, evidence_id, recorded_at) VALUES (?, ?, ?, ?, ?, ?)",
@@ -364,12 +365,17 @@ export class AgentAIBankCandidateStore {
     });
   }
 
-  #submitReviewEvidence(candidateId, evidence, now = Date.now()) {
+  #submitReviewEvidence(candidateId, evidence, reviewedReleaseUrl, now = Date.now()) {
     const candidateRow = this.ctx.storage.sql.exec(
       "SELECT * FROM ai_bank_candidates WHERE candidate_id = ?", candidateId
     ).toArray()[0];
     const candidate = candidateRow ? safeCandidate(candidateRow) : null;
     if (!candidate) return { accepted: false, reason: "candidate_not_found" };
+    if (typeof reviewedReleaseUrl !== "string" || !reviewedReleaseUrl.trim() || reviewedReleaseUrl.length > 1000) {
+      return { accepted: false, reason: "reviewed_release_identity_required" };
+    }
+    const releaseUrl = candidate.candidate.latest_release.source_url;
+    if (reviewedReleaseUrl !== releaseUrl) return { accepted: false, reason: "stale_candidate_release" };
     if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) {
       return { accepted: false, reason: "invalid_evidence" };
     }
@@ -403,7 +409,6 @@ export class AgentAIBankCandidateStore {
     if (!Number.isSafeInteger(now) || now < 0 || !Number.isFinite(new Date(now).getTime())) {
       return { accepted: false, reason: "invalid_evidence_timestamp" };
     }
-    const releaseUrl = candidate.candidate.latest_release.source_url;
     const existing = this.ctx.storage.sql.exec(
       "SELECT evidence_id FROM ai_bank_review_evidence WHERE candidate_id = ? AND check_type = ? AND source_url = ?",
       candidateId, checkType, sourceUrl.href
