@@ -58,6 +58,24 @@ test("audit events older than task retention are warnings, not false corruption 
   assert.ok(result.findings.some(x => x.code === "audit_task_missing_after_retention_window"));
 });
 
+test("audit inspector accepts a running lease cancelled by the circuit breaker", () => {
+  const result = inspectAuditIntegrity({
+    tasks: [task({ state: "cancelled", attemptCount: 1, leaseGeneration: 1 })],
+    events: [
+      { eventId: "q", taskId: "task-001", eventType: "task.queued", occurredAt: NOW - 5000, metadata: {} },
+      { eventId: "c", taskId: "task-001", eventType: "task.claimed", occurredAt: NOW - 3000, metadata: { attempt: 1, leaseGeneration: 1 } },
+      { eventId: "x", taskId: "task-001", eventType: "task.cancelled", occurredAt: NOW - 1000, metadata: { taskType: "content.review", leaseGeneration: 1 } },
+    ],
+  }, { nowMs: NOW });
+  assert.equal(result.status, "consistent");
+});
+
+test("audit inspector flags tasks with no audit events as incomplete evidence", () => {
+  const result = inspectAuditIntegrity({ tasks: [task()], events: [] }, { nowMs: NOW });
+  assert.equal(result.status, "integrity_error");
+  assert.ok(result.findings.some(x => x.code === "task_without_audit_events"));
+});
+
 test("audit inspector fails closed on oversized or malformed snapshots", () => {
   assert.equal(inspectAuditIntegrity({ tasks: "bad", events: [] }, { nowMs: NOW }).status, "evidence_incomplete");
   assert.equal(inspectAuditIntegrity({ tasks: [], events: [{ eventId: "e", taskId: "x", eventType: "task.queued", occurredAt: NOW + 1, metadata: {} }] }, { nowMs: NOW }).status, "evidence_incomplete");
