@@ -359,6 +359,8 @@ export const REVIEWER_CONSOLE_JS = `"use strict";
         submitReview.type = "button";
         submitReview.addEventListener("click", async () => {
           submitReview.disabled = true;
+          const reviewInputs = [...reviewSection.querySelectorAll("select, textarea")];
+          reviewInputs.forEach(input => { input.disabled = true; });
           try {
             const decisions = decisionForms.map(item => ({
               claim_id: item.claim_id,
@@ -385,6 +387,7 @@ export const REVIEWER_CONSOLE_JS = `"use strict";
             await loadDetail(artifact.id);
           } catch (error) {
             add(reviewSection, "p", "Không ghi nhận được: " + (error.message || "unknown_error"));
+            reviewInputs.forEach(input => { input.disabled = false; });
           } finally {
             submitReview.disabled = false;
           }
@@ -423,8 +426,15 @@ export const REVIEWER_CONSOLE_JS = `"use strict";
     await loadAIBankQueue();
   });
   logout.addEventListener("click", async () => {
-    try { await fetch("/auth/google/logout", { method: "POST", credentials: "same-origin", cache: "no-store" }); }
-    finally { window.location.reload(); }
+    logout.disabled = true;
+    try {
+      const response = await fetch("/auth/google/logout", { method: "POST", credentials: "same-origin", cache: "no-store" });
+      if (!response.ok) throw new Error("logout_failed");
+      window.location.reload();
+    } catch {
+      status.textContent = "Không thể đăng xuất do yêu cầu chưa được xác nhận. Bạn có thể thử lại.";
+      logout.disabled = false;
+    }
   });
   init();
 })();`;
