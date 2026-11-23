@@ -385,8 +385,8 @@ async function consumeContentResearchBudget(env, count) {
   return { day, used: budget.used, remaining: budget.remaining };
 }
 
-async function authoringArtifactId(idempotencyKey) {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(idempotencyKey));
+async function authoringArtifactId(idempotencyKey, topic) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify([idempotencyKey, topic])));
   const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
   return "authoring-" + hex.slice(0, 48);
 }
@@ -801,7 +801,7 @@ const worker = {
       }
 
       try {
-        const artifactId = await authoringArtifactId(body.idempotencyKey);
+        const artifactId = await authoringArtifactId(body.idempotencyKey, body.topic);
         const existing = await draftStub.getDraft(artifactId);
         if (existing) {
           if (existing.draft?.title !== body.topic.slice(0, 70)) {
