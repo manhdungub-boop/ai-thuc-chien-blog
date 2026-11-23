@@ -179,6 +179,28 @@ test("authoring route returns an existing idempotent artifact without spending q
   }
 });
 
+test("authoring idempotency binds the full topic, not only its first 70 characters", async () => {
+  const originalFetch = globalThis.fetch;
+  const network = mockOfficialFetch();
+  globalThis.fetch = network.fetch;
+  const runtime = makeEnv();
+  const prefix = "A".repeat(70);
+  try {
+    const first = await worker.fetch(makeRequest({ topic: prefix + " first suffix" }), runtime.env);
+    const firstBody = await first.json();
+    assert.equal(first.status, 200);
+    const second = await worker.fetch(makeRequest({ topic: prefix + " second suffix" }), runtime.env);
+    const secondBody = await second.json();
+    assert.equal(second.status, 200);
+    assert.equal(secondBody.duplicate, false);
+    assert.notEqual(secondBody.artifact.id, firstBody.artifact.id);
+    assert.equal(runtime.draftCalls.length, 2);
+    assert.equal(network.calls.length, 16);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("authoring route fails closed when fewer than four research request units remain", async () => {
   const originalFetch = globalThis.fetch;
   let fetches = 0;
