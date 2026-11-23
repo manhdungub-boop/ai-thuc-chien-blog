@@ -115,7 +115,7 @@ test("rejects pull_request OIDC tokens without the exact environment-bound subje
     sub: "repo:manhdungub-boop@342528485/ai-thuc-chien-blog@1423636651:ref:" + pushExpected.ref,
     ref: pushExpected.ref,
     workflow_ref: pushExpected.workflowRef,
-    event_name: "push",
+    event_name: "pull_request",
   });
   const result = await verify(token, { expected: pushExpected });
   assert.equal(result.ok, false);
