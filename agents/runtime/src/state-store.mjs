@@ -481,7 +481,15 @@ if (url.pathname === "/task" && request.method === "GET") {
         }
         const usage = readRow(this.sql, "SELECT accepted_count FROM daily_usage WHERE day_utc = ?", day);
         const active = readRow(this.sql, "SELECT COUNT(*) AS count FROM tasks WHERE state IN ('queued','running')");
-        return jsonResponse({ ok: true, dayUtc: day, acceptedToday: usage?.accepted_count ?? 0, inFlight: active?.count ?? 0 });
+        const limits = this.limits();
+        return jsonResponse({
+          ok: true,
+          dayUtc: day,
+          acceptedToday: usage?.accepted_count ?? 0,
+          inFlight: active?.count ?? 0,
+          dailyLimit: limits.daily,
+          concurrentLimit: limits.concurrent,
+        });
       }
       if (request.method !== "GET" && request.method !== "POST") return jsonResponse({ ok: false, error: "method_not_allowed" }, 405);
       return jsonResponse({ ok: false, error: "not_found" }, 404);
