@@ -472,5 +472,12 @@
     <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/dong-goi-dich-vu-ai-cho-doanh-nghiep-nho</guid>
     <description>Cách đóng gói dịch vụ AI cho doanh nghiệp nhỏ bằng phạm vi rõ, SOW một trang, KPI đo được, tiêu chí nghiệm thu và quy trình bảo vệ dữ liệu.</description>
   </item>
+  <item>
+    <title>Xây AI Agent điều khiển trình duyệt an toàn: Browser Use và Playwright | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/xay-ai-agent-dieu-khien-trinh-duyet-an-toan</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/xay-ai-agent-dieu-khien-trinh-duyet-an-toan</guid>
+    <author>DUNG - AI</author>
+    <description>Hướng dẫn chọn Browser Use hay Playwright, thiết kế quyền tối thiểu, chặn prompt injection, kiểm soát thao tác có tác động và triển khai browser agent không phát sinh chi phí ngoài dự kiến.</description>
+  </item>
   </channel>
 </rss>
