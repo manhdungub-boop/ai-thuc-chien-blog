@@ -89,7 +89,7 @@ test("accepts an owner-pinned push workflow using the exact Preview environment 
     eventName: "push",
     environment: "agent-runtime-preview",
   });
-  const pushSubject = "repo:manhdungub-boop/ai-thuc-chien-blog:environment:agent-runtime-preview";
+  const pushSubject = "repo:manhdungub-boop@342528485/ai-thuc-chien-blog@1423636651:environment:agent-runtime-preview";
   const token = await signedToken({
     sub: pushSubject,
     ref: pushExpected.ref,
@@ -112,7 +112,7 @@ test("rejects push OIDC tokens without the exact environment-bound subject", asy
     environment: "agent-runtime-preview",
   });
   const token = await signedToken({
-    sub: "repo:manhdungub-boop/ai-thuc-chien-blog:ref:" + pushExpected.ref,
+    sub: "repo:manhdungub-boop@342528485/ai-thuc-chien-blog@1423636651:ref:" + pushExpected.ref,
     ref: pushExpected.ref,
     workflow_ref: pushExpected.workflowRef,
     event_name: "push",
