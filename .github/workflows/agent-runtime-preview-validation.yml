@@ -196,7 +196,7 @@ jobs:
           const e2eWorkflow = parts[1];
           const validateJobStart = validationWorkflow.indexOf('  validate:\n');
           const assertionStepStart = validationWorkflow.indexOf('      - name: Assert validation job remains validation-only', validateJobStart);
-          const operatorStepMarker = '\\n      - name: Verify OIDC operator workflow is manual and pause-only';
+          const operatorStepMarker = '\n      - name: Verify OIDC operator workflow is manual and pause-only';
           const operatorStepOffset = validationWorkflow.indexOf(operatorStepMarker, assertionStepStart);
           const operatorStepStart = operatorStepOffset < 0 ? -1 : operatorStepOffset + 1;
           assert.ok(validateJobStart >= 0 && assertionStepStart > validateJobStart && operatorStepStart > assertionStepStart, 'validation job and assertion boundaries must exist');
