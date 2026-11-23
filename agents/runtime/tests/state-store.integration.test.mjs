@@ -127,6 +127,40 @@ test("metrics distinguish qualifying breaker failures from budget failures and p
   });
 });
 
+test("v1 migration cancels legacy running rows that have no lease identity", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "ai-thuc-chien-v1-migration-"));
+  let first;
+  let migrated;
+  try {
+    first = await createRuntime({ persistDir: directory });
+    const created = await call(first.stub, "/reserve", task("legacy-running"));
+    assert.equal(created.status, 201);
+    const claimed = await call(first.stub, "/claim", { taskId: created.body.task.taskId });
+    assert.equal(claimed.status, 200);
+    const downgraded = await call(first.stub, "/__test/downgrade-v1", {});
+    assert.equal(downgraded.status, 200);
+    await first.mf.dispose();
+    first = null;
+
+    migrated = await createRuntime({ persistDir: directory });
+    const taskResult = await call(migrated.stub, "/task?id=" + encodeURIComponent(created.body.task.taskId));
+    assert.equal(taskResult.status, 200);
+    assert.equal(taskResult.body.task.state, "cancelled");
+    assert.equal(taskResult.body.task.errorCode, "legacy_running_lease_missing");
+    const metrics = await call(migrated.stub, "/metrics");
+    assert.equal(metrics.status, 200);
+    assert.equal(metrics.body.tasks.running, 0);
+    assert.equal(metrics.body.tasks.cancelled, 1);
+    assert.ok(metrics.body.auditLast24h.some(event =>
+      event.taskId === created.body.task.taskId && event.eventType === "task.cancelled"
+    ));
+  } finally {
+    if (first) await first.mf.dispose();
+    if (migrated) await migrated.mf.dispose();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("quota pressure reports daily 80/90/100 and concurrent 80/100 boundaries without changing admission policy", async () => {
   await withRuntime({ daily: 10, concurrent: 5 }, async ({ stub }) => {
     for (let index = 0; index < 8; index++) {
