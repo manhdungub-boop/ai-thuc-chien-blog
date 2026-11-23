@@ -37,6 +37,24 @@ test("audit inspector recognizes runtime terminal-failure and circuit-breaker an
   assert.deepEqual(result.summary, { errors: 0, warnings: 0, checkedTasks: 1, checkedEvents: 5 });
 });
 
+test("audit inspector uses lifecycle order for same-time events with random event IDs", () => {
+  const timestamp = NOW - 1000;
+  const result = inspectAuditIntegrity({
+    tasks: [task({ state: "failed", updatedAt: timestamp, terminalAt: timestamp })],
+    events: [
+      { eventId: "a-runtime", taskId: "task-001", eventType: "runtime.circuit_breaker_auto_pause", occurredAt: timestamp, metadata: { failureCount: 5, cancelledRunningTasks: 2, threshold: 5, windowMs: 600000 } },
+      { eventId: "b-annotation", taskId: "task-001", eventType: "task.terminal_failure", occurredAt: timestamp, metadata: { errorCode: "upstream_unavailable" } },
+      { eventId: "c-failed", taskId: "task-001", eventType: "task.failed", occurredAt: timestamp, metadata: { taskType: "content.review", leaseGeneration: 1 } },
+      { eventId: "d-claimed", taskId: "task-001", eventType: "task.claimed", occurredAt: timestamp, metadata: { attempt: 1, leaseGeneration: 1 } },
+      { eventId: "e-queued", taskId: "task-001", eventType: "task.queued", occurredAt: timestamp, metadata: { taskType: "content.review" } },
+    ],
+  }, { nowMs: NOW });
+  assert.equal(result.status, "review_required");
+  assert.equal(result.summary.errors, 0);
+  assert.equal(result.summary.warnings, 4);
+  assert.ok(result.findings.every(x => x.code === "audit_timestamp_tie_order_ambiguous"));
+});
+
 test("audit inspector rejects malformed terminal-failure and circuit-breaker annotations", () => {
   const snapshotEvents = [
     { eventId: "evt-1", taskId: "task-001", eventType: "task.queued", occurredAt: NOW - 5000, metadata: {} },
