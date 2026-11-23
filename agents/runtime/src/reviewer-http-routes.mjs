@@ -209,11 +209,13 @@ async function handleAIBankReviewerApi(request, env, url) {
     const parsed = await readJson(request, 16 * 1024);
     if (!parsed.ok) return json({ ok: false, error: parsed.error }, parsed.status);
     const body = parsed.value;
-    const allowedBodyKeys = ["audit_event_id", "evidence"];
+    const allowedBodyKeys = ["audit_event_id", "evidence", "reviewed_release_url"];
     const evidenceKeys = ["check_type", "source_title", "source_url", "excerpt"];
     if (Object.keys(body).some(key => !allowedBodyKeys.includes(key)) ||
-        Object.keys(body).length !== 2 ||
+        Object.keys(body).length !== 3 ||
         typeof body.audit_event_id !== "string" ||
+        typeof body.reviewed_release_url !== "string" ||
+        !body.reviewed_release_url.trim() || body.reviewed_release_url.length > 1000 ||
         !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.audit_event_id) ||
         !body.evidence || typeof body.evidence !== "object" || Array.isArray(body.evidence) ||
         Object.keys(body.evidence).length !== 4 || Object.keys(body.evidence).some(key => !evidenceKeys.includes(key))) {
@@ -237,7 +239,7 @@ async function handleAIBankReviewerApi(request, env, url) {
     let result;
     try {
       result = await store.submitAuthorizedReviewEvidence(
-        candidateId, body.evidence, writerAuth.token, body.audit_event_id, writerAuthConfig
+        candidateId, body.evidence, writerAuth.token, body.audit_event_id, body.reviewed_release_url, writerAuthConfig
       );
     } catch {
       return json({ ok: false, error: "ai_bank_evidence_writer_unavailable", evidence_recorded: false }, 503);
@@ -245,7 +247,8 @@ async function handleAIBankReviewerApi(request, env, url) {
     if (!result || !result.accepted) {
       const reason = result?.reason || "ai_bank_evidence_writer_unavailable";
       const status = reason === "evidence_writer_not_allowlisted" ? 403 :
-        reason === "duplicate_audit_event" || reason === "audit_event_id_reused" ? 409 :
+        reason === "stale_candidate_release" || reason === "duplicate_audit_event" || reason === "audit_event_id_reused" ? 409 :
+        reason === "reviewed_release_identity_required" ? 400 :
         reason === "evidence_audit_daily_limit_reached" ? 429 :
         reason === "evidence_audit_capacity_reached" || reason === "reviewer_auth_not_configured" || reason === "evidence_writer_not_configured" ? 503 :
         reason === "reviewer_session_invalid" || reason === "reviewer_session_expired" ? 401 : 400;
