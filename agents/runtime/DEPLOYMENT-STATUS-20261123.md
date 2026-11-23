@@ -77,3 +77,17 @@ The three historical CodeQL double-unescaping review threads (#13–#15) are mar
 7. The Production Worker `ai-thuc-chien-blog` has an active Cloudflare Workers Builds trigger for this GitHub repository on branch `main`, path `*`, with deploy command `npx wrangler deploy`. A merge/push to `main` can therefore deploy Production automatically. Keep this PR Draft and do not merge.
 
 No Production Worker, DNS, D1, Production secrets, OAuth, routes, traffic, billing settings, live user/member data, public article, AI Bank catalog, or Facebook account was changed by this documentation update. No Runtime deployment, migration, scheduler activation, or autonomous task execution was performed.
+
+
+## Addendum — Billing Read and usage telemetry (2026-11-23 03:09 UTC)
+
+This addendum supersedes the earlier statement that no Billing Read connection was available:
+
+- The separate Composio connection `AI Thuc Chien Blog - Cloudflare Billing Read` is ACTIVE and exposes `#billing:read` and `#subscription:read`.
+- Read-only `CLOUDFLARE_LIST_ACCOUNT_SUBSCRIPTIONS` succeeded and returned an empty subscription list; no active subscription records were returned for this account.
+- Read-only `CLOUDFLARE_GET_ACCOUNT_BUILD_LIMITS` reported that the Workers build-minute limit has not been reached and refreshes at 2026-11-30 23:59:59.999 UTC.
+- Cloudflare GraphQL Workers telemetry for `ai-thuc-chien-agent-runtime-preview`, 2026-11-22 03:00 UTC through 2026-11-23 03:00 UTC, returned 23 time buckets totaling **65 requests and 0 errors**.
+- The Workers telemetry schema did not expose the requested `cpuTime` field. The GraphQL endpoint did not expose a `durableObjectsInvocationsAdaptive` field. No CPU, Durable Objects request, SQLite row read/write, storage, or duration headroom is therefore claimed.
+- The earlier direct Cloudflare API-token Billing requests still returned 403; they were not retried. The successful Composio Billing Read connection is a separate authorized path.
+
+An empty subscription list plus the owner-supplied Billing evidence (Workers Free, Durable Objects Free, no payment method and no invoices) supports the Free-only configuration. It does not establish remaining Workers CPU or Durable Objects quota. Keep the Runtime disabled and paused; do not increase workload or enable scheduled activity.
