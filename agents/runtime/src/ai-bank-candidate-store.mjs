@@ -280,7 +280,7 @@ export class AgentAIBankCandidateStore {
 
     return this.ctx.storage.transactionSync(() => {
       const current = this.ctx.storage.sql.exec(
-        "SELECT cursor, scan_id, batch_sha256 FROM ai_bank_discovery_cursor WHERE singleton_id = 1"
+        "SELECT cursor, scan_id, updated_at, batch_sha256 FROM ai_bank_discovery_cursor WHERE singleton_id = 1"
       ).toArray()[0];
       if (current?.scan_id === scanId) {
         let sameBatch = current.cursor === nextCursor && current.batch_sha256 === batchSha256;
