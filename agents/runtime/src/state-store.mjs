@@ -1060,8 +1060,28 @@ if (url.pathname === "/task" && request.method === "GET") {
       crypto.randomUUID(), "pause", now, "system:circuit_breaker",
       "circuit_breaker:5_failures_in_10m", crypto.randomUUID(),
     );
+
+    // Fence every lease that was already in flight when the breaker opened.
+    // Clearing the owner and moving the row to a terminal state makes late
+    // heartbeats/completions fail atomically through the existing lease checks.
+    const running = this.sql.exec(
+      "SELECT task_id, task_type, lease_generation FROM tasks WHERE state='running'",
+    ).toArray();
+    this.sql.exec(
+      "UPDATE tasks SET state='cancelled', updated_at=?, terminal_at=?, error_code='circuit_breaker_paused', lease_owner=NULL, lease_expires_at=NULL, lease_max_expires_at=NULL, next_attempt_at=NULL, last_error_code='circuit_breaker_paused' WHERE state='running'",
+      now, now,
+    );
+    for (const task of running) {
+      this.audit(task.task_id, "task.cancelled", now, {
+        taskType: task.task_type,
+        leaseGeneration: task.lease_generation,
+        reason: "circuit_breaker_auto_pause",
+      });
+    }
+
     this.audit(taskId, "runtime.circuit_breaker_auto_pause", now, {
       failureCount,
+      cancelledRunningTasks: running.length,
       threshold: CIRCUIT_BREAKER.threshold,
       windowMs: CIRCUIT_BREAKER.windowMs,
     });
