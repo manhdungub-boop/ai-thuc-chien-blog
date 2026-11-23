@@ -409,7 +409,37 @@ jobs:
           timeout --signal=TERM --kill-after=10s 180s npx --yes wrangler@4.166.0 deploy --config "$generated_config" \
             --message "One-shot OIDC read-only E2E; automatic disable/restore follows"
 
-      - name: Wait for the expected enabled Preview configuration before invoking the task,        timeout-minutes: 2,        run: |,          set -euo pipefail,          ready=false,          for attempt in $(seq 1 10); do,            if curl --fail --silent --show-error --max-time 10 "$AGENT_RUNTIME_PREVIEW_URL/health" -o "$RUNNER_TEMP/preview-health.json" 2>/dev/null &&,              node --input-type=module <<'NODE',          import assert from 'node:assert/strict';,          import { readFile } from 'node:fs/promises';,          const h = JSON.parse(await readFile(process.env.RUNNER_TEMP + '/preview-health.json', 'utf8'));,          assert.equal(h.ok, true);,          assert.equal(h.service, 'ai-thuc-chien-agent-runtime-preview');,          assert.equal(h.enabled, true);,          assert.equal(h.paused, false);,          assert.equal(h.scheduler, 'manual_only_no_cron');,          assert.equal(h.reviewer_auth_enabled, false);,          assert.equal(h.publication_authorized, false);,          NODE,            then,              ready=true,              break,            fi,            echo "The expected enabled Preview version is not serving yet (attempt $attempt/10).",            sleep 2,          done,          if [[ "$ready" != "true" ]]; then,            echo "::error::The expected enabled Preview configuration did not become healthy; refusing to invoke the task.",            exit 1,          fi,
+      - name: Wait for the expected enabled Preview configuration before invoking the task
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          ready=false
+          for attempt in $(seq 1 10); do
+            if curl --fail --silent --show-error --max-time 10 "$AGENT_RUNTIME_PREVIEW_URL/health" -o "$RUNNER_TEMP/preview-health.json" 2>/dev/null &&
+              node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFile } from 'node:fs/promises';
+          const h = JSON.parse(await readFile(process.env.RUNNER_TEMP + '/preview-health.json', 'utf8'));
+          assert.equal(h.ok, true);
+          assert.equal(h.service, 'ai-thuc-chien-agent-runtime-preview');
+          assert.equal(h.enabled, true);
+          assert.equal(h.paused, false);
+          assert.equal(h.scheduler, 'manual_only_no_cron');
+          assert.equal(h.reviewer_auth_enabled, false);
+          assert.equal(h.publication_authorized, false);
+          NODE
+            then
+              ready=true
+              break
+            fi
+            echo "The expected enabled Preview version is not serving yet (attempt $attempt/10)."
+            sleep 2
+          done
+          if [[ "$ready" != "true" ]]; then
+            echo "::error::The expected enabled Preview configuration did not become healthy; refusing to invoke the task."
+            exit 1
+          fi
+
       - name: Invoke exactly one allowlisted task with a short-lived GitHub OIDC token
         timeout-minutes: 2
         env:
