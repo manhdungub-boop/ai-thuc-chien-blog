@@ -309,6 +309,7 @@ export class AgentAIBankCandidateStore {
     if (!authorization.authorized) {
       return { accepted: false, reason: authorization.reason || "evidence_writer_not_authorized" };
     }
+    const auditEventId = authorization.audit_event_id;
     if (!evidence || typeof evidence !== "object" || Array.isArray(evidence) ||
         Object.keys(evidence).some(key => !["check_type", "source_title", "source_url", "excerpt"].includes(key)) ||
         Object.keys(evidence).length !== 4) {
@@ -327,7 +328,7 @@ export class AgentAIBankCandidateStore {
     return this.ctx.storage.transactionSync(() => {
       const prior = this.ctx.storage.sql.exec(
         "SELECT actor_subject, request_sha256 FROM ai_bank_evidence_audit_events WHERE event_id = ?",
-        eventId
+        auditEventId
       ).toArray()[0];
       if (prior) {
         const sameRequest = prior.actor_subject === authorization.actor.subject &&
@@ -353,12 +354,12 @@ export class AgentAIBankCandidateStore {
       if (!result.accepted) return result;
       this.ctx.storage.sql.exec(
         "INSERT INTO ai_bank_evidence_audit_events (event_id, actor_subject, actor_email, request_sha256, evidence_id, recorded_at) VALUES (?, ?, ?, ?, ?, ?)",
-        eventId, authorization.actor.subject, authorization.actor.email,
+        auditEventId, authorization.actor.subject, authorization.actor.email,
         requestSha256, result.evidence_id, authorization.authorized_at
       );
       return {
         ...result,
-        audit_event_id: eventId,
+        audit_event_id: auditEventId,
         actor_ref: authorization.actor.reviewer_ref,
         replay_protected: true
       };
