@@ -2,7 +2,9 @@
 
 Date: 2026-11-19
 Scope: isolated Preview Agent Runtime only
-Decision: **budget model is acceptable for a low-volume Preview pilot, subject to live account-usage verification; this is not deployment approval.**
+Decision: **budget model supports an isolated, disabled Preview deployment; task execution, scheduler, AI inference, and publication remain NO-GO until live usage/CPU headroom is measured and independent review is complete. This is not Production approval.**
+
+> Current deployed-resource and quota evidence: [DEPLOYMENT-STATUS-20261123.md](./DEPLOYMENT-STATUS-20261123.md). Historical no-deployment and empty-namespace observations below are superseded by that record.
 
 ## Official published Cloudflare limits
 

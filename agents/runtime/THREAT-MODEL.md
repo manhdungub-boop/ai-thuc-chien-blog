@@ -4,6 +4,8 @@ Date: 2026-11-19
 Scope: `agents/runtime/` isolated Preview shell and proposed Worker → SQLite Durable Object path  
 Status: engineering threat-model draft; **not an independent security sign-off and not deployment approval**
 
+> Live Preview evidence is recorded in [DEPLOYMENT-STATUS-20261123.md](./DEPLOYMENT-STATUS-20261123.md). This does not change the independent-review requirement. Older no-deployment, empty-namespace, and OIDC-disabled statements below are historical observations superseded by that record.
+
 ## 1. Security objective
 
 Keep the Agent Runtime disabled and unreachable until its operator boundary, internal state-store boundary, execution model, recovery behavior, monitoring, and cost controls have been independently reviewed. A compromise of an untrusted request, task payload, or operator credential must not expose the State Store, execute arbitrary work, disclose secrets, or affect the public website.

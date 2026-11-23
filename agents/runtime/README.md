@@ -1,6 +1,8 @@
 # AI Thuc Chien Agent Runtime — Preview shell
 
-Status: **isolated validation scaffold with a code-only, opt-in scheduled dispatcher; no Agent Runtime Worker deployment and no autonomous task execution**.
+Status: **dedicated Preview Worker is deployed and fail-closed; no autonomous task execution, scheduler, reviewer sign-in, AI inference, or publishing is enabled**.
+
+> Current authoritative deployment record: [DEPLOYMENT-STATUS-20261123.md](./DEPLOYMENT-STATUS-20261123.md). Older no-deployment, no-namespace, no-Preview-secret, OIDC-disabled, and `preview_urls=true` statements later in this file are historical snapshots and are superseded by that record.
 
 ## Safety boundary
 
