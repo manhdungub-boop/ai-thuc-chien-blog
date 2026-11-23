@@ -889,6 +889,37 @@ test("run reserves, claims, reviews, and completes durable read-only tasks", asy
   }
 });
 
+test("run reports cancelled duplicate tasks as unsuccessful instead of a successful batch", async () => {
+  const { env, records } = durableRunEnv();
+  const task = {
+    type: "content.review",
+    idempotencyKey: "content-review-cancelled-0001",
+    payload: { articlePath: "articles/demo-article.html" },
+  };
+  const enqueue = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/enqueue", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + RUN_TOKEN, "Content-Type": "application/json" },
+    body: JSON.stringify({ tasks: [task] }),
+  }), env);
+  assert.equal(enqueue.status, 200);
+  const stored = [...records.values()][0];
+  stored.state = "cancelled";
+
+  const response = await worker.fetch(new Request(RUN_URL, {
+    method: "POST",
+    headers: { Authorization: "Bearer " + RUN_TOKEN, "Content-Type": "application/json" },
+    body: JSON.stringify({ tasks: [task] }),
+  }), env);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.ok, false);
+  assert.equal(body.summary.total, 1);
+  assert.equal(body.summary.succeeded, 0);
+  assert.equal(body.summary.cancelled, 1);
+  assert.equal(body.items[0].ok, false);
+  assert.equal(body.items[0].state, "cancelled");
+});
+
 test("operator queue admission stores bounded idempotent tasks without executing them", async () => {
   const { env, records, calls } = durableRunEnv();
   const tasks = [
