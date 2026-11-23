@@ -96,6 +96,37 @@ test("read-only metrics report bounded aggregate task, quota, age, and audit dat
   });
 });
 
+test("metrics distinguish qualifying breaker failures from budget failures and pause actor from reason text", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const created = await call(stub, "/reserve", task("metrics-budget-failure"));
+    assert.equal(created.status, 201);
+    const claimed = await call(stub, "/claim", { taskId: created.body.task.taskId });
+    assert.equal(claimed.status, 200);
+    const completed = await call(stub, "/complete", {
+      taskId: created.body.task.taskId,
+      leaseOwner: claimed.body.lease.owner,
+      leaseGeneration: claimed.body.lease.generation,
+      status: "failed",
+      errorCode: "daily_external_request_budget_exhausted",
+    });
+    assert.equal(completed.status, 200);
+
+    const paused = await call(stub, "/control/pause", {
+      actor: "integration-test",
+      requestId: crypto.randomUUID(),
+      reason: "circuit_breaker:5_failures_in_10m",
+    });
+    assert.equal(paused.status, 200);
+
+    const metrics = await call(stub, "/metrics");
+    assert.equal(metrics.status, 200);
+    assert.equal(metrics.body.circuitBreaker.paused, true);
+    assert.equal(metrics.body.circuitBreaker.failureCountLast10m, 0);
+    assert.equal(metrics.body.circuitBreaker.autoPaused, false);
+    assert.equal(metrics.body.circuitBreaker.state, "closed");
+  });
+});
+
 test("quota pressure reports daily 80/90/100 and concurrent 80/100 boundaries without changing admission policy", async () => {
   await withRuntime({ daily: 10, concurrent: 5 }, async ({ stub }) => {
     for (let index = 0; index < 8; index++) {
