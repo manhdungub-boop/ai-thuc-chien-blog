@@ -1292,15 +1292,33 @@ const worker = {
         return json({ ok: false, error: "request_invalid" }, 400);
       }
       const action = url.pathname.endsWith("/pause") ? "pause" : "resume";
+      let expectedVersion;
+      if (action === "resume") {
+        // Resume is conditional: a newer emergency Pause must win over an
+        // operator request that observed an older control version.
+        try {
+          const observed = await readStateStore(env, "/control");
+          if (!Number.isSafeInteger(observed?.control?.version) || observed.control.version < 0) {
+            return json({ ok: false, error: "control_unavailable" }, 503);
+          }
+          expectedVersion = observed.control.version;
+        } catch {
+          return json({ ok: false, error: "control_unavailable" }, 503);
+        }
+      }
       try {
         const result = await writeStateStore(env, "/control/" + action, {
           actor,
           requestId: crypto.randomUUID(),
           ...(body.reason === undefined ? {} : { reason: body.reason }),
+          ...(action === "resume" ? { expectedVersion } : {}),
         });
         return json({ ok: true, changed: result.changed, control: result.control });
       } catch (error) {
-        if ([400, 401, 409, 429, 503].includes(error?.status)) {
+        if (error?.status === 409) {
+          return json({ ok: false, error: "runtime_control_version_conflict" }, 409);
+        }
+        if ([400, 401, 429, 503].includes(error?.status)) {
           return json({ ok: false, error: error.status === 429 ? "rate_limited" : "control_unavailable" }, error.status);
         }
         return json({ ok: false, error: "control_unavailable" }, 503);
