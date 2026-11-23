@@ -105,9 +105,18 @@ async function sha256Hex(value) {
 
 // Test-only snapshot prototype. All table reads occur inside one synchronous
 // SQLite transaction; hashing happens after the consistent row set is copied.
-async function captureTestSnapshot(state, pageSize = 1) {
+async function captureTestSnapshot(state, pageSize = 100, limits = {}) {
+  const maxRows = limits.maxRows ?? 10000;
+  const maxBytes = limits.maxBytes ?? 16 * 1024 * 1024;
+  if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 500 ||
+      !Number.isSafeInteger(maxRows) || maxRows < 1 || maxRows > 10000 ||
+      !Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > 16 * 1024 * 1024) {
+    throw new TypeError("invalid_snapshot_capture_limits");
+  }
   const rowsByTable = state.storage.transactionSync(() => {
     const result = {};
+    let totalRows = 0;
+    let totalBytes = 0;
     for (const table of SNAPSHOT_TABLES) {
       const rows = [];
       let offset = 0;
@@ -116,6 +125,10 @@ async function captureTestSnapshot(state, pageSize = 1) {
           "SELECT * FROM " + table.name + " ORDER BY " + table.order + " LIMIT ? OFFSET ?",
           pageSize, offset
         ).toArray();
+        totalRows += page.length;
+        totalBytes += new TextEncoder().encode(canonicalSnapshotJson(page)).byteLength;
+        if (totalRows > maxRows) throw new Error("snapshot_row_limit_exceeded");
+        if (totalBytes > maxBytes) throw new Error("snapshot_byte_limit_exceeded");
         rows.push(...page);
         if (page.length < pageSize) break;
         offset += page.length;
@@ -390,6 +403,185 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
         state.storage.sql.exec("SELECT COUNT(*) AS count FROM " + table.name).one().count
       ]));
       expect(finalCounts).toEqual(sourceSnapshot.counts);
+    });
+  });
+
+  it("rejects inconsistent manifest counts and a modified manifest digest before writes", async () => {
+    const now = Date.parse("2026-11-19T10:00:00.000Z");
+    await store.upsertCandidates([candidate()], now);
+    const sourceSnapshot = await runInDurableObject(store, async (_instance, state) =>
+      captureTestSnapshot(state, 1)
+    );
+
+    const wrongCount = structuredClone(sourceSnapshot);
+    wrongCount.counts.ai_bank_candidates += 1;
+    const badManifestDigest = structuredClone(sourceSnapshot);
+    badManifestDigest.manifest_sha256 = "0".repeat(64);
+
+    const destination = env.AGENT_AI_BANK_CANDIDATE_STORE.getByName(
+      "agent-ai-bank-candidates-manifest-metadata-" + testIndex
+    );
+    await runInDurableObject(destination, async (_instance, state) => {
+      for (const malformed of [wrongCount, badManifestDigest]) {
+        expect(await restoreTestSnapshotInBatches(state, malformed, 1)).toEqual({
+          restored: false,
+          reason: "snapshot_integrity_invalid"
+        });
+      }
+      for (const table of SNAPSHOT_TABLES) {
+        expect(state.storage.sql.exec(
+          "SELECT COUNT(*) AS count FROM " + table.name
+        ).one().count).toBe(0);
+      }
+    });
+  });
+
+  it("rejects truncated, missing-table, and digest-mismatched snapshots before writes", async () => {
+    const now = Date.parse("2026-11-19T10:00:00.000Z");
+    await store.upsertCandidates([candidate()], now);
+    const accepted = await submitEvidence(store, "github:ollama/ollama", {
+      check_type: "pricing_and_free_limits",
+      source_title: "Official pricing page",
+      source_url: "https://ollama.com/pricing",
+      excerpt: "Truncation validation fixture."
+    }, now, "f4e6d1c2-3b7f-4a91-8c22-1234567890ab");
+    expect(accepted.accepted).toBe(true);
+    const sourceSnapshot = await runInDurableObject(store, async (_instance, state) =>
+      captureTestSnapshot(state, 1)
+    );
+
+    const truncated = structuredClone(sourceSnapshot);
+    truncated.tables.ai_bank_review_evidence.pop();
+    const missingTable = structuredClone(sourceSnapshot);
+    delete missingTable.tables.ai_bank_review_evidence_releases;
+    const badDigest = structuredClone(sourceSnapshot);
+    badDigest.table_sha256.ai_bank_review_evidence = "0".repeat(64);
+
+    const destination = env.AGENT_AI_BANK_CANDIDATE_STORE.getByName(
+      "agent-ai-bank-candidates-truncated-snapshot-" + testIndex
+    );
+    await runInDurableObject(destination, async (_instance, state) => {
+      for (const malformed of [truncated, missingTable, badDigest]) {
+        expect(await restoreTestSnapshotInBatches(state, malformed, 1)).toEqual({
+          restored: false,
+          reason: "snapshot_integrity_invalid"
+        });
+      }
+      for (const table of SNAPSHOT_TABLES) {
+        expect(state.storage.sql.exec(
+          "SELECT COUNT(*) AS count FROM " + table.name
+        ).one().count).toBe(0);
+      }
+    });
+  });
+
+  it("enforces bounded snapshot capture rows, bytes, and page size", async () => {
+    const now = Date.parse("2026-11-19T10:00:00.000Z");
+    await store.upsertCandidates([candidate()], now);
+    const accepted = await submitEvidence(store, "github:ollama/ollama", {
+      check_type: "pricing_and_free_limits",
+      source_title: "Official pricing page",
+      source_url: "https://ollama.com/pricing",
+      excerpt: "Snapshot limit fixture."
+    }, now, "e4e6d1c2-3b7f-4a91-8c22-1234567890ab");
+    expect(accepted.accepted).toBe(true);
+
+    await runInDurableObject(store, async (_instance, state) => {
+      await expect(captureTestSnapshot(state, 1, { maxRows: 1 }))
+        .rejects.toThrow("snapshot_row_limit_exceeded");
+      await expect(captureTestSnapshot(state, 1, { maxBytes: 1 }))
+        .rejects.toThrow("snapshot_byte_limit_exceeded");
+      await expect(captureTestSnapshot(state, 0))
+        .rejects.toThrow("invalid_snapshot_capture_limits");
+
+      const valid = await captureTestSnapshot(state, 1, {
+        maxRows: 10,
+        maxBytes: 1024 * 1024
+      });
+      expect(valid.counts.ai_bank_candidates).toBe(1);
+      expect(valid.counts.ai_bank_review_evidence).toBe(1);
+      expect(await verifyTestSnapshot(valid)).toBe(true);
+    });
+  });
+
+  it("handles concurrent retries of the same verified snapshot idempotently", async () => {
+    const now = Date.parse("2026-11-19T10:00:00.000Z");
+    await store.upsertCandidates([candidate()], now);
+    const accepted = await submitEvidence(store, "github:ollama/ollama", {
+      check_type: "pricing_and_free_limits",
+      source_title: "Official pricing page",
+      source_url: "https://ollama.com/pricing",
+      excerpt: "Concurrent restore fixture."
+    }, now, "d4e6d1c2-3b7f-4a91-8c22-1234567890ab");
+    expect(accepted.accepted).toBe(true);
+    const sourceSnapshot = await runInDurableObject(store, async (_instance, state) =>
+      captureTestSnapshot(state, 1)
+    );
+    const destination = env.AGENT_AI_BANK_CANDIDATE_STORE.getByName(
+      "agent-ai-bank-candidates-restore-concurrent-" + testIndex
+    );
+
+    await runInDurableObject(destination, async (_instance, state) => {
+      const results = await Promise.all([
+        restoreTestSnapshotInBatches(state, sourceSnapshot, 1),
+        restoreTestSnapshotInBatches(state, sourceSnapshot, 1)
+      ]);
+      expect(results.every(result => result.restored === true)).toBe(true);
+      expect(results.every(result =>
+        result.manifest_sha256 === sourceSnapshot.manifest_sha256
+      )).toBe(true);
+
+      const counts = Object.fromEntries(SNAPSHOT_TABLES.map(table => [
+        table.name,
+        state.storage.sql.exec("SELECT COUNT(*) AS count FROM " + table.name).one().count
+      ]));
+      expect(counts).toEqual(sourceSnapshot.counts);
+      const restored = await captureTestSnapshot(state, 1);
+      expect(restored.manifest_sha256).toBe(sourceSnapshot.manifest_sha256);
+    });
+  });
+
+  it("rejects destination mutation between interrupted restore and resume without writing more rows", async () => {
+    const now = Date.parse("2026-11-19T10:00:00.000Z");
+    await store.upsertCandidates([candidate()], now);
+    const accepted = await submitEvidence(store, "github:ollama/ollama", {
+      check_type: "pricing_and_free_limits",
+      source_title: "Official pricing page",
+      source_url: "https://ollama.com/pricing",
+      excerpt: "Mutation conflict fixture."
+    }, now, "c4e6d1c2-3b7f-4a91-8c22-1234567890ab");
+    expect(accepted.accepted).toBe(true);
+    const sourceSnapshot = await runInDurableObject(store, async (_instance, state) =>
+      captureTestSnapshot(state, 1)
+    );
+    const destination = env.AGENT_AI_BANK_CANDIDATE_STORE.getByName(
+      "agent-ai-bank-candidates-restore-mutated-" + testIndex
+    );
+
+    await runInDurableObject(destination, async (_instance, state) => {
+      await expect(restoreTestSnapshotInBatches(state, sourceSnapshot, 1, 1))
+        .rejects.toThrow("simulated_restore_interruption");
+      const beforeMutation = state.storage.sql.exec(
+        "SELECT COUNT(*) AS count FROM ai_bank_candidates"
+      ).one().count;
+      expect(beforeMutation).toBe(1);
+
+      state.storage.sql.exec(
+        "UPDATE ai_bank_candidates SET candidate_json = ? WHERE candidate_id = ?",
+        "{\"tampered\":true}", "github:ollama/ollama"
+      );
+
+      expect(await restoreTestSnapshotInBatches(state, sourceSnapshot, 1)).toEqual({
+        restored: false,
+        reason: "restore_destination_conflict"
+      });
+      expect(state.storage.sql.exec(
+        "SELECT candidate_json FROM ai_bank_candidates WHERE candidate_id = ?",
+        "github:ollama/ollama"
+      ).one().candidate_json).toBe("{\"tampered\":true}");
+      expect(state.storage.sql.exec(
+        "SELECT COUNT(*) AS count FROM ai_bank_review_evidence"
+      ).one().count).toBe(0);
     });
   });
 
