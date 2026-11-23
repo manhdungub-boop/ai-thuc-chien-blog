@@ -50,10 +50,10 @@ function parseItems(xml, source, cutoff, now) {
 }
 
 function isFeedDocument(xml) {
-  const document = xml.replace(/^\\uFEFF/, "").trimStart()
-    .replace(/^(?:<\\?xml\\b[^>]*>\\s*)?(?:<!--[\\s\\S]*?-->\\s*)*/i, "");
-  const root = document.match(/^<(rss|feed|rdf:RDF)\\b/i);
-  return Boolean(root && new RegExp("</" + root[1] + "\\\\s*>\\\\s*$", "i").test(document));
+  const document = xml.replace(/^\uFEFF/, "").trimStart()
+    .replace(/^(?:<\?xml\b[^>]*>\s*)?(?:<!--[\s\S]*?-->\s*)*/i, "");
+  const root = document.match(/^<(rss|feed|rdf:RDF)\b/i);
+  return Boolean(root && new RegExp("</" + root[1] + "\\s*>\\s*$", "i").test(document));
 }
 
 async function fetchFeed(source, fetchImpl, cutoff, now) {
