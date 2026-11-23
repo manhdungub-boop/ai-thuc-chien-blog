@@ -31,6 +31,63 @@ function elementText(xml, name) {
   return match ? match[1] : "";
 }
 
+function maskNonElementMarkup(xml) {
+  let output = "";
+  let index = 0;
+  while (index < xml.length) {
+    if (xml.startsWith("<!--", index)) {
+      const end = xml.indexOf("-->", index + 4);
+      if (end === -1) return "";
+      output += " ".repeat(end + 3 - index);
+      index = end + 3;
+      continue;
+    }
+    if (xml.startsWith("<![CDATA[", index)) {
+      const end = xml.indexOf("]]>", index + 9);
+      if (end === -1) return "";
+      const content = xml.slice(index + 9, end)
+        .replace(/</g, "&amp;lt;")
+        .replace(/>/g, "&amp;gt;");
+      output += content;
+      index = end + 3;
+      continue;
+    }
+    if (xml.startsWith("<?", index)) {
+      const end = xml.indexOf("?>", index + 2);
+      if (end === -1) return "";
+      output += " ".repeat(end + 2 - index);
+      index = end + 2;
+      continue;
+    }
+    if (/^<!DOCTYPE\\b/i.test(xml.slice(index))) {
+      let quote = null;
+      let subsetDepth = 0;
+      let end = -1;
+      for (let cursor = index + 9; cursor < xml.length; cursor++) {
+        const character = xml[cursor];
+        if (quote) {
+          if (character === quote) quote = null;
+        } else if (character === '"' || character === "'") {
+          quote = character;
+        } else if (character === "[") {
+          subsetDepth++;
+        } else if (character === "]" && subsetDepth) {
+          subsetDepth--;
+        } else if (character === ">" && subsetDepth === 0) {
+          end = cursor;
+          break;
+        }
+      }
+      if (end === -1) return "";
+      output += " ".repeat(end + 1 - index);
+      index = end + 1;
+      continue;
+    }
+    output += xml[index++];
+  }
+  return output;
+}
+
 function parseItems(xml, source, cutoff, now) {
   return [...xml.matchAll(/<(item|entry)(?:\s[^>]*)?>([\s\S]*?)<\/\1>/gi)].map(match => {
     const body = match[2];
