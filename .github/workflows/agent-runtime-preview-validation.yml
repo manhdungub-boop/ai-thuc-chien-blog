@@ -234,6 +234,7 @@ jobs:
           assert.ok(e2eWorkflow.includes("readFile('wrangler.preview.jsonc', 'utf8')"));
           assert.ok(e2eWorkflow.includes('if: always()'), 'rollback must run even after an E2E failure');
           assert.ok(e2eWorkflow.includes('(.result | type)'), 'subscription API responses must be validated before classification');
+          assert.ok(e2eWorkflow.includes('result_info.total_count'), 'incomplete subscription pages must stop the deployment');
           assert.ok(e2eWorkflow.includes('free-default'), 'an empty paid-subscription list must map to Cloudflare Workers Free, its documented default plan');
           console.log('PASS: validation remains credential-free; the separately gated owner-only job uses OIDC, Preview-only deployment, and automatic rollback.');
           NODE
@@ -352,6 +353,7 @@ jobs:
           # Cloudflare documents Workers Free as the default plan. A successful subscription-list response with no paid Workers subscription therefore means Workers Free.
           plan_check="$(jq -r '
             if .success != true or (.result | type) != "array" then "invalid"
+            elif ((.result_info.total_count // (.result | length)) > (.result | length)) then "incomplete"
             else
               [.result[]? |
                 [
@@ -415,7 +417,7 @@ jobs:
           set -euo pipefail
           ready=false
           for attempt in $(seq 1 10); do
-            if curl --fail --silent --show-error --max-time 10 "$AGENT_RUNTIME_PREVIEW_URL/health" -o "$RUNNER_TEMP/preview-health.json" 2>/dev/null &&
+            if curl --fail --silent --show-error --max-time 5 "$AGENT_RUNTIME_PREVIEW_URL/health" -o "$RUNNER_TEMP/preview-health.json" 2>/dev/null &&
               node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
           import { readFile } from 'node:fs/promises';
@@ -519,7 +521,7 @@ jobs:
             --message "Restore Agent Runtime Preview disabled and paused after one-shot E2E"
           restored=false
           for attempt in $(seq 1 10); do
-            if curl --fail --silent --show-error --max-time 10 "$AGENT_RUNTIME_PREVIEW_URL/health" -o "$RUNNER_TEMP/preview-health-restored.json" 2>/dev/null &&
+            if curl --fail --silent --show-error --max-time 5 "$AGENT_RUNTIME_PREVIEW_URL/health" -o "$RUNNER_TEMP/preview-health-restored.json" 2>/dev/null &&
               node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
           import { readFile } from 'node:fs/promises';
