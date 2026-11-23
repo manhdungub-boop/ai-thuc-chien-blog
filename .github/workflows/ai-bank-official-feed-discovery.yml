@@ -8,17 +8,8 @@ on:
       - "scripts/ai-bank-editorial-briefs.mjs"
       - "data/ai-tools.json"
       - ".github/workflows/ai-bank-official-feed-discovery.yml"
-  push:
-    branches:
-      - "automation/ai-bank-feed-discovery-20261115"
-      - "automation/ai-bank-lead-triage-20261115"
-    paths:
-      - "scripts/ai-bank-feed-discovery.mjs"
-      - "scripts/ai-bank-lead-triage.mjs"
-      - "data/ai-tools.json"
-      - ".github/workflows/ai-bank-official-feed-discovery.yml"
   schedule:
-    # Wednesday 09:30 Asia/Ho_Chi_Minh
+    # Wednesday 09:30 Asia/Ho_Chi_Minh; live discovery stays dormant until AI_BANK_RSS_ENABLED_AT is set.
     - cron: "30 2 * * 3"
   workflow_dispatch:
 
@@ -31,8 +22,11 @@ concurrency:
 
 jobs:
   discover:
+    if: github.event_name == 'pull_request' || vars.AI_BANK_RSS_ENABLED_AT != ''
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      AI_BANK_RSS_ENABLED_AT: ${{ vars.AI_BANK_RSS_ENABLED_AT }}
     steps:
       - name: Check out repository without persisted credentials
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -57,13 +51,21 @@ jobs:
       - name: Run AI Bank triage classification fixtures
         run: node scripts/ai-bank-lead-triage.mjs --self-test
 
+      - name: Validate configured RSS activation timestamp
+        if: github.event_name != 'pull_request'
+        run: |
+          node --input-type=module -e 'const value = process.env.AI_BANK_RSS_ENABLED_AT || ""; if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(value) || !Number.isFinite(Date.parse(value))) { console.error("AI_BANK_RSS_ENABLED_AT must be a UTC ISO-8601 timestamp; live discovery remains disabled."); process.exit(1); } console.log(`RSS activation window begins at ${new Date(value).toISOString()}`);'
+
       - name: Collect discovery leads from official feeds
+        if: github.event_name != 'pull_request'
         run: node scripts/ai-bank-feed-discovery.mjs
 
       - name: Compare leads with the existing AI Bank
+        if: github.event_name != 'pull_request'
         run: node scripts/ai-bank-lead-triage.mjs
 
       - name: Create weekly editorial research briefs
+        if: github.event_name != 'pull_request'
         run: node scripts/ai-bank-editorial-briefs.mjs
 
       - name: Add discovery, triage and editorial reports to workflow summary

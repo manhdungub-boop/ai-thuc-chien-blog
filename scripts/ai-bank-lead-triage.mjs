@@ -8,7 +8,19 @@ const markdownPath = "reports/ai-bank/triage.md";
 function hostOf(value) {
   try {
     const url = new URL(value);
-    return url.protocol === "https:" ? url.hostname.toLowerCase().replace(/^www\./, "") : null;
+    return url.protocol === "https:" && !url.username && !url.password && (!url.port || url.port === "443")
+      ? url.hostname.toLowerCase().replace(/^www\./, "") : null;
+  } catch { return null; }
+}
+function canonicalUrl(value) {
+  try {
+    const url = new URL(value);
+    if (hostOf(value) === null) return null;
+    url.hash = "";
+    for (const key of [...url.searchParams.keys()]) {
+      if (/^(utm_.+|fbclid|gclid|mc_cid|mc_eid)$/i.test(key)) url.searchParams.delete(key);
+    }
+    return url.toString();
   } catch { return null; }
 }
 function normalize(value = "") {
@@ -41,6 +53,21 @@ function classifyLead(lead, entries) {
   return { triage_status: "manual_product_identification_required", possible_catalog_matches: [] };
 }
 
+function deduplicateLeads(leads) {
+  const seenUrls = new Set();
+  const seenTitleHosts = new Set();
+  return leads.map(lead => {
+    const urlKey = canonicalUrl(lead.url);
+    const host = hostOf(lead.url);
+    const titleKey = normalize(lead.title);
+    const titleHostKey = host && titleKey ? host + "|" + titleKey : null;
+    const duplicate = Boolean((urlKey && seenUrls.has(urlKey)) || (titleHostKey && seenTitleHosts.has(titleHostKey)));
+    if (urlKey) seenUrls.add(urlKey);
+    if (titleHostKey) seenTitleHosts.add(titleHostKey);
+    return { lead, duplicate };
+  });
+}
+
 async function selfTest() {
   const entries = [{ id: "chatgpt", name: "ChatGPT", vendor: "OpenAI", hosts: ["openai.com"] }];
   const product = classifyLead({ title: "Introducing ChatGPT Projects", url: "https://openai.com/news/projects" }, entries);
@@ -51,7 +78,16 @@ async function selfTest() {
   if (vendorOnly.triage_status !== "vendor_mentioned_manual_review") throw new Error("Vendor-only match must remain manual review");
   const unrelated = classifyLead({ title: "An unrelated open model release", url: "https://example.org/news" }, entries);
   if (unrelated.triage_status !== "manual_product_identification_required") throw new Error("Unrelated lead fixture failed");
-  console.log("PASS: product-name, domain-overlap, vendor-only and unrelated triage fixtures.");
+  const duplicates = deduplicateLeads([
+    { title: "Same headline", url: "https://openai.com/news/a?utm_source=rss" },
+    { title: "Same headline", url: "https://openai.com/news/a#section" },
+    { title: "Same headline", url: "https://openai.com/news/b" },
+    { title: "Same headline", url: "https://deepmind.google/blog/b" }
+  ]);
+  if (duplicates.map(item => item.duplicate).join(",") !== "false,true,true,false") {
+    throw new Error("URL/tracking and same-publisher title deduplication fixture failed");
+  }
+  console.log("PASS: product-name, domain-overlap, vendor-only, unrelated and publisher-scoped duplicate fixtures.");
 }
 
 if (process.argv.includes("--self-test")) {
@@ -70,19 +106,13 @@ if (process.argv.includes("--self-test")) {
     id: tool.id, name: tool.name, vendor: tool.vendor || "",
     hosts: [tool.website, ...(tool.official_sources || [])].map(hostOf).filter(Boolean)
   }));
-  const seenUrls = new Set();
-  const seenTitles = new Set();
-  const results = discovery.leads.map(lead => {
-    const titleKey = normalize(lead.title);
-    const duplicateUrl = seenUrls.has(lead.url);
-    const duplicateTitle = titleKey && seenTitles.has(titleKey);
-    seenUrls.add(lead.url);
-    if (titleKey) seenTitles.add(titleKey);
+  const deduplicated = deduplicateLeads(discovery.leads);
+  const results = deduplicated.map(({ lead, duplicate }) => {
     const classification = classifyLead(lead, entries);
     return {
       ...lead,
-      triage_status: duplicateUrl || duplicateTitle ? "duplicate_lead" : classification.triage_status,
-      possible_catalog_matches: duplicateUrl || duplicateTitle ? [] : classification.possible_catalog_matches,
+      triage_status: duplicate ? "duplicate_lead" : classification.triage_status,
+      possible_catalog_matches: duplicate ? [] : classification.possible_catalog_matches,
       verification_status: "unverified",
       catalog_write_allowed: false,
       public_publish_allowed: false
