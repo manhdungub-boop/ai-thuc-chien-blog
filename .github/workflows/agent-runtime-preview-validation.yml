@@ -350,13 +350,33 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}
         run: |
           set -euo pipefail
-          npx --yes wrangler@4.166.0 deploy --config wrangler.preview.jsonc \
-            --var "AGENT_ENABLED:true" \
-            --var "AGENT_PAUSED:false" \
-            --var "AGENT_OIDC_RUN_ENABLED:true" \
-            --var "AGENT_OIDC_RUN_REF:$GITHUB_REF" \
-            --var "AGENT_OIDC_RUN_WORKFLOW_REF:$GITHUB_WORKFLOW_REF" \
-            --var "AGENT_OIDC_RUN_ACTOR_ID:$GITHUB_ACTOR_ID" \
+          generated_config=".wrangler.e2e.generated.jsonc"
+          trap 'rm -f "$generated_config"' EXIT
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFile, writeFile } from 'node:fs/promises';
+          const config = JSON.parse(await readFile('wrangler.preview.jsonc', 'utf8'));
+          assert.equal(config.name, 'ai-thuc-chien-agent-runtime-preview');
+          assert.equal(config.vars.AGENT_ENABLED, 'false');
+          assert.equal(config.vars.AGENT_PAUSED, 'true');
+          assert.equal(config.vars.AGENT_SCHEDULER_ENABLED, 'false');
+          assert.equal(config.vars.AGENT_RECOVERY_ALARM_ENABLED, 'false');
+          config.vars.AGENT_ENABLED = 'true';
+          config.vars.AGENT_PAUSED = 'false';
+          config.vars.AGENT_OIDC_RUN_ENABLED = 'true';
+          config.vars.AGENT_OIDC_RUN_REF = process.env.GITHUB_REF;
+          config.vars.AGENT_OIDC_RUN_WORKFLOW_REF = process.env.GITHUB_WORKFLOW_REF;
+          config.vars.AGENT_OIDC_RUN_ACTOR_ID = process.env.GITHUB_ACTOR_ID;
+          assert.equal(config.vars.AGENT_ENABLED, 'true');
+          assert.equal(config.vars.AGENT_PAUSED, 'false');
+          assert.equal(config.vars.AGENT_OIDC_RUN_ENABLED, 'true');
+          assert.equal(config.vars.AGENT_SCHEDULER_ENABLED, 'false');
+          assert.equal(config.vars.AGENT_RECOVERY_ALARM_ENABLED, 'false');
+          assert.equal(config.vars.AGENT_REVIEWER_AUTH_ENABLED, 'false');
+          assert.equal((config.triggers?.crons ?? []).length, 0);
+          await writeFile(generated_config, JSON.stringify(config, null, 2) + '\n', { mode: 0o600 });
+          NODE
+          npx --yes wrangler@4.166.0 deploy --config "$generated_config" \
             --message "One-shot OIDC read-only E2E; automatic disable/restore follows"
 
       - name: Verify the isolated Preview is temporarily open only for the one-shot test
