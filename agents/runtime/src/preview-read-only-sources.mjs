@@ -57,7 +57,7 @@ async function fetchRepositoryResponse(url, relativePath, signal) {
     let response = await fetch(url, {
       method: "GET",
       redirect: "manual",
-      headers: { Accept: "text/plain" },
+      headers: { Accept: "text/plain", "User-Agent": "DUNG-AI-Preview-Source-Reader/1.0" },
       signal,
     });
     if (response.status >= 300 && response.status < 400) {
