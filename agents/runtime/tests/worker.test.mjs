@@ -704,6 +704,69 @@ test("OIDC pause endpoint remains disabled by default and does not contact State
   assert.equal(called, false);
 });
 
+test("OIDC one-shot run endpoint is disabled by default and does not contact State Store", async () => {
+  let called = false;
+  const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/oidc/run", {
+    method: "POST",
+    headers: { Authorization: "Bearer a.b.c", "Content-Type": "application/json" },
+    body: JSON.stringify({ task: {
+      type: "content.review",
+      idempotencyKey: "oidc-preview-e2e:0123456789abcdef",
+      payload: { articlePath: "articles/ai-agent-thuc-hanh-tu-thiet-ke-den-kiem-soat.html" },
+    } }),
+  }), {
+    AGENT_OIDC_RUN_ENABLED: "false",
+    AGENT_OIDC_ENABLED: "true",
+    AGENT_ENABLED: "true",
+    AGENT_PAUSED: "false",
+    AGENT_STATE_STORE: { idFromName: () => "unused", get: () => ({ fetch: async () => { called = true; } }) },
+  });
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).error, "oidc_run_disabled");
+  assert.equal(called, false);
+});
+
+test("OIDC one-shot run endpoint remains fail-closed while Agent Runtime is disabled or paused", async () => {
+  let called = false;
+  const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/oidc/run", {
+    method: "POST",
+    headers: { Authorization: "Bearer a.b.c", "Content-Type": "application/json" },
+    body: JSON.stringify({ task: {
+      type: "content.review",
+      idempotencyKey: "oidc-preview-e2e:0123456789abcdef",
+      payload: { articlePath: "articles/ai-agent-thuc-hanh-tu-thiet-ke-den-kiem-soat.html" },
+    } }),
+  }), {
+    AGENT_OIDC_RUN_ENABLED: "true",
+    AGENT_OIDC_ENABLED: "true",
+    AGENT_ENABLED: "false",
+    AGENT_PAUSED: "true",
+    AGENT_STATE_STORE: { idFromName: () => "unused", get: () => ({ fetch: async () => { called = true; } }) },
+  });
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).error, "agent_disabled_or_paused");
+  assert.equal(called, false);
+});
+
+test("OIDC one-shot run endpoint rejects any task outside the fixed public article review", async () => {
+  const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/oidc/run", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ task: {
+      type: "seo.audit",
+      idempotencyKey: "oidc-preview-e2e:0123456789abcdef",
+      payload: { path: "/" },
+    } }),
+  }), {
+    AGENT_OIDC_RUN_ENABLED: "true",
+    AGENT_OIDC_ENABLED: "true",
+    AGENT_ENABLED: "true",
+    AGENT_PAUSED: "false",
+  });
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).error, "oidc_run_task_not_allowlisted");
+});
+
 test("OIDC pause endpoint fails closed when the exact actor trust policy is incomplete", async () => {
   let called = false;
   const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/oidc/pause", {
