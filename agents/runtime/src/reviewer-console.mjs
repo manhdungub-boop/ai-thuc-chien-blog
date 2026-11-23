@@ -198,6 +198,8 @@ export const REVIEWER_CONSOLE_JS = `"use strict";
         encodeURIComponent(owner) + "/" + encodeURIComponent(repo));
       aiBankDetail.replaceChildren();
       add(aiBankDetail, "h2", "Hồ sơ " + owner + "/" + repo);
+      const reviewedReleaseUrl = result.packet?.candidate?.candidate?.latest_release?.source_url;
+      add(aiBankDetail, "p", "Release đang được rà soát: " + (reviewedReleaseUrl || "Chưa xác định"));
       add(aiBankDetail, "p", "Bằng chứng đang chờ người rà soát; chưa được xác minh.");
       add(aiBankDetail, "pre", JSON.stringify(result.packet || {}, null, 2));
       add(aiBankDetail, "p", "Xem hồ sơ không đồng nghĩa với xác nhận công cụ, cập nhật catalog hoặc cho phép xuất bản.");
