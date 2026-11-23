@@ -189,35 +189,37 @@ export class AgentAIBankCandidateStore {
       validated.push({ candidate, ...result });
     }
 
-    const timestamp = new Date(now).toISOString();
-    let inserted = 0;
-    let updated = 0;
-    let unchanged = 0;
-    for (const item of validated) {
-      const existing = this.ctx.storage.sql.exec(
-        "SELECT release_at FROM ai_bank_candidates WHERE candidate_id = ?",
-        item.candidate.candidate_id
-      ).toArray()[0];
-      if (!existing) {
-        this.ctx.storage.sql.exec(
-          "INSERT INTO ai_bank_candidates (candidate_id, repository, candidate_json, release_at, first_seen_at, last_seen_at) VALUES (?, ?, ?, ?, ?, ?)",
-          item.candidate.candidate_id, item.candidate.repository, item.json,
-          item.releaseAt, timestamp, timestamp
-        );
-        inserted += 1;
-      } else {
-        this.ctx.storage.sql.exec(
-          "UPDATE ai_bank_candidates SET candidate_json = CASE WHEN release_at < ? THEN ? ELSE candidate_json END, release_at = MAX(release_at, ?), last_seen_at = ? WHERE candidate_id = ?",
-          item.releaseAt, item.json, item.releaseAt, timestamp, item.candidate.candidate_id
-        );
-        if (item.releaseAt > existing.release_at) updated += 1;
-        else unchanged += 1;
+    return this.ctx.storage.transactionSync(() => {
+      const timestamp = new Date(now).toISOString();
+      let inserted = 0;
+      let updated = 0;
+      let unchanged = 0;
+      for (const item of validated) {
+        const existing = this.ctx.storage.sql.exec(
+          "SELECT release_at FROM ai_bank_candidates WHERE candidate_id = ?",
+          item.candidate.candidate_id
+        ).toArray()[0];
+        if (!existing) {
+          this.ctx.storage.sql.exec(
+            "INSERT INTO ai_bank_candidates (candidate_id, repository, candidate_json, release_at, first_seen_at, last_seen_at) VALUES (?, ?, ?, ?, ?, ?)",
+            item.candidate.candidate_id, item.candidate.repository, item.json,
+            item.releaseAt, timestamp, timestamp
+          );
+          inserted += 1;
+        } else {
+          this.ctx.storage.sql.exec(
+            "UPDATE ai_bank_candidates SET candidate_json = CASE WHEN release_at < ? THEN ? ELSE candidate_json END, release_at = MAX(release_at, ?), last_seen_at = ? WHERE candidate_id = ?",
+            item.releaseAt, item.json, item.releaseAt, timestamp, item.candidate.candidate_id
+          );
+          if (item.releaseAt > existing.release_at) updated += 1;
+          else unchanged += 1;
+        }
       }
-    }
-    const total = this.ctx.storage.sql.exec(
-      "SELECT COUNT(*) AS count FROM ai_bank_candidates"
-    ).one().count;
-    return { accepted: true, inserted, updated, unchanged, total, catalog_write_authorized: false };
+      const total = this.ctx.storage.sql.exec(
+        "SELECT COUNT(*) AS count FROM ai_bank_candidates"
+      ).one().count;
+      return { accepted: true, inserted, updated, unchanged, total, catalog_write_authorized: false };
+    });
   }
 
   async listCandidates(limit = 20) {
