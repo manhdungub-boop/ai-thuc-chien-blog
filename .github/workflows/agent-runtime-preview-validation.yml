@@ -280,12 +280,19 @@ jobs:
           EXPECTED_HEAD_REF: ${{ github.event.pull_request.head.ref }}
           EVENT_ACTION: ${{ github.event.action }}
           EVENT_LABEL: ${{ github.event.label.name }}
+          EVENT_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "manhdungub-boop/ai-thuc-chien-blog"
           test "$GITHUB_EVENT_NAME" = "pull_request"
-          test "$EVENT_ACTION" = "labeled"
-          test "$EVENT_LABEL" = "agent-runtime"
+          if [[ "$EVENT_ACTION" == "labeled" ]]; then
+            test "$EVENT_LABEL" = "agent-runtime"
+          elif [[ "$EVENT_ACTION" == "synchronize" ]]; then
+            node --input-type=module -e "import assert from 'node:assert/strict'; const labels = JSON.parse(process.env.EVENT_LABELS); assert.ok(labels.includes('agent-runtime'), 'required agent-runtime label must remain present')"
+          else
+            echo "Unexpected pull_request action for one-shot E2E: $EVENT_ACTION" >&2
+            exit 1
+          fi
           test "$EXPECTED_HEAD_REF" = "security/fence-leases-on-circuit-breaker-pause-20261123"
           test "$GITHUB_ACTOR_ID" = "342528485"
           [[ "$GITHUB_REF" =~ ^refs/pull/[0-9]+/merge$ ]]
