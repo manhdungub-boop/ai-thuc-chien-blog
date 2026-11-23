@@ -137,6 +137,45 @@ describe("read-only AI research discovery", () => {
     expect(result.sources_failed).toEqual([]);
   });
 
+  it("accepts namespace-equivalent Atom roots with prefixed root and unprefixed entries", async () => {
+    const result = await discoverResearchSignals({
+      now: NOW,
+      fetchImpl: async url => {
+        const source = RESEARCH_FEED_SOURCES.find(item => item.feed === url);
+        if (source.name !== "Google DeepMind") return new Response(feedFor(source), { status: 200 });
+        const entry = entryFor(source, "prefixed-root");
+        return new Response(
+          '<atom:feed xmlns:atom="http://www.w3.org/2005/Atom" xmlns="http://www.w3.org/2005/Atom">' +
+          entry + "</atom:feed>",
+          { status: 200 }
+        );
+      }
+    });
+    expect(result.ok).toBe(true);
+    expect(result.sources_succeeded).toBe(4);
+    expect(result.sources_failed).toEqual([]);
+    expect(result.latest_signals.some(item => item.url.endsWith("/prefixed-root"))).toBe(true);
+  });
+
+  it("rejects Atom feed roots bound to an unrelated namespace", async () => {
+    const result = await discoverResearchSignals({
+      now: NOW,
+      fetchImpl: async url => {
+        const source = RESEARCH_FEED_SOURCES.find(item => item.feed === url);
+        if (source.name !== "Google DeepMind") return new Response(feedFor(source), { status: 200 });
+        return new Response(
+          '<atom:feed xmlns:atom="urn:untrusted:feed" xmlns="http://www.w3.org/2005/Atom">' +
+          entryFor(source, "wrong-namespace") + "</atom:feed>",
+          { status: 200 }
+        );
+      }
+    });
+    expect(result.ok).toBe(true);
+    expect(result.sources_succeeded).toBe(3);
+    expect(result.sources_failed).toEqual([{ source: "Google DeepMind", error: "invalid_feed_document" }]);
+    expect(result.latest_signals.every(item => !item.url.endsWith("/wrong-namespace"))).toBe(true);
+  });
+
   it("rejects unclosed or improperly nested XML elements", async () => {
     const malformed = ["<rss><channel></rss>", "<rss><channel><item></channel></item></rss>"];
     for (const document of malformed) {
