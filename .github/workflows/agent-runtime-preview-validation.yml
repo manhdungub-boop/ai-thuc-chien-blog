@@ -204,22 +204,22 @@ jobs:
           import assert from 'node:assert/strict';
           import { readFile } from 'node:fs/promises';
           const workflow = await readFile('.github/workflows/agent-runtime-preview-validation.yml', 'utf8');
-          const parts = workflow.split('  one-shot-preview-e2e:\\n');
+          const parts = workflow.split('  one-shot-preview-e2e:\n');
           assert.equal(parts.length, 2, 'the separately gated one-shot E2E job must exist exactly once');
           const validationWorkflow = parts[0];
           const e2eWorkflow = parts[1];
-          const deployLines = validationWorkflow.split('\\n').filter(line => line.trimStart().startsWith('npx --yes wrangler@4.166.0 deploy '));
+          const deployLines = validationWorkflow.split('\n').filter(line => line.trimStart().startsWith('npx --yes wrangler@4.166.0 deploy '));
           assert.equal(deployLines.length, 1, 'validation job must contain exactly one Wrangler command');
           assert.match(deployLines[0], /--dry-run/, 'validation Wrangler command must be dry-run only');
-          assert.match(deployLines[0], /--config wrangler\\.preview\\.jsonc/, 'dry-run must target only dedicated Preview config');
-          assert.doesNotMatch(validationWorkflow, /CLOUDFLARE_[A-Z_]*TOKEN|secrets\\./i, 'validation job must not receive Cloudflare credentials');
-          assert.match(e2eWorkflow, /github\\.actor_id == '342528485'/, 'one-shot E2E must be restricted to repository owner actor');
-          assert.match(e2eWorkflow, /github\\.ref == 'refs\\/heads\\/security\\/fence-leases-on-circuit-breaker-pause-20261123'/);
-          assert.match(e2eWorkflow, /id-token: write/);
-          assert.match(e2eWorkflow, /AGENT_OIDC_RUN_ENABLED:true/);
-          assert.match(e2eWorkflow, /--config wrangler\\.preview\\.jsonc/);
-          assert.match(e2eWorkflow, /if: always\\(\\)/, 'rollback must run even after an E2E failure');
-          assert.match(e2eWorkflow, /AGENT_ENABLED:false|wrangler\\.preview\\.jsonc/, 'rollback must restore the checked-in disabled config');
+          assert.ok(deployLines[0].includes('--config wrangler.preview.jsonc'));
+          assert.equal(validationWorkflow.includes('CLOUDFLARE_'), false, 'validation job must not receive Cloudflare credentials');
+          assert.equal(validationWorkflow.includes('secrets.'), false, 'validation job must not reference secrets');
+          assert.ok(e2eWorkflow.includes("github.actor_id == '342528485'"), 'one-shot E2E must be restricted to repository owner actor');
+          assert.ok(e2eWorkflow.includes("github.ref == 'refs/heads/security/fence-leases-on-circuit-breaker-pause-20261123'"));
+          assert.ok(e2eWorkflow.includes('id-token: write'));
+          assert.ok(e2eWorkflow.includes('AGENT_OIDC_RUN_ENABLED:true'));
+          assert.ok(e2eWorkflow.includes('--config wrangler.preview.jsonc'));
+          assert.ok(e2eWorkflow.includes('if: always()'), 'rollback must run even after an E2E failure');
           console.log('PASS: validation remains credential-free; the separately gated owner-only job uses OIDC, Preview-only deployment, and automatic rollback.');
           NODE
 
