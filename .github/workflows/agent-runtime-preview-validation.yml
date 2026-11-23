@@ -203,10 +203,15 @@ jobs:
           assert.ok(deployLines[0].includes('--config wrangler.preview.jsonc'));
           assert.doesNotMatch(validateJobSource, /CLOUDFLARE_API_TOKEN:\\s*\\$\\{\\{\\s*secrets\\./i, 'validation job must not bind a Cloudflare token');
           assert.doesNotMatch(validateJobSource, /secrets\\.[A-Z0-9_]+/, 'validation job must not reference a secret value');
+          assert.ok(e2eWorkflow.includes("github.event.action == 'labeled'"));
+          assert.ok(e2eWorkflow.includes("github.event.label.name == 'agent-runtime'"));
           assert.ok(e2eWorkflow.includes("github.actor_id == '342528485'"), 'one-shot E2E must be restricted to repository owner actor');
-          assert.ok(e2eWorkflow.includes("github.ref == 'refs/heads/security/fence-leases-on-circuit-breaker-pause-20261123'"));
+          assert.ok(e2eWorkflow.includes("github.event.pull_request.head.ref == 'security/fence-leases-on-circuit-breaker-pause-20261123'"));
+          assert.ok(e2eWorkflow.includes("github.event.pull_request.base.ref == 'integration/agent-runtime-v5-preview-20261120'"));
           assert.ok(e2eWorkflow.includes('id-token: write'));
           assert.ok(e2eWorkflow.includes('AGENT_OIDC_RUN_ENABLED:true'));
+          assert.ok(e2eWorkflow.includes('AGENT_OIDC_RUN_REF:$GITHUB_REF'));
+          assert.ok(e2eWorkflow.includes('AGENT_OIDC_RUN_WORKFLOW_REF:$GITHUB_WORKFLOW_REF'));
           assert.ok(e2eWorkflow.includes('--config wrangler.preview.jsonc'));
           assert.ok(e2eWorkflow.includes('if: always()'), 'rollback must run even after an E2E failure');
           console.log('PASS: validation remains credential-free; the separately gated owner-only job uses OIDC, Preview-only deployment, and automatic rollback.');
