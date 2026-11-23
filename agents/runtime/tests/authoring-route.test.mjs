@@ -6,8 +6,8 @@ const OPERATOR_TOKEN = "authoring-route-operator-token-0123456789abcdef";
 const STATE_TOKEN = "authoring-route-state-token-0123456789abcdef";
 const ROUTE = "https://agent-runtime-preview.example.workers.dev/internal/authoring/prepare";
 
-function makeEnv({ remaining = 8 } = {}) {
-  let used = 8 - remaining;
+function makeEnv({ remaining = 8, limit = 8 } = {}) {
+  let used = limit - remaining;
   const budgetCalls = [];
   const draftCalls = [];
   const artifacts = new Map();
@@ -16,15 +16,15 @@ function makeEnv({ remaining = 8 } = {}) {
       const url = new URL(request.url);
       assert.equal(request.headers.get("authorization"), "Bearer " + STATE_TOKEN);
       if (url.pathname === "/external-budget" && request.method === "GET") {
-        return Response.json({ ok: true, budget: { ok: true, day: url.searchParams.get("day"), scope: "content_research", used, limit: 8, remaining: 8 - used } });
+        return Response.json({ ok: true, budget: { ok: true, day: url.searchParams.get("day"), scope: "content_research", used, limit, remaining: limit - used } });
       }
       if (url.pathname === "/external-budget/consume" && request.method === "POST") {
         const body = await request.json();
         budgetCalls.push(body);
-        if (body.scope !== "content_research" || used >= 8) return Response.json({ ok: false, error: "external_request_budget_exhausted" }, { status: 400 });
+        if (body.scope !== "content_research" || used >= limit) return Response.json({ ok: false, error: "external_request_budget_exhausted" }, { status: 400 });
         used += 1;
         const day = new Date().toISOString().slice(0, 10);
-        return Response.json({ ok: true, budget: { ok: true, day: body.day, scope: body.scope, used, limit: 8, remaining: 8 - used } });
+        return Response.json({ ok: true, budget: { ok: true, day: body.day, scope: body.scope, used, limit, remaining: limit - used } });
       }
       throw new Error("unexpected_state_store_route");
     },
@@ -183,7 +183,7 @@ test("authoring idempotency binds the full topic, not only its first 70 characte
   const originalFetch = globalThis.fetch;
   const network = mockOfficialFetch();
   globalThis.fetch = network.fetch;
-  const runtime = makeEnv();
+  const runtime = makeEnv({ remaining: 16, limit: 16 });
   const prefix = "A".repeat(70);
   try {
     const first = await worker.fetch(makeRequest({ topic: prefix + " first suffix" }), runtime.env);
