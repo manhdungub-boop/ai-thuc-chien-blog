@@ -6,6 +6,8 @@ const ALLOWED_REPOSITORIES = new Set(AI_BANK_RELEASE_SOURCES.map(source => sourc
 const MAX_CANDIDATES_PER_BATCH = 10;
 const MAX_CANDIDATE_BYTES = 8192;
 const MAX_EVIDENCE_PER_CHECK = 5;
+const MAX_AUDIT_EVENTS_PER_UTC_DAY = 100;
+const MAX_AUDIT_EVENTS_TOTAL = 10000;
 const MAX_EVIDENCE_TITLE_CHARS = 180;
 const MAX_EVIDENCE_EXCERPT_CHARS = 1000;
 const REQUIRED_CHECKS = [
@@ -128,6 +130,9 @@ export class AgentAIBankCandidateStore extends DurableObject {
       "request_sha256 TEXT NOT NULL, evidence_id TEXT NOT NULL, recorded_at TEXT NOT NULL)"
     );
     this.ctx.storage.sql.exec(
+      "CREATE INDEX IF NOT EXISTS ai_bank_evidence_audit_events_recorded_at ON ai_bank_evidence_audit_events(recorded_at)"
+    );
+    this.ctx.storage.sql.exec(
       "INSERT OR IGNORE INTO ai_bank_review_evidence_releases (evidence_id, candidate_release_url, associated_at) " +
       "SELECT evidence_id, candidate_release_url, submitted_at FROM ai_bank_review_evidence WHERE candidate_release_url <> ''"
     );
@@ -231,6 +236,21 @@ export class AgentAIBankCandidateStore extends DurableObject {
           accepted: false,
           reason: sameRequest ? "duplicate_audit_event" : "audit_event_id_reused"
         };
+      }
+      const totalAuditCount = this.ctx.storage.sql.exec(
+        "SELECT COUNT(*) AS count FROM ai_bank_evidence_audit_events"
+      ).one().count;
+      if (totalAuditCount >= MAX_AUDIT_EVENTS_TOTAL) {
+        return { accepted: false, reason: "evidence_audit_capacity_reached" };
+      }
+      const utcDay = authorization.authorized_at.slice(0, 10);
+      const dailyAuditCount = this.ctx.storage.sql.exec(
+        "SELECT COUNT(*) AS count FROM ai_bank_evidence_audit_events WHERE recorded_at >= ? AND recorded_at < ?",
+        utcDay + "T00:00:00.000Z",
+        new Date(Date.parse(utcDay + "T00:00:00.000Z") + 24 * 60 * 60 * 1000).toISOString()
+      ).one().count;
+      if (dailyAuditCount >= MAX_AUDIT_EVENTS_PER_UTC_DAY) {
+        return { accepted: false, reason: "evidence_audit_daily_limit_reached" };
       }
       const result = this.#submitReviewEvidence(candidateId, evidence, now);
       if (!result.accepted) return result;
