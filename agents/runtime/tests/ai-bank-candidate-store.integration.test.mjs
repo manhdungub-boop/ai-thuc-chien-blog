@@ -400,6 +400,57 @@ async function restoreTestSnapshot(state, snapshot) {
   return restoreTestSnapshotAtomically(state, snapshot);
 }
 
+function snapshotManifest(snapshot) {
+  return {
+    format_id: snapshot.format_id,
+    format_version: snapshot.format_version,
+    counts: snapshot.counts,
+    table_sha256: snapshot.table_sha256,
+    context: snapshot.context ?? null
+  };
+}
+
+async function signTestSnapshot(snapshot, keyId, privateKey) {
+  const manifestBytes = new TextEncoder().encode(canonicalSnapshotJson(snapshotManifest(snapshot)));
+  const signature = await crypto.subtle.sign({ name: "Ed25519" }, privateKey, manifestBytes);
+  return {
+    algorithm: "Ed25519",
+    canonicalization: "canonical-json-v1",
+    key_id: keyId,
+    manifest_sha256: snapshot.manifest_sha256,
+    signature: encodeBase64Url(new Uint8Array(signature))
+  };
+}
+
+async function verifyTestSnapshotSignatureWithKeyState(snapshot, envelope, trustedKeys) {
+  const record = trustedKeys.get(envelope?.key_id);
+  if (!record || !["active", "verify_only"].includes(record.status)) return false;
+  return verifyTestSnapshotSignature(snapshot, envelope, new Map([[envelope.key_id, record.publicKey]]));
+}
+
+async function verifyTestSnapshotSignature(snapshot, envelope, trustedPublicKeys) {
+  if (!snapshot || snapshot.format_id !== "ai-bank-audit-emulator-snapshot" ||
+      snapshot.format_version !== 1 ||
+      !envelope || envelope.algorithm !== "Ed25519" ||
+      envelope.canonicalization !== "canonical-json-v1" ||
+      typeof envelope.key_id !== "string" ||
+      envelope.manifest_sha256 !== snapshot?.manifest_sha256 ||
+      typeof envelope.signature !== "string") return false;
+  const publicKey = trustedPublicKeys.get(envelope.key_id);
+  if (!publicKey) return false;
+  let signature;
+  try {
+    const normalized = envelope.signature.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized + "=".repeat((4 - normalized.length % 4) % 4);
+    signature = Uint8Array.from(atob(padded), char => char.charCodeAt(0));
+  } catch {
+    return false;
+  }
+  const manifestBytes = new TextEncoder().encode(canonicalSnapshotJson(snapshotManifest(snapshot)));
+  return crypto.subtle.verify({ name: "Ed25519" }, publicKey, signature, manifestBytes);
+}
+
+
 describe("AgentAIBankCandidateStore Durable Object", () => {
   let store;
   let testIndex = 0;
