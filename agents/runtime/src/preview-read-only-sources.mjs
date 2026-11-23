@@ -1,4 +1,5 @@
 const GITHUB_CONTENTS_ORIGIN = "https://api.github.com/repos/manhdungub-boop/ai-thuc-chien-blog/contents/";
+const GITHUB_RAW_ORIGIN = "https://raw.githubusercontent.com/manhdungub-boop/ai-thuc-chien-blog/main/";
 const MAX_SOURCE_BYTES = 512 * 1024;
 
 async function readBoundedResponse(response, limit, signal) {
@@ -35,6 +36,64 @@ async function readBoundedResponse(response, limit, signal) {
   }
 }
 
+function isAllowedRawRedirect(location, requestUrl, relativePath) {
+  let target;
+  try {
+    target = new URL(location, requestUrl);
+  } catch {
+    return false;
+  }
+  const expectedPath = "/manhdungub-boop/ai-thuc-chien-blog/main/" + relativePath;
+  return target.protocol === "https:" &&
+    target.hostname === "raw.githubusercontent.com" &&
+    target.port === "" &&
+    target.username === "" &&
+    target.password === "" &&
+    target.pathname === expectedPath &&
+    target.hash === "";
+}
+
+async function fetchRepositoryResponse(url, relativePath, signal) {
+  let response;
+  try {
+    response = await fetch(url, {
+      method: "GET",
+      redirect: "manual",
+      headers: {
+        Accept: "application/vnd.github.raw+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+      signal,
+    });
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get("location");
+      if (!location || !isAllowedRawRedirect(location, url, relativePath)) {
+        throw new Error("preview_source_http_error");
+      }
+      const target = new URL(location, url);
+      response = await fetch(target.toString(), {
+        method: "GET",
+        redirect: "manual",
+        headers: { Accept: "text/plain" },
+        signal,
+      });
+      // Never follow a second redirect. The redirect target is pinned to the
+      // exact public repository, branch, and allowlisted file path.
+      if (response.status >= 300 && response.status < 400) {
+        throw new Error("preview_source_http_error");
+      }
+    }
+  } catch (error) {
+    if (signal?.aborted || error?.name === "AbortError") {
+      throw new Error("task_execution_aborted");
+    }
+    if (error?.message === "preview_source_http_error") throw error;
+    throw new Error("preview_source_fetch_failed");
+  }
+  if (signal?.aborted) throw new Error("task_execution_aborted");
+  return response;
+}
+
 async function readRepositoryText(relativePath, { signal } = {}) {
   if (typeof relativePath !== "string" ||
       !/^(?:articles\/[a-z0-9][a-z0-9-]{0,150}\.html|data\/ai-tools\.json)$/.test(relativePath)) {
@@ -42,22 +101,7 @@ async function readRepositoryText(relativePath, { signal } = {}) {
   }
   const url = GITHUB_CONTENTS_ORIGIN + relativePath + "?ref=main";
   if (signal?.aborted) throw new Error("task_execution_aborted");
-  let response;
-  try {
-    response = await fetch(url, {
-      method: "GET",
-      redirect: "error",
-      headers: {
-        Accept: "application/vnd.github.raw+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-      },
-      signal,
-    });
-  } catch (error) {
-    if (signal?.aborted || error?.name === "AbortError") throw new Error("task_execution_aborted");
-    throw new Error("preview_source_fetch_failed");
-  }
-  if (signal?.aborted) throw new Error("task_execution_aborted");
+  const response = await fetchRepositoryResponse(url, relativePath, signal);
   return readBoundedResponse(response, MAX_SOURCE_BYTES, signal);
 }
 
