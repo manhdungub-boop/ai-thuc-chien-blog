@@ -2,6 +2,7 @@ name: Agent Runtime Preview Shell Validation
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
     branches:
     - main
     - integration/agent-runtime-v5-preview-20261120
@@ -15,22 +16,6 @@ on:
       - ".github/workflows/agent-runtime-preview-validation.yml"
       - ".github/workflows/agent-runtime-operator.yml"
   workflow_dispatch:
-    inputs:
-      confirm_one_shot_preview_e2e:
-        description: "Authorize one read-only content.review task on the dedicated Preview Worker, followed by automatic disable/rollback"
-        required: true
-        type: boolean
-        default: false
-      confirm_free_workers_plan:
-        description: "Confirm this one-shot test must remain on the Workers Free plan only"
-        required: true
-        type: boolean
-        default: false
-      expected_sha:
-        description: "Exact 40-character PR branch commit SHA to deploy and test"
-        required: true
-        type: string
-
 permissions:
   contents: read
 
@@ -247,12 +232,14 @@ jobs:
           NODE
   one-shot-preview-e2e:
     if: >-
-      github.event_name == 'workflow_dispatch' &&
-      inputs.confirm_one_shot_preview_e2e == true &&
+      github.event_name == 'pull_request' &&
+      github.event.action == 'labeled' &&
+      github.event.label.name == 'agent-runtime' &&
       github.repository == 'manhdungub-boop/ai-thuc-chien-blog' &&
-      github.ref == 'refs/heads/security/fence-leases-on-circuit-breaker-pause-20261123' &&
-      github.actor_id == '342528485' &&
-      github.sha == inputs.expected_sha
+      github.event.pull_request.head.repo.full_name == 'manhdungub-boop/ai-thuc-chien-blog' &&
+      github.event.pull_request.head.ref == 'security/fence-leases-on-circuit-breaker-pause-20261123' &&
+      github.event.pull_request.base.ref == 'integration/agent-runtime-v5-preview-20261120' &&
+      github.actor_id == '342528485'
     needs: validate
     runs-on: ubuntu-latest
     environment: agent-runtime-preview
@@ -270,17 +257,25 @@ jobs:
       - name: Check out the exact authorized PR commit
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
 
       - name: Verify exact branch, actor, and commit pin
         env:
-          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+          EXPECTED_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          EVENT_ACTION: ${{ github.event.action }}
+          EVENT_LABEL: ${{ github.event.label.name }}
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "manhdungub-boop/ai-thuc-chien-blog"
-          test "$GITHUB_REF" = "refs/heads/security/fence-leases-on-circuit-breaker-pause-20261123"
+          test "$GITHUB_EVENT_NAME" = "pull_request"
+          test "$EVENT_ACTION" = "labeled"
+          test "$EVENT_LABEL" = "agent-runtime"
+          test "$EXPECTED_HEAD_REF" = "security/fence-leases-on-circuit-breaker-pause-20261123"
           test "$GITHUB_ACTOR_ID" = "342528485"
+          [[ "$GITHUB_REF" =~ ^refs/pull/[0-9]+/merge$ ]]
+          test "$GITHUB_WORKFLOW_REF" = "$GITHUB_REPOSITORY/.github/workflows/agent-runtime-preview-validation.yml@$GITHUB_REF"
           [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
           test -f agents/runtime/wrangler.preview.jsonc
@@ -303,7 +298,7 @@ jobs:
       - name: Verify Workers Free plan before deployment
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}
-          CONFIRM_FREE_WORKERS_PLAN: ${{ inputs.confirm_free_workers_plan }}
+          CONFIRM_FREE_WORKERS_PLAN: "true"
         run: |
           set -euo pipefail
           if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
@@ -354,9 +349,9 @@ jobs:
             --var "AGENT_ENABLED:true" \
             --var "AGENT_PAUSED:false" \
             --var "AGENT_OIDC_RUN_ENABLED:true" \
-            --var "AGENT_OIDC_RUN_REF:refs/heads/security/fence-leases-on-circuit-breaker-pause-20261123" \
-            --var "AGENT_OIDC_RUN_WORKFLOW_REF:manhdungub-boop/ai-thuc-chien-blog/.github/workflows/agent-runtime-preview-validation.yml@refs/heads/security/fence-leases-on-circuit-breaker-pause-20261123" \
-            --var "AGENT_OIDC_RUN_ACTOR_ID:342528485" \
+            --var "AGENT_OIDC_RUN_REF:$GITHUB_REF" \\
+            --var "AGENT_OIDC_RUN_WORKFLOW_REF:$GITHUB_WORKFLOW_REF" \\
+            --var "AGENT_OIDC_RUN_ACTOR_ID:$GITHUB_ACTOR_ID" \\
             --message "One-shot OIDC read-only E2E; automatic disable/restore follows"
 
       - name: Verify the isolated Preview is temporarily open only for the one-shot test
