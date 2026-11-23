@@ -145,11 +145,29 @@ async function captureTestSnapshot(state, pageSize = 1) {
   };
 }
 
+const SNAPSHOT_ROW_KEYS = {
+  ai_bank_candidates: ["candidate_id", "repository", "candidate_json", "release_at", "first_seen_at", "last_seen_at"],
+  ai_bank_review_evidence: ["evidence_id", "candidate_id", "check_type", "source_title", "source_url", "excerpt", "source_status", "review_status", "submitted_at", "candidate_release_url"],
+  ai_bank_review_evidence_releases: ["evidence_id", "candidate_release_url", "associated_at"],
+  ai_bank_evidence_audit_events: ["event_id", "actor_subject", "actor_email", "request_sha256", "evidence_id", "recorded_at"]
+};
+
+function hasExactKeys(value, expectedKeys) {
+  return value !== null && typeof value === "object" && !Array.isArray(value) &&
+    Object.keys(value).sort().join("|") === expectedKeys.slice().sort().join("|");
+}
+
 async function verifyTestSnapshot(snapshot) {
-  if (!snapshot || snapshot.format_id !== "ai-bank-audit-emulator-snapshot" ||
-      snapshot.format_version !== 1 || !snapshot.tables || !snapshot.counts ||
-      !snapshot.table_sha256 || Object.keys(snapshot.tables).sort().join("|") !==
-        SNAPSHOT_TABLES.map(table => table.name).sort().join("|")) {
+  const tableNames = SNAPSHOT_TABLES.map(table => table.name);
+  if (!hasExactKeys(snapshot, [
+    "format_id", "format_version", "counts", "table_sha256", "tables", "manifest_sha256"
+  ]) || snapshot.format_id !== "ai-bank-audit-emulator-snapshot" ||
+      snapshot.format_version !== 1 ||
+      !hasExactKeys(snapshot.tables, tableNames) ||
+      !hasExactKeys(snapshot.counts, tableNames) ||
+      !hasExactKeys(snapshot.table_sha256, tableNames) ||
+      typeof snapshot.manifest_sha256 !== "string" ||
+      !/^[a-f0-9]{64}$/.test(snapshot.manifest_sha256)) {
     return false;
   }
   const manifest = {
@@ -160,8 +178,13 @@ async function verifyTestSnapshot(snapshot) {
   };
   for (const table of SNAPSHOT_TABLES) {
     const rows = snapshot.tables[table.name];
-    if (!Array.isArray(rows) || rows.length !== snapshot.counts[table.name] ||
-        await sha256Hex(canonicalSnapshotJson(rows)) !== snapshot.table_sha256[table.name]) {
+    const count = snapshot.counts[table.name];
+    const digest = snapshot.table_sha256[table.name];
+    if (!Number.isSafeInteger(count) || count < 0 ||
+        !Array.isArray(rows) || rows.length !== count ||
+        typeof digest !== "string" || !/^[a-f0-9]{64}$/.test(digest) ||
+        rows.some(row => !hasExactKeys(row, SNAPSHOT_ROW_KEYS[table.name])) ||
+        await sha256Hex(canonicalSnapshotJson(rows)) !== digest) {
       return false;
     }
   }
@@ -251,7 +274,8 @@ function snapshotManifest(snapshot) {
     format_id: snapshot.format_id,
     format_version: snapshot.format_version,
     counts: snapshot.counts,
-    table_sha256: snapshot.table_sha256
+    table_sha256: snapshot.table_sha256,
+    context: snapshot.context ?? null
   };
 }
 
@@ -260,6 +284,7 @@ async function signTestSnapshot(snapshot, keyId, privateKey) {
   const signature = await crypto.subtle.sign({ name: "Ed25519" }, privateKey, manifestBytes);
   return {
     algorithm: "Ed25519",
+    canonicalization: "canonical-json-v1",
     key_id: keyId,
     manifest_sha256: snapshot.manifest_sha256,
     signature: encodeBase64Url(new Uint8Array(signature))
@@ -273,7 +298,10 @@ async function verifyTestSnapshotSignatureWithKeyState(snapshot, envelope, trust
 }
 
 async function verifyTestSnapshotSignature(snapshot, envelope, trustedPublicKeys) {
-  if (!envelope || envelope.algorithm !== "Ed25519" ||
+  if (!snapshot || snapshot.format_id !== "ai-bank-audit-emulator-snapshot" ||
+      snapshot.format_version !== 1 ||
+      !envelope || envelope.algorithm !== "Ed25519" ||
+      envelope.canonicalization !== "canonical-json-v1" ||
       typeof envelope.key_id !== "string" ||
       envelope.manifest_sha256 !== snapshot?.manifest_sha256 ||
       typeof envelope.signature !== "string") return false;
@@ -433,6 +461,65 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     });
   });
 
+  it("rejects truncated, missing, extra, and wrongly typed snapshot structures before destination writes", async () => {
+    await store.upsertCandidates([candidate()]);
+    const snapshot = await runInDurableObject(store, async (_instance, state) =>
+      captureTestSnapshot(state, 1)
+    );
+    const destination = env.AGENT_AI_BANK_CANDIDATE_STORE.getByName(
+      "agent-ai-bank-candidates-malformed-" + testIndex
+    );
+
+    const malformedSnapshots = [];
+    const missingTable = structuredClone(snapshot);
+    delete missingTable.tables.ai_bank_review_evidence;
+    malformedSnapshots.push(missingTable);
+
+    const truncatedRows = structuredClone(snapshot);
+    truncatedRows.tables.ai_bank_candidates.pop();
+    malformedSnapshots.push(truncatedRows);
+
+    const extraTable = structuredClone(snapshot);
+    extraTable.tables.unexpected_table = [];
+    malformedSnapshots.push(extraTable);
+
+    const wrongCountType = structuredClone(snapshot);
+    wrongCountType.counts.ai_bank_candidates = "1";
+    malformedSnapshots.push(wrongCountType);
+
+    const negativeCount = structuredClone(snapshot);
+    negativeCount.counts.ai_bank_candidates = -1;
+    malformedSnapshots.push(negativeCount);
+
+    const malformedDigest = structuredClone(snapshot);
+    malformedDigest.table_sha256.ai_bank_candidates = "not-a-sha256";
+    malformedSnapshots.push(malformedDigest);
+
+    const malformedRow = structuredClone(snapshot);
+    malformedRow.tables.ai_bank_candidates[0].unexpected_column = "unexpected";
+    malformedSnapshots.push(malformedRow);
+
+    const missingManifestField = structuredClone(snapshot);
+    delete missingManifestField.manifest_sha256;
+    malformedSnapshots.push(missingManifestField);
+
+    for (const malformed of malformedSnapshots) {
+      expect(await verifyTestSnapshot(malformed)).toBe(false);
+      await runInDurableObject(destination, async (_instance, state) => {
+        await expect(restoreTestSnapshot(state, malformed)).resolves.toEqual({
+          restored: false,
+          reason: "snapshot_integrity_invalid"
+        });
+        for (const table of SNAPSHOT_TABLES) {
+          const count = state.storage.sql.exec(
+            "SELECT COUNT(*) AS count FROM " + table.name
+          ).one().count;
+          expect(count).toBe(0);
+        }
+      });
+    }
+  });
+
   it("rejects a tampered snapshot before writing to the destination emulator object", async () => {
     await store.upsertCandidates([candidate()]);
     const sourceSnapshot = await runInDurableObject(store, async (_instance, state) =>
@@ -452,6 +539,63 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
         "SELECT COUNT(*) AS count FROM ai_bank_candidates"
       ).one().count).toBe(0);
     });
+  });
+
+  it("binds environment, schema, snapshot identity, format version, and canonicalization into the signature", async () => {
+    await store.upsertCandidates([candidate()]);
+    const baseSnapshot = await runInDurableObject(store, async (_instance, state) =>
+      captureTestSnapshot(state, 1)
+    );
+    const snapshot = {
+      ...baseSnapshot,
+      context: {
+        dataset_id: "ai-bank-review-evidence",
+        environment_id: "emulator-isolated-test",
+        snapshot_id: "snapshot-20261119-0001",
+        schema_fingerprint: "sha256:emulator-schema-v1",
+        created_at: "2026-11-19T09:00:00.000Z"
+      }
+    };
+    const keyPair = await crypto.subtle.generateKey(
+      { name: "Ed25519" }, true, ["sign", "verify"]
+    );
+    const keys = new Map([["context-binding-key-v1", keyPair.publicKey]]);
+    const envelope = await signTestSnapshot(snapshot, "context-binding-key-v1", keyPair.privateKey);
+    expect(await verifyTestSnapshotSignature(snapshot, envelope, keys)).toBe(true);
+
+    for (const field of ["environment_id", "schema_fingerprint", "snapshot_id", "dataset_id", "created_at"]) {
+      const tampered = structuredClone(snapshot);
+      tampered.context[field] = "tampered-" + field;
+      expect(await verifyTestSnapshotSignature(tampered, envelope, keys)).toBe(false);
+    }
+
+    const unsupportedFormat = structuredClone(snapshot);
+    unsupportedFormat.format_version = 2;
+    const unsupportedFormatEnvelope = await signTestSnapshot(
+      unsupportedFormat, "context-binding-key-v1", keyPair.privateKey
+    );
+    expect(await verifyTestSnapshotSignature(
+      unsupportedFormat, unsupportedFormatEnvelope, keys
+    )).toBe(false);
+
+    const unsupportedFormatId = structuredClone(snapshot);
+    unsupportedFormatId.format_id = "unknown-snapshot-format";
+    const unsupportedFormatIdEnvelope = await signTestSnapshot(
+      unsupportedFormatId, "context-binding-key-v1", keyPair.privateKey
+    );
+    expect(await verifyTestSnapshotSignature(
+      unsupportedFormatId, unsupportedFormatIdEnvelope, keys
+    )).toBe(false);
+
+    const unsupportedCanonicalization = {
+      ...envelope,
+      canonicalization: "unknown-canonicalization-v9"
+    };
+    expect(await verifyTestSnapshotSignature(snapshot, unsupportedCanonicalization, keys)).toBe(false);
+
+    const wrongDataset = structuredClone(snapshot);
+    wrongDataset.context.dataset_id = "another-dataset";
+    expect(await verifyTestSnapshotSignature(wrongDataset, envelope, keys)).toBe(false);
   });
 
   it("verifies raw imported public keys and enforces active, verify-only, and revoked key states", async () => {
