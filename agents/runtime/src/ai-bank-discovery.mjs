@@ -153,10 +153,16 @@ function buildCatalogCandidates(signals, discoveredAt) {
 export async function discoverAiBankReleaseSignals({
   fetchImpl = fetch,
   now = Date.now(),
-  lookbackDays = 30
+  lookbackDays = 30,
+  startAt = null
 } = {}) {
   const boundedDays = Math.min(90, Math.max(1, Number(lookbackDays) || 30));
-  const cutoff = now - boundedDays * 86_400_000;
+  const lookbackCutoff = now - boundedDays * 86_400_000;
+  const startAtMs = startAt === null ? null : Date.parse(startAt);
+  if (startAt !== null && (typeof startAt !== "string" || !Number.isFinite(startAtMs))) {
+    throw new TypeError("invalid_start_at");
+  }
+  const cutoff = startAtMs === null ? lookbackCutoff : Math.max(lookbackCutoff, startAtMs);
   const results = await Promise.all(
     AI_BANK_RELEASE_SOURCES.map(source => fetchSource(source, fetchImpl, cutoff))
   );
@@ -173,6 +179,8 @@ export async function discoverAiBankReleaseSignals({
     ok: succeeded > 0,
     status: succeeded === 0 ? "all_sources_failed" : "read_only_discovery_complete",
     generated_at: new Date(now).toISOString(),
+    start_at: startAtMs === null ? null : new Date(startAtMs).toISOString(),
+    effective_cutoff: new Date(cutoff).toISOString(),
     lookback_days: boundedDays,
     sources_checked: results.length,
     sources_succeeded: succeeded,

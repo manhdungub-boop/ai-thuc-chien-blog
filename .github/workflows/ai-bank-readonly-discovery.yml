@@ -1,15 +1,13 @@
 name: AI Bank read-only discovery
 
 on:
-  schedule:
-    # 09:30 Asia/Ho_Chi_Minh every Wednesday
-    - cron: "30 2 * * 3"
+  # Manual-only until durable cross-run cursor persistence, deduplication and quality gates are verified.
   workflow_dispatch:
     inputs:
       lookback_days:
-        description: "Discovery window (1-90 days)"
+        description: "Discovery window (1-90 days, bounded by the saved From now on cursor)"
         required: false
-        default: "30"
+        default: "90"
 
 permissions:
   contents: read
@@ -21,6 +19,9 @@ concurrency:
 jobs:
   discover:
     runs-on: ubuntu-latest
+    env:
+      # User-selected RSS boundary: From now on (2026-11-22 03:04:52 UTC).
+      AI_BANK_DISCOVERY_START_AT: "2026-11-22T03:04:52Z"
     timeout-minutes: 10
     steps:
       - name: Check out exact revision without persisted credentials
@@ -36,7 +37,7 @@ jobs:
 
       - name: Collect official release discovery signals
         env:
-          AI_BANK_DISCOVERY_DAYS: ${{ inputs.lookback_days || '30' }}
+          AI_BANK_DISCOVERY_DAYS: ${{ inputs.lookback_days || '90' }}
         run: node scripts/run-ai-bank-readonly-discovery.mjs
 
       - name: Add safe interpretation to workflow summary
@@ -45,7 +46,9 @@ jobs:
           {
             echo "## AI Bank discovery — read only"
             echo
-            echo "- Revision: `$GITHUB_SHA`"
+            echo "- Revision: $GITHUB_SHA"
+            echo "- Start cursor: $AI_BANK_DISCOVERY_START_AT (From now on; earlier releases are excluded)."
+            echo "- Trigger: manual only; scheduled collection remains disabled until cross-run deduplication and quality gates are verified."
             echo "- Collector: shared Agent Runtime allowlist and bounded Atom parser."
             echo "- Signals are candidates for editorial investigation, not verified tools."
             echo "- No catalog, article, Worker, DNS, D1, secrets, or Production setting is modified."

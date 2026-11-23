@@ -51,6 +51,53 @@ describe("read-only AI Bank release discovery", () => {
     expect(result.latest_signals).toEqual([]);
   });
 
+  it("enforces the saved From now on cursor and excludes earlier releases", async () => {
+    const now = Date.parse("2026-11-24T12:00:00.000Z");
+    const startAt = "2026-11-22T03:04:52.000Z";
+    const requested = [];
+    const result = await discoverAiBankReleaseSignals({
+      now,
+      startAt,
+      lookbackDays: 90,
+      fetchImpl: async url => {
+        requested.push(url);
+        const source = AI_BANK_RELEASE_SOURCES.find(item => item.feed === url);
+        const before = feedFor(source, "2026-11-22T03:04:51.000Z")
+          .replace("<feed>", "").replace("</feed>", "");
+        const after = feedFor(source, "2026-11-22T03:04:53.000Z")
+          .replace("<feed>", "").replace("</feed>", "");
+        return new Response("<feed>" + before + after + "</feed>", { status: 200 });
+      }
+    });
+
+    expect(requested).toHaveLength(10);
+    expect(result.start_at).toBe(new Date(startAt).toISOString());
+    expect(result.effective_cutoff).toBe(new Date(startAt).toISOString());
+    expect(result.signal_count).toBe(10);
+    expect(result.latest_signals.every(item => item.published_at === "2026-11-22T03:04:53.000Z")).toBe(true);
+    expect(result.catalog_candidates.every(item => item.latest_release.published_at >= startAt)).toBe(true);
+  });
+
+  it("fails closed for an invalid persisted start cursor before requesting feeds", async () => {
+    let requests = 0;
+    let failure;
+    try {
+      await discoverAiBankReleaseSignals({
+        now: NOW,
+        startAt: "not-a-date",
+        fetchImpl: async () => {
+          requests += 1;
+          return new Response("<feed />", { status: 200 });
+        }
+      });
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(failure?.message).toBe("invalid_start_at");
+    expect(requests).toBe(0);
+  });
+
   it("reports all-source failure without fabricating discovery results", async () => {
     const result = await discoverAiBankReleaseSignals({
       now: NOW,
