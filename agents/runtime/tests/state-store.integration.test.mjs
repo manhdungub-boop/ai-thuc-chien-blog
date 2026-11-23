@@ -1102,6 +1102,27 @@ test("five terminal failures open the circuit breaker and fence every in-flight 
     });
     assert.equal(lateCompletion.status, 409);
     assert.equal((await call(stub, "/usage")).body.inFlight, 0);
+
+    const resumed = await call(stub, "/control/resume", {
+      actor: "integration-test-resume",
+      requestId: crypto.randomUUID(),
+      reason: "verify cancelled work is never replayed automatically",
+    });
+    assert.equal(resumed.status, 200);
+    assert.equal(resumed.body.control.paused, false);
+
+    const afterResume = await call(stub, "/task?id=" + encodeURIComponent(inFlightTaskId));
+    assert.equal(afterResume.status, 200);
+    assert.equal(afterResume.body.task.state, "cancelled");
+    assert.equal(afterResume.body.task.errorCode, "circuit_breaker_paused");
+
+    const sameIdempotencyKey = await call(stub, "/reserve", task("circuit-breaker-in-flight"));
+    assert.equal(sameIdempotencyKey.status, 200);
+    assert.equal(sameIdempotencyKey.body.duplicate, true);
+    assert.equal(sameIdempotencyKey.body.task.state, "cancelled");
+
+    const noAutomaticReclaim = await call(stub, "/claim", { taskId: inFlightTaskId });
+    assert.equal(noAutomaticReclaim.status, 409);
   });
 });
 
