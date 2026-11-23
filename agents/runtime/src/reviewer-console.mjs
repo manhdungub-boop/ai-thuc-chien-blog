@@ -12,7 +12,7 @@ export const REVIEWER_CONSOLE_HTML = `<!doctype html>
     <p>Preview riêng biệt · Biên tập và duyệt bằng chứng có xác thực · Không có quyền xuất bản</p>
     <p id="session-status" role="status">Đang kiểm tra phiên đăng nhập…</p>
     <p>
-      <a id="login-link" href="/auth/google/start">Đăng nhập Google</a>
+      <a id="login-link" href="/auth/google/start?return_to=%2Freviewer-console">Đăng nhập Google</a>
       <button id="logout-button" type="button" hidden>Đăng xuất</button>
       <button id="refresh-button" type="button">Làm mới hàng chờ</button>
     </p>
