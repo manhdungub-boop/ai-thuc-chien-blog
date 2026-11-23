@@ -50,10 +50,127 @@ function parseItems(xml, source, cutoff, now) {
 }
 
 function isFeedDocument(xml) {
-  const document = xml.replace(/^\uFEFF/, "").trimStart()
-    .replace(/^(?:<\?xml\b[^>]*>\s*)?(?:<!--[\s\S]*?-->\s*)*/i, "");
-  const root = document.match(/^<(rss|feed|rdf:RDF)\b/i);
-  return Boolean(root && new RegExp("</" + root[1] + "\\s*>\\s*$", "i").test(document));
+  const document = xml.replace(/^\uFEFF/, "");
+  let index = 0;
+  let rootName = null;
+  const stack = [];
+  let doctypeSeen = false;
+
+  const scanTagEnd = start => {
+    let quote = null;
+    for (let cursor = start; cursor < document.length; cursor++) {
+      const character = document[cursor];
+      if (quote) {
+        if (character === quote) quote = null;
+      } else if (character === '"' || character === "'") {
+        quote = character;
+      } else if (character === ">") {
+        return cursor;
+      }
+    }
+    return -1;
+  };
+
+  while (index < document.length) {
+    if (document[index] !== "<") {
+      const next = document.indexOf("<", index);
+      const end = next === -1 ? document.length : next;
+      const text = document.slice(index, end);
+      if (!stack.length && text.trim()) return false;
+      if (text.includes("]]>")) return false;
+      index = end;
+      continue;
+    }
+
+    if (document.startsWith("<!--", index)) {
+      const end = document.indexOf("-->", index + 4);
+      if (end === -1 || document.slice(index + 4, end).includes("--")) return false;
+      index = end + 3;
+      continue;
+    }
+
+    if (document.startsWith("<?", index)) {
+      const end = document.indexOf("?>", index + 2);
+      if (end === -1 || !/^[A-Za-z_][A-Za-z0-9_.:-]*(?:\s|$)/.test(document.slice(index + 2, end) + " ")) return false;
+      index = end + 2;
+      continue;
+    }
+
+    if (document.startsWith("<![CDATA[", index)) {
+      if (!stack.length) return false;
+      const end = document.indexOf("]]>", index + 9);
+      if (end === -1) return false;
+      index = end + 3;
+      continue;
+    }
+
+    if (/^<!DOCTYPE\b/i.test(document.slice(index))) {
+      if (rootName !== null || stack.length || doctypeSeen) return false;
+      let quote = null;
+      let subsetDepth = 0;
+      let end = -1;
+      for (let cursor = index + 9; cursor < document.length; cursor++) {
+        const character = document[cursor];
+        if (quote) {
+          if (character === quote) quote = null;
+        } else if (character === '"' || character === "'") {
+          quote = character;
+        } else if (character === "[") {
+          subsetDepth++;
+        } else if (character === "]" && subsetDepth) {
+          subsetDepth--;
+        } else if (character === ">" && subsetDepth === 0) {
+          end = cursor;
+          break;
+        }
+      }
+      if (end === -1) return false;
+      doctypeSeen = true;
+      index = end + 1;
+      continue;
+    }
+
+    if (document.startsWith("<!", index)) return false;
+
+    if (document.startsWith("</", index)) {
+      const end = document.indexOf(">", index + 2);
+      if (end === -1) return false;
+      const closing = document.slice(index + 2, end).trim();
+      if (!/^[A-Za-z_:][A-Za-z0-9_.:-]*$/.test(closing) || stack.pop() !== closing) return false;
+      index = end + 1;
+      continue;
+    }
+
+    const end = scanTagEnd(index + 1);
+    if (end === -1) return false;
+    let body = document.slice(index + 1, end);
+    const selfClosing = /\/\s*$/.test(body);
+    if (selfClosing) body = body.replace(/\/\s*$/, "");
+    const nameMatch = body.match(/^([A-Za-z_:][A-Za-z0-9_.:-]*)([\s\S]*)$/);
+    if (!nameMatch) return false;
+    const name = nameMatch[1];
+    let attributes = nameMatch[2];
+    const seenAttributes = new Set();
+    while (attributes.length) {
+      if (!/^\s/.test(attributes)) return false;
+      const match = attributes.match(/^\s+([A-Za-z_:][A-Za-z0-9_.:-]*)\s*=\s*("[^"]*"|'[^']*')/);
+      if (!match || seenAttributes.has(match[1])) return false;
+      if (match[2].slice(1, -1).includes("<")) return false;
+      seenAttributes.add(match[1]);
+      attributes = attributes.slice(match[0].length);
+    }
+
+    if (!stack.length) {
+      if (rootName !== null) return false;
+      rootName = name;
+    }
+    if (!selfClosing) stack.push(name);
+    index = end + 1;
+  }
+
+  return rootName !== null &&
+    ["rss", "feed", "rdf:rdf"].includes(rootName.toLowerCase()) &&
+    stack.length === 0;
 }
 
 async function fetchFeed(source, fetchImpl, cutoff, now) {
