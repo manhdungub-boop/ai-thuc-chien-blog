@@ -1,9 +1,12 @@
 import { AI_BANK_RELEASE_SOURCES } from "./ai-bank-discovery.mjs";
+import { authorizeAIBankEvidenceWriter } from "./ai-bank-evidence-authorization.mjs";
 
 const ALLOWED_REPOSITORIES = new Set(AI_BANK_RELEASE_SOURCES.map(source => source.repo));
 const MAX_CANDIDATES_PER_BATCH = 10;
 const MAX_CANDIDATE_BYTES = 8192;
 const MAX_EVIDENCE_PER_CHECK = 5;
+const MAX_AUDIT_EVENTS_PER_UTC_DAY = 100;
+const MAX_AUDIT_EVENTS_TOTAL = 10000;
 const MAX_EVIDENCE_TITLE_CHARS = 180;
 const MAX_EVIDENCE_EXCERPT_CHARS = 1000;
 const REQUIRED_CHECKS = [
@@ -125,6 +128,14 @@ export class AgentAIBankCandidateStore {
       "INSERT OR IGNORE INTO ai_bank_review_evidence_releases (evidence_id, candidate_release_url, associated_at) " +
       "SELECT evidence_id, candidate_release_url, submitted_at FROM ai_bank_review_evidence WHERE candidate_release_url <> ''"
     );
+    this.ctx.storage.sql.exec(
+      "CREATE TABLE IF NOT EXISTS ai_bank_evidence_audit_events (" +
+      "event_id TEXT PRIMARY KEY, actor_subject TEXT NOT NULL, actor_email TEXT NOT NULL, " +
+      "request_sha256 TEXT NOT NULL, evidence_id TEXT NOT NULL, recorded_at TEXT NOT NULL)"
+    );
+    this.ctx.storage.sql.exec(
+      "CREATE INDEX IF NOT EXISTS ai_bank_evidence_audit_recorded_at ON ai_bank_evidence_audit_events(recorded_at)"
+    );
   }
 
   async fetch(request) {
@@ -230,8 +241,71 @@ export class AgentAIBankCandidateStore {
     return row ? safeCandidate(row) : null;
   }
 
-  async submitReviewEvidence(candidateId, evidence, now = Date.now()) {
-    const candidate = await this.getCandidate(candidateId);
+  async submitAuthorizedReviewEvidence(candidateId, evidence, sessionToken, eventId, authConfig, now = Date.now()) {
+    const authorization = await authorizeAIBankEvidenceWriter(sessionToken, authConfig, eventId, now);
+    if (!authorization.authorized) {
+      return { accepted: false, reason: authorization.reason || "evidence_writer_not_authorized" };
+    }
+    if (!evidence || typeof evidence !== "object" || Array.isArray(evidence) ||
+        Object.keys(evidence).some(key => !["check_type", "source_title", "source_url", "excerpt"].includes(key)) ||
+        Object.keys(evidence).length !== 4) {
+      return { accepted: false, reason: "invalid_evidence" };
+    }
+    const fingerprintPayload = JSON.stringify({
+      candidate_id: candidateId,
+      check_type: evidence.check_type,
+      source_title: typeof evidence.source_title === "string" ? evidence.source_title.trim() : null,
+      source_url: evidence.source_url,
+      excerpt: typeof evidence.excerpt === "string" ? evidence.excerpt.trim() : null
+    });
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(fingerprintPayload));
+    const requestSha256 = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+    return this.ctx.storage.transactionSync(() => {
+      const prior = this.ctx.storage.sql.exec(
+        "SELECT actor_subject, request_sha256 FROM ai_bank_evidence_audit_events WHERE event_id = ?",
+        eventId
+      ).toArray()[0];
+      if (prior) {
+        const sameRequest = prior.actor_subject === authorization.actor.subject &&
+          prior.request_sha256 === requestSha256;
+        return { accepted: false, reason: sameRequest ? "duplicate_audit_event" : "audit_event_id_reused" };
+      }
+      const totalAuditCount = this.ctx.storage.sql.exec(
+        "SELECT COUNT(*) AS count FROM ai_bank_evidence_audit_events"
+      ).one().count;
+      if (totalAuditCount >= MAX_AUDIT_EVENTS_TOTAL) {
+        return { accepted: false, reason: "evidence_audit_capacity_reached" };
+      }
+      const utcDay = authorization.authorized_at.slice(0, 10);
+      const dailyAuditCount = this.ctx.storage.sql.exec(
+        "SELECT COUNT(*) AS count FROM ai_bank_evidence_audit_events WHERE recorded_at >= ? AND recorded_at < ?",
+        utcDay + "T00:00:00.000Z",
+        new Date(Date.parse(utcDay + "T00:00:00.000Z") + 24 * 60 * 60 * 1000).toISOString()
+      ).one().count;
+      if (dailyAuditCount >= MAX_AUDIT_EVENTS_PER_UTC_DAY) {
+        return { accepted: false, reason: "evidence_audit_daily_limit_reached" };
+      }
+      const result = this.#submitReviewEvidence(candidateId, evidence, now);
+      if (!result.accepted) return result;
+      this.ctx.storage.sql.exec(
+        "INSERT INTO ai_bank_evidence_audit_events (event_id, actor_subject, actor_email, request_sha256, evidence_id, recorded_at) VALUES (?, ?, ?, ?, ?, ?)",
+        eventId, authorization.actor.subject, authorization.actor.email,
+        requestSha256, result.evidence_id, authorization.authorized_at
+      );
+      return {
+        ...result,
+        audit_event_id: eventId,
+        actor_ref: authorization.actor.reviewer_ref,
+        replay_protected: true
+      };
+    });
+  }
+
+  #submitReviewEvidence(candidateId, evidence, now = Date.now()) {
+    const candidateRow = this.ctx.storage.sql.exec(
+      "SELECT * FROM ai_bank_candidates WHERE candidate_id = ?", candidateId
+    ).toArray()[0];
+    const candidate = candidateRow ? safeCandidate(candidateRow) : null;
     if (!candidate) return { accepted: false, reason: "candidate_not_found" };
     if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) {
       return { accepted: false, reason: "invalid_evidence" };
