@@ -47,6 +47,10 @@ const SAFE_OIDC_DIAGNOSTIC_CODES = new Set([
   "candidate_source_unavailable",
   "seo_source_unavailable",
 ]);
+function isSafeOidcDiagnosticCode(value) {
+  return SAFE_OIDC_DIAGNOSTIC_CODES.has(value) ||
+    (typeof value === "string" && /^preview_source_(?:http_error|redirect_rejected)_(?:contents|raw|body)_\\d{3}$/.test(value));
+}
 export function safeReviewResult(item) {
   if (!item || item.ok !== true || !SAFE_TASK_TYPES.has(item.taskType) ||
       !["pass", "attention", "review_required"].includes(item.status) ||
@@ -554,7 +558,7 @@ const worker = {
             if (runResult?.ok !== true || runResult?.summary?.total !== 1 ||
                 runResult?.summary?.succeeded !== 1 || item?.state !== "succeeded" ||
                 typeof item.taskId !== "string" || item.result?.taskType !== "content.review") {
-              const diagnosticCode = SAFE_OIDC_DIAGNOSTIC_CODES.has(item?.diagnosticCode)
+              const diagnosticCode = isSafeOidcDiagnosticCode(item?.diagnosticCode)
                 ? item.diagnosticCode : undefined;
               response = json({ ok: false, error: "oidc_run_not_succeeded",
                 ...(diagnosticCode ? { diagnosticCode } : {}) }, 503);
@@ -912,7 +916,7 @@ const worker = {
             state: completion.task?.state || (reviewSucceeded ? "succeeded" : "failed"),
             result,
             ...(context === INTERNAL_OIDC_RUN && !reviewSucceeded &&
-                SAFE_OIDC_DIAGNOSTIC_CODES.has(item?.error)
+                isSafeOidcDiagnosticCode(item?.error)
               ? { diagnosticCode: item.error } : {}),
           });
         }
