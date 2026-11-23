@@ -192,6 +192,54 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     expect(await store.listCandidates()).toHaveLength(2);
   });
 
+  it("commits candidates and the discovery cursor atomically, with replay and monotonicity protection", async () => {
+    const firstCursor = "2026-11-19T08:06:00.000Z";
+    expect(await store.getDiscoveryCursor()).toBeNull();
+
+    const committed = await store.upsertCandidatesAndAdvanceCursor(
+      [candidate()], firstCursor, "run-100-attempt-1", Date.parse("2026-11-19T08:07:00.000Z")
+    );
+    expect(committed).toMatchObject({ accepted: true, inserted: 1, total: 1,
+      cursor: firstCursor, scan_id: "run-100-attempt-1", cursor_advanced: true,
+      catalog_write_authorized: false });
+    expect(await store.getDiscoveryCursor()).toMatchObject({ cursor: firstCursor, scan_id: "run-100-attempt-1" });
+
+    const replay = await store.upsertCandidatesAndAdvanceCursor(
+      [candidate()], firstCursor, "run-100-attempt-1", Date.parse("2026-11-19T08:08:00.000Z")
+    );
+    expect(replay).toMatchObject({ accepted: true, duplicate: true, inserted: 0,
+      cursor: firstCursor, cursor_advanced: false, total: 1 });
+
+    expect(await store.upsertCandidatesAndAdvanceCursor(
+      [], "2026-11-19T08:05:00.000Z", "run-101-attempt-1", Date.parse("2026-11-19T08:09:00.000Z")
+    )).toMatchObject({ accepted: false, reason: "discovery_cursor_not_monotonic", cursor_advanced: false });
+    expect(await store.upsertCandidatesAndAdvanceCursor(
+      [], "2026-11-19T08:07:00.000Z", "run-100-attempt-1", Date.parse("2026-11-19T08:09:00.000Z")
+    )).toMatchObject({ accepted: false, reason: "discovery_scan_id_reused", cursor_advanced: false });
+    expect(await store.getDiscoveryCursor()).toMatchObject({ cursor: firstCursor, scan_id: "run-100-attempt-1" });
+  });
+
+  it("does not advance the discovery cursor when any candidate write fails", async () => {
+    await store.testInstallCandidateInsertFailureTrigger();
+    await expect(Promise.resolve().then(() => store.upsertCandidatesAndAdvanceCursor(
+      [candidate(), candidate(sources[1])], "2026-11-19T08:07:00.000Z", "run-102-attempt-1",
+      Date.parse("2026-11-19T08:08:00.000Z")
+    ))).rejects.toThrow("injected_candidate_insert_failure");
+
+    expect(await store.stats()).toMatchObject({ total: 0 });
+    expect(await store.getDiscoveryCursor()).toBeNull();
+
+    await store.testDropCandidateInsertFailureTrigger();
+    const retry = await store.upsertCandidatesAndAdvanceCursor(
+      [candidate(), candidate(sources[1])], "2026-11-19T08:07:00.000Z", "run-102-attempt-1",
+      Date.parse("2026-11-19T08:08:00.000Z")
+    );
+    expect(retry).toMatchObject({ accepted: true, inserted: 2, total: 2, cursor_advanced: true });
+    expect(await store.getDiscoveryCursor()).toMatchObject({
+      cursor: "2026-11-19T08:07:00.000Z", scan_id: "run-102-attempt-1"
+    });
+  });
+
   it("rejects duplicate IDs within a batch and oversized batches", async () => {
     expect(await store.upsertCandidates([candidate(), candidate()])).toEqual({
       accepted: false, reason: "duplicate_candidate_in_batch"

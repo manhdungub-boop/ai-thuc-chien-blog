@@ -88,6 +88,55 @@ function safeCandidate(row) {
   };
 }
 
+function validateCandidateBatch(candidates, now) {
+  if (!Array.isArray(candidates) || candidates.length > MAX_CANDIDATES_PER_BATCH ||
+      !Number.isSafeInteger(now) || now < 0 || !Number.isFinite(new Date(now).getTime())) {
+    return { ok: false, reason: "invalid_candidate_batch" };
+  }
+  const validated = [];
+  const seen = new Set();
+  for (const candidate of candidates) {
+    const result = validateCandidate(candidate);
+    if (!result.ok) return { ok: false, reason: result.reason };
+    if (seen.has(candidate.candidate_id)) return { ok: false, reason: "duplicate_candidate_in_batch" };
+    seen.add(candidate.candidate_id);
+    validated.push({ candidate, ...result });
+  }
+  return { ok: true, validated };
+}
+
+function writeValidatedCandidateBatch(ctx, validated, now) {
+  const timestamp = new Date(now).toISOString();
+  let inserted = 0;
+  let updated = 0;
+  let unchanged = 0;
+  for (const item of validated) {
+    const existing = ctx.storage.sql.exec(
+      "SELECT release_at FROM ai_bank_candidates WHERE candidate_id = ?",
+      item.candidate.candidate_id
+    ).toArray()[0];
+    if (!existing) {
+      ctx.storage.sql.exec(
+        "INSERT INTO ai_bank_candidates (candidate_id, repository, candidate_json, release_at, first_seen_at, last_seen_at) VALUES (?, ?, ?, ?, ?, ?)",
+        item.candidate.candidate_id, item.candidate.repository, item.json,
+        item.releaseAt, timestamp, timestamp
+      );
+      inserted += 1;
+    } else {
+      ctx.storage.sql.exec(
+        "UPDATE ai_bank_candidates SET candidate_json = CASE WHEN release_at < ? THEN ? ELSE candidate_json END, release_at = MAX(release_at, ?), last_seen_at = ? WHERE candidate_id = ?",
+        item.releaseAt, item.json, item.releaseAt, timestamp, item.candidate.candidate_id
+      );
+      if (item.releaseAt > existing.release_at) updated += 1;
+      else unchanged += 1;
+    }
+  }
+  const total = ctx.storage.sql.exec(
+    "SELECT COUNT(*) AS count FROM ai_bank_candidates"
+  ).one().count;
+  return { accepted: true, inserted, updated, unchanged, total, catalog_write_authorized: false };
+}
+
 export class AgentAIBankCandidateStore {
   constructor(ctx, env) {
     this.ctx = ctx;
@@ -100,6 +149,11 @@ export class AgentAIBankCandidateStore {
     );
     this.ctx.storage.sql.exec(
       "CREATE INDEX IF NOT EXISTS ai_bank_candidates_last_seen ON ai_bank_candidates(last_seen_at)"
+    );
+    this.ctx.storage.sql.exec(
+      "CREATE TABLE IF NOT EXISTS ai_bank_discovery_cursor (" +
+      "singleton_id INTEGER PRIMARY KEY CHECK(singleton_id = 1), " +
+      "cursor TEXT NOT NULL, scan_id TEXT NOT NULL, updated_at TEXT NOT NULL)"
     );
     this.ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS ai_bank_review_evidence (" +
@@ -175,50 +229,57 @@ export class AgentAIBankCandidateStore {
   }
 
   upsertCandidates(candidates, now = Date.now()) {
-    if (!Array.isArray(candidates) || candidates.length > MAX_CANDIDATES_PER_BATCH ||
-        !Number.isSafeInteger(now) || now < 0 || !Number.isFinite(new Date(now).getTime())) {
-      return { accepted: false, reason: "invalid_candidate_batch" };
-    }
-    const validated = [];
-    const seen = new Set();
-    for (const candidate of candidates) {
-      const result = validateCandidate(candidate);
-      if (!result.ok) return { accepted: false, reason: result.reason };
-      if (seen.has(candidate.candidate_id)) return { accepted: false, reason: "duplicate_candidate_in_batch" };
-      seen.add(candidate.candidate_id);
-      validated.push({ candidate, ...result });
+    const batch = validateCandidateBatch(candidates, now);
+    if (!batch.ok) return { accepted: false, reason: batch.reason };
+    return this.ctx.storage.transactionSync(() =>
+      writeValidatedCandidateBatch(this.ctx, batch.validated, now)
+    );
+  }
+
+  async getDiscoveryCursor() {
+    const row = this.ctx.storage.sql.exec(
+      "SELECT cursor, scan_id, updated_at FROM ai_bank_discovery_cursor WHERE singleton_id = 1"
+    ).toArray()[0];
+    return row ? { cursor: row.cursor, scan_id: row.scan_id, updated_at: row.updated_at } : null;
+  }
+
+  upsertCandidatesAndAdvanceCursor(candidates, nextCursor, scanId, now = Date.now()) {
+    const batch = validateCandidateBatch(candidates, now);
+    if (!batch.ok) return { accepted: false, reason: batch.reason, cursor_advanced: false };
+    const cursorMs = typeof nextCursor === "string" ? Date.parse(nextCursor) : NaN;
+    if (!Number.isFinite(cursorMs) || new Date(cursorMs).toISOString() !== nextCursor ||
+        cursorMs > now + 60_000 || typeof scanId !== "string" ||
+        !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(scanId)) {
+      return { accepted: false, reason: "invalid_discovery_cursor", cursor_advanced: false };
     }
 
     return this.ctx.storage.transactionSync(() => {
-      const timestamp = new Date(now).toISOString();
-      let inserted = 0;
-      let updated = 0;
-      let unchanged = 0;
-      for (const item of validated) {
-        const existing = this.ctx.storage.sql.exec(
-          "SELECT release_at FROM ai_bank_candidates WHERE candidate_id = ?",
-          item.candidate.candidate_id
-        ).toArray()[0];
-        if (!existing) {
-          this.ctx.storage.sql.exec(
-            "INSERT INTO ai_bank_candidates (candidate_id, repository, candidate_json, release_at, first_seen_at, last_seen_at) VALUES (?, ?, ?, ?, ?, ?)",
-            item.candidate.candidate_id, item.candidate.repository, item.json,
-            item.releaseAt, timestamp, timestamp
-          );
-          inserted += 1;
-        } else {
-          this.ctx.storage.sql.exec(
-            "UPDATE ai_bank_candidates SET candidate_json = CASE WHEN release_at < ? THEN ? ELSE candidate_json END, release_at = MAX(release_at, ?), last_seen_at = ? WHERE candidate_id = ?",
-            item.releaseAt, item.json, item.releaseAt, timestamp, item.candidate.candidate_id
-          );
-          if (item.releaseAt > existing.release_at) updated += 1;
-          else unchanged += 1;
+      const current = this.ctx.storage.sql.exec(
+        "SELECT cursor, scan_id FROM ai_bank_discovery_cursor WHERE singleton_id = 1"
+      ).toArray()[0];
+      if (current?.scan_id === scanId) {
+        if (current.cursor !== nextCursor) {
+          return { accepted: false, reason: "discovery_scan_id_reused", cursor_advanced: false };
         }
+        const total = this.ctx.storage.sql.exec(
+          "SELECT COUNT(*) AS count FROM ai_bank_candidates"
+        ).one().count;
+        return { accepted: true, duplicate: true, inserted: 0, updated: 0, unchanged: 0,
+          total, cursor: current.cursor, scan_id: current.scan_id, cursor_advanced: false,
+          catalog_write_authorized: false };
       }
-      const total = this.ctx.storage.sql.exec(
-        "SELECT COUNT(*) AS count FROM ai_bank_candidates"
-      ).one().count;
-      return { accepted: true, inserted, updated, unchanged, total, catalog_write_authorized: false };
+      if (current && cursorMs <= Date.parse(current.cursor)) {
+        return { accepted: false, reason: "discovery_cursor_not_monotonic", cursor_advanced: false };
+      }
+
+      const result = writeValidatedCandidateBatch(this.ctx, batch.validated, now);
+      const timestamp = new Date(now).toISOString();
+      this.ctx.storage.sql.exec(
+        "INSERT INTO ai_bank_discovery_cursor (singleton_id, cursor, scan_id, updated_at) VALUES (1, ?, ?, ?) " +
+        "ON CONFLICT(singleton_id) DO UPDATE SET cursor = excluded.cursor, scan_id = excluded.scan_id, updated_at = excluded.updated_at",
+        nextCursor, scanId, timestamp
+      );
+      return { ...result, duplicate: false, cursor: nextCursor, scan_id: scanId, cursor_advanced: true };
     });
   }
 
