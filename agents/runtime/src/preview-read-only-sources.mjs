@@ -1,8 +1,8 @@
-const GITHUB_CONTENTS_ORIGIN = "https://api.github.com/repos/manhdungub-boop/ai-thuc-chien-blog/contents/";
+const RAW_CONTENT_ORIGIN = "https://raw.githubusercontent.com/manhdungub-boop/ai-thuc-chien-blog/main/";
 const MAX_SOURCE_BYTES = 512 * 1024;
 
 async function readBoundedResponse(response, limit, signal) {
-  if (!response || !response.ok) throw new Error("preview_source_http_error_body_" + (response?.status || "unknown"));
+  if (!response || !response.ok) throw new Error("preview_source_http_error_raw_" + (response?.status || "unknown"));
   if (!response.body) throw new Error("preview_source_body_unavailable");
   const declared = Number(response.headers.get("content-length") || 0);
   if (Number.isFinite(declared) && declared > limit) throw new Error("preview_source_too_large");
@@ -53,21 +53,17 @@ function isAllowedRawRedirect(location, requestUrl, relativePath) {
 }
 
 async function fetchRepositoryResponse(url, relativePath, signal) {
-  let response;
   try {
-    response = await fetch(url, {
+    let response = await fetch(url, {
       method: "GET",
       redirect: "manual",
-      headers: {
-        Accept: "application/vnd.github.raw+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-      },
+      headers: { Accept: "text/plain" },
       signal,
     });
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get("location");
       if (!location || !isAllowedRawRedirect(location, url, relativePath)) {
-        throw new Error("preview_source_redirect_rejected_contents_" + response.status);
+        throw new Error("preview_source_redirect_rejected_raw_" + response.status);
       }
       const target = new URL(location, url);
       response = await fetch(target.toString(), {
@@ -76,24 +72,20 @@ async function fetchRepositoryResponse(url, relativePath, signal) {
         headers: { Accept: "text/plain" },
         signal,
       });
-      // Never follow a second redirect. The redirect target is pinned to the
-      // exact public repository, branch, and allowlisted file path.
       if (response.status >= 300 && response.status < 400) {
         throw new Error("preview_source_redirect_rejected_raw_" + response.status);
       }
-      if (!response.ok) {
-        throw new Error("preview_source_http_error_raw_" + response.status);
-      }
     }
+    if (!response.ok) throw new Error("preview_source_http_error_raw_" + response.status);
+    if (signal?.aborted) throw new Error("task_execution_aborted");
+    return response;
   } catch (error) {
     if (signal?.aborted || error?.name === "AbortError") {
       throw new Error("task_execution_aborted");
     }
-    if (/^preview_source_(?:http_error|redirect_rejected)_(?:contents|raw|body)_\d{3}$/.test(error?.message || "")) throw error;
+    if (/^preview_source_(?:http_error|redirect_rejected)_raw_\d{3}$/.test(error?.message || "")) throw error;
     throw new Error("preview_source_fetch_failed");
   }
-  if (signal?.aborted) throw new Error("task_execution_aborted");
-  return response;
 }
 
 async function readRepositoryText(relativePath, { signal } = {}) {
@@ -101,7 +93,7 @@ async function readRepositoryText(relativePath, { signal } = {}) {
       !/^(?:articles\/[a-z0-9][a-z0-9-]{0,150}\.html|data\/ai-tools\.json)$/.test(relativePath)) {
     throw new Error("preview_source_path_not_allowlisted");
   }
-  const url = GITHUB_CONTENTS_ORIGIN + relativePath + "?ref=main";
+  const url = RAW_CONTENT_ORIGIN + relativePath;
   if (signal?.aborted) throw new Error("task_execution_aborted");
   const response = await fetchRepositoryResponse(url, relativePath, signal);
   return readBoundedResponse(response, MAX_SOURCE_BYTES, signal);
@@ -111,6 +103,7 @@ async function readRepositoryText(relativePath, { signal } = {}) {
  * Narrow read-only Preview source adapter.
  * All repository URLs are fixed to the public GitHub repository's main branch.
  * No caller-provided host, URL, credential, or write capability is accepted.
+ * Direct raw-content reads avoid the unauthenticated GitHub API rate limit.
  */
 export function createPreviewReadOnlyReaders() {
   return Object.freeze({
@@ -135,7 +128,7 @@ export function createPreviewReadOnlyReaders() {
 }
 
 export const PREVIEW_READ_ONLY_SOURCE_POLICY = Object.freeze({
-  repository: "manhdungub-boop/ai-thuc-chien-blog",
+  repository: "manhdungub/ai-thuc-chien-blog",
   ref: "main",
   maxSourceBytes: MAX_SOURCE_BYTES,
   writable: false,
