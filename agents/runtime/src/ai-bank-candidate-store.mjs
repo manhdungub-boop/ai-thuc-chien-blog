@@ -283,21 +283,11 @@ export class AgentAIBankCandidateStore {
         "SELECT cursor, scan_id, updated_at, batch_sha256 FROM ai_bank_discovery_cursor WHERE singleton_id = 1"
       ).toArray()[0];
       if (current?.scan_id === scanId) {
-        let sameBatch = current.cursor === nextCursor && current.batch_sha256 === batchSha256;
-        if (!sameBatch && current.cursor === nextCursor && current.batch_sha256 === "") {
-          // A legacy cursor has no stored digest. Reconstruct only when the exact
-          // batch snapshot is still recoverable from rows touched at its commit
-          // timestamp; otherwise fail closed rather than accepting an arbitrary batch.
-          const legacyRows = this.ctx.storage.sql.exec(
-            "SELECT candidate_id, candidate_json FROM ai_bank_candidates WHERE last_seen_at = ? ORDER BY candidate_id",
-            current.updated_at
-          ).toArray();
-          sameBatch = legacyRows.length === canonicalBatch.length &&
-            legacyRows.every((row, index) =>
-              row.candidate_id === canonicalBatch[index].candidate_id &&
-              stableJson(JSON.parse(row.candidate_json)) === stableJson(canonicalBatch[index])
-            );
-        }
+        // A legacy cursor has no immutable batch digest. Candidate rows are
+        // mutable (last_seen_at and metadata can change), so they cannot safely
+        // reconstruct the originally committed batch identity. Fail closed.
+        const sameBatch = current.cursor === nextCursor &&
+          current.batch_sha256 !== "" && current.batch_sha256 === batchSha256;
         if (!sameBatch) {
           return { accepted: false, reason: "discovery_scan_id_reused", cursor_advanced: false };
         }
