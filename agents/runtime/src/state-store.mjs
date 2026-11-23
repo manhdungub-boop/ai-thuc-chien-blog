@@ -671,9 +671,11 @@ if (url.pathname === "/task" && request.method === "GET") {
   }
 
   setPaused(paused, body, now) {
-    if (!isObject(body) || Object.keys(body).some((key) => !["reason", "actor", "requestId"].includes(key)) ||
+    if (!isObject(body) || Object.keys(body).some((key) => !["reason", "actor", "requestId", "expectedVersion"].includes(key)) ||
         typeof body.actor !== "string" || !/^[a-zA-Z0-9._:-]{3,64}$/.test(body.actor) ||
         typeof body.requestId !== "string" || !/^[a-zA-Z0-9-]{16,64}$/.test(body.requestId) ||
+        (!paused && (!Number.isSafeInteger(body.expectedVersion) || body.expectedVersion < 0)) ||
+        (paused && body.expectedVersion !== undefined) ||
         (body.reason !== undefined && (typeof body.reason !== "string" || body.reason.length > 160 ||
           [...body.reason].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)))) {
       return { status: 400, body: { ok: false, error: "runtime_control_request_invalid" } };
@@ -688,6 +690,9 @@ if (url.pathname === "/task" && request.method === "GET") {
           body.actor, windowStart, requestCount + 1);
         const current = readRow(this.sql, "SELECT paused, changed_at, version FROM runtime_control WHERE singleton_id = 1");
         if (!current) return { status: 503, body: { ok: false, error: "runtime_control_unavailable" } };
+        if (!paused && current.version !== body.expectedVersion) {
+          return { status: 409, body: { ok: false, error: "runtime_control_version_conflict" } };
+        }
         const cancelRunningTasks = () => {
           const running = this.sql.exec(
             "SELECT task_id, task_type, lease_generation FROM tasks WHERE state='running'",
