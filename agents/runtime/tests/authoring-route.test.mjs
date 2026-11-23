@@ -24,7 +24,7 @@ function makeEnv({ remaining = 8 } = {}) {
         if (body.scope !== "content_research" || used >= 8) return Response.json({ ok: false, error: "external_request_budget_exhausted" }, { status: 400 });
         used += 1;
         const day = new Date().toISOString().slice(0, 10);
-        return Response.json({ ok: true, budget: { ok: true, day: body.day, scope: body.scope, used, limit, remaining: limit - used } });
+        return Response.json({ ok: true, budget: { ok: true, day: body.day, scope: body.scope, used, limit: 8, remaining: 8 - used } });
       }
       throw new Error("unexpected_state_store_route");
     },
