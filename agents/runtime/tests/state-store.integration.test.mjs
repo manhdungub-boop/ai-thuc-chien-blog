@@ -1047,8 +1047,15 @@ test("expired leases are requeued after bounded delay and fail at the attempt ce
   });
 });
 
-test("five terminal failures within ten minutes durably open the circuit breaker", async () => {
+test("five terminal failures open the circuit breaker and fence every in-flight lease", async () => {
   await withRuntime({}, async ({ stub }) => {
+    const inFlight = await call(stub, "/reserve", task("circuit-breaker-in-flight"));
+    assert.equal(inFlight.status, 201);
+    const inFlightTaskId = inFlight.body.task.taskId;
+    const inFlightClaim = await call(stub, "/claim", { taskId: inFlightTaskId });
+    assert.equal(inFlightClaim.status, 200);
+    const inFlightLease = inFlightClaim.body.lease;
+
     for (let index = 1; index <= 5; index++) {
       const created = await call(stub, "/reserve", task("circuit-breaker-" + index));
       assert.equal(created.status, 201);
@@ -1076,6 +1083,26 @@ test("five terminal failures within ten minutes durably open the circuit breaker
     assert.equal(control.body.control.paused, true);
     assert.equal(control.body.control.circuitBreakerThreshold, 5);
     assert.equal(control.body.control.circuitBreakerWindowMs, 10 * 60 * 1000);
+
+    const fenced = await call(stub, "/task?id=" + encodeURIComponent(inFlightTaskId));
+    assert.equal(fenced.status, 200);
+    assert.equal(fenced.body.task.state, "cancelled");
+    assert.equal(fenced.body.task.errorCode, "circuit_breaker_paused");
+    const lateHeartbeat = await call(stub, "/heartbeat", {
+      taskId: inFlightTaskId,
+      leaseOwner: inFlightLease.owner,
+      leaseGeneration: inFlightLease.generation,
+    });
+    assert.equal(lateHeartbeat.status, 409);
+    const lateCompletion = await call(stub, "/complete", {
+      taskId: inFlightTaskId,
+      leaseOwner: inFlightLease.owner,
+      leaseGeneration: inFlightLease.generation,
+      status: "succeeded",
+      result: { ok: true },
+    });
+    assert.equal(lateCompletion.status, 409);
+    assert.equal((await call(stub, "/usage")).body.inFlight, 0);
   });
 });
 
