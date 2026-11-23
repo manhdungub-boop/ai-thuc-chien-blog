@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createReadOnlyTaskSnapshotAdapter, TASK_SNAPSHOT_ADAPTER_LIMITS } from "../src/task-snapshot-adapters.mjs";
 import { handleReadOnlyTask } from "../src/task-handlers.mjs";
+import { createPreviewReadOnlyReaders } from "../src/preview-read-only-sources.mjs";
 
 const key = "task-2026-11-20-000001";
 const contentTask = { type: "content.review", idempotencyKey: key, payload: { articlePath: "articles/example.html" } };
@@ -140,4 +141,32 @@ test("reader interface is mandatory and source bounds are explicit", () => {
   assert.throws(() => createReadOnlyTaskSnapshotAdapter({}), /read_only_readers_required/);
   assert.equal(TASK_SNAPSHOT_ADAPTER_LIMITS.maxSourceBytes, 512 * 1024);
   assert.equal(TASK_SNAPSHOT_ADAPTER_LIMITS.maxCatalogItems, 1000);
+});
+
+
+test("Preview repository reader uses the fixed GitHub Contents raw endpoint without redirects", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestedUrl;
+  let requestedOptions;
+  globalThis.fetch = async (url, options) => {
+    requestedUrl = String(url);
+    requestedOptions = options;
+    return new Response("<html><title>Preview source</title></html>", {
+      status: 200,
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+    });
+  };
+  try {
+    const readers = createPreviewReadOnlyReaders();
+    const result = await readers.readArticleHtml("articles/example.html");
+    assert.equal(result, "<html><title>Preview source</title></html>");
+    assert.equal(requestedUrl,
+      "https://api.github.com/repos/manhdungub-boop/ai-thuc-chien-blog/contents/articles/example.html?ref=main");
+    assert.equal(requestedOptions.method, "GET");
+    assert.equal(requestedOptions.redirect, "error");
+    assert.equal(requestedOptions.headers.Accept, "application/vnd.github.raw+json");
+    assert.equal(requestedOptions.headers["X-GitHub-Api-Version"], "2022-11-28");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
