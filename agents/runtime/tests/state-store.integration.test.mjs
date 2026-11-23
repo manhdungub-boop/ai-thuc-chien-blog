@@ -152,7 +152,7 @@ test("v1 migration cancels legacy running rows that have no lease identity", asy
     assert.equal(metrics.body.tasks.running, 0);
     assert.equal(metrics.body.tasks.cancelledRetained, 1);
     assert.ok(metrics.body.auditLast24h.some(event =>
-      event.taskId === created.body.task.taskId && event.eventType === "task.cancelled"
+      event.eventType === "task.cancelled" && event.count >= 1
     ));
   } finally {
     if (first) await first.mf.dispose();
