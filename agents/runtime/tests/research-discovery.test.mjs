@@ -79,8 +79,8 @@ describe("read-only AI research discovery", () => {
         const real = entryFor(source, "real");
         const nested = entryFor(source, "nested-fake");
         const wrapped = source.name === "Google DeepMind" || source.name === "Hugging Face"
-          ? real.replace("</entry>", "<content type=\"xhtml\"><div xmlns=\"http://www.w3.org/1999/xhtml\">" + nested + "</div></content></entry>")
-          : real.replace("</item>", "<description><div>" + nested + "</div></description></item>");
+          ? real.replace("</entry>", "<content type=\"xhtml\"><div xmlns=\"http://www.w3.org/1999/xhtml\"><feed>" + nested + "</feed></div></content></entry>")
+          : real.replace("</item>", "<description><channel>" + nested + "</channel></description></item>");
         return new Response(feedDocumentFor(source, wrapped));
       }
     });
@@ -88,6 +88,30 @@ describe("read-only AI research discovery", () => {
     expect(result.sources_succeeded).toBe(4);
     expect(result.signal_count).toBe(4);
     expect(result.latest_signals.every(item => item.url.endsWith("/research-update-real"))).toBe(true);
+  });
+
+  it("restores CDATA payloads before cleaning title and summary markup", async () => {
+    const result = await discoverResearchSignals({
+      now: NOW,
+      fetchImpl: async url => {
+        const source = RESEARCH_FEED_SOURCES.find(item => item.feed === url);
+        const atom = source.name === "Google DeepMind" || source.name === "Hugging Face";
+        const entryName = atom ? "entry" : "item";
+        const link = atom
+          ? '<link href="https://' + source.host + source.pathPrefix + 'cdata-cleanup"/>'
+          : '<link><![CDATA[https://' + source.host + source.pathPrefix + 'cdata-cleanup]]></link>';
+        const date = atom ? "updated" : "pubDate";
+        const summary = atom ? "summary" : "description";
+        const entry = '<' + entryName + '><title><![CDATA[<em>Research Update</em>]]></title>' +
+          link + '<' + date + '><![CDATA[2026-11-18T10:00:00.000Z]]></' + date + '>' +
+          '<' + summary + '><![CDATA[<p>Useful <strong>AI agent</strong> summary.</p>]]></' + summary + '></' + entryName + '>';
+        return new Response(feedDocumentFor(source, entry), { status: 200 });
+      }
+    });
+    expect(result.sources_succeeded).toBe(4);
+    expect(result.latest_signals).toHaveLength(4);
+    expect(result.latest_signals.every(item => item.title === "Research Update")).toBe(true);
+    expect(result.latest_signals.every(item => item.summary === "Useful AI agent summary.")).toBe(true);
   });
 
   it("does not count HTTP 200 HTML error pages as successful feed scans", async () => {
