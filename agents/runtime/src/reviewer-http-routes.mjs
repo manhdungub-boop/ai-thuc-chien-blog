@@ -146,7 +146,10 @@ async function handleOperatorControl(request, env, url) {
       stateStoreRequest(env, "/usage")
     ]);
     if (!controlResult.ok) return json(controlResult.body, controlResult.status);
-    const usage = usageResult.ok ? usageResult.body : {};
+    const usage = usageResult.ok ? usageResult.body : null;
+    const usageAvailable = Boolean(usage &&
+      Number.isSafeInteger(usage.acceptedToday) && usage.acceptedToday >= 0 &&
+      Number.isSafeInteger(usage.inFlight) && usage.inFlight >= 0);
     return json({
       ok: true,
       control: controlView(controlResult.body.control),
@@ -158,8 +161,9 @@ async function handleOperatorControl(request, env, url) {
         quality_review_executor_registered: false,
         quality_review_executor_enabled: false,
         task_admission: {
-          accepted_today: usage.acceptedToday ?? 0,
-          in_flight: usage.inFlight ?? 0,
+          available: usageAvailable,
+          accepted_today: usageAvailable ? usage.acceptedToday : null,
+          in_flight: usageAvailable ? usage.inFlight : null,
           daily_limit: 100,
           concurrency_limit: 5
         }
