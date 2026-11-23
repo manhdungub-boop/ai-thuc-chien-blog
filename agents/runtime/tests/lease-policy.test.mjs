@@ -84,6 +84,15 @@ test("heartbeat accepts only the current owner and unexpired generation", () => 
   }).error, "lease_expired");
 });
 
+test("heartbeat never shortens an already longer valid lease", () => {
+  const row = running({ lease_expires_at: 5000, lease_max_expires_at: 20000 });
+  const result = heartbeatLease(row, {
+    now: 2000, leaseOwner: OWNER_A, leaseGeneration: 1, leaseDurationMs: 1000,
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.fields.lease_expires_at, 5000);
+});
+
 test("heartbeat cannot extend a lease beyond its absolute maximum lifetime", () => {
   const row = running({ lease_expires_at: 29 * 60 * 1000 + 1, lease_max_expires_at: 30 * 60 * 1000 });
   const capped = heartbeatLease(row, {
