@@ -197,6 +197,20 @@ export class AgentStateStore {
           for (const statement of columns) this.sql.exec(statement);
           this.sql.exec("CREATE INDEX IF NOT EXISTS tasks_retry_due_idx ON tasks(state, next_attempt_at)");
           this.sql.exec("CREATE INDEX IF NOT EXISTS tasks_lease_expiry_idx ON tasks(state, lease_expires_at)");
+          const migrationNow = Date.now();
+          const legacyRunning = this.sql.exec(
+            "SELECT task_id FROM tasks WHERE state='running'"
+          ).toArray();
+          for (const row of legacyRunning) {
+            this.sql.exec(
+              "UPDATE tasks SET state='cancelled', updated_at=?, terminal_at=?, error_code='legacy_running_lease_missing', last_error_code='legacy_running_lease_missing' WHERE task_id=? AND state='running'",
+              migrationNow, migrationNow, row.task_id
+            );
+            this.audit(row.task_id, "task.cancelled", migrationNow, {
+              source: "schema_migration_v1_to_v2",
+              reason: "legacy_running_lease_missing",
+            });
+          }
           this.sql.exec("UPDATE runtime_meta SET value = '2' WHERE key = 'schema_version'");
           version = { value: "2" };
         }
