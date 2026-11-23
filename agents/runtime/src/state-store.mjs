@@ -571,6 +571,10 @@ if (url.pathname === "/task" && request.method === "GET") {
             leaseGeneration: row.lease_generation,
             source: "durable_object_alarm",
           });
+          if (decision.outcome === "failed") {
+            this.audit(row.task_id, "task.terminal_failure", now, { errorCode: fields.error_code });
+            this.evaluateCircuitBreaker(row.task_id, now);
+          }
           count++;
         }
         return count;
