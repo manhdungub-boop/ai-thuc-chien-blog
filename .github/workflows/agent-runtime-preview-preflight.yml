@@ -1,6 +1,9 @@
 name: Agent Runtime Preview Preflight (Read Only)
 
 on:
+  push:
+    branches:
+      - integration/agent-runtime-v5-preview-20261120
   workflow_dispatch:
     inputs:
       expected_sha:
@@ -22,7 +25,7 @@ concurrency:
 
 jobs:
   preflight:
-    if: inputs.confirm_read_only == true
+    if: github.event_name == 'push' || inputs.confirm_read_only == true
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -36,11 +39,12 @@ jobs:
         shell: bash
         env:
           TARGET_REF: ${{ github.ref }}
-          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          EXPECTED_SHA: ${{ inputs.expected_sha || github.sha }}
         run: |
           set -euo pipefail
           case "$TARGET_REF" in
             refs/heads/reconcile/agent-runtime-pr339-schema-v7-20261121) ;;
+            refs/heads/integration/agent-runtime-v5-preview-20261120) ;;
             *)
               echo "::error::Selected branch is not in the explicit Preview preflight allowlist."
               exit 1
