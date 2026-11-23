@@ -213,7 +213,7 @@ test("Preview repository reader rejects redirects outside the exact repository p
     const readers = createPreviewReadOnlyReaders();
     await assert.rejects(
       readers.readArticleHtml("articles/example.html"),
-      /preview_source_http_error/,
+      /preview_source_redirect_rejected_contents_302/,
     );
     assert.equal(calls, 1, "untrusted redirect targets must never be fetched");
   } finally {
@@ -241,7 +241,7 @@ test("Preview repository reader rejects a second redirect instead of following i
     const readers = createPreviewReadOnlyReaders();
     await assert.rejects(
       readers.readArticleHtml("articles/example.html"),
-      /preview_source_http_error/,
+      /preview_source_redirect_rejected_raw_302/,
     );
     assert.equal(calls, 2, "a second redirect must be rejected without another request");
   } finally {
