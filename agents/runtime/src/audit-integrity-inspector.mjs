@@ -3,6 +3,7 @@ const EVENT_TYPES = new Set([
   "task.queued", "task.claimed", "task.lease_heartbeat",
   "task.succeeded", "task.failed", "task.cancelled",
   "task.lease_expired_requeued", "task.lease_expired_failed",
+  "task.terminal_failure", "runtime.circuit_breaker_auto_pause",
 ]);
 const MAX_TASKS = 1000;
 const MAX_EVENTS = 5000;
@@ -106,7 +107,19 @@ export function inspectAuditIntegrity(snapshot, { nowMs = Date.now(), findingOff
       if (event.occurredAt < lastAt) findings.push(finding("audit_timestamp_regression", "error", taskId, event.eventId));
       lastAt = Math.max(lastAt, event.occurredAt);
       const meta = event.metadata;
-      if (event.eventType === "task.queued") {
+      if (event.eventType === "task.terminal_failure") {
+        if (state !== "failed" || typeof meta.errorCode !== "string" ||
+            !/^[a-z0-9_.:-]{1,64}$/.test(meta.errorCode)) {
+          findings.push(finding("terminal_failure_annotation_invalid", "error", taskId, event.eventId));
+        }
+      } else if (event.eventType === "runtime.circuit_breaker_auto_pause") {
+        if (state !== "failed" || !Number.isSafeInteger(meta.failureCount) ||
+            !Number.isSafeInteger(meta.threshold) || meta.failureCount < meta.threshold ||
+            !Number.isSafeInteger(meta.cancelledRunningTasks) || meta.cancelledRunningTasks < 0 ||
+            !Number.isSafeInteger(meta.windowMs) || meta.windowMs < 1) {
+          findings.push(finding("circuit_breaker_annotation_invalid", "error", taskId, event.eventId));
+        }
+      } else if (event.eventType === "task.queued") {
         if (state !== null) findings.push(finding("duplicate_or_unexpected_queued_event", "error", taskId, event.eventId));
         state = "queued";
       } else if (event.eventType === "task.claimed") {
