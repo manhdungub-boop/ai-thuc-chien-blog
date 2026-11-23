@@ -5,6 +5,18 @@ const EVENT_TYPES = new Set([
   "task.lease_expired_requeued", "task.lease_expired_failed",
   "task.terminal_failure", "runtime.circuit_breaker_auto_pause",
 ]);
+const EVENT_ORDER = new Map([
+  ["task.queued", 10],
+  ["task.claimed", 20],
+  ["task.lease_heartbeat", 30],
+  ["task.lease_expired_requeued", 35],
+  ["task.lease_expired_failed", 35],
+  ["task.succeeded", 40],
+  ["task.failed", 40],
+  ["task.cancelled", 40],
+  ["task.terminal_failure", 50],
+  ["runtime.circuit_breaker_auto_pause", 60],
+]);
 const MAX_TASKS = 1000;
 const MAX_EVENTS = 5000;
 const TASK_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -94,7 +106,7 @@ export function inspectAuditIntegrity(snapshot, { nowMs = Date.now(), findingOff
       ));
       continue;
     }
-    events.sort((a, b) => a.occurredAt - b.occurredAt || a.eventId.localeCompare(b.eventId));
+    events.sort((a, b) => a.occurredAt - b.occurredAt ||\n      (EVENT_ORDER.get(a.eventType) ?? 100) - (EVENT_ORDER.get(b.eventType) ?? 100) ||\n      a.eventId.localeCompare(b.eventId));
     for (let i = 1; i < events.length; i++) {
       if (events[i].occurredAt === events[i - 1].occurredAt) {
         findings.push(finding("audit_timestamp_tie_order_ambiguous", "warning", taskId, events[i].eventId));
