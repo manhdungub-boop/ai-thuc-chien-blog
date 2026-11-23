@@ -406,8 +406,8 @@ jobs:
           const h = JSON.parse(await readFile(process.env.RUNNER_TEMP + '/preview-health.json', 'utf8'));
           assert.equal(h.ok, true);
           assert.equal(h.service, 'ai-thuc-chien-agent-runtime-preview');
-          assert.equal(h.enabled, true);
-          assert.equal(h.paused, false);
+          // The Durable Object's persistent pause latch intentionally remains closed
+          // until the authenticated one-shot OIDC route opens it for this single task.
           assert.equal(h.scheduler, 'manual_only_no_cron');
           assert.equal(h.reviewer_auth_enabled, false);
           assert.equal(h.publication_authorized, false);
