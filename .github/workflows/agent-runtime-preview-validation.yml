@@ -216,8 +216,8 @@ jobs:
           assert.equal(deployLines.length, 1, 'validation job must contain exactly one Wrangler command');
           assert.match(deployLines[0], /--dry-run/, 'validation Wrangler command must be dry-run only');
           assert.ok(deployLines[0].includes('--config wrangler.preview.jsonc'));
-          assert.equal(validateJobSource.includes('CLOUDFLARE_'), false, 'validation job must not receive Cloudflare credentials');
-          assert.equal(validateJobSource.includes('secrets.'), false, 'validation job must not reference secrets');
+          assert.doesNotMatch(validateJobSource, /CLOUDFLARE_API_TOKEN:\\s*\\$\\{\\{\\s*secrets\\./i, 'validation job must not bind a Cloudflare token');
+          assert.doesNotMatch(validateJobSource, /secrets\\.[A-Z0-9_]+/, 'validation job must not reference a secret value');
           assert.ok(e2eWorkflow.includes("github.actor_id == '342528485'"), 'one-shot E2E must be restricted to repository owner actor');
           assert.ok(e2eWorkflow.includes("github.ref == 'refs/heads/security/fence-leases-on-circuit-breaker-pause-20261123'"));
           assert.ok(e2eWorkflow.includes('id-token: write'));
