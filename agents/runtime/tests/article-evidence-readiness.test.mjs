@@ -185,7 +185,7 @@ describe("article evidence readiness", () => {
     const draft = makeDraft();
     draft.body_markdown = draft.body_markdown.replace(
       "## Quy trình",
-      "## Quy trình\\n\\n1. Chuẩn bị dữ liệu.\\n2. Kiểm tra nguồn."
+      "## Quy trình\n\n1. Chuẩn bị dữ liệu.\n2. Kiểm tra nguồn."
     );
     const result = await assessArticleEvidenceReadiness({
       draft,
@@ -203,7 +203,7 @@ describe("article evidence readiness", () => {
     const draft = makeDraft();
     draft.body_markdown = draft.body_markdown.replace(
       "## Quy trình",
-      "## Quy trình\\n\\n1. Tỷ lệ xử lý đạt 95% trong năm 2026. [1]"
+      "## Quy trình\n\n1. Tỷ lệ xử lý đạt 95% trong năm 2026. [1]"
     );
     const result = await assessArticleEvidenceReadiness({
       draft,
