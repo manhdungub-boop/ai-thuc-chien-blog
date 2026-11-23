@@ -1,6 +1,23 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import worker, { runWithLeaseHeartbeat } from "../src/worker.mjs";
+import worker, { runWithLeaseHeartbeat, safeReviewResult } from "../src/worker.mjs";
+
+test("safe review results stay within the Durable Object 4 KiB persistence limit", () => {
+  const valid = safeReviewResult({
+    ok: true, taskType: "seo.audit", status: "attention", findingCount: 1,
+    findings: [{ code: "meta_description_missing", severity: "warning", message: "A concise description is missing." }]
+  });
+  assert.equal(valid.ok, true);
+  const oversized = safeReviewResult({
+    ok: true, taskType: "seo.audit", status: "attention", findingCount: 20,
+    findings: Array.from({ length: 20 }, (_, index) => ({
+      code: "finding_" + String(index).padStart(2, "0"),
+      severity: "warning",
+      message: "x".repeat(256),
+    }))
+  });
+  assert.deepEqual(oversized, { ok: false, errorCode: "read_only_review_failed" });
+});
 
 test("required ingress limiter covers every route and keys by Cloudflare client IP", async () => {
   let received;
