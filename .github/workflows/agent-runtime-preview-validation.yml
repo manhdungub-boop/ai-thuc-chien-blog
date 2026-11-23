@@ -486,8 +486,10 @@ jobs:
           fi
           npx --yes wrangler@4.166.0 deploy --config wrangler.preview.jsonc \
             --message "Restore Agent Runtime Preview disabled and paused after one-shot E2E"
-          curl --fail --silent --show-error --max-time 20 "$AGENT_RUNTIME_PREVIEW_URL/health" -o "$RUNNER_TEMP/preview-health-restored.json"
-          node --input-type=module <<'NODE'
+          restored=false
+          for attempt in $(seq 1 10); do
+            if curl --fail --silent --show-error --max-time 20 "$AGENT_RUNTIME_PREVIEW_URL/health" -o "$RUNNER_TEMP/preview-health-restored.json" 2>/dev/null &&
+              node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
           import { readFile } from 'node:fs/promises';
           const h = JSON.parse(await readFile(process.env.RUNNER_TEMP + '/preview-health-restored.json', 'utf8'));
@@ -498,5 +500,16 @@ jobs:
           assert.equal(h.reviewer_auth_enabled, false);
           assert.equal(h.publication_authorized, false);
           NODE
-          echo "Preview is restored and verified disabled/paused."
+            then
+              restored=true
+              break
+            fi
+            echo "Preview health has not converged to disabled/paused yet (attempt $attempt/10)."
+            sleep 3
+          done
+          if [[ "$restored" != "true" ]]; then
+            echo "::error::Preview did not report the required disabled/paused state within the bounded rollback verification window."
+            exit 1
+          fi
+          echo "Preview is restored and verified disabled/paused after bounded health polling."
 
