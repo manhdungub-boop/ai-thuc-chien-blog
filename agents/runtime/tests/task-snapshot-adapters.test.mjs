@@ -74,7 +74,7 @@ test("SEO adapter requires explicit sitemap and broken-link evidence", async () 
 test("article parsing removes raw blocks with spaced end tags and decodes entities only once", async () => {
   const source = `<html><head><title>&amp;lt;script&amp;gt;literal</title></head><body>
     <p>Visible article text</p>
-    <script>hidden script payload</script 	
+    <script>hidden script payload</script \t
  bar>
     <style>hidden style payload</style >
     <svg><text>hidden vector payload</text></svg   >
@@ -143,8 +143,7 @@ test("reader interface is mandatory and source bounds are explicit", () => {
   assert.equal(TASK_SNAPSHOT_ADAPTER_LIMITS.maxCatalogItems, 1000);
 });
 
-
-test("Preview repository reader uses the fixed GitHub Contents endpoint with Cloudflare-compatible manual redirects", async () => {
+test("Preview repository reader fetches the fixed raw GitHub path without using the rate-limited Contents API", async () => {
   const originalFetch = globalThis.fetch;
   let requestedUrl;
   let requestedOptions;
@@ -161,17 +160,16 @@ test("Preview repository reader uses the fixed GitHub Contents endpoint with Clo
     const result = await readers.readArticleHtml("articles/example.html");
     assert.equal(result, "<html><title>Preview source</title></html>");
     assert.equal(requestedUrl,
-      "https://api.github.com/repos/manhdungub-boop/ai-thuc-chien-blog/contents/articles/example.html?ref=main");
+      "https://raw.githubusercontent.com/manhdungub-boop/ai-thuc-chien-blog/main/articles/example.html");
     assert.equal(requestedOptions.method, "GET");
     assert.equal(requestedOptions.redirect, "manual");
-    assert.equal(requestedOptions.headers.Accept, "application/vnd.github.raw+json");
-    assert.equal(requestedOptions.headers["X-GitHub-Api-Version"], "2022-11-28");
+    assert.equal(requestedOptions.headers.Accept, "text/plain");
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
 
-test("Preview repository reader follows only the exact allowlisted GitHub raw redirect", async () => {
+test("Preview repository reader follows only the exact allowlisted raw GitHub redirect", async () => {
   const originalFetch = globalThis.fetch;
   const calls = [];
   globalThis.fetch = async (url, options) => {
@@ -189,6 +187,8 @@ test("Preview repository reader follows only the exact allowlisted GitHub raw re
     const result = await readers.readArticleHtml("articles/example.html");
     assert.equal(result, "<html><title>Redirected source</title></html>");
     assert.equal(calls.length, 2);
+    assert.equal(calls[0].url,
+      "https://raw.githubusercontent.com/manhdungub-boop/ai-thuc-chien-blog/main/articles/example.html");
     assert.equal(calls[0].options.redirect, "manual");
     assert.equal(calls[1].url,
       "https://raw.githubusercontent.com/manhdungub-boop/ai-thuc-chien-blog/main/articles/example.html");
@@ -213,7 +213,7 @@ test("Preview repository reader rejects redirects outside the exact repository p
     const readers = createPreviewReadOnlyReaders();
     await assert.rejects(
       readers.readArticleHtml("articles/example.html"),
-      /preview_source_redirect_rejected_contents_302/,
+      /preview_source_redirect_rejected_raw_302/,
     );
     assert.equal(calls, 1, "untrusted redirect targets must never be fetched");
   } finally {
@@ -244,6 +244,25 @@ test("Preview repository reader rejects a second redirect instead of following i
       /preview_source_redirect_rejected_raw_302/,
     );
     assert.equal(calls, 2, "a second redirect must be rejected without another request");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Preview repository reader reports an upstream 403 without exposing response bodies", async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    return new Response("private upstream details must not be surfaced", { status: 403 });
+  };
+  try {
+    const readers = createPreviewReadOnlyReaders();
+    await assert.rejects(
+      readers.readArticleHtml("articles/example.html"),
+      /preview_source_http_error_raw_403/,
+    );
+    assert.equal(calls, 1);
   } finally {
     globalThis.fetch = originalFetch;
   }
