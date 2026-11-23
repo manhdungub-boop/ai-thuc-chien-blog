@@ -30,7 +30,7 @@ test("audit inspector recognizes runtime terminal-failure and circuit-breaker an
     { eventId: "evt-5", taskId: "task-001", eventType: "runtime.circuit_breaker_auto_pause", occurredAt: NOW - 1000, metadata: { failureCount: 5, cancelledRunningTasks: 2, threshold: 5, windowMs: 600000 } },
   ];
   const result = inspectAuditIntegrity({
-    tasks: [task({ state: "failed", updatedAt: NOW - 3000, terminalAt: NOW - 3000 })],
+    tasks: [task({ state: "failed", updatedAt: NOW - 1000, terminalAt: NOW - 3000 })],
     events: snapshotEvents,
   }, { nowMs: NOW });
   assert.equal(result.status, "consistent");
@@ -46,7 +46,7 @@ test("audit inspector rejects malformed terminal-failure and circuit-breaker ann
     { eventId: "evt-5", taskId: "task-001", eventType: "runtime.circuit_breaker_auto_pause", occurredAt: NOW - 1000, metadata: { failureCount: 1, cancelledRunningTasks: -1, threshold: 5, windowMs: 0 } },
   ];
   const result = inspectAuditIntegrity({
-    tasks: [task({ state: "failed", updatedAt: NOW - 3000, terminalAt: NOW - 3000 })],
+    tasks: [task({ state: "failed", updatedAt: NOW - 1000, terminalAt: NOW - 3000 })],
     events: snapshotEvents,
   }, { nowMs: NOW });
   assert.equal(result.status, "integrity_error");
