@@ -11,7 +11,7 @@ const expected = Object.freeze({
   repositoryOwnerId: "342528485",
   ref: "refs/heads/main",
   workflowRef: "manhdungub-boop/ai-thuc-chien-blog/.github/workflows/agent-runtime-operator.yml@refs/heads/main",
-  actorId: "1234567",
+  actorId: "342528485",
   eventName: "workflow_dispatch",
 });
 
@@ -38,8 +38,7 @@ async function signedToken(overrides = {}, headerOverrides = {}) {
   const claims = {
     iss: "https://token.actions.githubusercontent.com",
     aud: expected.audience,
-    sub: "repo:" + expected.repositoryOwner + "@" + expected.repositoryOwnerId + "/" +
-      expected.repository.split("/")[1] + "@" + expected.repositoryId + ":ref:" + expected.ref,
+    sub: "repo:" + expected.repositoryOwner + "@" + expected.repositoryOwnerId + "/" + expected.repository.slice(expected.repository.indexOf("/") + 1) + "@" + expected.repositoryId + ":ref:" + expected.ref,
     repository: expected.repository,
     repository_owner: expected.repositoryOwner,
     repository_owner_id: expected.repositoryOwnerId,
@@ -123,6 +122,7 @@ test("rejects audience, repository, repository ID, branch, workflow, actor, and 
     { actor_id: "999" },
     { event_name: "pull_request" },
     { sub: "repo:attacker/other-repo:ref:refs/heads/main" },
+    { sub: "repo:manhdungub-boop/ai-thuc-chien-blog:ref:refs/heads/main" },
   ]) {
     const result = await verify(await signedToken(override));
     assert.equal(result.ok, false);

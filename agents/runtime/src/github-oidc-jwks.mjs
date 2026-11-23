@@ -101,7 +101,7 @@ export async function fetchGitHubActionsJwks({ fetchImpl = fetch } = {}) {
       response = await fetchImpl(url, {
         method: "GET",
         headers: { Accept: "application/json" },
-        redirect: "error",
+        redirect: "manual",
         cache: "no-store",
         credentials: "omit",
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),

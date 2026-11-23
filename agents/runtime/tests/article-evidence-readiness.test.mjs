@@ -99,6 +99,21 @@ describe("article evidence readiness", () => {
     expect(missingMarkerResult.issues[0].code).toBe("claim_inline_citation_missing_from_body");
   });
 
+  it("does not let citations in an unrelated paragraph satisfy a reviewed claim", async () => {
+    const reviewRecord = await makeReview();
+    const draft = makeDraft();
+    draft.body_markdown = draft.body_markdown
+      .replace(" [1] [2] [3]. ", ". ")
+      + "\n\nTài liệu tham khảo bổ sung [1] [2] [3].";
+    const result = await assessArticleEvidenceReadiness({ draft, ledger, reviewRecord, now });
+    expect(result.status).toBe("article_claim_evidence_not_ready");
+    expect(result.issues).toContainEqual({
+      code: "claim_inline_citation_missing_from_body",
+      claim_id: "claim-1",
+      citation_index: 1
+    });
+  });
+
   it("requires every reviewed claim to appear in the article body", async () => {
     const reviewRecord = await makeReview();
     const missing = makeDraft();
@@ -118,6 +133,66 @@ describe("article evidence readiness", () => {
     expect(result.issues).toContainEqual({
       code: "reviewed_claim_missing_from_article_body",
       claim_id: "claim-1"
+    });
+  });
+
+  it("blocks numeric factual sentences that are absent from the reviewed claim manifest", async () => {
+    const reviewRecord = await makeReview();
+    const draft = makeDraft();
+    draft.body_markdown = draft.body_markdown.replace(
+      "## Quy trình",
+      "## Quy trình\n\nTỷ lệ xử lý thành công đạt 95% trong năm 2026. [1]\n"
+    );
+    const result = await assessArticleEvidenceReadiness({
+      draft,
+      ledger,
+      reviewRecord,
+      authenticatedReviewer: { authenticated: true, reviewer_ref: reviewRecord.reviewer_ref },
+      now
+    });
+    expect(result.status).toBe("article_claim_evidence_not_ready");
+    expect(result.issues.some(issue =>
+      issue.code === "unreviewed_quantitative_claim_candidate" &&
+      issue.excerpt === "Tỷ lệ xử lý thành công đạt 95% trong năm 2026."
+    )).toBe(true);
+    expect(result.publication_authorized).toBe(false);
+  });
+
+  it("flags an added numeric assertion appended to an otherwise reviewed sentence", async () => {
+    const reviewRecord = await makeReview();
+    const draft = makeDraft();
+    draft.body_markdown = draft.body_markdown.replace(
+      ledger.claims[0].claim + " [1] [2] [3].",
+      ledger.claims[0].claim + " và cải thiện kết quả thêm 95% [1] [2] [3]."
+    );
+    const result = await assessArticleEvidenceReadiness({
+      draft,
+      ledger,
+      reviewRecord,
+      authenticatedReviewer: { authenticated: true, reviewer_ref: reviewRecord.reviewer_ref },
+      now
+    });
+    expect(result.status).toBe("article_claim_evidence_not_ready");
+    expect(result.issues.some(issue =>
+      issue.code === "unreviewed_quantitative_claim_candidate" &&
+      issue.excerpt.includes("95%")
+    )).toBe(true);
+    expect(result.publication_authorized).toBe(false);
+  });
+
+  it("does not treat inline numeric citation markers as quantitative claim candidates", async () => {
+    const reviewRecord = await makeReview();
+    const result = await assessArticleEvidenceReadiness({
+      draft: makeDraft(),
+      ledger,
+      reviewRecord,
+      authenticatedReviewer: { authenticated: true, reviewer_ref: reviewRecord.reviewer_ref },
+      now
+    });
+    expect(result.status).toBe("eligible_for_owner_release_review");
+    expect(result.quantitative_claim_scan).toEqual({
+      status: "heuristic_scan_completed",
+      unreviewed_candidates: 0
     });
   });
 
@@ -151,6 +226,36 @@ describe("article evidence readiness", () => {
     expect(absentResult.issues[0].code).toBe("claim_inline_citations_invalid");
     expect(duplicateResult.issues[0].code).toBe("claim_inline_citations_invalid");
   });
+  it("surfaces contradictory evidence and blocks article readiness", async () => {
+    const reviewRecord = await recordHumanClaimReview(ledger, [{
+      ...decisions[0],
+      decision: "needs_revision",
+      evidence_reviews: [
+        { source_url: sources[0].url, decision: "supports", reviewer_note: "This excerpt supports the exact claim wording." },
+        { source_url: sources[1].url, decision: "contradicts", reviewer_note: "This excerpt reports an incompatible result." }
+      ]
+    }], reviewer, { now });
+    const result = await assessArticleEvidenceReadiness({
+      draft: makeDraft(),
+      ledger,
+      reviewRecord,
+      authenticatedReviewer: { authenticated: true, reviewer_ref: reviewRecord.reviewer_ref },
+      now
+    });
+    expect(result.status).toBe("article_claim_evidence_not_ready");
+    expect(result.issues).toContainEqual({
+      code: "claim_not_reviewed_as_supported",
+      claim_id: "claim-1",
+      decision: "needs_revision"
+    });
+    expect(result.evidence_summary).toMatchObject({
+      claims_with_contradicting_evidence: ["claim-1"],
+      evidence_decision_counts: { supports: 1, contradicts: 1, insufficient: 0 },
+      contradiction_count: 1
+    });
+    expect(result.publication_authorized).toBe(false);
+  });
+
   it("rejects claims that were not reviewed as supported", async () => {
     const reviewRecord = await makeReview("needs_revision");
     const result = await assessArticleEvidenceReadiness({ draft: makeDraft(), ledger, reviewRecord, now });

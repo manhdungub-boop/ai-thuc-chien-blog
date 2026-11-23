@@ -9,7 +9,7 @@ import { authorizeGitHubActionsOperator } from "../src/github-oidc-authorize.mjs
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const workerPath = path.resolve(here, "state-store-test-worker.mjs");
-const STATE_STORE_TOKEN = "oidc-e2e-state-store-token-0123456789abcdef";
+const STATE_STORE_TOKEN = "oidc-e2e-state-store-token-034252848589abcdef";
 const ISSUER = "https://token.actions.githubusercontent.com";
 const DISCOVERY_URL = ISSUER + "/.well-known/openid-configuration";
 const JWKS_URL = ISSUER + "/.well-known/jwks";
@@ -21,7 +21,7 @@ const EXPECTED = Object.freeze({
   repositoryOwnerId: "342528485",
   ref: "refs/heads/main",
   workflowRef: "manhdungub-boop/ai-thuc-chien-blog/.github/workflows/agent-runtime-operator.yml@refs/heads/main",
-  actorId: "1234567",
+  actorId: "342528485",
   eventName: "workflow_dispatch",
 });
 
@@ -42,7 +42,7 @@ function jsonResponse(value) {
 function makeGitHubFetch(jwks) {
   return async (url, options) => {
     assert.equal(options.method, "GET");
-    assert.equal(options.redirect, "error");
+    assert.equal(options.redirect, "manual");
     assert.equal(options.credentials, "omit");
     if (url === DISCOVERY_URL) {
       return jsonResponse({ issuer: ISSUER, jwks_uri: JWKS_URL });

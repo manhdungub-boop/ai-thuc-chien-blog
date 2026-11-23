@@ -126,7 +126,7 @@ test("verifies a real RS256 token using only the pinned GitHub JWKS endpoints", 
   assert.equal(result.identity.workflowRef, expected.workflowRef);
   assert.equal(result.identity.jti, "test-jti-unique-001");
   assert.deepEqual(calls.map((call) => call.url), [discoveryUrl, jwksUrl]);
-  assert.ok(calls.every((call) => call.options.redirect === "error"));
+  assert.ok(calls.every((call) => call.options.redirect === "manual"));
 });
 
 test("rejects a modified signature even when the key id exists in trusted JWKS", async () => {

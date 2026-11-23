@@ -32,6 +32,25 @@ async function readJson(request, maxBytes) {
   if (!parsed.value || typeof parsed.value !== "object" || Array.isArray(parsed.value)) return { ok: false, status: 400, error: "request_object_required" };
   return parsed;
 }
+function aiBankCandidateStore(env) {
+  const namespace = env.AGENT_AI_BANK_CANDIDATE_STORE;
+  if (!namespace || typeof namespace.idFromName !== "function" || typeof namespace.get !== "function") return null;
+  return namespace.get(namespace.idFromName("agent-ai-bank-candidates-primary"));
+}
+
+async function aiBankCandidateStoreRequest(store, path) {
+  try {
+    if (!store || typeof store.fetch !== "function") return { ok: false, status: 503, body: null };
+    const response = await store.fetch(new Request("https://ai-bank-candidate-store.internal" + path, { method: "GET" }));
+    const parsed = await readBoundedJson(response, 256 * 1024);
+    if (!parsed.ok || !parsed.value || typeof parsed.value !== "object" || Array.isArray(parsed.value)) {
+      return { ok: false, status: 502, body: null };
+    }
+    return { ok: response.ok, status: response.status, body: parsed.value };
+  } catch {
+    return { ok: false, status: 503, body: null };
+  }
+}
 function draftStore(env) {
   const namespace = env.AGENT_DRAFT_STORE;
   if (!namespace || typeof namespace.idFromName !== "function" || typeof namespace.get !== "function") return null;
@@ -63,6 +82,19 @@ function resultStatus(result, fallback = 200) {
   }
   return fallback;
 }
+function reviewerResultResponse(result) {
+  if (!result || typeof result !== "object") {
+    return json({ ok: false, error: "reviewer_store_response_invalid", publication_authorized: false }, 502);
+  }
+  const status = resultStatus(result);
+  if (result.authorized === false) {
+    return json({ ok: false, error: result.reason || "reviewer_session_invalid", publication_authorized: false }, status);
+  }
+  const { authorized, reviewer_ref, ...body } = result;
+  if (Array.isArray(body.items)) body.count = body.items.length;
+  return json({ ...body, publication_authorized: false }, status);
+}
+
 function controlView(control) {
   if (!control || typeof control !== "object") return null;
   return {
@@ -151,7 +183,76 @@ async function handleOperatorControl(request, env, url) {
   return json(result.body, result.status);
 }
 
+export function isValidReviewerDraftAuthoringRequest(value) {
+  return Boolean(
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.keys(value).every(key => ["expected_version", "draft"].includes(key)) &&
+    Number.isSafeInteger(value.expected_version) &&
+    value.draft &&
+    typeof value.draft === "object" &&
+    !Array.isArray(value.draft)
+  );
+}
+
+async function handleAIBankReviewerApi(request, env, url) {
+  const collection = url.pathname === "/api/reviewer/ai-bank/candidates";
+  const detail = url.pathname.match(/^\/api\/reviewer\/ai-bank\/candidates\/([a-zA-Z0-9_.-]{1,100})\/([a-zA-Z0-9_.-]{1,100})$/);
+  if (!collection && !detail) return null;
+  if (request.method !== "GET") return json({ ok: false, error: "method_not_allowed" }, 405);
+  if (!sameOrigin(request)) return json({ ok: false, error: "review_request_origin_or_content_type_rejected" }, 403);
+  const auth = await reviewerSession(request, env);
+  if (!auth.ok) return json({ ok: false, error: auth.error }, auth.status);
+
+  let limit = 20;
+  if (collection) {
+    const values = url.searchParams.getAll("limit");
+    if (values.length > 1 || (values.length === 1 && !/^(?:[1-9]|1[0-9]|20)$/.test(values[0]))) {
+      return json({ ok: false, error: "invalid_ai_bank_candidate_limit" }, 400);
+    }
+    if (values.length === 1) limit = Number(values[0]);
+  }
+
+  const store = aiBankCandidateStore(env);
+  if (!store) return json({ ok: false, error: "ai_bank_candidate_store_unavailable" }, 503);
+  const safety = {
+    catalog_write_authorized: false,
+    evidence_verification_authorized: false,
+    public_publication_authorized: false
+  };
+  if (collection) {
+    const result = await aiBankCandidateStoreRequest(store, "/candidates?limit=" + limit);
+    const items = result.body?.items;
+    if (!result.ok || !Array.isArray(items) || items.length > limit) {
+      return json({ ok: false, error: "ai_bank_candidate_response_invalid", ...safety }, result.status === 503 ? 503 : 502);
+    }
+    return json({
+      items,
+      count: items.length,
+      reviewer_ref: auth.reviewer.reviewer_ref,
+      ...safety
+    });
+  }
+
+  const candidateId = "github:" + detail[1] + "/" + detail[2];
+  const result = await aiBankCandidateStoreRequest(store, "/candidate?id=" + encodeURIComponent(candidateId));
+  const packet = result.body?.packet;
+  if (!result.ok || !packet || typeof packet !== "object" || Array.isArray(packet)) {
+    return json({ ok: false, error: result.status === 404 ? "ai_bank_candidate_not_found" : "ai_bank_candidate_response_invalid", ...safety }, result.status === 404 ? 404 : 502);
+  }
+  return json({
+    packet,
+    reviewer_ref: auth.reviewer.reviewer_ref,
+    ...safety
+  });
+}
+
 async function handleReviewerApi(request, env, url) {
+  if (url.pathname.startsWith("/api/reviewer/ai-bank/")) {
+    const aiBankResponse = await handleAIBankReviewerApi(request, env, url);
+    return aiBankResponse || json({ ok: false, error: "not_found" }, 404);
+  }
   if (!sameOrigin(request, request.method === "POST")) return json({ ok: false, error: "same_origin_required" }, 403);
   const auth = await reviewerSession(request, env);
   if (!auth.ok) return json({ ok: false, error: auth.error }, auth.status);
@@ -162,25 +263,22 @@ async function handleReviewerApi(request, env, url) {
 
   if (url.pathname === "/api/reviewer/drafts" && request.method === "GET") {
     const result = await store.listPendingReviewsForReviewer(limit, auth.token);
-    return json(result, resultStatus(result));
+    return reviewerResultResponse(result);
   }
   if (url.pathname === "/api/reviewer/drafts-needing-authoring" && request.method === "GET") {
     const result = await store.listNeedsRevisionForReviewer(limit, auth.token);
-    return json(result, resultStatus(result));
+    return reviewerResultResponse(result);
   }
 
   const authoringMatch = url.pathname.match(/^\/api\/reviewer\/drafts\/([a-zA-Z0-9._:-]{8,128})\/authoring$/);
   if (authoringMatch && request.method === "POST") {
     const parsed = await readJson(request, 48 * 1024);
     if (!parsed.ok) return json({ ok: false, error: parsed.error }, parsed.status);
-    if (!Number.isSafeInteger(parsed.value.expected_version) || !parsed.value.draft || typeof parsed.value.draft !== "object" || Array.isArray(parsed.value.draft)) {
+    if (!isValidReviewerDraftAuthoringRequest(parsed.value)) {
       return json({ ok: false, error: "draft_authoring_request_invalid" }, 400);
     }
     const result = await store.reviseDraftForReviewer(authoringMatch[1], parsed.value.expected_version, parsed.value.draft, auth.token);
-    if (result.updated && Array.isArray(parsed.value.retrieved_evidence)) {
-      result.evidence_ledger = await store.storeEvidenceLedger(authoringMatch[1], result.artifact.version, parsed.value.retrieved_evidence);
-    }
-    return json(result, resultStatus(result));
+    return reviewerResultResponse(result);
   }
 
   const evidenceMatch = url.pathname.match(/^\/api\/reviewer\/drafts\/([a-zA-Z0-9._:-]{8,128})\/evidence-review$/);
@@ -191,13 +289,13 @@ async function handleReviewerApi(request, env, url) {
       return json({ ok: false, error: "evidence_review_request_invalid" }, 400);
     }
     const result = await store.recordReviewerClaimDecisions(evidenceMatch[1], parsed.value.expected_version, parsed.value.decisions, auth.token);
-    return json(result, resultStatus(result));
+    return reviewerResultResponse(result);
   }
 
   const detailMatch = url.pathname.match(/^\/api\/reviewer\/drafts\/([a-zA-Z0-9._:-]{8,128})$/);
   if (detailMatch && request.method === "GET") {
     const result = await store.getDraftForReviewer(detailMatch[1], auth.token);
-    return json(result, resultStatus(result));
+    return reviewerResultResponse(result);
   }
   return json({ ok: false, error: "not_found" }, 404);
 }

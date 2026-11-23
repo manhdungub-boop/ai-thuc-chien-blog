@@ -13,6 +13,7 @@ on:
     paths:
       - "agents/runtime/**"
       - ".github/workflows/agent-runtime-preview-validation.yml"
+      - ".github/workflows/agent-runtime-operator.yml"
   workflow_dispatch:
 
 permissions:
@@ -90,18 +91,25 @@ jobs:
           NODE
 
       - name: Check syntax
-        run: node --check agents/runtime/src/worker.mjs && node --check agents/runtime/src/state-store.mjs && node --check agents/runtime/src/lease-policy.mjs && node --check agents/runtime/src/internal-auth.mjs && node --check agents/runtime/src/github-oidc-verify.mjs && node --check agents/runtime/src/state-store-client.mjs
+        run: node --check agents/runtime/src/worker.mjs && node --check agents/runtime/src/state-store.mjs && node --check agents/runtime/src/lease-policy.mjs && node --check agents/runtime/src/internal-auth.mjs && node --check agents/runtime/src/github-oidc-verify.mjs && node --check agents/runtime/src/github-oidc-jwks.mjs && node --check agents/runtime/src/github-oidc-trusted-verify.mjs && node --check agents/runtime/src/github-oidc-authorize.mjs && node --check agents/runtime/src/state-store-client.mjs && node --check agents/runtime/src/task-handlers.mjs && node --check agents/runtime/src/task-snapshot-adapters.mjs && node --check agents/runtime/src/repository-readers.mjs && node --check agents/runtime/src/read-only-agent-manager.mjs && node --check agents/runtime/src/agent-safety-supervisor.mjs && node --check agents/runtime/src/agent-priority-engine.mjs && node --check agents/runtime/src/agent-budget-guard.mjs && node --check agents/runtime/src/usage-evidence-collector.mjs && node --check agents/runtime/src/runtime-admission-controller.mjs && node --check agents/runtime/src/agent-health-monitor.mjs && node --check agents/runtime/src/agent-recovery-planner.mjs && node --check agents/runtime/src/audit-integrity-inspector.mjs
 
       - name: Run isolated Worker shell and contract tests
         timeout-minutes: 4
         run: timeout --signal=TERM --kill-after=10s 180s node --test agents/runtime/tests/*.test.mjs
 
-      - name: Verify preview config is isolated and has no execution triggers
+      - name: Validate Preview types and Worker bundle without deployment
+        working-directory: agents/runtime
+        run: |
+          npx --yes wrangler@4.166.0 types --config wrangler.preview.jsonc
+          npx --yes wrangler@4.166.0 deploy --dry-run --config wrangler.preview.jsonc --outdir "$RUNNER_TEMP/agent-runtime-dry-run"
+
+      - name: Verify Preview config is isolated and scheduled dispatcher remains disabled
         run: |
           node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
           import { readFile } from 'node:fs/promises';
           const config = JSON.parse(await readFile('agents/runtime/wrangler.jsonc', 'utf8'));
+          const preview = JSON.parse(await readFile('agents/runtime/wrangler.preview.jsonc', 'utf8'));
           const stateStoreSource = await readFile('agents/runtime/src/state-store.mjs', 'utf8');
           assert.equal(config.main, './src/worker.mjs');
           assert.equal(stateStoreSource.includes('/__test/'), false, 'test-only routes must stay outside deployable source');
@@ -120,13 +128,81 @@ jobs:
           assert.equal('durable_objects' in config, false);
           assert.equal('kv_namespaces' in config, false);
           assert.equal('r2_buckets' in config, false);
-          console.log('PASS: isolated preview configuration; no production bindings, secrets, or schedules.');
+          assert.equal(preview.name, 'ai-thuc-chien-agent-runtime-preview');
+          assert.equal(preview.main, './src/worker.mjs');
+          assert.equal(preview.workers_dev, true);
+          assert.equal(preview.preview_urls, false);
+          assert.equal(preview.vars.AGENT_ENABLED, 'false');
+          assert.equal(preview.vars.AGENT_PAUSED, 'true');
+          assert.equal(preview.vars.AGENT_SCHEDULER_ENABLED, 'false');
+          assert.equal('triggers' in preview, false, 'do not configure recurring invocations until Free-plan headroom is verified and explicitly approved');
+          assert.equal(preview.vars.AGENT_OIDC_ENABLED, 'true');
+          assert.equal(preview.vars.AGENT_RECOVERY_ALARM_ENABLED, 'false');
+          assert.equal(preview.vars.AGENT_REVIEWER_AUTH_ENABLED, 'false');
+          assert.equal(preview.vars.AGENT_RATE_LIMIT_REQUIRED, 'true');
+          assert.deepEqual(preview.ratelimits, [{
+            name: 'AGENT_INGRESS_RATE_LIMITER',
+            namespace_id: '20261121',
+            simple: { limit: 60, period: 60 }
+          }]);
+          assert.deepEqual(preview.durable_objects?.bindings, [
+            { name: 'AGENT_STATE_STORE', class_name: 'AgentStateStore' },
+            { name: 'AGENT_REVIEWER_AUTH_STORE', class_name: 'AgentReviewerAuthStore' },
+            { name: 'AGENT_DRAFT_STORE', class_name: 'AgentDraftStore' },
+            { name: 'AGENT_AI_BANK_CANDIDATE_STORE', class_name: 'AgentAIBankCandidateStore' }
+          ]);
+          assert.deepEqual(preview.migrations, [
+            { tag: 'v1', new_sqlite_classes: ['AgentStateStore'] },
+            { tag: 'v2', new_sqlite_classes: ['AgentReviewerAuthStore', 'AgentDraftStore'] },
+            { tag: 'v3-ai-bank-candidate-store', new_sqlite_classes: ['AgentAIBankCandidateStore'] }
+          ]);
+          assert.equal('routes' in preview, false);
+          assert.equal('d1_databases' in preview, false);
+          assert.equal('queues' in preview, false);
+          assert.equal('kv_namespaces' in preview, false);
+          assert.equal('r2_buckets' in preview, false);
+          assert.equal('vars' in preview && Object.keys(preview.vars).some(k => /TOKEN|SECRET|KEY/i.test(k)), false);
+          const workerSource = await readFile('agents/runtime/src/worker.mjs', 'utf8');
+          assert.match(workerSource, /controller\?\.cron !== "\*\/30 \* \* \* \*"/);
+          assert.match(workerSource, /AGENT_SCHEDULER_ENABLED !== "true"/);
+          assert.match(workerSource, /AGENT_RECOVERY_ALARM_ENABLED !== "true"/);
+          assert.match(workerSource, /JSON\.stringify\(\{ maxTasks: 1 \}\)/);
+          console.log('PASS: Preview is isolated and has no recurring trigger; scheduled dispatch remains code-only until cost gates pass.');
           NODE
 
       - name: Assert workflow is validation-only
         run: |
-          if grep -Eiq 'wrangler[[:space:]]+(deploy|versions[[:space:]]+upload)|CLOUDFLARE_[A-Z_]*TOKEN|secrets[.]' .github/workflows/agent-runtime-preview-validation.yml; then
-            echo "Unexpected deployment or secret reference in validation workflow"
+          if grep -Eiq 'wrangler[[:space:]]+versions[[:space:]]+upload|CLOUDFLARE_[A-Z_]*TOKEN|secrets[.]' .github/workflows/agent-runtime-preview-validation.yml; then
+            echo "Unexpected upload command or Cloudflare secret reference in validation workflow"
             exit 1
           fi
-          echo "PASS: CI workflow contains no deployment command or Cloudflare secret."
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFile } from 'node:fs/promises';
+          const workflow = await readFile('.github/workflows/agent-runtime-preview-validation.yml', 'utf8');
+          const deployLines = workflow.split('\n').filter(line => line.trimStart().startsWith('npx --yes wrangler@4.166.0 deploy '));
+          assert.equal(deployLines.length, 1, 'only one Wrangler deploy command is allowed in this validation workflow');
+          assert.match(deployLines[0], /--dry-run/, 'Wrangler deploy must be dry-run only');
+          assert.match(deployLines[0], /--config wrangler\.preview\.jsonc/, 'dry-run must target only the dedicated Preview config');
+          assert.doesNotMatch(workflow, /CLOUDFLARE_[A-Z_]*TOKEN|secrets\./i);
+          console.log('PASS: Wrangler command is a single Preview-only dry-run; no Cloudflare credential or upload command.');
+          NODE
+
+      - name: Verify OIDC operator workflow is manual and pause-only
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFile } from 'node:fs/promises';
+          const workflow = await readFile('.github/workflows/agent-runtime-operator.yml', 'utf8');
+          assert.match(workflow, /workflow_dispatch:/);
+          assert.doesNotMatch(workflow, /schedule:|repository_dispatch:|workflow_run:|pull_request:|push:/);
+          assert.match(workflow, /permissions:[\s\S]*?contents: none[\s\S]*?id-token: write/);
+          assert.doesNotMatch(workflow, /contents: write|actions: write|packages: write|write-all/i);
+          assert.match(workflow, /if:[^\n]*github\.ref\s*==\s*'refs\/heads\/main'/);
+          assert.match(workflow, /cancel-in-progress:\s*false/);
+          assert.match(workflow, /AGENT_RUNTIME_PREVIEW_URL/);
+          assert.match(workflow, /ai-thuc-chien-agent-runtime-preview/);
+          assert.match(workflow, /internal\/oidc\/pause/);
+          assert.doesNotMatch(workflow, /internal\/oidc\/resume|wrangler\s+deploy|CLOUDFLARE_.*TOKEN/i);
+          console.log('PASS: OIDC operator is manual-only, main-ref-only, minimally privileged, serialized, Preview-scoped, and pause-only.');
+          NODE

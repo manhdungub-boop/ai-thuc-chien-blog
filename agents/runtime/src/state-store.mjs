@@ -1,9 +1,11 @@
 import { validateTaskRequest } from "./task-contract.mjs";
 import { readBoundedJson, readBoundedText } from "./bounded-json-body.mjs";
 import { hasValidStateStoreBearer } from "./internal-auth.mjs";
+import { currentUtcBudgetDay } from "./utc-budget-day.mjs";
+import { classifyTaskFailure } from "./failure-classification.mjs";
 import { claimQueuedTask, heartbeatLease, recoverExpiredLease, completeLeasedTask } from "./lease-policy.mjs";
 
-const SCHEMA_VERSION = 6;
+const SCHEMA_VERSION = 7;
 // Conservative Free-tier pilot defaults; hard caps remain enforced below.
 const DEFAULT_LIMITS = Object.freeze({ daily: 100, concurrent: 5, payloadBytes: 8192 });
 const TERMINAL_STATES = new Set(["succeeded", "failed", "cancelled"]);
@@ -29,6 +31,18 @@ function isValidUtcDay(day) {
   if (typeof day !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return false;
   const timestamp = Date.parse(day + "T00:00:00.000Z");
   return Number.isFinite(timestamp) && new Date(timestamp).toISOString().slice(0, 10) === day;
+}
+
+function quotaPressure(percent) {
+  if (percent >= 100) return "exhausted";
+  if (percent >= 90) return "critical";
+  if (percent >= 80) return "warning";
+  return "normal";
+}
+
+function highestQuotaPressure(daily, concurrent) {
+  const rank = { normal: 0, warning: 1, critical: 2, exhausted: 3 };
+  return rank[daily] >= rank[concurrent] ? daily : concurrent;
 }
 
 
@@ -113,6 +127,24 @@ async function sha256Hex(value) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
+function validatePersistedResult(value) {
+  if (!isObject(value) || Object.keys(value).sort().join(",") !== "findingCount,findings,status,taskType" ||
+      !["content.review", "ai_bank.candidate_review", "seo.audit"].includes(value.taskType) ||
+      !["pass", "attention", "review_required"].includes(value.status) ||
+      !Number.isSafeInteger(value.findingCount) || value.findingCount < 0 || value.findingCount > 20 ||
+      !Array.isArray(value.findings) || value.findings.length > 20 ||
+      value.findings.length !== value.findingCount) return null;
+  for (const item of value.findings) {
+    if (!isObject(item) || Object.keys(item).sort().join(",") !== "code,message,severity" ||
+        typeof item.code !== "string" || !/^[a-z][a-z0-9_]{1,79}$/.test(item.code) ||
+        !["error", "warning"].includes(item.severity) ||
+        typeof item.message !== "string" || item.message.length < 1 || item.message.length > 256 ||
+        item.message.trim() !== item.message || /[\u0000-\u001f\u007f]/.test(item.message)) return null;
+  }
+  const json = JSON.stringify(value);
+  if (new TextEncoder().encode(json).byteLength > 4096) return null;
+  return json;
+}
 function safeTask(row) {
   if (!row) return null;
   return {
@@ -122,6 +154,7 @@ function safeTask(row) {
     attemptCount: row.attempt_count, maxAttempts: row.max_attempts,
     leaseGeneration: row.lease_generation, leaseExpiresAt: row.lease_expires_at, leaseMaxExpiresAt: row.lease_max_expires_at,
     nextAttemptAt: row.next_attempt_at, lastErrorCode: row.last_error_code,
+    result: row.result_json ? JSON.parse(row.result_json) : null,
   };
 }
 
@@ -188,11 +221,15 @@ export class AgentStateStore {
           this.sql.exec("UPDATE runtime_meta SET value = '5' WHERE key = 'schema_version'");
           version = { value: "5" };
         }
-        if (version.value === "5") {
-          this.sql.exec("CREATE TABLE external_request_budgets (budget_day TEXT NOT NULL CHECK (length(budget_day) = 10), scope TEXT NOT NULL CHECK (scope IN ('ai_bank_discovery','content_research')), used INTEGER NOT NULL CHECK (used >= 0), updated_at INTEGER NOT NULL CHECK (updated_at >= 0), PRIMARY KEY (budget_day, scope))");
-          this.sql.exec("CREATE INDEX external_request_budget_day_idx ON external_request_budgets(budget_day)");
-          this.sql.exec("UPDATE runtime_meta SET value = '6' WHERE key = 'schema_version'");
-          version = { value: "6" };
+        if (version.value === "5" || version.value === "6") {
+          const taskColumns = this.sql.exec("PRAGMA table_info(tasks)").toArray();
+          if (!taskColumns.some((column) => column.name === "result_json")) {
+            this.sql.exec("ALTER TABLE tasks ADD COLUMN result_json TEXT CHECK (result_json IS NULL OR length(CAST(result_json AS BLOB)) <= 4096)");
+          }
+          this.sql.exec("CREATE TABLE IF NOT EXISTS external_request_budgets (budget_day TEXT NOT NULL CHECK (length(budget_day) = 10), scope TEXT NOT NULL CHECK (scope IN ('ai_bank_discovery','content_research')), used INTEGER NOT NULL CHECK (used >= 0), updated_at INTEGER NOT NULL CHECK (updated_at >= 0), PRIMARY KEY (budget_day, scope))");
+          this.sql.exec("CREATE INDEX IF NOT EXISTS external_request_budget_day_idx ON external_request_budgets(budget_day)");
+          this.sql.exec("UPDATE runtime_meta SET value = '7' WHERE key = 'schema_version'");
+          version = { value: "7" };
         }
         if (version.value !== String(SCHEMA_VERSION)) {
           throw new Error("runtime_schema_version_unsupported");
@@ -225,9 +262,10 @@ export class AgentStateStore {
           return jsonResponse({ ok: false, error: parsedBody.status === 413 ? "request_body_too_large" : "request_invalid" }, parsedBody.status);
         }
         const result = this.setPaused(url.pathname.endsWith("/pause"), parsedBody.value, this.requestTime(request));
+        if (result.status === 200) await this.scheduleRecoveryAlarm(this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
-      if (url.pathname === "/external-budget" && request.method === "GET") {
+                  if (url.pathname === "/external-budget" && request.method === "GET") {
         const day = url.searchParams.get("day");
         const scope = url.searchParams.get("scope");
         const result = await this.getExternalRequestBudget(day, scope);
@@ -251,7 +289,13 @@ export class AgentStateStore {
       if (url.pathname === "/claim" && request.method === "POST") {
         const parsedBody = await readBoundedJson(request, 16 * 1024);
         if (!parsedBody.ok) return jsonResponse({ ok: false, error: parsedBody.status === 413 ? "request_body_too_large" : "request_invalid" }, parsedBody.status);
-        const result = this.claim(parsedBody.value, this.requestTime(request));
+        const result = await this.claim(parsedBody.value, this.requestTime(request));
+        return jsonResponse(result.body, result.status);
+      }
+      if (url.pathname === "/claim-next" && request.method === "POST") {
+        const parsedBody = await readBoundedJson(request, 16 * 1024);
+        if (!parsedBody.ok) return jsonResponse({ ok: false, error: parsedBody.status === 413 ? "request_body_too_large" : "request_invalid" }, parsedBody.status);
+        const result = await this.claimNext(parsedBody.value, this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
       if (url.pathname === "/heartbeat" && request.method === "POST") {
@@ -278,11 +322,144 @@ export class AgentStateStore {
         const result = this.transition(parsedBody.value, this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
-      if (url.pathname === "/task" && request.method === "GET") {
+if (url.pathname === "/task" && request.method === "GET") {
         const taskId = url.searchParams.get("id");
         if (!taskId || taskId.length > 64) return jsonResponse({ ok: false, error: "task_id_invalid" }, 400);
         const row = readRow(this.sql, "SELECT * FROM tasks WHERE task_id = ?", taskId);
         return row ? jsonResponse({ ok: true, task: safeTask(row) }) : jsonResponse({ ok: false, error: "task_not_found" }, 404);
+      }
+      if (url.pathname === "/dead-letter" && request.method === "GET") {
+        const allowed = new Set(["limit", "beforeTerminalAt", "beforeTaskId"]);
+        const keys = [...url.searchParams.keys()];
+        if (keys.some((key) => !allowed.has(key)) ||
+            keys.some((key) => url.searchParams.getAll(key).length !== 1) ||
+            (url.searchParams.has("beforeTerminalAt") !== url.searchParams.has("beforeTaskId"))) {
+          return jsonResponse({ ok: false, error: "dead_letter_query_invalid" }, 400);
+        }
+        const limitText = url.searchParams.get("limit") ?? "25";
+        if (!/^\d{1,2}$/.test(limitText)) return jsonResponse({ ok: false, error: "dead_letter_limit_invalid" }, 400);
+        const limit = Number(limitText);
+        if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50) {
+          return jsonResponse({ ok: false, error: "dead_letter_limit_invalid" }, 400);
+        }
+        let beforeTerminalAt = null;
+        let beforeTaskId = null;
+        if (url.searchParams.has("beforeTerminalAt")) {
+          const timestamp = url.searchParams.get("beforeTerminalAt");
+          beforeTaskId = url.searchParams.get("beforeTaskId");
+          if (!/^\d{1,16}$/.test(timestamp) || !Number.isSafeInteger(Number(timestamp)) ||
+              Number(timestamp) < 0 || typeof beforeTaskId !== "string" ||
+              beforeTaskId.length < 1 || beforeTaskId.length > 64 ||
+              [...beforeTaskId].some((character) => character.charCodeAt(0) < 33 || character.charCodeAt(0) === 127)) {
+            return jsonResponse({ ok: false, error: "dead_letter_cursor_invalid" }, 400);
+          }
+          beforeTerminalAt = Number(timestamp);
+        }
+        const rows = beforeTerminalAt === null
+          ? this.sql.exec(
+            "SELECT task_id,task_type,created_at,terminal_at,error_code,last_error_code,attempt_count,max_attempts " +
+            "FROM tasks WHERE state='failed' ORDER BY terminal_at DESC,task_id DESC LIMIT ?",
+            limit + 1,
+          ).toArray()
+          : this.sql.exec(
+            "SELECT task_id,task_type,created_at,terminal_at,error_code,last_error_code,attempt_count,max_attempts " +
+            "FROM tasks WHERE state='failed' AND (terminal_at<? OR (terminal_at=? AND task_id<?)) " +
+            "ORDER BY terminal_at DESC,task_id DESC LIMIT ?",
+            beforeTerminalAt, beforeTerminalAt, beforeTaskId, limit + 1,
+          ).toArray();
+        const hasMore = rows.length > limit;
+        const page = rows.slice(0, limit).map((row) => ({
+          taskId: row.task_id,
+          type: row.task_type,
+          createdAt: row.created_at,
+          terminalAt: row.terminal_at,
+          errorCode: row.error_code,
+          lastErrorCode: row.last_error_code,
+          classification: classifyTaskFailure(row.error_code, row.last_error_code),
+          attemptCount: row.attempt_count,
+          maxAttempts: row.max_attempts,
+        }));
+        const last = page[page.length - 1];
+        return jsonResponse({
+          ok: true,
+          items: page,
+          nextCursor: hasMore && last ? { terminalAt: last.terminalAt, taskId: last.taskId } : null,
+        });
+      }
+      if (url.pathname === "/metrics" && request.method === "GET") {
+        if ([...url.searchParams.keys()].length > 0) {
+          return jsonResponse({ ok: false, error: "metrics_query_invalid" }, 400);
+        }
+        const now = this.requestTime(request);
+        const day = utcDay(now);
+        const usage = readRow(this.sql, "SELECT accepted_count FROM daily_usage WHERE day_utc = ?", day);
+        const limits = this.limits();
+        const counts = readRow(this.sql,
+          "SELECT COUNT(*) AS total, " +
+          "COALESCE(SUM(CASE WHEN state='queued' THEN 1 ELSE 0 END),0) AS queued, " +
+          "COALESCE(SUM(CASE WHEN state='running' THEN 1 ELSE 0 END),0) AS running, " +
+          "COALESCE(SUM(CASE WHEN state='succeeded' THEN 1 ELSE 0 END),0) AS succeeded, " +
+          "COALESCE(SUM(CASE WHEN state='failed' THEN 1 ELSE 0 END),0) AS failed, " +
+          "COALESCE(SUM(CASE WHEN state='cancelled' THEN 1 ELSE 0 END),0) AS cancelled, " +
+          "COALESCE(SUM(CASE WHEN state='queued' AND (next_attempt_at IS NULL OR next_attempt_at<=?) THEN 1 ELSE 0 END),0) AS queuedDue, " +
+          "MIN(CASE WHEN state='queued' THEN created_at END) AS oldestQueuedAt, " +
+          "MIN(CASE WHEN state='running' THEN updated_at END) AS oldestRunningAt, " +
+          "COALESCE(SUM(CASE WHEN state='failed' AND terminal_at>=? THEN 1 ELSE 0 END),0) AS failedLast24h " +
+          "FROM tasks", now, now - 24 * 60 * 60 * 1000);
+        const audit = this.sql.exec(
+          "SELECT event_type AS eventType, COUNT(*) AS count FROM audit_events WHERE occurred_at>=? GROUP BY event_type ORDER BY count DESC, event_type ASC LIMIT 20",
+          now - 24 * 60 * 60 * 1000,
+        ).toArray();
+        const failureCountLast10m = readRow(this.sql,
+          "SELECT COUNT(*) AS count FROM tasks WHERE state='failed' AND terminal_at>=?", now - CIRCUIT_BREAKER.windowMs).count;
+        const control = this.controlState();
+        const latestPause = readRow(this.sql,
+          "SELECT reason FROM runtime_control_audit WHERE action='pause' ORDER BY occurred_at DESC,event_id DESC LIMIT 1");
+        const acceptedToday = usage?.accepted_count ?? 0;
+        const dailyUtilizationPercent = Math.round((acceptedToday / limits.daily) * 10000) / 100;
+        const concurrentUtilizationPercent = Math.round(((counts.queued + counts.running) / limits.concurrent) * 10000) / 100;
+        const dailyPressure = quotaPressure(dailyUtilizationPercent);
+        const concurrentPressure = quotaPressure(concurrentUtilizationPercent);
+        const autoPaused = control.paused && latestPause?.reason === "circuit_breaker:5_failures_in_10m";
+        return jsonResponse({
+          ok: true,
+          observedAt: now,
+          dayUtc: day,
+          tasks: {
+            totalRetained: counts.total,
+            queued: counts.queued,
+            queuedDue: counts.queuedDue,
+            running: counts.running,
+            succeededRetained: counts.succeeded,
+            failedRetained: counts.failed,
+            cancelledRetained: counts.cancelled,
+            failedLast24h: counts.failedLast24h,
+            oldestQueuedAgeMs: counts.oldestQueuedAt === null ? null : Math.max(0, now - counts.oldestQueuedAt),
+            oldestRunningUpdateAgeMs: counts.oldestRunningAt === null ? null : Math.max(0, now - counts.oldestRunningAt),
+          },
+          circuitBreaker: {
+            state: autoPaused ? "open" : "closed",
+            autoPaused,
+            paused: control.paused,
+            failureCountLast10m,
+            threshold: CIRCUIT_BREAKER.threshold,
+            windowMs: CIRCUIT_BREAKER.windowMs,
+          },
+          quota: {
+            acceptedToday,
+            dailyLimit: limits.daily,
+            dailyUtilizationPercent,
+            dailyPressure,
+            inFlight: counts.queued + counts.running,
+            concurrentLimit: limits.concurrent,
+            concurrentUtilizationPercent,
+            concurrentPressure,
+            overallPressure: highestQuotaPressure(dailyPressure, concurrentPressure),
+            payloadLimitBytes: limits.payloadBytes,
+          },
+          auditLast24h: audit,
+          note: "Internal admission guardrails only; not a measurement of provider or Cloudflare account quota.",
+        });
       }
       if (url.pathname === "/usage" && request.method === "GET") {
         const day = url.searchParams.get("day") ?? utcDay(this.requestTime(request));
@@ -304,6 +481,89 @@ export class AgentStateStore {
     return Date.now();
   }
 
+  async scheduleRecoveryAlarm(now = Date.now()) {
+    if (this.env.AGENT_RECOVERY_ALARM_ENABLED !== "true" ||
+        this.env.AGENT_ENABLED !== "true" || this.env.AGENT_PAUSED !== "false") {
+      try { await this.ctx.storage.deleteAlarm(); } catch {}
+      return false;
+    }
+    try {
+      const control = this.controlState();
+      if (control.paused) {
+        await this.ctx.storage.deleteAlarm();
+        return false;
+      }
+      const next = readRow(this.sql,
+        "SELECT MIN(lease_expires_at) AS next_at FROM tasks WHERE state='running' AND lease_expires_at IS NOT NULL");
+      if (!next || next.next_at === null || next.next_at === undefined) {
+        await this.ctx.storage.deleteAlarm();
+        return false;
+      }
+      // One shared alarm per DO, with a five-minute minimum cadence.
+      // This is recovery-only; it never claims or executes queued work.
+      const desired = Math.max(now + 5 * 60 * 1000, next.next_at);
+      const existing = await this.ctx.storage.getAlarm();
+      if (existing === null || existing > desired) {
+        await this.ctx.storage.setAlarm(desired);
+      }
+      return true;
+    } catch {
+      // Alarm scheduling is best-effort and must not turn a successful lease
+      // claim into a false failure. The operator path remains available.
+      return false;
+    }
+  }
+
+  async alarm() {
+    try {
+      await this.ready;
+    } catch {
+      return;
+    }
+    if (this.env.AGENT_RECOVERY_ALARM_ENABLED !== "true" ||
+        this.env.AGENT_ENABLED !== "true" || this.env.AGENT_PAUSED !== "false") {
+      try { await this.ctx.storage.deleteAlarm(); } catch {}
+      return;
+    }
+    const now = Date.now();
+    try {
+      const recovered = this.ctx.storage.transactionSync(() => {
+        if (this.controlState().paused) return 0;
+        const rows = this.sql.exec(
+          "SELECT * FROM tasks WHERE state='running' AND lease_expires_at<=? ORDER BY lease_expires_at LIMIT 5",
+          now,
+        ).toArray();
+        let count = 0;
+        for (const row of rows) {
+          const decision = recoverExpiredLease(row, { now });
+          if (!decision.ok) continue;
+          const fields = decision.fields;
+          this.sql.exec(
+            "UPDATE tasks SET state=?,updated_at=?,terminal_at=?,error_code=?,lease_owner=NULL,lease_expires_at=NULL,lease_max_expires_at=NULL,next_attempt_at=?,last_error_code=? WHERE task_id=? AND state='running' AND lease_generation=? AND lease_expires_at<=?",
+            fields.state, fields.updated_at, fields.terminal_at, fields.error_code,
+            fields.next_attempt_at, fields.last_error_code, row.task_id, row.lease_generation, now,
+          );
+          const updated = readRow(this.sql, "SELECT state, lease_owner FROM tasks WHERE task_id=?", row.task_id);
+          if (!updated || updated.state !== fields.state || updated.lease_owner !== null) continue;
+          this.audit(row.task_id, decision.outcome === "failed" ? "task.lease_expired_failed" : "task.lease_expired_requeued", now, {
+            attempt: row.attempt_count,
+            leaseGeneration: row.lease_generation,
+            source: "durable_object_alarm",
+          });
+          count++;
+        }
+        return count;
+      });
+      await this.scheduleRecoveryAlarm(now);
+      return recovered;
+    } catch {
+      // Re-arm only through the same gate and durable-pause checks. If the
+      // control state is unavailable, fail closed rather than retry forever.
+      await this.scheduleRecoveryAlarm(now);
+      return;
+    }
+  }
+
   async getExternalRequestBudget(day, scope) {
     const limit = EXTERNAL_REQUEST_LIMITS[scope];
     if (!isValidUtcDay(day) || !Number.isSafeInteger(limit)) return { ok: false, error: "external_request_budget_input_invalid" };
@@ -317,6 +577,13 @@ export class AgentStateStore {
     if (!isValidUtcDay(day) || !Number.isSafeInteger(limit) || !Number.isSafeInteger(now) || now < 0) {
       return { ok: false, error: "external_request_budget_input_invalid" };
     }
+    let executionDay;
+    try { executionDay = currentUtcBudgetDay(now); } catch {
+      return { ok: false, error: "external_request_budget_timestamp_invalid" };
+    }
+    if (day !== executionDay) {
+      return { ok: false, error: "external_request_budget_day_mismatch" };
+    }
     const consumed = readRow(this.sql,
       "INSERT INTO external_request_budgets (budget_day,scope,used,updated_at) VALUES (?,?,1,?) ON CONFLICT(budget_day,scope) DO UPDATE SET used = external_request_budgets.used + 1, updated_at = excluded.updated_at WHERE external_request_budgets.used < ? RETURNING used",
       day, scope, now, limit,
@@ -326,7 +593,6 @@ export class AgentStateStore {
     const used = current?.used ?? 0;
     return { ok: true, allowed: false, day, scope, used, limit, remaining: 0 };
   }
-
   limits() {
     return {
       daily: boundedLimit(this.env.RUNTIME_MAX_TASKS_PER_DAY, DEFAULT_LIMITS.daily, DEFAULT_LIMITS.daily),
@@ -397,7 +663,26 @@ export class AgentStateStore {
           body.actor, windowStart, requestCount + 1);
         const current = readRow(this.sql, "SELECT paused, changed_at, version FROM runtime_control WHERE singleton_id = 1");
         if (!current) return { status: 503, body: { ok: false, error: "runtime_control_unavailable" } };
+        const cancelRunningTasks = () => {
+          const running = this.sql.exec(
+            "SELECT task_id, task_type, lease_generation FROM tasks WHERE state='running'",
+          ).toArray();
+          this.sql.exec(
+            "UPDATE tasks SET state='cancelled', updated_at=?, terminal_at=?, error_code='operator_paused', lease_owner=NULL, lease_expires_at=NULL, lease_max_expires_at=NULL, next_attempt_at=NULL, last_error_code='operator_paused' WHERE state='running'",
+            now, now,
+          );
+          for (const task of running) {
+            this.audit(task.task_id, "task.cancelled", now, {
+              taskType: task.task_type,
+              leaseGeneration: task.lease_generation,
+              reason: "operator_paused",
+            });
+          }
+        };
         if (current.paused === (paused ? 1 : 0)) {
+          // Repeated Pause is idempotent but still repairs any stale running
+          // lease left by an earlier runtime version or interrupted rollout.
+          if (paused) cancelRunningTasks();
           return { status: 200, body: { ok: true, changed: false, control: this.controlState() } };
         }
         const version = current.version + 1;
@@ -409,6 +694,10 @@ export class AgentStateStore {
         }
         this.sql.exec("INSERT INTO runtime_control_audit (event_id, action, occurred_at, actor, reason, request_id) VALUES (?,?,?,?,?,?)",
           crypto.randomUUID(), paused ? "pause" : "resume", now, body.actor, body.reason ?? "", body.requestId);
+
+        // Emergency pause atomically fences every in-flight lease. The worker's
+        // next heartbeat observes the cancelled lease and aborts cooperative work.
+        if (paused) cancelRunningTasks();
         return { status: 200, body: { ok: true, changed: true, control: updated } };
       });
     } catch {
@@ -464,7 +753,7 @@ export class AgentStateStore {
     }
   }
 
-  claim(body, now) {
+  async claim(body, now) {
     if (this.env.AGENT_ENABLED !== "true" || this.env.AGENT_PAUSED !== "false") {
       return { status: 503, body: { ok: false, error: "agent_disabled_or_paused" } };
     }
@@ -473,7 +762,7 @@ export class AgentStateStore {
       return { status: 400, body: { ok: false, error: "claim_request_invalid" } };
     }
     try {
-      return this.ctx.storage.transactionSync(() => {
+      const result = this.ctx.storage.transactionSync(() => {
         if (this.controlState().paused) return { status: 503, body: { ok: false, error: "agent_disabled_or_paused" } };
         const row = readRow(this.sql, "SELECT * FROM tasks WHERE task_id = ?", body.taskId);
         if (!row) return { status: 404, body: { ok: false, error: "task_not_found" } };
@@ -508,6 +797,65 @@ export class AgentStateStore {
           },
         };
       });
+      if (result.status === 200) await this.scheduleRecoveryAlarm(now);
+      return result;
+    } catch {
+      return { status: 503, body: { ok: false, error: "state_store_unavailable" } };
+    }
+  }
+
+
+  async claimNext(body, now) {
+    if (this.env.AGENT_ENABLED !== "true" || this.env.AGENT_PAUSED !== "false") {
+      return { status: 503, body: { ok: false, error: "agent_disabled_or_paused" } };
+    }
+    if (!isObject(body) || Object.keys(body).length !== 0) {
+      return { status: 400, body: { ok: false, error: "claim_next_request_invalid" } };
+    }
+    try {
+      const result = this.ctx.storage.transactionSync(() => {
+        if (this.controlState().paused) {
+          return { status: 503, body: { ok: false, error: "agent_disabled_or_paused" } };
+        }
+        const row = readRow(this.sql,
+          "SELECT * FROM tasks WHERE state='queued' AND (next_attempt_at IS NULL OR next_attempt_at<=?) ORDER BY COALESCE(next_attempt_at,created_at),created_at,task_id LIMIT 1",
+          now,
+        );
+        if (!row) return { status: 200, body: { ok: true, task: null, lease: null } };
+        const leaseOwner = crypto.randomUUID();
+        const decision = claimQueuedTask(row, { now, leaseOwner });
+        if (!decision.ok) {
+          const status = decision.error === "lease_state_invalid" || decision.error === "lease_owner_invalid" ? 400 : 409;
+          return { status, body: { ok: false, error: decision.error } };
+        }
+        const fields = decision.fields;
+        this.sql.exec(
+          "UPDATE tasks SET state=?,attempt_count=?,lease_generation=?,lease_owner=?,lease_expires_at=?,lease_max_expires_at=?,next_attempt_at=?,updated_at=? WHERE task_id=? AND state='queued' AND attempt_count=? AND lease_generation=?",
+          fields.state, fields.attempt_count, fields.lease_generation, fields.lease_owner,
+          fields.lease_expires_at, fields.lease_max_expires_at, fields.next_attempt_at, fields.updated_at,
+          row.task_id, row.attempt_count, row.lease_generation,
+        );
+        const updated = readRow(this.sql, "SELECT * FROM tasks WHERE task_id=?", row.task_id);
+        if (!updated || updated.state !== "running" || updated.lease_owner !== leaseOwner ||
+            updated.lease_generation !== fields.lease_generation) {
+          return { status: 409, body: { ok: false, error: "task_claim_conflict" } };
+        }
+        this.audit(row.task_id, "task.claimed", now, {
+          attempt: updated.attempt_count,
+          leaseGeneration: updated.lease_generation,
+          source: "bounded_queue_dispatch",
+        });
+        return {
+          status: 200,
+          body: {
+            ok: true,
+            task: safeTask(updated),
+            lease: { owner: updated.lease_owner, generation: updated.lease_generation, expiresAt: updated.lease_expires_at, maxExpiresAt: updated.lease_max_expires_at },
+          },
+        };
+      });
+      if (result.status === 200 && result.body.task) await this.scheduleRecoveryAlarm(now);
+      return result;
     } catch {
       return { status: 503, body: { ok: false, error: "state_store_unavailable" } };
     }
@@ -545,10 +893,17 @@ export class AgentStateStore {
   }
 
   complete(body, now) {
-    if (!isObject(body) || Object.keys(body).some((key) => !["taskId","leaseOwner","leaseGeneration","status","errorCode"].includes(key)) ||
+    if (!isObject(body) || Object.keys(body).some((key) => !["taskId","leaseOwner","leaseGeneration","status","errorCode","result"].includes(key)) ||
         !["taskId","leaseOwner","leaseGeneration","status"].every((key) => Object.hasOwn(body, key)) ||
         typeof body.taskId !== "string" || body.taskId.length < 1 || body.taskId.length > 64) {
       return { status: 400, body: { ok: false, error: "complete_request_invalid" } };
+    }
+    const resultJson = Object.hasOwn(body, "result") ? validatePersistedResult(body.result) : null;
+    if (Object.hasOwn(body, "result") && resultJson === null) {
+      return { status: 400, body: { ok: false, error: "complete_result_invalid" } };
+    }
+    if (resultJson !== null && body.status !== "succeeded") {
+      return { status: 400, body: { ok: false, error: "complete_result_status_invalid" } };
     }
     try {
       return this.ctx.storage.transactionSync(() => {
@@ -559,12 +914,19 @@ export class AgentStateStore {
           status: body.status, errorCode: body.errorCode,
         });
         if (!decision.ok) return { status: 409, body: { ok: false, error: decision.error } };
-        if (decision.duplicate) return { status: 200, body: { ok: true, duplicate: true, task: safeTask(row) } };
+        if (decision.duplicate) {
+          const resultConflict = resultJson !== null && resultJson !== row.result_json;
+          const errorConflict = Object.hasOwn(body, "errorCode") && body.errorCode !== row.error_code;
+          if (resultConflict || errorConflict) {
+            return { status: 409, body: { ok: false, error: "completion_conflict" } };
+          }
+          return { status: 200, body: { ok: true, duplicate: true, task: safeTask(row) } };
+        }
         const fields = decision.fields;
         this.sql.exec(
-          "UPDATE tasks SET state=?,updated_at=?,terminal_at=?,error_code=?,lease_owner=NULL,lease_expires_at=NULL,lease_max_expires_at=NULL,next_attempt_at=NULL,last_error_code=? WHERE task_id=? AND state='running' AND lease_owner=? AND lease_generation=? AND lease_expires_at>?",
+          "UPDATE tasks SET state=?,updated_at=?,terminal_at=?,error_code=?,lease_owner=NULL,lease_expires_at=NULL,lease_max_expires_at=NULL,next_attempt_at=NULL,last_error_code=?,result_json=? WHERE task_id=? AND state='running' AND lease_owner=? AND lease_generation=? AND lease_expires_at>?",
           fields.state, fields.updated_at, fields.terminal_at, fields.error_code,
-          fields.error_code, body.taskId, body.leaseOwner, body.leaseGeneration, now,
+          fields.error_code, resultJson, body.taskId, body.leaseOwner, body.leaseGeneration, now,
         );
         const updated = readRow(this.sql, "SELECT * FROM tasks WHERE task_id = ?", body.taskId);
         if (!updated || updated.state !== fields.state || updated.lease_owner !== null) {
@@ -589,13 +951,21 @@ export class AgentStateStore {
     if (this.env.AGENT_ENABLED !== "true" || this.env.AGENT_PAUSED !== "false") {
       return { status: 503, body: { ok: false, error: "agent_disabled_or_paused" } };
     }
-    if (!isObject(body) || Object.keys(body).length !== 1 ||
-        typeof body.taskId !== "string" || body.taskId.length < 1 || body.taskId.length > 64) {
+    if (!isObject(body) || Object.keys(body).length !== 3 ||
+        typeof body.taskId !== "string" || body.taskId.length < 1 || body.taskId.length > 64 ||
+        typeof body.actor !== "string" || !/^[a-zA-Z0-9._:-]{3,64}$/.test(body.actor) ||
+        typeof body.requestId !== "string" || !/^[a-zA-Z0-9-]{16,64}$/.test(body.requestId)) {
       return { status: 400, body: { ok: false, error: "recover_request_invalid" } };
     }
     try {
       return this.ctx.storage.transactionSync(() => {
         if (this.controlState().paused) return { status: 503, body: { ok: false, error: "agent_disabled_or_paused" } };
+        const rate = readRow(this.sql, "SELECT window_started_at, request_count FROM runtime_control_rate_limit WHERE actor = ?", body.actor);
+        const windowStart = rate && now - rate.window_started_at < 60_000 ? rate.window_started_at : now;
+        const requestCount = rate && windowStart === rate.window_started_at ? rate.request_count : 0;
+        if (requestCount >= 10) return { status: 429, body: { ok: false, error: "runtime_control_rate_limited" } };
+        this.sql.exec("INSERT INTO runtime_control_rate_limit (actor, window_started_at, request_count) VALUES (?,?,1) ON CONFLICT(actor) DO UPDATE SET window_started_at=excluded.window_started_at, request_count=?",
+          body.actor, windowStart, requestCount + 1);
         const row = readRow(this.sql, "SELECT * FROM tasks WHERE task_id = ?", body.taskId);
         if (!row) return { status: 404, body: { ok: false, error: "task_not_found" } };
         const decision = recoverExpiredLease(row, { now });
@@ -613,6 +983,8 @@ export class AgentStateStore {
         this.audit(body.taskId, decision.outcome === "failed" ? "task.lease_expired_failed" : "task.lease_expired_requeued", now, {
           attempt: row.attempt_count,
           leaseGeneration: row.lease_generation,
+          actor: body.actor,
+          requestId: body.requestId,
         });
         if (decision.outcome === "failed") {
           this.audit(body.taskId, "task.terminal_failure", now, { errorCode: fields.error_code });
@@ -703,11 +1075,17 @@ export class AgentStateStore {
   prune(now) {
     const taskCutoff = now - 30 * 24 * 60 * 60 * 1000;
     const auditCutoff = now - 90 * 24 * 60 * 60 * 1000;
-    this.sql.exec("DELETE FROM tasks WHERE state IN ('succeeded','failed','cancelled') AND terminal_at < ?", taskCutoff);
-    this.sql.exec("DELETE FROM audit_events WHERE occurred_at < ?", auditCutoff);
-    this.sql.exec("DELETE FROM runtime_control_audit WHERE occurred_at < ?", auditCutoff);
-    this.sql.exec("DELETE FROM runtime_control_rate_limit WHERE window_started_at < ?", now - 24 * 60 * 60 * 1000);
-    this.sql.exec("DELETE FROM daily_usage WHERE day_utc < ?", utcDay(auditCutoff));
-    this.sql.exec("DELETE FROM external_request_budgets WHERE rowid IN (SELECT rowid FROM external_request_budgets WHERE budget_day < ? ORDER BY budget_day LIMIT 100)", utcDay(now - 30 * 24 * 60 * 60 * 1000));
+    const boundedDelete = (table, key, predicate, orderBy, cutoff, limit = 100) => this.sql.exec(
+      `DELETE FROM ${table} WHERE ${key} IN (SELECT ${key} FROM ${table} WHERE ${predicate} ORDER BY ${orderBy} LIMIT ?)`,
+      cutoff, limit
+    );
+    // Keep each admission-triggered cleanup bounded and oldest-first. A large
+    // stale backlog drains over subsequent reservations instead of monopolizing one DO turn.
+    boundedDelete("tasks", "task_id", "state IN ('succeeded','failed','cancelled') AND terminal_at < ?", "terminal_at ASC,task_id ASC", taskCutoff);
+    boundedDelete("audit_events", "event_id", "occurred_at < ?", "occurred_at ASC,event_id ASC", auditCutoff, 250);
+    boundedDelete("runtime_control_audit", "event_id", "occurred_at < ?", "occurred_at ASC,event_id ASC", auditCutoff);
+    boundedDelete("runtime_control_rate_limit", "actor", "window_started_at < ?", "window_started_at ASC,actor ASC", now - 24 * 60 * 60 * 1000);
+    boundedDelete("daily_usage", "day_utc", "day_utc < ?", "day_utc ASC", utcDay(auditCutoff));
+    this.sql.exec("DELETE FROM external_request_budgets WHERE rowid IN (SELECT rowid FROM external_request_budgets WHERE budget_day < ? ORDER BY budget_day ASC LIMIT 100)", utcDay(now - 30 * 24 * 60 * 60 * 1000));
   }
 }

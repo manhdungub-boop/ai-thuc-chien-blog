@@ -33,6 +33,33 @@ function normalizeClaimText(value) {
     .toLocaleLowerCase("vi");
 }
 
+function findUnmanifestedQuantitativeCandidates(markdown, reviewedClaims) {
+  const reviewed = reviewedClaims.map(normalizeClaimText).filter(Boolean);
+  const candidates = [];
+  const prose = removeFencedCode(markdown);
+  const paragraphs = prose.split(/\n{2,}/);
+  for (const [paragraphIndex, paragraph] of paragraphs.entries()) {
+    const sentences = paragraph.split(/(?<=[.!?。！？])\s+|\n+/u);
+    for (const sentence of sentences) {
+      const candidate = sentence
+        .replace(/!?\[[^\]]*\]\([^)]*\)/g, " ")
+        .replace(/\[\d+\]/g, " ")
+        .replace(/https?:\/\/\S+/g, " ")
+        .replace(/^\s*(?:[-*+]\s+|\d+[.)]\s+)/, "")
+        .trim();
+      if (!/\d/u.test(candidate)) continue;
+      const normalized = normalizeClaimText(candidate);
+      if (reviewed.some(claim => normalized === claim)) continue;
+      candidates.push({
+        paragraph_index: paragraphIndex + 1,
+        excerpt: candidate.slice(0, 280),
+        detection: "numeric_marker_requires_human_claim_mapping"
+      });
+    }
+  }
+  return candidates;
+}
+
 /**
  * Evaluate whether an article draft is traceable to claims explicitly reviewed
  * as supported. This is a release-readiness pre-check only; it never publishes.
@@ -50,6 +77,7 @@ export async function assessArticleEvidenceReadiness({
       ok: false,
       status: "human_review_record_not_verified",
       review_status: reviewVerification.status,
+      evidence_summary: reviewVerification.evidence_summary,
       publication_authorized: false,
       content_published: false
     };
@@ -114,6 +142,7 @@ export async function assessArticleEvidenceReadiness({
       claims_assessed: draft.claims.length,
       issues: claimIssues,
       review_status: reviewVerification.status,
+      evidence_summary: reviewVerification.evidence_summary,
       publication_authorized: false,
       content_published: false
     };
@@ -134,10 +163,14 @@ export async function assessArticleEvidenceReadiness({
   }
 
   const body = typeof draft.body_markdown === "string" ? draft.body_markdown : "";
-  const normalizedBody = normalizeClaimText(removeFencedCode(body));
+  const proseBody = removeFencedCode(body);
+  const paragraphs = proseBody.split(/\n\s*\n/);
   for (const item of draft.claims) {
     const normalizedClaim = normalizeClaimText(item.claim);
-    if (!normalizedClaim || !normalizedBody.includes(normalizedClaim)) {
+    const claimParagraph = normalizedClaim
+      ? paragraphs.find(paragraph => normalizeClaimText(paragraph).includes(normalizedClaim))
+      : null;
+    if (!claimParagraph) {
       claimIssues.push({
         code: "reviewed_claim_missing_from_article_body",
         claim_id: item.claim_id
@@ -170,7 +203,7 @@ export async function assessArticleEvidenceReadiness({
       continue;
     }
     for (const citationIndex of expectedCitationIndices) {
-      if (!body.includes(`[${citationIndex}]`)) {
+      if (!claimParagraph.includes(`[${citationIndex}]`)) {
         claimIssues.push({
           code: "claim_inline_citation_missing_from_body",
           claim_id: item.claim_id,
@@ -180,13 +213,26 @@ export async function assessArticleEvidenceReadiness({
     }
   }
 
+  const quantitativeCandidates = findUnmanifestedQuantitativeCandidates(
+    body,
+    draft.claims.map(item => item.claim)
+  );
+  for (const candidate of quantitativeCandidates) {
+    claimIssues.push({
+      code: "unreviewed_quantitative_claim_candidate",
+      ...candidate
+    });
+  }
+
   if (claimIssues.length) {
     return {
       ok: false,
       status: "article_claim_evidence_not_ready",
       claims_assessed: draft.claims.length,
       issues: claimIssues,
+      unreviewed_quantitative_claim_candidates: quantitativeCandidates,
       review_status: reviewVerification.status,
+      evidence_summary: reviewVerification.evidence_summary,
       publication_authorized: false,
       content_published: false
     };
@@ -200,6 +246,7 @@ export async function assessArticleEvidenceReadiness({
       claims_assessed: draft.claims.length,
       article_quality: articleQuality,
       review_status: reviewVerification.status,
+      evidence_summary: reviewVerification.evidence_summary,
       publication_authorized: false,
       content_published: false
     };
@@ -214,6 +261,7 @@ export async function assessArticleEvidenceReadiness({
       claims_assessed: draft.claims.length,
       article_quality: articleQuality,
       review_status: reviewVerification.status,
+      evidence_summary: reviewVerification.evidence_summary,
       reviewer_identity_authenticated: false,
       limitations: [
         "The review record matches the supplied ledger, but the reviewer identity is not authenticated.",
@@ -232,6 +280,8 @@ export async function assessArticleEvidenceReadiness({
     claims_assessed: draft.claims.length,
     article_quality: articleQuality,
     review_status: reviewVerification.status,
+    evidence_summary: reviewVerification.evidence_summary,
+    quantitative_claim_scan: { status: "heuristic_scan_completed", unreviewed_candidates: 0 },
     limitations: [
       "Only the explicitly supplied claim manifest is checked; this does not discover omitted factual claims in the article body.",
       "Inline citation indices are bound to the exact reviewed evidence URLs and source-list positions, but this does not prove semantic support.",

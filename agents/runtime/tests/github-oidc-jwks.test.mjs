@@ -44,7 +44,7 @@ test("fetches discovery and signing keys only from the pinned GitHub issuer", as
   assert.deepEqual(calls.map((call) => call.url), [discoveryUrl, jwksUrl]);
   for (const call of calls) {
     assert.equal(call.options.method, "GET");
-    assert.equal(call.options.redirect, "error");
+    assert.equal(call.options.redirect, "manual");
     assert.equal(call.options.cache, "no-store");
     assert.equal(call.options.credentials, "omit");
     assert.equal(call.options.headers.Accept, "application/json");

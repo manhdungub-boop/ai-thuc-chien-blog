@@ -127,6 +127,42 @@ export class AgentAIBankCandidateStore {
     );
   }
 
+  async fetch(request) {
+    const url = new URL(request.url);
+    const respond = (body, status = 200) => new Response(JSON.stringify(body), {
+      status,
+      headers: {
+        "Cache-Control": "no-store",
+        "Content-Type": "application/json; charset=utf-8",
+        "X-Content-Type-Options": "nosniff"
+      }
+    });
+    if (request.method !== "GET") return respond({ ok: false, error: "method_not_allowed" }, 405);
+    if (url.pathname === "/candidates") {
+      if ([...url.searchParams.keys()].some(key => key !== "limit") ||
+          url.searchParams.getAll("limit").length > 1) {
+        return respond({ ok: false, error: "candidate_query_invalid" }, 400);
+      }
+      const raw = url.searchParams.get("limit");
+      const limit = raw === null ? 20 : (/^[0-9]{1,2}$/.test(raw) ? Number(raw) : null);
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50) {
+        return respond({ ok: false, error: "candidate_limit_invalid" }, 400);
+      }
+      return respond({ ok: true, items: await this.listCandidates(limit) });
+    }
+    if (url.pathname === "/candidate") {
+      if ([...url.searchParams.keys()].some(key => key !== "id") ||
+          url.searchParams.getAll("id").length !== 1) {
+        return respond({ ok: false, error: "candidate_id_invalid" }, 400);
+      }
+      const candidateId = url.searchParams.get("id");
+      const packet = await this.getReviewPacket(candidateId);
+      if (!packet) return respond({ ok: false, error: "candidate_not_found" }, 404);
+      return respond({ ok: true, packet });
+    }
+    return respond({ ok: false, error: "not_found" }, 404);
+  }
+
   upsertCandidates(candidates, now = Date.now()) {
     if (!Array.isArray(candidates) || candidates.length > MAX_CANDIDATES_PER_BATCH ||
         !Number.isSafeInteger(now) || now < 0 || !Number.isFinite(new Date(now).getTime())) {
@@ -300,10 +336,22 @@ export class AgentAIBankCandidateStore {
       status: counts.has(checkType) ? "evidence_pending_human_review" : "evidence_missing",
       verified: false
     }));
+    const evidence = this.ctx.storage.sql.exec(
+      "SELECT e.evidence_id, e.check_type, e.source_title, e.source_url, e.excerpt, e.source_status, e.review_status, e.submitted_at " +
+      "FROM ai_bank_review_evidence e JOIN ai_bank_review_evidence_releases r ON r.evidence_id = e.evidence_id " +
+      "WHERE e.candidate_id = ? AND r.candidate_release_url = ? " +
+      "ORDER BY e.check_type ASC, e.submitted_at ASC, e.evidence_id ASC LIMIT 30",
+      candidateId, stored.candidate.latest_release.source_url
+    ).toArray().map(row => ({
+      ...row,
+      verified: false,
+      verification_authorized: false
+    }));
     const totalEvidence = checklist.reduce((sum, item) => sum + item.evidence_count, 0);
     return {
       candidate: stored,
       checklist,
+      evidence,
       total_evidence: totalEvidence,
       checks_with_evidence: checklist.filter(item => item.evidence_count > 0).length,
       checks_missing_evidence: checklist.filter(item => item.evidence_count === 0).length,

@@ -70,6 +70,34 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     });
   });
 
+  it("exposes only bounded read-only fetch routes for the reviewer Worker", async () => {
+    await store.upsertCandidates([candidate()], Date.parse("2026-11-19T08:06:00.000Z"));
+
+    const listResponse = await store.fetch(new Request("https://candidate-store.internal/candidates?limit=1"));
+    expect(listResponse.status).toBe(200);
+    const list = await listResponse.json();
+    expect(list.ok).toBe(true);
+    expect(list.items).toHaveLength(1);
+    expect(list.items[0].candidate.candidate_id).toBe("github:ollama/ollama");
+
+    const detailResponse = await store.fetch(new Request(
+      "https://candidate-store.internal/candidate?id=" + encodeURIComponent("github:ollama/ollama")
+    ));
+    expect(detailResponse.status).toBe(200);
+    const detail = await detailResponse.json();
+    expect(detail.ok).toBe(true);
+    expect(detail.packet.candidate.candidate.candidate_id).toBe("github:ollama/ollama");
+    expect(detail.packet.catalog_write_authorized).toBe(false);
+    expect(detail.packet.publication_authorized).not.toBe(true);
+
+    const oversized = await store.fetch(new Request("https://candidate-store.internal/candidates?limit=51"));
+    expect(oversized.status).toBe(400);
+    const write = await store.fetch(new Request("https://candidate-store.internal/candidates", { method: "POST" }));
+    expect(write.status).toBe(405);
+    const unknown = await store.fetch(new Request("https://candidate-store.internal/write"));
+    expect(unknown.status).toBe(404);
+  });
+
   it("deduplicates repeat scans and only replaces a record with a newer release", async () => {
     await store.upsertCandidates([candidate()], Date.parse("2026-11-19T08:06:00.000Z"));
     const repeated = await store.upsertCandidates([candidate()], Date.parse("2026-11-19T09:00:00.000Z"));
@@ -234,6 +262,22 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
       public_publication_authorized: false
     });
     expect(packet.checklist).toHaveLength(6);
+    expect(packet.evidence).toHaveLength(2);
+    expect(packet.evidence.some(item =>
+      item.check_type === "pricing_and_free_limits" &&
+      item.source_title === "Pricing reference" &&
+      item.source_url === "https://ollama.com/pricing" &&
+      item.source_status === "submitted_source_not_verified" &&
+      item.review_status === "pending_human_review" &&
+      item.verified === false &&
+      item.verification_authorized === false
+    )).toBe(true);
+    expect(packet.evidence.some(item =>
+      item.check_type === "license_scope" &&
+      item.source_title === "License reference" &&
+      item.verified === false &&
+      item.verification_authorized === false
+    )).toBe(true);
     expect(packet.checklist.find(item => item.check_type === "pricing_and_free_limits")).toMatchObject({
       evidence_count: 1,
       status: "evidence_pending_human_review",
@@ -263,6 +307,7 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
 
     const packet = await store.getReviewPacket("github:ollama/ollama");
     expect(packet.total_evidence).toBe(0);
+    expect(packet.evidence).toEqual([]);
     expect(packet.checks_missing_evidence).toBe(6);
     const history = await store.listReviewEvidence("github:ollama/ollama");
     expect(history).toHaveLength(1);

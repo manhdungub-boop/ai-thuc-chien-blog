@@ -75,6 +75,7 @@ function expect(actual) {
     }
   };
   const negative = {
+    toBe(expected) { assert.notStrictEqual(actual, expected); },
     toHaveProperty(property) { assert.ok(!hasProperty(actual, property)); },
     toContain(expected) {
       assert.ok(!(actual != null && typeof actual.includes === "function" && actual.includes(expected)));

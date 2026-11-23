@@ -12,6 +12,26 @@ function rpcNamespace(mf, binding) {
       return new Proxy({}, {
         get(_target, method) {
           if (method === "then") return undefined;
+          if (method === "fetch") {
+            return async request => {
+              const response = await mf.dispatchFetch("https://legacy-stores.test/__rpc", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({
+                  binding,
+                  name,
+                  method: "testFetch",
+                  args: [request.url, request.method, Object.fromEntries(request.headers)]
+                })
+              });
+              const payload = await response.json();
+              if (!response.ok || !payload.ok) throw new Error(payload.error || "store_rpc_failed");
+              return new Response(payload.result.body, {
+                status: payload.result.status,
+                headers: payload.result.headers
+              });
+            };
+          }
           return async (...args) => {
             const response = await mf.dispatchFetch("https://legacy-stores.test/__rpc", {
               method: "POST",
