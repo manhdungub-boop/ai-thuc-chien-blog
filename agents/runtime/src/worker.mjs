@@ -506,61 +506,99 @@ const worker = {
         return json({ ok: false, error: "oidc_run_audit_unavailable" }, 503);
       }
 
-      // The private symbol cannot be supplied by an HTTP caller. It authorizes
-      // exactly this in-process handoff to the existing leased /run implementation.
-      const runResponse = await worker.fetch(new Request("https://agent-runtime.internal/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tasks: [validation.task] }),
-      }), env, INTERNAL_OIDC_RUN);
-      if (!runResponse.ok) return runResponse;
-
-      let runResult;
+      // Resume the Durable Object's independent admission latch only after exact
+      // GitHub OIDC authorization. This route is task- and workflow-allowlisted,
+      // and the latch is paused again in finally before any result is returned.
+      const actor = "github-actions:" + authorized.identity.actorId;
+      const requestId = () => crypto.randomUUID();
+      let response = null;
+      let pauseVerified = false;
       try {
-        runResult = await readBoundedJson(runResponse);
-      } catch {
-        return json({ ok: false, error: "oidc_run_result_invalid" }, 503);
-      }
-      const item = runResult?.items?.[0];
-      if (runResult?.ok !== true || runResult?.summary?.total !== 1 ||
-          runResult?.summary?.succeeded !== 1 || item?.state !== "succeeded" ||
-          typeof item.taskId !== "string" || item.result?.taskType !== "content.review") {
-        return json({ ok: false, error: "oidc_run_not_succeeded" }, 503);
-      }
-
-      try {
-        const persisted = await readStateStore(env, "/task?id=" + encodeURIComponent(item.taskId));
-        const afterMetrics = await readStateStore(env, "/metrics");
-        const eventTypes = ["task.queued", "task.claimed", "task.succeeded"];
-        const count = (metrics, eventType) => {
-          const entry = Array.isArray(metrics?.auditLast24h)
-            ? metrics.auditLast24h.find((event) => event?.eventType === eventType)
-            : null;
-          return Number.isSafeInteger(entry?.count) && entry.count >= 0 ? entry.count : 0;
-        };
-        const auditEvents = Object.fromEntries(eventTypes.map((eventType) => [
-          eventType,
-          { before: count(beforeMetrics, eventType), after: count(afterMetrics, eventType) },
-        ]));
-        const auditVerified = eventTypes.every((eventType) =>
-          auditEvents[eventType].after >= auditEvents[eventType].before + 1);
-        if (persisted?.task?.taskId !== item.taskId || persisted.task.state !== "succeeded" ||
-            persisted.task.type !== "content.review" || !persisted.task.result ||
-            persisted.task.result.taskType !== "content.review" || !auditVerified) {
-          return json({ ok: false, error: "oidc_run_persistence_verification_failed" }, 503);
-        }
-        return json({
-          ...runResult,
-          persistence: {
-            verified: true,
-            taskId: item.taskId,
-            state: persisted.task.state,
-            auditEvents,
-          },
+        await writeStateStore(env, "/control/resume", {
+          actor,
+          requestId: requestId(),
+          reason: "one-shot OIDC Preview E2E",
         });
+
+        // The private symbol cannot be supplied by an HTTP caller. It authorizes
+        // exactly this in-process handoff to the existing leased /run implementation.
+        const runResponse = await worker.fetch(new Request("https://agent-runtime.internal/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tasks: [validation.task] }),
+        }), env, INTERNAL_OIDC_RUN);
+        if (!runResponse.ok) {
+          response = runResponse;
+        } else {
+          let runResult;
+          try {
+            runResult = await readBoundedJson(runResponse);
+          } catch {
+            response = json({ ok: false, error: "oidc_run_result_invalid" }, 503);
+          }
+          if (response === null) {
+            const item = runResult?.items?.[0];
+            if (runResult?.ok !== true || runResult?.summary?.total !== 1 ||
+                runResult?.summary?.succeeded !== 1 || item?.state !== "succeeded" ||
+                typeof item.taskId !== "string" || item.result?.taskType !== "content.review") {
+              response = json({ ok: false, error: "oidc_run_not_succeeded" }, 503);
+            } else {
+              try {
+                const persisted = await readStateStore(env, "/task?id=" + encodeURIComponent(item.taskId));
+                const afterMetrics = await readStateStore(env, "/metrics");
+                const eventTypes = ["task.queued", "task.claimed", "task.succeeded"];
+                const count = (metrics, eventType) => {
+                  const entry = Array.isArray(metrics?.auditLast24h)
+                    ? metrics.auditLast24h.find((event) => event?.eventType === eventType)
+                    : null;
+                  return Number.isSafeInteger(entry?.count) && entry.count >= 0 ? entry.count : 0;
+                };
+                const auditEvents = Object.fromEntries(eventTypes.map((eventType) => [
+                  eventType,
+                  { before: count(beforeMetrics, eventType), after: count(afterMetrics, eventType) },
+                ]));
+                const auditVerified = eventTypes.every((eventType) =>
+                  auditEvents[eventType].after >= auditEvents[eventType].before + 1);
+                if (persisted?.task?.taskId !== item.taskId || persisted.task.state !== "succeeded" ||
+                    persisted.task.type !== "content.review" || !persisted.task.result ||
+                    persisted.task.result.taskType !== "content.review" || !auditVerified) {
+                  response = json({ ok: false, error: "oidc_run_persistence_verification_failed" }, 503);
+                } else {
+                  response = json({
+                    ...runResult,
+                    persistence: {
+                      verified: true,
+                      taskId: item.taskId,
+                      state: persisted.task.state,
+                      auditEvents,
+                    },
+                  });
+                }
+              } catch {
+                response = json({ ok: false, error: "oidc_run_persistence_verification_unavailable" }, 503);
+              }
+            }
+          }
+        }
       } catch {
-        return json({ ok: false, error: "oidc_run_persistence_verification_unavailable" }, 503);
+        response = json({ ok: false, error: "oidc_run_execution_unavailable" }, 503);
+      } finally {
+        // Always close the durable admission latch, including when reserve,
+        // claim, heartbeat, execution, or persistence verification fails.
+        try {
+          await writeStateStore(env, "/control/pause", {
+            actor,
+            requestId: requestId(),
+            reason: "one-shot OIDC Preview E2E complete",
+          });
+          const control = await readStateStore(env, "/control");
+          pauseVerified = control?.control?.paused === true;
+        } catch {
+          pauseVerified = false;
+        }
       }
+      if (!pauseVerified) return json({ ok: false, error: "oidc_run_pause_verification_failed" }, 503);
+      return response ?? json({ ok: false, error: "oidc_run_result_unavailable" }, 503);
     }
     if (url.pathname === "/internal/oidc/pause") {
       if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
