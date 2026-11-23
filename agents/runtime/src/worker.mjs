@@ -34,6 +34,19 @@ function json(data, status = 200) {
 function isEnabled(value) { return value === "true"; }
 
 const SAFE_TASK_TYPES = new Set(["content.review", "ai_bank.candidate_review", "seo.audit"]);
+const SAFE_OIDC_DIAGNOSTIC_CODES = new Set([
+  "read_only_source_error",
+  "preview_source_http_error",
+  "preview_source_body_unavailable",
+  "preview_source_too_large",
+  "preview_source_invalid_utf8",
+  "preview_source_fetch_failed",
+  "preview_source_path_not_allowlisted",
+  "preview_ai_bank_catalog_invalid",
+  "article_source_unavailable",
+  "candidate_source_unavailable",
+  "seo_source_unavailable",
+]);
 export function safeReviewResult(item) {
   if (!item || item.ok !== true || !SAFE_TASK_TYPES.has(item.taskType) ||
       !["pass", "attention", "review_required"].includes(item.status) ||
@@ -541,7 +554,10 @@ const worker = {
             if (runResult?.ok !== true || runResult?.summary?.total !== 1 ||
                 runResult?.summary?.succeeded !== 1 || item?.state !== "succeeded" ||
                 typeof item.taskId !== "string" || item.result?.taskType !== "content.review") {
-              response = json({ ok: false, error: "oidc_run_not_succeeded" }, 503);
+              const diagnosticCode = SAFE_OIDC_DIAGNOSTIC_CODES.has(item?.diagnosticCode)
+                ? item.diagnosticCode : undefined;
+              response = json({ ok: false, error: "oidc_run_not_succeeded",
+                ...(diagnosticCode ? { diagnosticCode } : {}) }, 503);
             } else {
               try {
                 const persisted = await readStateStore(env, "/task?id=" + encodeURIComponent(item.taskId));
@@ -895,6 +911,9 @@ const worker = {
             taskId: stored.taskId,
             state: completion.task?.state || (reviewSucceeded ? "succeeded" : "failed"),
             result,
+            ...(context === INTERNAL_OIDC_RUN && !reviewSucceeded &&
+                SAFE_OIDC_DIAGNOSTIC_CODES.has(item?.error)
+              ? { diagnosticCode: item.error } : {}),
           });
         }
         const summary = {
