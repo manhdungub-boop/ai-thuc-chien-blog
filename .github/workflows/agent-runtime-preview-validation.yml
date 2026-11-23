@@ -404,7 +404,7 @@ jobs:
             },
             body: JSON.stringify({ task: {
               type: 'content.review',
-              idempotencyKey: 'oidc-preview-e2e:' + process.env.GITHUB_RUN_ID + ':' + process.env.GITHUB_RUN_ATTEMPT,
+              idempotencyKey: 'oidc-preview-e2e:pr368-once-20261123',
               payload: { articlePath: 'articles/ai-agent-thuc-hanh-tu-thiet-ke-den-kiem-soat.html' },
             } }),
             redirect: 'error',
