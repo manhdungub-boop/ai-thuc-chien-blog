@@ -1,0 +1,89 @@
+name: AI Bank official-feed discovery
+
+on:
+  pull_request:
+    paths:
+      - "scripts/ai-bank-feed-discovery.mjs"
+      - "scripts/ai-bank-lead-triage.mjs"
+      - "scripts/ai-bank-editorial-briefs.mjs"
+      - "data/ai-tools.json"
+      - ".github/workflows/ai-bank-official-feed-discovery.yml"
+  schedule:
+    # Wednesday 09:30 Asia/Ho_Chi_Minh; live discovery stays dormant until AI_BANK_RSS_ENABLED_AT is set.
+    - cron: "30 2 * * 3"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-bank-official-feed-discovery
+  cancel-in-progress: false
+
+jobs:
+  discover:
+    if: github.event_name == 'pull_request' || vars.AI_BANK_RSS_ENABLED_AT != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      AI_BANK_RSS_ENABLED_AT: ${{ vars.AI_BANK_RSS_ENABLED_AT }}
+    steps:
+      - name: Check out repository without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+
+      - name: Check JavaScript syntax
+        run: |
+          node --check scripts/ai-bank-feed-discovery.mjs
+          node --check scripts/ai-bank-lead-triage.mjs
+          node --check scripts/ai-bank-editorial-briefs.mjs
+
+      - name: Run offline RSS parser and size-limit fixtures
+        run: node scripts/ai-bank-feed-discovery.mjs --self-test
+
+      - name: Run AI Bank triage classification fixtures
+        run: node scripts/ai-bank-lead-triage.mjs --self-test
+
+      - name: Validate configured RSS activation timestamp
+        if: github.event_name != 'pull_request'
+        run: |
+          node --input-type=module -e 'const value = process.env.AI_BANK_RSS_ENABLED_AT || ""; if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(value) || !Number.isFinite(Date.parse(value))) { console.error("AI_BANK_RSS_ENABLED_AT must be a UTC ISO-8601 timestamp; live discovery remains disabled."); process.exit(1); } console.log(`RSS activation window begins at ${new Date(value).toISOString()}`);'
+
+      - name: Collect discovery leads from official feeds
+        if: github.event_name != 'pull_request'
+        run: node scripts/ai-bank-feed-discovery.mjs
+
+      - name: Compare leads with the existing AI Bank
+        if: github.event_name != 'pull_request'
+        run: node scripts/ai-bank-lead-triage.mjs
+
+      - name: Create weekly editorial research briefs
+        if: github.event_name != 'pull_request'
+        run: node scripts/ai-bank-editorial-briefs.mjs
+
+      - name: Add discovery, triage and editorial reports to workflow summary
+        if: always()
+        run: |
+          for report in reports/ai-bank/discovery.md reports/ai-bank/triage.md reports/editorial/weekly-topic-research-briefs.md; do
+            if [ -f "$report" ]; then
+              cat "$report" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "Report not generated: $report" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+
+      - name: Preserve discovery, triage and editorial reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: ai-bank-editorial-research-${{ github.run_id }}
+          path: reports/
+          if-no-files-found: warn
+          retention-days: 30
