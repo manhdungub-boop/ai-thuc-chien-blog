@@ -624,7 +624,7 @@ test("durable pause is atomic, survives restart, and resume never dispatches que
     assert.equal(persisted.body.control.version, 2);
     assert.equal((await call(restarted.stub, "/claim", { taskId })).status, 503);
 
-    const resumed = await call(restarted.stub, "/control/resume", { actor: "test-operator", requestId: crypto.randomUUID(), reason: "maintenance complete" });
+    const resumed = await resumeWithCurrentVersion(restarted.stub, { actor: "test-operator", requestId: crypto.randomUUID(), reason: "maintenance complete" });
     assert.equal(resumed.status, 200);
     assert.equal(resumed.body.changed, true);
     assert.equal(resumed.body.control.paused, false);
