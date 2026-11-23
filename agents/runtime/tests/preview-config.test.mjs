@@ -89,6 +89,5 @@ test("GitHub OIDC Pause workflow pins the bearer-token destination to the exact 
   const workflow = readFileSync(workflowPath, "utf8");
   assert.match(workflow, /target\.origin !== 'https:\/\/ai-thuc-chien-agent-runtime-preview\.manhdungub\.workers\.dev'/);
   assert.match(workflow, /target\.pathname !== '\/'/);
-  assert.doesNotMatch(workflow, /ai-thuc-chien-agent-runtime-preview\\\\\?\./);
-  assert.doesNotMatch(workflow, /workers\\\.dev\$\/i\.test\(target\.hostname\)/);
+  assert.doesNotMatch(workflow, /target\.hostname/);
 });
