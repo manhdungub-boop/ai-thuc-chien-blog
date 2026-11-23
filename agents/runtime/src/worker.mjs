@@ -46,7 +46,7 @@ export function safeReviewResult(item) {
         typeof finding.code !== "string" || !/^[a-z][a-z0-9_]{1,79}$/.test(finding.code) ||
         !["error", "warning"].includes(finding.severity) ||
         typeof finding.message !== "string" || finding.message.length < 1 || finding.message.length > 256 ||
-        finding.message.trim() !== finding.message || /[\\u0000-\\u001f\\u007f]/.test(finding.message)) {
+        finding.message.trim() !== finding.message || /[\u0000-\u001f\u007f]/.test(finding.message)) {
       return { ok: false, errorCode: "read_only_review_failed" };
     }
     findings.push({ code: finding.code, severity: finding.severity, message: finding.message });
