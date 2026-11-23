@@ -206,6 +206,13 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
       catalog_write_authorized: false });
     expect(await store.getDiscoveryCursor()).toMatchObject({ cursor: firstCursor, scan_id: "run-100-attempt-1" });
 
+    await store.testSetLegacyDiscoveryDigest();
+    const legacyReplay = await store.upsertCandidatesAndAdvanceCursor(
+      [candidate()], firstCursor, "run-100-attempt-1", Date.parse("2026-11-19T08:07:30.000Z")
+    );
+    expect(legacyReplay).toMatchObject({ accepted: true, duplicate: true, inserted: 0,
+      cursor: firstCursor, cursor_advanced: false, total: 1 });
+
     const replay = await store.upsertCandidatesAndAdvanceCursor(
       [candidate()], firstCursor, "run-100-attempt-1", Date.parse("2026-11-19T08:08:00.000Z")
     );
@@ -513,6 +520,7 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     const reviewedReleaseUrl = "https://github.com/ollama/ollama/releases/tag/v1.2.3";
     const first = await store.submitAuthorizedReviewEvidence("github:ollama/ollama", evidence, token, eventId, reviewedReleaseUrl, writerAuthEnv, now);
     expect(first).toMatchObject({ accepted: true, replay_protected: true, audit_event_id: canonicalEventId, verification_authorized: false, catalog_write_authorized: false, public_publication_authorized: false });
+    await store.testUppercaseAuditEventId(canonicalEventId);
     expect(await store.submitAuthorizedReviewEvidence("github:ollama/ollama", evidence, token, canonicalEventId, reviewedReleaseUrl, writerAuthEnv, now)).toEqual({ accepted: false, reason: "duplicate_audit_event" });
     expect(await store.submitAuthorizedReviewEvidence("github:ollama/ollama", { ...evidence, excerpt: "Changed payload." }, token, canonicalEventId, reviewedReleaseUrl, writerAuthEnv, now)).toEqual({ accepted: false, reason: "audit_event_id_reused" });
     expect(await store.listReviewEvidence("github:ollama/ollama")).toHaveLength(1);
