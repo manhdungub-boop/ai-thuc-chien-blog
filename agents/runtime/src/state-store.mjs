@@ -723,9 +723,21 @@ if (url.pathname === "/task" && request.method === "GET") {
           }
         };
         if (current.paused === (paused ? 1 : 0)) {
-          // Repeated Pause is idempotent but still repairs any stale running
-          // lease left by an earlier runtime version or interrupted rollout.
-          if (paused) cancelRunningTasks();
+          // A repeated emergency Pause must fence any Resume that observed an
+          // earlier control version, even though the paused state is unchanged.
+          if (paused) {
+            const version = current.version + 1;
+            this.sql.exec("UPDATE runtime_control SET changed_at = ?, version = ? WHERE singleton_id = 1 AND version = ? AND paused = 1",
+              now, version, current.version);
+            const updated = this.controlState();
+            if (updated.version !== version || !updated.paused) {
+              return { status: 409, body: { ok: false, error: "runtime_control_conflict" } };
+            }
+            this.sql.exec("INSERT INTO runtime_control_audit (event_id, action, occurred_at, actor, reason, request_id) VALUES (?,?,?,?,?,?)",
+              crypto.randomUUID(), "pause", now, body.actor, body.reason ?? "", body.requestId);
+            cancelRunningTasks();
+            return { status: 200, body: { ok: true, changed: false, control: updated } };
+          }
           return { status: 200, body: { ok: true, changed: false, control: this.controlState() } };
         }
         const version = current.version + 1;
