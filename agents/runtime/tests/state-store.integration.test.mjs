@@ -71,7 +71,7 @@ async function resumeControl(stub, body) {
   if (observed.status !== 200 || !Number.isSafeInteger(observed.body?.control?.version)) {
     throw new Error("test_control_state_unavailable");
   }
-  return resumeControl(stub, {
+  return call(stub, "/control/resume", {
     ...body,
     expectedVersion: observed.body.control.version,
   });
