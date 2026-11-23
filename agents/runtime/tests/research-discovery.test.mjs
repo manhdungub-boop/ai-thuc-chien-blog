@@ -55,6 +55,22 @@ describe("read-only AI research discovery", () => {
     expect(new TextEncoder().encode(JSON.stringify(result)).byteLength).toBeLessThan(8192);
   });
 
+  it("does not extract fake entries embedded in XML comments or CDATA", async () => {
+    const result = await discoverResearchSignals({
+      now: NOW,
+      fetchImpl: async url => {
+        const source = RESEARCH_FEED_SOURCES.find(item => item.feed === url);
+        const fakeInComment = "<!-- " + entryFor(source, "comment-fake") + " -->";
+        const fakeInCdata = "<description><![CDATA[" + entryFor(source, "cdata-fake") + "]]></description>";
+        return new Response(feedDocumentFor(source, fakeInComment + fakeInCdata + entryFor(source, "real")));
+      }
+    });
+    expect(result.ok).toBe(true);
+    expect(result.sources_succeeded).toBe(4);
+    expect(result.signal_count).toBe(4);
+    expect(result.latest_signals.every(item => item.url.endsWith("/research-update-real"))).toBe(true);
+  });
+
   it("does not count HTTP 200 HTML error pages as successful feed scans", async () => {
     const result = await discoverResearchSignals({
       now: NOW,
