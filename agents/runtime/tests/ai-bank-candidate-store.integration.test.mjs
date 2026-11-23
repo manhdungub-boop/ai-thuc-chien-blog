@@ -170,6 +170,28 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     expect(await store.stats()).toMatchObject({ total: 0 });
   });
 
+  it("rolls back a mid-batch SQL failure and safely retries the complete batch", async () => {
+    await store.testInstallCandidateInsertFailureTrigger();
+    await expect(Promise.resolve().then(() => store.upsertCandidates([
+      candidate(), candidate(sources[1])
+    ], Date.parse("2026-11-19T08:06:00.000Z")))).rejects.toThrow("injected_candidate_insert_failure");
+
+    expect(await store.stats()).toMatchObject({ total: 0 });
+    expect(await store.listCandidates()).toEqual([]);
+
+    await store.testDropCandidateInsertFailureTrigger();
+    const retried = await store.upsertCandidates([
+      candidate(), candidate(sources[1])
+    ], Date.parse("2026-11-19T08:07:00.000Z"));
+    expect(retried).toMatchObject({ accepted: true, inserted: 2, updated: 0, unchanged: 0, total: 2 });
+
+    const repeated = await store.upsertCandidates([
+      candidate(), candidate(sources[1])
+    ], Date.parse("2026-11-19T08:08:00.000Z"));
+    expect(repeated).toMatchObject({ accepted: true, inserted: 0, updated: 0, unchanged: 2, total: 2 });
+    expect(await store.listCandidates()).toHaveLength(2);
+  });
+
   it("rejects duplicate IDs within a batch and oversized batches", async () => {
     expect(await store.upsertCandidates([candidate(), candidate()])).toEqual({
       accepted: false, reason: "duplicate_candidate_in_batch"

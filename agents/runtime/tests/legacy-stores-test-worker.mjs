@@ -3,7 +3,7 @@ import { AgentDraftStore } from "../src/draft-artifact-store.mjs";
 import { AgentReviewerAuthStore } from "../src/google-reviewer-auth-store.mjs";
 
 const METHODS = {
-  AGENT_AI_BANK_CANDIDATE_STORE: new Set(["upsertCandidates", "listCandidates", "getCandidate", "submitAuthorizedReviewEvidence", "listReviewEvidence", "getReviewPacket", "stats", "testFetch"]),
+  AGENT_AI_BANK_CANDIDATE_STORE: new Set(["upsertCandidates", "listCandidates", "getCandidate", "submitAuthorizedReviewEvidence", "listReviewEvidence", "getReviewPacket", "stats", "testFetch", "testInstallCandidateInsertFailureTrigger", "testDropCandidateInsertFailureTrigger"]),
   AGENT_DRAFT_STORE: new Set(["createDraft", "reviseDraft", "reviseDraftForReviewer", "recordReviewerClaimDecisions", "storeEvidenceLedger", "recordEvidenceReview", "listPendingReviewsForReviewer", "listNeedsRevisionForReviewer", "getDraftForReviewer", "getDraft", "reviewDraft", "listPendingReviews", "listNeedsRevision", "listOwnerReleaseReviews", "stats"]),
   AGENT_REVIEWER_AUTH_STORE: new Set(["consumeStartRateLimit", "createTransaction", "consumeTransaction"])
 };
@@ -39,7 +39,21 @@ function withRpcFetch(Base, binding) {
   };
 }
 
-class TestAgentAIBankCandidateStore extends withRpcFetch(AgentAIBankCandidateStore, "AGENT_AI_BANK_CANDIDATE_STORE") {}
+class TestAgentAIBankCandidateStore extends withRpcFetch(AgentAIBankCandidateStore, "AGENT_AI_BANK_CANDIDATE_STORE") {
+  testInstallCandidateInsertFailureTrigger() {
+    this.ctx.storage.sql.exec(
+      "CREATE TRIGGER test_fail_second_candidate_insert BEFORE INSERT ON ai_bank_candidates " +
+      "WHEN NEW.candidate_id = 'github:Comfy-Org/ComfyUI' " +
+      "BEGIN SELECT RAISE(ABORT, 'injected_candidate_insert_failure'); END"
+    );
+    return true;
+  }
+
+  testDropCandidateInsertFailureTrigger() {
+    this.ctx.storage.sql.exec("DROP TRIGGER IF EXISTS test_fail_second_candidate_insert");
+    return true;
+  }
+}
 class TestAgentDraftStore extends withRpcFetch(AgentDraftStore, "AGENT_DRAFT_STORE") {}
 class TestAgentReviewerAuthStore extends withRpcFetch(AgentReviewerAuthStore, "AGENT_REVIEWER_AUTH_STORE") {}
 
