@@ -205,7 +205,9 @@ jobs:
           assert.doesNotMatch(validateJobSource, /secrets\\.[A-Z0-9_]+/, 'validation job must not reference a secret value');
           assert.ok(e2eWorkflow.includes("github.event_name == 'pull_request'"));
           assert.ok(e2eWorkflow.includes("github.event.action == 'labeled'"));
+          assert.ok(e2eWorkflow.includes("github.event.action == 'synchronize'"));
           assert.ok(e2eWorkflow.includes("github.event.label.name == 'agent-runtime'"));
+          assert.ok(e2eWorkflow.includes("github.event.pull_request.labels.*.name"));
           assert.ok(e2eWorkflow.includes("github.actor_id == '342528485'"), 'one-shot E2E must be restricted to repository owner actor');
           assert.ok(e2eWorkflow.includes("github.event.pull_request.head.ref == 'security/fence-leases-on-circuit-breaker-pause-20261123'"));
           assert.ok(e2eWorkflow.includes('id-token: write'));
@@ -240,8 +242,10 @@ jobs:
   one-shot-preview-e2e:
     if: >-
       github.event_name == 'pull_request' &&
-      github.event.action == 'labeled' &&
-      github.event.label.name == 'agent-runtime' &&
+      (
+        (github.event.action == 'labeled' && github.event.label.name == 'agent-runtime') ||
+        (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'agent-runtime'))
+      ) &&
       github.repository == 'manhdungub-boop/ai-thuc-chien-blog' &&
       github.event.pull_request.head.repo.full_name == 'manhdungub-boop/ai-thuc-chien-blog' &&
       github.event.pull_request.head.ref == 'security/fence-leases-on-circuit-breaker-pause-20261123' &&
