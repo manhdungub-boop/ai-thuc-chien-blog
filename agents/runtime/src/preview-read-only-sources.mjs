@@ -56,7 +56,7 @@ async function fetchRepositoryResponse(url, signal) {
     if (signal?.aborted || error?.name === "AbortError") {
       throw new Error("task_execution_aborted");
     }
-    if (/^preview_source_(?:http_error|redirect_rejected)_raw_\\d{3}$/.test(error?.message || "")) throw error;
+    if (/^preview_source_(?:http_error|redirect_rejected)_raw_\d{3}$/.test(error?.message || "")) throw error;
     throw new Error("preview_source_fetch_failed");
   }
   if (signal?.aborted) throw new Error("task_execution_aborted");
