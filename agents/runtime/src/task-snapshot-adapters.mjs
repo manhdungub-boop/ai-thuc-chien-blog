@@ -170,6 +170,9 @@ function candidateSnapshot(candidateId, catalog) {
 
 const SAFE_SOURCE_ERROR_CODES = new Set([
   "preview_source_http_error",
+  "preview_source_http_error_body_404",
+  "preview_source_http_error_body_403",
+  "preview_source_http_error_body_429",
   "preview_source_body_unavailable",
   "preview_source_too_large",
   "preview_source_invalid_utf8",
@@ -179,7 +182,10 @@ const SAFE_SOURCE_ERROR_CODES = new Set([
 ]);
 
 function safeSourceErrorCode(error) {
-  return SAFE_SOURCE_ERROR_CODES.has(error?.message) ? error.message : "read_only_source_error";
+  const message = error?.message || "";
+  return SAFE_SOURCE_ERROR_CODES.has(message) ||
+    /^preview_source_(?:http_error|redirect_rejected)_(?:contents|raw|body)_\d{3}$/.test(message)
+    ? message : "read_only_source_error";
 }
 
 function unavailable(reason) {
