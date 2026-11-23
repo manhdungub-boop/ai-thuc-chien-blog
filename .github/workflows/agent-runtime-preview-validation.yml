@@ -459,7 +459,7 @@ jobs:
               !['task.queued', 'task.claimed', 'task.succeeded'].every(type =>
                 result.persistence.auditEvents?.[type]?.after >= result.persistence.auditEvents?.[type]?.before + 1)) {
             throw new Error('One-shot read-only task or durable audit verification failed: ' +
-              JSON.stringify({ httpStatus: response.status, error: result?.error, state: item?.state }));
+              JSON.stringify({ httpStatus: response.status, error: result?.error, diagnosticCode: result?.diagnosticCode, state: item?.state }));
           }
           console.log(JSON.stringify({
             ok: true,
