@@ -71,6 +71,25 @@ describe("read-only AI research discovery", () => {
     expect(result.latest_signals.every(item => item.url.endsWith("/research-update-real"))).toBe(true);
   });
 
+  it("ignores nested item and entry elements that are not direct feed entries", async () => {
+    const result = await discoverResearchSignals({
+      now: NOW,
+      fetchImpl: async url => {
+        const source = RESEARCH_FEED_SOURCES.find(item => item.feed === url);
+        const real = entryFor(source, "real");
+        const nested = entryFor(source, "nested-fake");
+        const wrapped = source.name === "Google DeepMind" || source.name === "Hugging Face"
+          ? real.replace("</entry>", "<content type=\"xhtml\"><div xmlns=\"http://www.w3.org/1999/xhtml\">" + nested + "</div></content></entry>")
+          : real.replace("</item>", "<description><div>" + nested + "</div></description></item>");
+        return new Response(feedDocumentFor(source, wrapped));
+      }
+    });
+    expect(result.ok).toBe(true);
+    expect(result.sources_succeeded).toBe(4);
+    expect(result.signal_count).toBe(4);
+    expect(result.latest_signals.every(item => item.url.endsWith("/research-update-real"))).toBe(true);
+  });
+
   it("does not count HTTP 200 HTML error pages as successful feed scans", async () => {
     const result = await discoverResearchSignals({
       now: NOW,
