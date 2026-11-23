@@ -149,7 +149,9 @@ async function handleOperatorControl(request, env, url) {
     const usage = usageResult.ok ? usageResult.body : null;
     const usageAvailable = Boolean(usage &&
       Number.isSafeInteger(usage.acceptedToday) && usage.acceptedToday >= 0 &&
-      Number.isSafeInteger(usage.inFlight) && usage.inFlight >= 0);
+      Number.isSafeInteger(usage.inFlight) && usage.inFlight >= 0 &&
+      Number.isSafeInteger(usage.dailyLimit) && usage.dailyLimit >= 1 &&
+      Number.isSafeInteger(usage.concurrentLimit) && usage.concurrentLimit >= 1);
     return json({
       ok: true,
       control: controlView(controlResult.body.control),
@@ -164,8 +166,8 @@ async function handleOperatorControl(request, env, url) {
           available: usageAvailable,
           accepted_today: usageAvailable ? usage.acceptedToday : null,
           in_flight: usageAvailable ? usage.inFlight : null,
-          daily_limit: 100,
-          concurrency_limit: 5
+          daily_limit: usageAvailable ? usage.dailyLimit : null,
+          concurrency_limit: usageAvailable ? usage.concurrentLimit : null
         }
       }
     });
