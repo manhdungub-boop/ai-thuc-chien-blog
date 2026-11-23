@@ -59,7 +59,7 @@ function maskNonElementMarkup(xml) {
       index = end + 2;
       continue;
     }
-    if (/^<!DOCTYPE\\b/i.test(xml.slice(index))) {
+    if (/^<!DOCTYPE\b/i.test(xml.slice(index))) {
       let quote = null;
       let subsetDepth = 0;
       let end = -1;
@@ -89,7 +89,8 @@ function maskNonElementMarkup(xml) {
 }
 
 function parseItems(xml, source, cutoff, now) {
-  return [...xml.matchAll(/<(item|entry)(?:\s[^>]*)?>([\s\S]*?)<\/\1>/gi)].map(match => {
+  const searchableXml = maskNonElementMarkup(xml);
+  return [...searchableXml.matchAll(/<(item|entry)(?:\s[^>]*)?>([\s\S]*?)<\/\1>/gi)].map(match => {
     const body = match[2];
     const title = cleanText(elementText(body, "title"), 120);
     const summary = cleanText(elementText(body, "description") || elementText(body, "summary") || elementText(body, "content:encoded"), 160);
