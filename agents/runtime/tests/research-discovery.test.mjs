@@ -208,4 +208,38 @@ describe("read-only AI research discovery", () => {
     }
   });
 
+  it("accepts a valid XML declaration only at the beginning of a feed", async () => {
+    const result = await discoverResearchSignals({
+      now: NOW,
+      fetchImpl: async url => {
+        const source = RESEARCH_FEED_SOURCES.find(item => item.feed === url);
+        return new Response('<?xml version="1.0" encoding="UTF-8"?>' + feedFor(source), { status: 200 });
+      }
+    });
+    expect(result.ok).toBe(true);
+    expect(result.sources_succeeded).toBe(4);
+    expect(result.signal_count).toBe(4);
+    expect(result.sources_failed).toEqual([]);
+  });
+
+  it("rejects XML declarations after the root, inside the root, or with invalid grammar", async () => {
+    const malformed = [
+      '<rss><channel/></rss><?xml version="1.0"?>',
+      '<?xml version="1.0"?><rss><?xml version="1.0"?><channel/></rss>',
+      '<?xml encoding="UTF-8" version="1.0"?><rss><channel/></rss>',
+      '<?xml version="2.0"?><rss><channel/></rss>',
+      '<?XML version="1.0"?><rss><channel/></rss>'
+    ];
+    for (const document of malformed) {
+      const result = await discoverResearchSignals({
+        now: NOW,
+        fetchImpl: async () => new Response(document, { status: 200 })
+      });
+      expect(result.ok).toBe(false);
+      expect(result.sources_succeeded).toBe(0);
+      expect(result.sources_failed).toHaveLength(4);
+      expect(result.sources_failed.every(item => item.error === "invalid_feed_document")).toBe(true);
+    }
+  });
+
 });
