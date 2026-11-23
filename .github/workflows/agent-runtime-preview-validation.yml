@@ -61,13 +61,26 @@ jobs:
       - name: Report exact npm dependency advisories
         if: always()
         run: |
-          npm audit --prefix "$RUNNER_TEMP/agent-runtime-audit" --json > "$RUNNER_TEMP/agent-runtime-npm-audit.json" || true
-          node --input-type=module <<'NODE'
+          audit_exit=0
+          npm audit --prefix "$RUNNER_TEMP/agent-runtime-audit" --audit-level=high --json > "$RUNNER_TEMP/agent-runtime-npm-audit.json" || audit_exit=$?
+          NPM_AUDIT_EXIT_CODE="$audit_exit" node --input-type=module <<'NODE'
           import { readFile } from 'node:fs/promises';
           const report = JSON.parse(await readFile(process.env.RUNNER_TEMP + '/agent-runtime-npm-audit.json', 'utf8'));
           const vulnerabilities = report.vulnerabilities ?? {};
-          const totals = report.metadata?.vulnerabilities ?? {};
+          const totals = report.metadata?.vulnerabilities;
+          const countFields = ['info', 'low', 'moderate', 'high', 'critical', 'total'];
+          if (!totals || !countFields.every(field => Number.isSafeInteger(totals[field]) && totals[field] >= 0)) {
+            throw new Error('npm audit did not return complete vulnerability metadata; refusing to treat the scan as clean.');
+          }
+          const auditExitCode = Number(process.env.NPM_AUDIT_EXIT_CODE);
+          if (!Number.isInteger(auditExitCode) || auditExitCode < 0) {
+            throw new Error('npm audit exit status is unavailable; refusing to treat the scan as clean.');
+          }
+          if (auditExitCode !== 0 && totals.total === 0) {
+            throw new Error('npm audit failed without reporting vulnerability metadata; refusing to treat the scan as clean.');
+          }
           console.log(JSON.stringify({
+            audit_exit_code: auditExitCode,
             totals,
             packages: Object.entries(vulnerabilities).map(([name, item]) => ({
               name,
@@ -85,7 +98,7 @@ jobs:
               }))
             }))
           }, null, 2));
-          if ((totals.high ?? 0) > 0 || (totals.critical ?? 0) > 0) {
+          if (totals.high > 0 || totals.critical > 0) {
             throw new Error('High or critical dependency advisories remain in the isolated test dependency tree.');
           }
           NODE

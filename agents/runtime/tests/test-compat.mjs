@@ -1,4 +1,4 @@
-import assert from "node:assert";
+import assert from "node:assert/strict";
 
 function partialMatch(actual, expected, path = "value") {
   if (expected && typeof expected === "object") {
