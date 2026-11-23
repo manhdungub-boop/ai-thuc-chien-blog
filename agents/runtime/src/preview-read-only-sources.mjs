@@ -2,7 +2,7 @@ const GITHUB_CONTENTS_ORIGIN = "https://api.github.com/repos/manhdungub-boop/ai-
 const MAX_SOURCE_BYTES = 512 * 1024;
 
 async function readBoundedResponse(response, limit, signal) {
-  if (!response || !response.ok) throw new Error("preview_source_http_error");
+  if (!response || !response.ok) throw new Error("preview_source_http_error_body_" + (response?.status || "unknown"));
   if (!response.body) throw new Error("preview_source_body_unavailable");
   const declared = Number(response.headers.get("content-length") || 0);
   if (Number.isFinite(declared) && declared > limit) throw new Error("preview_source_too_large");
@@ -67,7 +67,7 @@ async function fetchRepositoryResponse(url, relativePath, signal) {
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get("location");
       if (!location || !isAllowedRawRedirect(location, url, relativePath)) {
-        throw new Error("preview_source_http_error");
+        throw new Error("preview_source_redirect_rejected_contents_" + response.status);
       }
       const target = new URL(location, url);
       response = await fetch(target.toString(), {
@@ -79,14 +79,17 @@ async function fetchRepositoryResponse(url, relativePath, signal) {
       // Never follow a second redirect. The redirect target is pinned to the
       // exact public repository, branch, and allowlisted file path.
       if (response.status >= 300 && response.status < 400) {
-        throw new Error("preview_source_http_error");
+        throw new Error("preview_source_redirect_rejected_raw_" + response.status);
+      }
+      if (!response.ok) {
+        throw new Error("preview_source_http_error_raw_" + response.status);
       }
     }
   } catch (error) {
     if (signal?.aborted || error?.name === "AbortError") {
       throw new Error("task_execution_aborted");
     }
-    if (error?.message === "preview_source_http_error") throw error;
+    if (/^preview_source_(?:http_error|redirect_rejected)_(?:contents|raw|body)_\d{3}$/.test(error?.message || "")) throw error;
     throw new Error("preview_source_fetch_failed");
   }
   if (signal?.aborted) throw new Error("task_execution_aborted");
