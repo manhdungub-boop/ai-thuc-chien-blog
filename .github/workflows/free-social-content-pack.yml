@@ -1,4 +1,4 @@
-name: Free social content draft pack
+name: Free Facebook content draft
 
 on:
   schedule:
@@ -6,9 +6,7 @@ on:
     - cron: "0 2 * * 3"
   workflow_dispatch:
   pull_request:
-    branches: [main]
     paths:
-      - "feed.xml"
       - "scripts/generate-social-content-pack.mjs"
       - ".github/workflows/free-social-content-pack.yml"
 
@@ -16,11 +14,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: free-social-content-pack
+  group: free-facebook-content-draft-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  build-draft-pack:
+  validate-facebook-draft:
+    # Pull requests run tests only; draft generation remains restricted to public main.
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -39,27 +39,30 @@ jobs:
           node --check scripts/generate-social-content-pack.mjs
           node scripts/generate-social-content-pack.mjs --self-test
 
-      - name: Generate social drafts from published RSS entries
+      - name: Generate Facebook draft from published RSS entries
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         run: |
-          node scripts/generate-social-content-pack.mjs --feed feed.xml --out reports/social/social-content-pack.md
+          node scripts/generate-social-content-pack.mjs --feed feed.xml --out reports/social/facebook-content-draft.md
 
-      - name: Add draft summary to workflow run
+      - name: Add Facebook draft summary to workflow run
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         run: |
           {
-            echo "## Free social content draft pack"
+            echo "## Free Facebook content draft"
             echo
             echo "- Source: repository RSS only"
             echo "- Output: five newest published articles, or fewer if RSS contains fewer entries"
-            echo "- Destinations: Facebook Page, TikTok, and YouTube Shorts draft copy"
+            echo "- Destination: Facebook Page draft copy only"
             echo "- No social publishing, account mutation, external API, paid service, or secret access"
             echo
-            cat reports/social/social-content-pack.md
+            cat reports/social/facebook-content-draft.md
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Preserve draft pack
+      - name: Preserve Facebook draft
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: free-social-content-pack-${{ github.run_id }}
-          path: reports/social/social-content-pack.md
+          name: free-facebook-content-draft-${{ github.run_id }}
+          path: reports/social/facebook-content-draft.md
           if-no-files-found: error
           retention-days: 14

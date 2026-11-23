@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-11-16T17:13:33+07:00",
+  "generated_at": "2026-11-20T23:40:00+07:00",
   "catalog_policy": {
     "default_locale": "vi",
     "currency": "USD",
@@ -61,12 +61,12 @@
         "android"
       ],
       "description": "Trợ lý AI của Google cho hỏi đáp, viết và xử lý nội dung.",
-      "free_tier_summary": "Có quyền truy cập tiêu chuẩn miễn phí; giới hạn prompt và tính năng có thể thay đổi theo thời điểm, khu vực và gói AI.",
+      "free_tier_summary": "Tài khoản cá nhân không có gói Google AI được dùng Gemini theo hạn mức tính toán. Giới hạn thay đổi theo model, tính năng, nhu cầu hệ thống và tài khoản; hạn mức thường làm mới sau mỗi 5 giờ cho đến khi chạm giới hạn tuần. Gói Google AI trả phí cung cấp hạn mức cao hơn. Google có thể thay đổi giới hạn mà không báo trước.",
       "official_sources": [
         "https://gemini.google.com/",
         "https://support.google.com/gemini/answer/16275805?hl=en"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-17",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -130,7 +130,7 @@
       "official_sources": [
         "https://www.perplexity.ai/enterprise/pricing"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-17",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -155,13 +155,13 @@
         "web"
       ],
       "description": "Không gian nghiên cứu dựa trên tài liệu và nguồn do người dùng cung cấp.",
-      "free_tier_summary": "Có gói Standard miễn phí; giới hạn hiện được công bố gồm 100 notebook/người dùng và 50 nguồn/notebook. Hạn mức có thể thay đổi.",
+      "free_tier_summary": "Gemini Notebook Standard có gói miễn phí khi dùng tài khoản Gmail; hạn mức công bố hiện gồm tối đa 100 notebook/người dùng và 50 nguồn/notebook. Hạn mức AI phụ thuộc mức sử dụng và có thể thay đổi theo thời điểm; các gói Google AI trả phí cung cấp hạn mức cao hơn. Người dùng tại Việt Nam cần lưu ý có thể xuất hiện watermark trên một số nội dung theo trang trợ giúp Google.",
       "official_sources": [
         "https://notebooklm.google.com/",
         "https://support.google.com/gemininotebook/answer/16213268",
         "https://support.google.com/gemininotebook/answer/17670842"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-17",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -219,12 +219,12 @@
         "web"
       ],
       "description": "Công cụ tạo và chỉnh sửa hình ảnh, vector, video và audio bằng AI trong hệ sinh thái Adobe; các tính năng tiêu thụ generative credits theo loại tính năng và gói.",
-      "free_tier_summary": "Gói miễn phí được cấp generative credits khi người dùng sử dụng tính năng Firefly lần đầu; credits miễn phí hết hạn sau một tháng kể từ ngày cấp và được cấp lại khi bắt đầu lần sử dụng đầu tiên ở tháng tiếp theo. Số credits và mức tiêu thụ phụ thuộc gói, tính năng và model; credits không cộng dồn. Tính năng premium có thể tiêu thụ nhiều credits, ví dụ Generate Video 1080p/24fps dùng 100 credits mỗi giây theo FAQ Adobe cập nhật 27/10/2026.",
+      "free_tier_summary": "Người dùng miễn phí chưa đăng ký gói được cấp một số lượt tạo nội dung AI miễn phí mỗi ngày, dùng chung trên các tính năng AI tạo sinh được hỗ trợ và một nhóm model được chọn. Hạn mức được làm mới hằng ngày nhưng số lượt, tính năng và model có thể thay đổi. Muốn tạo thêm hoặc dùng đầy đủ model/tính năng cần gói Adobe trả phí; không coi lượt miễn phí là một số credits cố định mỗi tháng.",
       "official_sources": [
         "https://firefly.adobe.com/",
         "https://helpx.adobe.com/creative-cloud/apps/generative-ai/generative-credits-faq.html"
       ],
-      "last_verified": "2026-11-05",
+      "last_verified": "2026-11-17",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -285,11 +285,11 @@
         "web"
       ],
       "description": "Nền tảng tạo và chỉnh sửa video, hình ảnh bằng mô hình AI.",
-      "free_tier_summary": "Gói Free $0 cung cấp 125 tín dụng một lần để trải nghiệm; không phải hạn mức tín dụng miễn phí làm mới hằng tháng.",
+      "free_tier_summary": "Gói Free cung cấp 125 credits một lần (không hết hạn, không làm mới), 5 GB lưu trữ và quyền truy cập một số công cụ/model được chọn; danh sách có thể thay đổi. Video tạo trên Free plan có watermark Runway. Không thể mua thêm credits trên Free; muốn thêm credits hoặc bỏ watermark phải nâng cấp gói trả phí. Vì dự án yêu cầu 0 đồng và video chuyên nghiệp không watermark, chỉ dùng Runway để thử nghiệm nội bộ nếu chấp nhận watermark; không dùng làm nguồn xuất bản chính. Không nhập dữ liệu riêng tư hoặc nội dung chưa công khai vào dịch vụ cloud.",
       "official_sources": [
         "https://runway.com/pricing"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-18",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -319,7 +319,7 @@
         "https://aistudio.google.com/",
         "https://ai.google.dev/gemini-api/docs/pricing"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-17",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -346,13 +346,13 @@
         "self_hosted"
       ],
       "description": "Nền tảng workflow automation kết nối ứng dụng, trigger/action và AI agent.",
-      "free_tier_summary": "Activepieces Cloud Free hiện công bố $0, không cần thẻ, unlimited flows và tối đa 5 users; gồm Flows, Agents, Tables, MCP và API access. Lưu ý trang giá chính thức đang có thông tin không nhất quán về chu kỳ credits: phần đầu và FAQ nêu 1.000 credits mỗi tháng, nhưng bảng so sánh ghi Free reset hằng ngày và hết quota thì chờ đến ngày sau. Vì vậy không khẳng định chu kỳ làm mới cho đến khi nhà cung cấp làm rõ. Free không thu phí vượt quota; AI steps tiêu thụ credits bổ sung theo loại model (trang giá nêu fast 2, smart 10, frontier 20 credits mỗi AI step). Không chuyển sang Plus/Team hoặc bật thanh toán nếu giữ ngân sách 0 đồng. Community Edition tự lưu trữ dùng lõi MIT; tính năng Enterprise/Cloud nâng cao thuộc Commercial License. Self-host cần máy chủ, vận hành và cập nhật riêng.",
+      "free_tier_summary": "Cloud Free có giá $0, không cần thẻ và không giới hạn số flow. Trang giá chính thức nêu 1.000 credits/tháng, nhưng cùng trang có mô tả reset/overage không nhất quán: bảng so sánh ghi reset hằng ngày và chờ đến ngày hôm sau, còn FAQ nói 1.000 credits làm mới theo tháng. Kiểm tra quota thực tế trong workspace; không bật pay-as-you-go hoặc nâng cấp nếu ngân sách bằng 0. AI steps tiêu thụ credits theo model (fast 2, smart 10, frontier 20).",
       "official_sources": [
         "https://www.activepieces.com/pricing",
         "https://www.activepieces.com/docs/about/license",
         "https://www.activepieces.com/docs/install/overview"
       ],
-      "last_verified": "2026-11-16",
+      "last_verified": "2026-11-20",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -425,7 +425,7 @@
         "https://langfuse.com/self-hosting",
         "https://github.com/langfuse/langfuse"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-17",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -467,7 +467,7 @@
         "https://github.com/BerriAI/litellm/blob/main/enterprise/LICENSE.md",
         "https://github.com/BerriAI/litellm/blob/main/pyproject.toml"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-17",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -508,7 +508,7 @@
         "https://github.com/alibaba/dify/blob/main/LICENSE",
         "https://docs.dify.ai/"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-17",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -622,7 +622,7 @@
         "cloud"
       ],
       "description": "Dịch vụ API gateway tổng hợp nhiều nhà cung cấp LLM, chuẩn hóa API, hỗ trợ routing/fallback và lựa chọn mô hình miễn phí hoặc trả phí.",
-      "free_tier_summary": "Free plan hiện công bố 25+ free models và 4 free providers; free model variants có rate limits 20 requests/min và 50/day (có thể tăng sau khi mua credits). Paid inference tính theo token; Standard có platform fee 5.5% khi mua credits.",
+      "free_tier_summary": "Gói Free công bố hơn 25 model miễn phí và 4 nhà cung cấp miễn phí. Các model có biến thể :free được giới hạn 20 requests/phút và 50 requests/ngày; model $0 khác có thể chịu giới hạn riêng của model/nhà cung cấp. Mua từ $10 credits có thể nâng giới hạn ngày lên 1.000 requests nhưng sẽ phát sinh khoản nạp tiền, vì vậy không thực hiện trong quy trình 0 đồng. Chỉ chọn đúng model có giá $0 và nhãn/ID :free; không bật paid fallback, không nạp credits, không thêm phương thức thanh toán. Model miễn phí có thể thay đổi và một số endpoint có context window thấp hơn bản trả phí. Lỗi request vẫn có thể tính vào quota ngày. Kiểm tra giá và giới hạn ngay trước khi sử dụng.",
       "official_sources": [
         "https://openrouter.ai/",
         "https://openrouter.ai/pricing",
@@ -630,7 +630,7 @@
         "https://openrouter.ai/docs",
         "https://openrouter.ai/docs/limits"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-18",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -670,7 +670,7 @@
         "https://tesseract-ocr.github.io/tessdoc/",
         "https://github.com/tesseract-ocr/tessdata"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-17",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -751,7 +751,7 @@
         "https://www.datalab.to/pricing",
         "https://github.com/datalab-to/surya/blob/master/MODEL_LICENSE"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-17",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -792,7 +792,7 @@
         "https://unstructured.io/pricing",
         "https://github.com/Unstructured-IO/unstructured/blob/main/LICENSE.md"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-17",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -832,7 +832,7 @@
         "https://github.com/datalab-to/marker/blob/master/LICENSE",
         "https://github.com/datalab-to/marker/blob/master/MODEL_LICENSE"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-17",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -878,7 +878,7 @@
         "https://github.com/snakers4/silero-vad/blob/master/LICENSE",
         "https://pypi.org/project/whisperx/"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-17",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -923,7 +923,7 @@
         "https://github.com/OpenHands/enterprise",
         "https://github.com/OpenHands/enterprise/blob/main/LICENSE"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-17",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -964,7 +964,7 @@
         "https://github.com/Aider-AI/aider/blob/main/LICENSE.txt",
         "https://aider.chat/docs/"
       ],
-      "last_verified": "2026-11-01",
+      "last_verified": "2026-11-17",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -1006,7 +1006,7 @@
         "https://huggingface.co/docs/hub/security",
         "https://huggingface.co/docs/hub/repositories"
       ],
-      "last_verified": "2026-11-05",
+      "last_verified": "2026-11-17",
       "verification_status": "verified",
       "status": "active",
       "tags": [
@@ -1511,6 +1511,453 @@
         "multimodal",
         "1m-context",
         "privacy-review"
+      ]
+    },
+    {
+      "id": "invideo",
+      "name": "InVideo",
+      "vendor": "InVideo",
+      "website": "https://invideo.io/",
+      "categories": [
+        "video",
+        "video-editing",
+        "ai-generation"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "limited_credits",
+      "license": "proprietary",
+      "platforms": [
+        "web",
+        "cloud"
+      ],
+      "description": "Nền tảng tạo video bằng AI và biên tập timeline thủ công, hỗ trợ tạo, chỉnh sửa và xuất video cho mạng xã hội.",
+      "free_tier_summary": "Gói Free $0 không yêu cầu thẻ thanh toán, cấp hạn mức AI giới hạn và làm mới hàng tuần vào thứ Hai lúc 00:00 UTC. Tín dụng AI được dùng cho các tính năng tạo sinh; số tín dụng tiêu hao phụ thuộc model và thiết lập. Biên tập timeline thủ công (cắt, tách, sắp xếp clip) và xuất/tải video không tiêu tốn credits. Không giả định AI generation luôn khả dụng khi số dư bằng 0; kiểm tra số dư trước mỗi lần tạo.",
+      "official_sources": [
+        "https://help.invideo.io/en/articles/9380226-can-i-use-invideo-ai-for-free",
+        "https://help.invideo.io/en/articles/11528140-invideo-plans-and-credits-everything-you-need-to-know",
+        "https://invideo.io/pricing/"
+      ],
+      "last_verified": "2026-11-18",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "video-generation",
+        "video-editing",
+        "weekly-credits",
+        "social-video"
+      ]
+    },
+    {
+      "id": "heygen",
+      "name": "HeyGen",
+      "vendor": "HeyGen",
+      "website": "https://www.heygen.com/",
+      "categories": [
+        "video",
+        "text-to-speech",
+        "avatar",
+        "localization"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "verified_free_tier",
+      "license": "proprietary",
+      "platforms": [
+        "web",
+        "cloud"
+      ],
+      "description": "Nền tảng tạo video người dẫn ảo, avatar nói chuyện, voiceover và chuyển văn bản thành giọng nói đa ngôn ngữ.",
+      "free_tier_summary": "Gói Free $0: hạn mức khoảng 1–3 video/tháng tùy khu vực; video tối đa 1 phút, chia sẻ ở 720p và có watermark. Người dùng Free dùng quota video riêng, không dùng credit trả phí; số lượng cụ thể có thể khác theo vùng và tài khoản. Trong lần kiểm tra workspace này, bộ lọc giọng công khai language=vi trả về 0 giọng; tìm 'Vietnamese' chỉ trả về một voice có language=en, nên chưa xác nhận được giọng TTS tiếng Việt tự nhiên. Không dùng làm nguồn voice tiếng Việt cho video xuất bản nếu chưa nghe thử mẫu thật.",
+      "official_sources": [
+        "https://www.heygen.com/pricing",
+        "https://help.heygen.com/en/articles/15125761-heygen-credit-based-pricing-plans-subscriptions-explained",
+        "https://www.heygen.com/tool/ai-video-generator"
+      ],
+      "last_verified": "2026-11-18",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "ai-avatar",
+        "text-to-speech",
+        "video-generation",
+        "voiceover"
+      ]
+    },
+    {
+      "id": "metricool",
+      "name": "Metricool",
+      "vendor": "Metricool",
+      "website": "https://metricool.com/",
+      "categories": [
+        "social-media",
+        "publishing",
+        "analytics",
+        "scheduling"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "verified_free_tier",
+      "license": "proprietary",
+      "platforms": [
+        "web",
+        "cloud",
+        "api"
+      ],
+      "description": "Nền tảng quản lý mạng xã hội, lập lịch và tự xuất bản bài đăng, theo dõi phân tích và quản lý tương tác trong một brand.",
+      "free_tier_summary": "Gói Free $0, không hết hạn và không cần thẻ: 1 brand, tối đa 20 bài được xuất bản mỗi tháng, 1 hồ sơ cho mỗi mạng xã hội trong brand, 30 ngày lịch sử analytics và 5 AI text credits/tháng. Bài nháp và bài chỉ lên lịch chưa tính vào quota xuất bản; mỗi mạng xã hội được tính riêng khi đăng chéo. Free không có API, Make/Zapier, LinkedIn hoặc X. Có thể tự xuất bản và quản lý tin nhắn theo khả năng từng mạng; cần xác minh đúng tài khoản trước khi đăng.",
+      "official_sources": [
+        "https://metricool.com/pricing/",
+        "https://help.metricool.com/main-differences-between-free-and-paid-plans-bl0v9",
+        "https://help.metricool.com/plans-add-ons-and-api-access-explained-xux1u"
+      ],
+      "last_verified": "2026-11-18",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "social-scheduling",
+        "auto-publishing",
+        "analytics",
+        "free-plan"
+      ]
+    },
+    {
+      "id": "vidiq",
+      "name": "vidIQ",
+      "vendor": "vidIQ",
+      "website": "https://vidiq.com/",
+      "categories": [
+        "youtube",
+        "analytics",
+        "seo",
+        "content-research"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "verified_free_tier",
+      "license": "proprietary",
+      "platforms": [
+        "web",
+        "browser-extension",
+        "api"
+      ],
+      "description": "Bộ công cụ nghiên cứu từ khóa, xu hướng, đối thủ và tối ưu nội dung dành cho nhà sáng tạo YouTube; MCP kết nối dữ liệu kênh với trợ lý AI.",
+      "free_tier_summary": "Gói Free $0 gồm 150 AI credits mỗi tháng, làm mới theo ngày đăng ký; nghiên cứu từ khóa miễn phí bị giới hạn kết quả, tối đa 3 đối thủ theo dõi và một số tính năng phân tích nâng cao chỉ có ở gói trả phí. MCP có trên gói Free và dùng chung 150 credits. Khi đăng nhập OAuth, có thể hỗ trợ cập nhật metadata/lịch đăng của video đã có sau khi người dùng duyệt; MCP không tải video mới lên YouTube. Không coi công cụ này là bộ xuất bản video tự động.",
+      "official_sources": [
+        "https://vidiq.com/plans/",
+        "https://support.vidiq.com/en/articles/13928456-features-credits-by-plan",
+        "https://support.vidiq.com/en/articles/15082430-vidiq-mcp"
+      ],
+      "last_verified": "2026-11-18",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "youtube-seo",
+        "keyword-research",
+        "creator-analytics",
+        "mcp"
+      ]
+    },
+    {
+      "id": "higgsfield",
+      "name": "Higgsfield",
+      "vendor": "Higgsfield",
+      "website": "https://higgsfield.ai/",
+      "categories": [
+        "video",
+        "image",
+        "ai-generation"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "limited_credits",
+      "license": "proprietary",
+      "platforms": [
+        "web",
+        "cloud"
+      ],
+      "description": "Bộ công cụ AI tạo và chỉnh sửa hình ảnh, video, nhân vật và nội dung quảng cáo ngắn.",
+      "free_tier_summary": "Gói Free $0 không có hạn mức credit hàng tháng; chỉ mở một số model/tính năng giới hạn và một tác vụ tạo tại một thời điểm. Một số chương trình có free generations riêng nhưng không áp dụng cho mọi tài khoản/model. Video tạo miễn phí có thể có watermark; quyền sử dụng thương mại không được bao gồm trong Free. Chỉ dùng khi tài khoản thực sự có free generation còn lại và điều khoản cho phép mục đích sử dụng; không coi là công cụ sản xuất chính.",
+      "official_sources": [
+        "https://higgsfield.ai/creator-hub/help-center/plans/what-does-the-free-plan-include",
+        "https://higgsfield.ai/pricing"
+      ],
+      "last_verified": "2026-11-18",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "video-generation",
+        "image-generation",
+        "limited-free",
+        "watermark"
+      ]
+    },
+    {
+      "id": "pocketpal-ai",
+      "name": "PocketPal AI",
+      "vendor": "PocketPal",
+      "website": "https://pocketpal.dev/",
+      "categories": [
+        "assistant",
+        "local-llm",
+        "voice"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "verified_free_tier",
+      "license": "Mã nguồn ứng dụng PocketPal AI theo MIT License; model weights tải về có giấy phép và điều khoản riêng. App Store Việt Nam hiển thị Free + In-App Purchases; chu kỳ thanh toán và mapping tính năng của các mức PocketPal Plus/Pals chưa được xác định rõ.",
+      "platforms": [
+        "ios",
+        "android"
+      ],
+      "description": "Trợ lý AI di động chạy mô hình GGUF trực tiếp trên iPhone, iPad và Android; hỗ trợ trò chuyện offline, giọng nói và công cụ tùy model/thiết bị.",
+      "free_tier_summary": "Chat và suy luận local cơ bản miễn phí, không cần tài khoản; tải model GGUF rồi chạy trên thiết bị. App Store Việt Nam có In-App Purchases, nhưng không suy đoán chu kỳ thanh toán hoặc tính năng tương ứng từng mức. Web search, page reading hoặc remote server là tính năng online có thể gửi dữ liệu ra ngoài. Model weights có giấy phép riêng; hiệu năng phụ thuộc RAM và phần cứng.",
+      "official_sources": [
+        "https://pocketpal.dev/",
+        "https://github.com/a-ghorbani/pocketpal-ai",
+        "https://github.com/a-ghorbani/pocketpal-ai/blob/main/LICENSE",
+        "https://apps.apple.com/vn/app/pocketpal-ai/id6502579498"
+      ],
+      "last_verified": "2026-11-20",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "on-device",
+        "offline",
+        "gguf",
+        "privacy",
+        "mobile"
+      ]
+    },
+    {
+      "id": "draw-things",
+      "name": "Draw Things",
+      "vendor": "Draw Things, Inc.",
+      "website": "https://drawthings.ai/",
+      "categories": [
+        "image",
+        "design"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "verified_free_tier",
+      "license": "Mã nguồn cộng đồng công khai của engine Draw Things được cấp phép GPL-v3; ứng dụng đầy đủ do nhà phát triển quản lý trong kho riêng và chịu EULA/điều khoản ứng dụng. Không suy ra toàn bộ ứng dụng hoặc model weights/LoRA là GPL-v3; kiểm tra giấy phép riêng của từng model và tài sản nhập vào.",
+      "platforms": [
+        "ios",
+        "macos"
+      ],
+      "description": "Ứng dụng sáng tạo hình ảnh AI trên iPhone, iPad và Mac; hỗ trợ tạo ảnh local, chỉnh sửa ảnh, canvas và huấn luyện LoRA trên thiết bị.",
+      "free_tier_summary": "Free Edition dùng compute trên thiết bị, tải model, infinite canvas và train LoRA local. Community là tài khoản miễn phí cho phép dùng Cloud Compute miễn phí theo điều kiện dịch vụ; Draw Things+ có giá $8.99/tháng để tăng giới hạn cloud và mở tính năng cloud nâng cao. Tạo ảnh local không cần subscription; cloud compute cần đăng nhập và có luồng dữ liệu riêng. Model weights/LoRA có giấy phép riêng.",
+      "official_sources": [
+        "https://drawthings.ai/pricing/",
+        "https://drawthings.ai/policy/",
+        "https://apps.apple.com/vn/app/draw-things-offline-ai-art/id6444050820"
+      ],
+      "last_verified": "2026-11-20",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "image-generation",
+        "on-device",
+        "offline",
+        "local-compute",
+        "lora"
+      ]
+    },
+    {
+      "id": "cline",
+      "name": "Cline",
+      "vendor": "Cline Bot Inc.",
+      "website": "https://cline.bot/",
+      "categories": [
+        "coding",
+        "developer",
+        "agents",
+        "automation"
+      ],
+      "pricing_model": "freemium",
+      "pricing_status": "limited_credits",
+      "license": "Apache-2.0 for the Cline core repository; the repository notes that its JetBrains plugin is not open-sourced. Hosted model/provider services have separate terms.",
+      "platforms": [
+        "vscode",
+        "jetbrains",
+        "windows",
+        "macos",
+        "linux",
+        "cli"
+      ],
+      "description": "AI coding agent hoạt động trong IDE, terminal và desktop; có thể đọc dự án, lập kế hoạch, sửa mã, chạy lệnh, kết nối MCP và hỗ trợ quy trình headless/CI.",
+      "free_tier_summary": "Có thể cài phần mềm miễn phí. Cline cung cấp một số model FREE theo chương trình giới hạn và thay đổi theo thời gian; sau hạn mức có thể cần credits hoặc nhà cung cấp trả phí. Có thể kết nối model cục bộ qua Ollama/LM Studio để tránh phí inference theo request, nhưng vẫn cần phần cứng phù hợp.",
+      "official_sources": [
+        "https://cline.bot/",
+        "https://github.com/cline/cline",
+        "https://docs.cline.bot/getting-started/free-models",
+        "https://docs.cline.bot/getting-started/authorizing-with-cline"
+      ],
+      "last_verified": "2026-11-20",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "coding-agent",
+        "ide",
+        "cli",
+        "mcp",
+        "local-models",
+        "human-in-the-loop"
+      ]
+    },
+    {
+      "id": "jan",
+      "name": "Jan",
+      "vendor": "Menlo Research",
+      "website": "https://jan.ai/",
+      "categories": [
+        "assistant",
+        "local-llm",
+        "writing",
+        "research",
+        "privacy"
+      ],
+      "pricing_model": "self_hosted_free_and_cloud_paid",
+      "pricing_status": "self_hosted_free",
+      "license": "Apache-2.0 for the Jan repository; individual downloaded model weights may carry separate licenses and usage restrictions.",
+      "platforms": [
+        "windows",
+        "macos",
+        "linux",
+        "desktop"
+      ],
+      "description": "Ứng dụng desktop mã nguồn mở để tải và chạy mô hình AI cục bộ, tổ chức hội thoại/dự án và kết nối model hoặc nhà cung cấp bên ngoài khi cần.",
+      "free_tier_summary": "Ứng dụng Jan được phát hành theo Apache-2.0 và có thể chạy model cục bộ mà không trả phí inference theo request. Người dùng vẫn cần máy tính đủ cấu hình, điện/nơi lưu trữ; model tải về có giấy phép riêng. Kết nối API cloud có thể phát sinh phí của nhà cung cấp.",
+      "official_sources": [
+        "https://jan.ai/",
+        "https://github.com/janhq/jan",
+        "https://github.com/janhq/jan/blob/main/LICENSE",
+        "https://dev.jan.ai/terms"
+      ],
+      "last_verified": "2026-11-20",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "local-ai",
+        "offline",
+        "desktop",
+        "privacy",
+        "open-source"
+      ]
+    },
+    {
+      "id": "librechat",
+      "name": "LibreChat",
+      "vendor": "LibreChat",
+      "website": "https://www.librechat.ai/",
+      "categories": [
+        "assistant",
+        "agents",
+        "developer",
+        "documents",
+        "automation"
+      ],
+      "pricing_model": "free",
+      "pricing_status": "self_hosted_free",
+      "license": "MIT for the LibreChat repository; hosted model providers, model weights, plugins and deployment infrastructure have separate terms and costs.",
+      "platforms": [
+        "web",
+        "self_hosted",
+        "docker",
+        "api"
+      ],
+      "description": "Giao diện trò chuyện AI tự lưu trữ, hợp nhất nhiều nhà cung cấp model và hỗ trợ Agents, MCP, Skills, Artifacts, Code Interpreter cùng xác thực nhiều người dùng.",
+      "free_tier_summary": "Phần mềm tự lưu trữ có giấy phép MIT và không thu phí bản quyền phần mềm. Demo công khai chỉ dành cho đánh giá, không dùng cho dữ liệu riêng tư hoặc sản xuất. Máy chủ, lưu trữ và API model cloud có thể phát sinh chi phí; model local giúp tránh phí inference cloud nhưng vẫn cần phần cứng.",
+      "official_sources": [
+        "https://www.librechat.ai/",
+        "https://github.com/LibreChat-AI/LibreChat",
+        "https://github.com/LibreChat-AI/LibreChat/blob/main/LICENSE",
+        "https://www.librechat.ai/docs/local"
+      ],
+      "last_verified": "2026-11-20",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "self-hosted",
+        "multi-provider",
+        "agents",
+        "mcp",
+        "rag",
+        "privacy"
+      ]
+    },
+    {
+      "id": "browser-use",
+      "name": "Browser Use",
+      "vendor": "Browser Use",
+      "website": "https://browser-use.com/",
+      "categories": [
+        "agents",
+        "browser-automation",
+        "developer",
+        "automation"
+      ],
+      "pricing_model": "self_hosted_free_and_cloud_paid",
+      "pricing_status": "self_hosted_free",
+      "license": "MIT cho thư viện Python mã nguồn mở; Browser Use Cloud và hosted Agent API có điều khoản và giá riêng.",
+      "platforms": [
+        "python",
+        "typescript",
+        "chromium",
+        "chrome",
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "description": "Thư viện AI browser agent mã nguồn mở cho phép agent điều khiển Chromium/Chrome qua giao diện trình duyệt; có thể chạy local với model tương thích hoặc dùng hạ tầng cloud riêng của nhà cung cấp.",
+      "free_tier_summary": "Thư viện mã nguồn mở MIT có thể chạy miễn phí trên máy của bạn; khi chạy local vẫn cần tự cung cấp model/inference và tài nguyên máy. Browser Use Cloud, browser-hosting và hosted agent API là dịch vụ tính phí; README hiện nêu cloud browser từ 0,02 USD/giờ. Không nhầm thư viện local miễn phí với dịch vụ cloud miễn phí.",
+      "official_sources": [
+        "https://github.com/browser-use/browser-use",
+        "https://github.com/browser-use/browser-use/blob/main/LICENSE",
+        "https://docs.browser-use.com/"
+      ],
+      "last_verified": "2026-11-20",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "browser-agent",
+        "automation",
+        "local-first",
+        "mit-license"
+      ]
+    },
+    {
+      "id": "open-webui",
+      "name": "Open WebUI",
+      "vendor": "Open WebUI Inc.",
+      "website": "https://openwebui.com/",
+      "categories": [
+        "assistant",
+        "self-hosted",
+        "chat-ui",
+        "rag",
+        "agents"
+      ],
+      "pricing_model": "self_hosted_free_and_cloud_paid",
+      "pricing_status": "self_hosted_free",
+      "license": "Open WebUI License cho các bản hiện hành từ v0.6.6+, có điều khoản giữ nguyên thương hiệu; code trước v0.6.6 giữ BSD-3-Clause theo lịch sử giấy phép. Không phải giấy phép OSI-approved cho bản mới.",
+      "platforms": [
+        "web",
+        "docker",
+        "python",
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "description": "Giao diện AI tự lưu trữ, hỗ trợ Ollama và API tương thích OpenAI, tích hợp tài liệu, công cụ, RAG và nhiều provider; có thể vận hành trên hạ tầng riêng.",
+      "free_tier_summary": "Community edition có thể tự host miễn phí; cần tự chịu chi phí máy chủ, điện, lưu trữ và model/API nếu dùng dịch vụ cloud. Từ v0.6.6 phải giữ nguyên nhận diện Open WebUI trong các trường hợp không thuộc ngoại lệ được cấp phép; không mặc định được white-label hoặc gỡ logo. Đọc đúng LICENSE của phiên bản triển khai.",
+      "official_sources": [
+        "https://docs.openwebui.com/",
+        "https://docs.openwebui.com/license/",
+        "https://github.com/open-webui/open-webui/blob/main/LICENSE"
+      ],
+      "last_verified": "2026-11-20",
+      "verification_status": "verified",
+      "status": "active",
+      "tags": [
+        "self-hosted",
+        "ollama",
+        "rag",
+        "branding-license"
       ]
     }
   ]

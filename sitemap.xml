@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/nen-chon-activepieces-n8n-hay-github-actions</loc><lastmod>2026-11-20</lastmod></url>
   <url>
     <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/</loc>
   </url>
@@ -294,5 +295,25 @@
   <url>
     <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/tu-dong-doc-hoa-don-bang-ai-an-toan</loc>
     <lastmod>2026-11-15</lastmod>
+  </url>
+<url>
+    <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/bao-mat-mcp-server-oauth-ai</loc>
+    <lastmod>2026-11-17</lastmod>
+  </url>
+<url>
+    <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/google-ai-edge-gallery-ai-cuc-bo</loc>
+    <lastmod>2026-11-17</lastmod>
+  </url>
+<url>
+    <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/antiscam-pango-ai-phat-hien-lua-dao-tren-dien-thoai</loc>
+    <lastmod>2026-11-17</lastmod>
+  </url>
+  <url>
+    <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/ai-cuc-bo-jan-ollama-cline-librechat</loc>
+    <lastmod>2026-11-20</lastmod>
+  </url>
+  <url>
+    <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/xay-ai-agent-dieu-khien-trinh-duyet-an-toan</loc>
+    <lastmod>2026-11-20</lastmod>
   </url>
 </urlset>
