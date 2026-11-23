@@ -26,7 +26,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: agent-runtime-preview-validation-${{ github.ref }}
+  group: agent-runtime-preview-validation-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
