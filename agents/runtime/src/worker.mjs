@@ -531,6 +531,7 @@ const worker = {
       let response = null;
       let pauseVerified = true;
       let resumeWasRequested = false;
+      let resumeRejectedConflict = false;
       try {
         let observedControl;
         try {
@@ -615,13 +616,22 @@ const worker = {
             }
           }
         }
-      } catch {
-        response = json({ ok: false, error: "oidc_run_execution_unavailable" }, 503);
+      } catch (error) {
+        if (error?.status === 409) {
+          // A competing Pause won after our control read. Do not issue a cleanup
+          // Pause: it could close the winning request's latch and cancel its task.
+          resumeRejectedConflict = true;
+          pauseVerified = true;
+          response = json({ ok: false, error: "runtime_control_version_conflict" }, 409);
+        } else {
+          response = json({ ok: false, error: "oidc_run_execution_unavailable" }, 503);
+        }
       } finally {
         // Close the durable admission latch only after this request attempted
         // the conditional Resume; do not mutate an unrelated control state when
-        // the preflight control read fails or finds an already-open latch.
-        if (resumeWasRequested) {
+        // the preflight control read fails, finds an already-open latch, or a
+        // competing Pause has invalidated this request's observed version.
+        if (resumeWasRequested && !resumeRejectedConflict) {
           try {
             await writeStateStore(env, "/control/pause", {
               actor,
