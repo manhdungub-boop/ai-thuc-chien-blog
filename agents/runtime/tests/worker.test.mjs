@@ -253,6 +253,7 @@ function bridgeEnv({ responseBody = { ok: true, dayUtc: "2026-11-19", acceptedTo
           budget: { ok: true, day, scope, used: 0, limit, remaining: limit },
         });
       }
+      if (typeof response === "function") return response(internalRequest);
       return response ?? Response.json(responseBody, { status: responseStatus });
     },
   };
@@ -460,6 +461,61 @@ test("control mutation bridge uses configured actor and dedicated internal crede
   assert.equal(forwarded.reason, "planned maintenance");
   assert.equal(JSON.stringify(forwarded).includes(OPERATOR_TOKEN), false);
   assert.equal(JSON.stringify(forwarded).includes(STATE_TOKEN), false);
+});
+
+test("operator resume bridge sends the observed control version and preserves stale-version conflicts", async () => {
+  const { env, calls } = bridgeEnv({
+    response: async (internalRequest) => {
+      const url = new URL(internalRequest.url);
+      if (internalRequest.method === "GET" && url.pathname === "/control") {
+        return Response.json({ ok: true, control: { paused: true, version: 7 } });
+      }
+      if (url.pathname === "/control/resume") {
+        const body = await internalRequest.json();
+        assert.equal(body.expectedVersion, 7);
+        return Response.json({ ok: true, changed: true, control: { paused: false, version: 8 } });
+      }
+      throw new Error("unexpected State Store request");
+    },
+  });
+  const incoming = new Request("https://agent-runtime-preview.example.workers.dev/internal/control/resume", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + OPERATOR_TOKEN, "Content-Type": "application/json" },
+    body: JSON.stringify({ reason: "operator resume" }),
+  });
+  const response = await worker.fetch(incoming, env);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.control.paused, false);
+  assert.equal(calls.length, 2);
+  assert.equal(new URL(calls[0].url).pathname, "/control");
+  assert.equal(new URL(calls[1].url).pathname, "/control/resume");
+  const forwarded = await calls[1].json();
+  assert.equal(forwarded.expectedVersion, 7);
+  assert.equal(forwarded.actor, "project-operator-01");
+});
+
+test("operator resume bridge returns 409 without retrying after a newer Pause", async () => {
+  const { env, calls } = bridgeEnv({
+    response: async (internalRequest) => {
+      const url = new URL(internalRequest.url);
+      if (internalRequest.method === "GET" && url.pathname === "/control") {
+        return Response.json({ ok: true, control: { paused: true, version: 11 } });
+      }
+      if (url.pathname === "/control/resume") {
+        return Response.json({ ok: false, error: "runtime_control_version_conflict" }, { status: 409 });
+      }
+      throw new Error("unexpected State Store request");
+    },
+  });
+  const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/control/resume", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + OPERATOR_TOKEN, "Content-Type": "application/json" },
+    body: JSON.stringify({ reason: "stale operator resume" }),
+  }), env);
+  assert.equal(response.status, 409);
+  assert.equal((await response.json()).error, "runtime_control_version_conflict");
+  assert.equal(calls.length, 2, "a stale resume must not be retried automatically");
 });
 
 test("control mutation bridge rejects missing operator identity and caller-supplied actor", async () => {
