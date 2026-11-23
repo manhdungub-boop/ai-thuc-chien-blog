@@ -25,6 +25,38 @@ const json = (value, status = 200) => new Response(JSON.stringify(value), {
   }
 });
 
+async function readBoundedRequestText(request, maxBytes) {
+  if (!request.body) return { tooLarge: false, text: "" };
+  const reader = request.body.getReader();
+  const chunks = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        try {
+          await reader.cancel("request_body_limit_exceeded");
+        } catch {
+          // The size limit is already established; cancellation failure must not change the 413 result.
+        }
+        return { tooLarge: true, text: null };
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return { tooLarge: false, text: new TextDecoder("utf-8", { fatal: true }).decode(bytes) };
+}
+
 function createBudgetedFetch(store, day, scope) {
   let calls = 0;
   return {
@@ -322,6 +354,73 @@ export default {
         }
       });
     }
+    const reviewerAIBankEvidenceMatch = url.pathname.match(/^\/api\/reviewer\/ai-bank\/candidates\/([a-zA-Z0-9_.-]{1,100})\/([a-zA-Z0-9_.-]{1,100})\/evidence$/);
+    if (reviewerAIBankEvidenceMatch) {
+      if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
+      if (request.headers.get("origin") !== url.origin ||
+          (request.headers.get("content-type") || "").split(";")[0].trim().toLowerCase() !== "application/json") {
+        return json({ error: "review_request_origin_or_content_type_rejected" }, 403);
+      }
+      const contentLengthHeader = request.headers.get("content-length");
+      if (contentLengthHeader !== null && !/^(?:0|[1-9][0-9]*)$/.test(contentLengthHeader)) {
+        return json({ error: "invalid_review_request_content_length" }, 400);
+      }
+      if (contentLengthHeader !== null && Number(contentLengthHeader) > 16 * 1024) {
+        return json({ error: "review_request_too_large" }, 413);
+      }
+      const sessionToken = readGoogleReviewerSessionCookie(request);
+      if (!sessionToken) return json({ error: "reviewer_session_required" }, 401);
+      let body;
+      try {
+        const bounded = await readBoundedRequestText(request, 16 * 1024);
+        if (bounded.tooLarge) return json({ error: "review_request_too_large" }, 413);
+        body = JSON.parse(bounded.text);
+      } catch { return json({ error: "invalid_review_request_json" }, 400); }
+      if (!body || typeof body !== "object" || Array.isArray(body) ||
+          Object.keys(body).some(key => !["audit_event_id", "evidence"].includes(key)) ||
+          Object.keys(body).length !== 2 || typeof body.audit_event_id !== "string" ||
+          !body.evidence || typeof body.evidence !== "object" || Array.isArray(body.evidence)) {
+        return json({ error: "invalid_ai_bank_evidence_request_shape" }, 400);
+      }
+      const candidateStore = env.AGENT_AI_BANK_CANDIDATE_STORE?.getByName("primary");
+      if (!candidateStore) return json({ error: "ai_bank_candidate_store_unavailable" }, 503);
+      const candidateId = "github:" + reviewerAIBankEvidenceMatch[1] + "/" + reviewerAIBankEvidenceMatch[2];
+      const writerAuthConfig = {
+        AGENT_REVIEWER_AUTH_ENABLED: env.AGENT_REVIEWER_AUTH_ENABLED,
+        GOOGLE_REVIEWER_CLIENT_ID: env.GOOGLE_REVIEWER_CLIENT_ID,
+        GOOGLE_REVIEWER_CLIENT_SECRET: env.GOOGLE_REVIEWER_CLIENT_SECRET,
+        GOOGLE_REVIEWER_REDIRECT_URI: env.GOOGLE_REVIEWER_REDIRECT_URI,
+        GOOGLE_REVIEWER_ALLOWED_EMAILS: env.GOOGLE_REVIEWER_ALLOWED_EMAILS,
+        GOOGLE_REVIEWER_STATE_SECRET: env.GOOGLE_REVIEWER_STATE_SECRET,
+        GOOGLE_REVIEWER_SESSION_SECRET: env.GOOGLE_REVIEWER_SESSION_SECRET,
+        GOOGLE_REVIEWER_EVIDENCE_WRITER_EMAILS: env.GOOGLE_REVIEWER_EVIDENCE_WRITER_EMAILS
+      };
+      const result = await candidateStore.submitAuthorizedReviewEvidence(
+        candidateId, body.evidence, sessionToken, body.audit_event_id, writerAuthConfig
+      );
+      if (!result.accepted) {
+        const status = result.reason === "evidence_writer_not_allowlisted" ? 403 :
+          result.reason === "duplicate_audit_event" || result.reason === "audit_event_id_reused" ? 409 :
+          result.reason === "evidence_audit_daily_limit_reached" ? 429 :
+          result.reason === "evidence_audit_capacity_reached" ? 503 :
+          result.reason === "reviewer_auth_not_configured" || result.reason === "evidence_writer_not_configured" ? 503 :
+          result.reason === "reviewer_session_invalid" || result.reason === "reviewer_session_expired" ? 401 : 400;
+        return json({ error: result.reason, evidence_recorded: false }, status);
+      }
+      return json({
+        accepted: true,
+        evidence: {
+          evidence_id: result.evidence_id,
+          source_status: result.source_status,
+          review_status: result.review_status
+        },
+        audit_event_id: result.audit_event_id,
+        replay_protected: result.replay_protected,
+        verification_authorized: false,
+        catalog_write_authorized: false,
+        public_publication_authorized: false
+      }, 201);
+    }
     const reviewerAIBankCollection = url.pathname === "/api/reviewer/ai-bank/candidates";
     const reviewerAIBankDetail = url.pathname.match(/^\/api\/reviewer\/ai-bank\/candidates\/([a-zA-Z0-9_.-]{1,100})\/([a-zA-Z0-9_.-]{1,100})$/);
     if (reviewerAIBankCollection || reviewerAIBankDetail) {
@@ -395,15 +494,20 @@ export default {
           (request.headers.get("content-type") || "").split(";")[0].trim().toLowerCase() !== "application/json") {
         return json({ error: "review_request_origin_or_content_type_rejected" }, 403);
       }
-      const contentLength = Number(request.headers.get("content-length") || 0);
-      if (contentLength > 96 * 1024) return json({ error: "review_request_too_large" }, 413);
+      const contentLengthHeader = request.headers.get("content-length");
+      if (contentLengthHeader !== null && !/^(?:0|[1-9][0-9]*)$/.test(contentLengthHeader)) {
+        return json({ error: "invalid_review_request_content_length" }, 400);
+      }
+      if (contentLengthHeader !== null && Number(contentLengthHeader) > 96 * 1024) {
+        return json({ error: "review_request_too_large" }, 413);
+      }
       const sessionToken = readGoogleReviewerSessionCookie(request);
       if (!sessionToken) return json({ error: "reviewer_session_required" }, 401);
       let body;
       try {
-        const raw = await request.text();
-        if (new TextEncoder().encode(raw).byteLength > 96 * 1024) return json({ error: "review_request_too_large" }, 413);
-        body = JSON.parse(raw);
+        const bounded = await readBoundedRequestText(request, 96 * 1024);
+        if (bounded.tooLarge) return json({ error: "review_request_too_large" }, 413);
+        body = JSON.parse(bounded.text);
       } catch { return json({ error: "invalid_review_request_json" }, 400); }
       if (!body || typeof body !== "object" || Array.isArray(body) ||
           Object.keys(body).some(key => !["expected_version", "ledger", "review_record"].includes(key)) ||
