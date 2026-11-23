@@ -28,10 +28,12 @@ function record(value) {
  * Cross-checks bounded task and audit snapshots exported by a trusted read-only adapter.
  * This function does not query SQLite, authenticate a source, mutate records or repair gaps.
  */
-export function inspectAuditIntegrity(snapshot, { nowMs = Date.now() } = {}) {
+export function inspectAuditIntegrity(snapshot, { nowMs = Date.now(), findingOffset = 0, findingLimit = 100 } = {}) {
   if (!record(snapshot) || !Array.isArray(snapshot.tasks) || !Array.isArray(snapshot.events) ||
       snapshot.tasks.length > MAX_TASKS || snapshot.events.length > MAX_EVENTS ||
-      !Number.isSafeInteger(nowMs) || nowMs < 0) return invalid("audit_snapshot_invalid");
+      !Number.isSafeInteger(nowMs) || nowMs < 0 ||
+      !Number.isSafeInteger(findingOffset) || findingOffset < 0 ||
+      !Number.isSafeInteger(findingLimit) || findingLimit < 1 || findingLimit > 100) return invalid("audit_snapshot_invalid");
 
   const findings = [];
   const tasks = new Map();
@@ -150,7 +152,14 @@ export function inspectAuditIntegrity(snapshot, { nowMs = Date.now() } = {}) {
     ok: true,
     mode: "read_only_audit_integrity",
     status: errors ? "integrity_error" : warnings ? "review_required" : "consistent",
-    findings: Object.freeze(findings.slice(0, 100)),
+    findings: Object.freeze(findings.slice(findingOffset, findingOffset + findingLimit)),
+    pagination: Object.freeze({
+      offset: findingOffset,
+      limit: findingLimit,
+      total: findings.length,
+      hasMore: findingOffset + findingLimit < findings.length,
+      nextOffset: findingOffset + findingLimit < findings.length ? findingOffset + findingLimit : null,
+    }),
     summary: Object.freeze({ errors, warnings, checkedTasks: tasks.size, checkedEvents: eventIds.size }),
     sideEffects: Object.freeze([]),
     limitations: Object.freeze([
