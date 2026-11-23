@@ -47,6 +47,125 @@ describe("authenticated reviewer evidence HTTP route", () => {
     expect(response.status).toBe(403);
   });
 
+  it("rejects malformed Content-Length before session or draft-store access", async () => {
+    let storeAccesses = 0;
+    const response = await worker.fetch(new Request(path, {
+      method: "POST",
+      headers: {
+        origin,
+        "content-type": "application/json",
+        "content-length": "invalid",
+        cookie: "__Host-ai_reviewer_session=opaque-session"
+      },
+      body
+    }), {
+      AGENT_DRAFT_STORE: {
+        getByName() {
+          storeAccesses += 1;
+          return {};
+        }
+      }
+    });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "invalid_review_request_content_length" });
+    expect(storeAccesses).toBe(0);
+  });
+
+  it("rejects declared oversized draft evidence before reading the stream", async () => {
+    let pulls = 0;
+    let storeAccesses = 0;
+    const bodyStream = new ReadableStream({
+      pull(controller) {
+        pulls += 1;
+        controller.enqueue(new Uint8Array([0x7b, 0x7d]));
+      }
+    }, { highWaterMark: 0 });
+    const response = await worker.fetch(new Request(path, {
+      method: "POST",
+      headers: {
+        origin,
+        "content-type": "application/json",
+        "content-length": String(97 * 1024),
+        cookie: "__Host-ai_reviewer_session=opaque-session"
+      },
+      body: bodyStream,
+      duplex: "half"
+    }), {
+      AGENT_DRAFT_STORE: {
+        getByName() {
+          storeAccesses += 1;
+          return {};
+        }
+      }
+    });
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({ error: "review_request_too_large" });
+    expect(pulls).toBe(0);
+    expect(storeAccesses).toBe(0);
+  });
+
+  it("rejects invalid UTF-8 without draft-store access", async () => {
+    let storeAccesses = 0;
+    const response = await worker.fetch(new Request(path, {
+      method: "POST",
+      headers: {
+        origin,
+        "content-type": "application/json",
+        cookie: "__Host-ai_reviewer_session=opaque-session"
+      },
+      body: new Uint8Array([0xff, 0xfe])
+    }), {
+      AGENT_DRAFT_STORE: {
+        getByName() {
+          storeAccesses += 1;
+          return {};
+        }
+      }
+    });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "invalid_review_request_json" });
+    expect(storeAccesses).toBe(0);
+  });
+
+  it("cancels an oversized draft evidence stream before draft-store access", async () => {
+    let storeAccesses = 0;
+    let pulls = 0;
+    let cancelled = false;
+    const env = {
+      AGENT_DRAFT_STORE: {
+        getByName() {
+          storeAccesses += 1;
+          return {};
+        }
+      }
+    };
+    const bodyStream = new ReadableStream({
+      pull(controller) {
+        pulls += 1;
+        if (pulls === 1) controller.enqueue(new Uint8Array(97 * 1024));
+        else controller.enqueue(new Uint8Array([0x7b, 0x7d]));
+      },
+      cancel() {
+        cancelled = true;
+      }
+    }, { highWaterMark: 0 });
+    const response = await worker.fetch(new Request(path, {
+      method: "POST",
+      headers: {
+        origin,
+        "content-type": "application/json",
+        cookie: "__Host-ai_reviewer_session=opaque-session"
+      },
+      body: bodyStream,
+      duplex: "half"
+    }), env);
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({ error: "review_request_too_large" });
+    expect(cancelled).toBe(true);
+    expect(pulls).toBe(1);
+    expect(storeAccesses).toBe(0);
+  });
+
   it("passes the opaque session cookie to the Durable Object for independent verification", async () => {
     const sessionToken = "signed-session-token-placeholder";
     let received;
@@ -261,6 +380,46 @@ describe("authenticated read-only AI Bank reviewer routes", () => {
     expect(storeAccesses).toBe(0);
   });
 
+  it("cancels an oversized evidence stream at the byte ceiling before another chunk or store access", async () => {
+    let storeAccesses = 0;
+    let pulls = 0;
+    let cancelled = false;
+    const env = {
+      AGENT_AI_BANK_CANDIDATE_STORE: {
+        getByName() {
+          storeAccesses += 1;
+          return {};
+        }
+      }
+    };
+    const evidencePath = origin + "/api/reviewer/ai-bank/candidates/ollama/ollama/evidence";
+    const bodyStream = new ReadableStream({
+      pull(controller) {
+        pulls += 1;
+        if (pulls === 1) controller.enqueue(new Uint8Array(17 * 1024));
+        else controller.enqueue(new Uint8Array([0x7b, 0x7d]));
+      },
+      cancel() {
+        cancelled = true;
+      }
+    }, { highWaterMark: 0 });
+    const response = await worker.fetch(new Request(evidencePath, {
+      method: "POST",
+      headers: {
+        origin,
+        "content-type": "application/json",
+        cookie: "__Host-ai_reviewer_session=opaque-session"
+      },
+      body: bodyStream,
+      duplex: "half"
+    }), env);
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({ error: "review_request_too_large" });
+    expect(cancelled).toBe(true);
+    expect(pulls).toBe(1);
+    expect(storeAccesses).toBe(0);
+  });
+
   it("passes only the signed session and serializable auth configuration to the Durable Object", async () => {
     const token = "opaque-signed-reviewer-session";
     const evidence = {
@@ -367,6 +526,86 @@ describe("authenticated read-only AI Bank reviewer routes", () => {
     expect(duplicate.status).toBe(409);
     expect(await duplicate.json()).toMatchObject({ error: "duplicate_audit_event", evidence_recorded: false });
     expect(storeAccesses).toBe(1);
+  });
+
+  it("maps exhausted lifetime audit capacity to HTTP 503", async () => {
+    const auth = reviewerAuthEnv("reviewer-session-secret-for-tests-32chars");
+    const env = {
+      ...auth,
+      GOOGLE_REVIEWER_CLIENT_SECRET: "reviewer-client-secret-for-test-32-characters",
+      GOOGLE_REVIEWER_STATE_SECRET: "reviewer-state-secret-for-tests-32-characters",
+      GOOGLE_REVIEWER_EVIDENCE_WRITER_EMAILS: "reviewer@example.com",
+      AGENT_AI_BANK_CANDIDATE_STORE: {
+        getByName: () => ({
+          async submitAuthorizedReviewEvidence() {
+            return { accepted: false, reason: "evidence_audit_capacity_reached" };
+          }
+        })
+      }
+    };
+    const evidencePath = origin + "/api/reviewer/ai-bank/candidates/ollama/ollama/evidence";
+    const response = await worker.fetch(new Request(evidencePath, {
+      method: "POST",
+      headers: {
+        origin,
+        "content-type": "application/json",
+        cookie: "__Host-ai_reviewer_session=opaque-session"
+      },
+      body: JSON.stringify({
+        audit_event_id: "e4e6d1c2-3b7f-4a91-8c22-1234567890ab",
+        evidence: {
+          check_type: "pricing_and_free_limits",
+          source_title: "Pricing",
+          source_url: "https://ollama.com/pricing",
+          excerpt: "Pending review."
+        }
+      })
+    }), env);
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({
+      error: "evidence_audit_capacity_reached",
+      evidence_recorded: false
+    });
+  });
+
+  it("maps the exhausted evidence audit budget to HTTP 429", async () => {
+    const auth = reviewerAuthEnv("reviewer-session-secret-for-tests-32chars");
+    const env = {
+      ...auth,
+      GOOGLE_REVIEWER_CLIENT_SECRET: "reviewer-client-secret-for-test-32-characters",
+      GOOGLE_REVIEWER_STATE_SECRET: "reviewer-state-secret-for-tests-32-characters",
+      GOOGLE_REVIEWER_EVIDENCE_WRITER_EMAILS: "reviewer@example.com",
+      AGENT_AI_BANK_CANDIDATE_STORE: {
+        getByName: () => ({
+          async submitAuthorizedReviewEvidence() {
+            return { accepted: false, reason: "evidence_audit_daily_limit_reached" };
+          }
+        })
+      }
+    };
+    const evidencePath = origin + "/api/reviewer/ai-bank/candidates/ollama/ollama/evidence";
+    const response = await worker.fetch(new Request(evidencePath, {
+      method: "POST",
+      headers: {
+        origin,
+        "content-type": "application/json",
+        cookie: "__Host-ai_reviewer_session=opaque-session"
+      },
+      body: JSON.stringify({
+        audit_event_id: "d4e6d1c2-3b7f-4a91-8c22-1234567890ab",
+        evidence: {
+          check_type: "pricing_and_free_limits",
+          source_title: "Pricing",
+          source_url: "https://ollama.com/pricing",
+          excerpt: "Pending review."
+        }
+      })
+    }), env);
+    expect(response.status).toBe(429);
+    expect(await response.json()).toEqual({
+      error: "evidence_audit_daily_limit_reached",
+      evidence_recorded: false
+    });
   });
 });
 
