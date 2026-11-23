@@ -6,8 +6,8 @@ const OPERATOR_TOKEN = "authoring-route-operator-token-0123456789abcdef";
 const STATE_TOKEN = "authoring-route-state-token-0123456789abcdef";
 const ROUTE = "https://agent-runtime-preview.example.workers.dev/internal/authoring/prepare";
 
-function makeEnv({ remaining = 8, limit = 8 } = {}) {
-  let used = limit - remaining;
+function makeEnv({ remaining = 8 } = {}) {
+  let used = 8 - remaining;
   const budgetCalls = [];
   const draftCalls = [];
   const artifacts = new Map();
@@ -16,12 +16,12 @@ function makeEnv({ remaining = 8, limit = 8 } = {}) {
       const url = new URL(request.url);
       assert.equal(request.headers.get("authorization"), "Bearer " + STATE_TOKEN);
       if (url.pathname === "/external-budget" && request.method === "GET") {
-        return Response.json({ ok: true, budget: { ok: true, day: url.searchParams.get("day"), scope: "content_research", used, limit, remaining: limit - used } });
+        return Response.json({ ok: true, budget: { ok: true, day: url.searchParams.get("day"), scope: "content_research", used, limit: 8, remaining: 8 - used } });
       }
       if (url.pathname === "/external-budget/consume" && request.method === "POST") {
         const body = await request.json();
         budgetCalls.push(body);
-        if (body.scope !== "content_research" || used >= limit) return Response.json({ ok: false, error: "external_request_budget_exhausted" }, { status: 400 });
+        if (body.scope !== "content_research" || used >= 8) return Response.json({ ok: false, error: "external_request_budget_exhausted" }, { status: 400 });
         used += 1;
         const day = new Date().toISOString().slice(0, 10);
         return Response.json({ ok: true, budget: { ok: true, day: body.day, scope: body.scope, used, limit, remaining: limit - used } });
@@ -59,7 +59,7 @@ function makeEnv({ remaining = 8, limit = 8 } = {}) {
       get(id) { assert.equal(id, "fixed-draft-store"); return draftStub; },
     },
   };
-  return { env, budgetCalls, draftCalls, artifacts, get used() { return used; } };
+  return { env, budgetCalls, draftCalls, artifacts, get used() { return used; }, resetBudgetForTest() { used = 0; } };
 }
 
 function makeRequest({ topic = "Ứng dụng AI Agent trong tự động hóa", key = "authoring-idempotency-0001", query = "", body = null, token = OPERATOR_TOKEN, contentType = "application/json" } = {}) {
@@ -183,12 +183,14 @@ test("authoring idempotency binds the full topic, not only its first 70 characte
   const originalFetch = globalThis.fetch;
   const network = mockOfficialFetch();
   globalThis.fetch = network.fetch;
-  const runtime = makeEnv({ remaining: 16, limit: 16 });
+  const runtime = makeEnv();
   const prefix = "A".repeat(70);
   try {
     const first = await worker.fetch(makeRequest({ topic: prefix + " first suffix" }), runtime.env);
     const firstBody = await first.json();
     assert.equal(first.status, 200);
+    // Reset only the mock budget counter so this test isolates full-topic idempotency.
+    runtime.resetBudgetForTest();
     const second = await worker.fetch(makeRequest({ topic: prefix + " second suffix" }), runtime.env);
     const secondBody = await second.json();
     assert.equal(second.status, 200);
