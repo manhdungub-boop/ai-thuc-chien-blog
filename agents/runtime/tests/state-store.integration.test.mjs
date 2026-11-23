@@ -36,7 +36,7 @@ async function createRuntime({ daily = 100, concurrent = 5, persistDir, enabled 
   // Tests that exercise an enabled runtime explicitly open the durable control gate.
   // Fresh-store defaults remain paused unless the test opts into this fixture setup.
   if (resumeControl && enabled === "true" && paused === "false") {
-    const opened = await resumeControl(stub, {
+    const opened = await resumeWithCurrentVersion(stub, {
       actor: "integration-test",
       requestId: crypto.randomUUID(),
       reason: "test fixture initialization",
@@ -66,7 +66,7 @@ async function call(stub, pathname, body, headers = {}) {
   return { status: response.status, body: await response.json() };
 }
 
-async function resumeControl(stub, body) {
+async function resumeWithCurrentVersion(stub, body) {
   const observed = await call(stub, "/control");
   if (observed.status !== 200 || !Number.isSafeInteger(observed.body?.control?.version)) {
     throw new Error("test_control_state_unavailable");
@@ -414,7 +414,7 @@ test("resume rejects an observed control version after a newer Pause commits", a
   await withRuntime({ resumeControl: false }, async ({ stub }) => {
     const initial = await call(stub, "/control");
     assert.equal(initial.body.control.paused, true);
-    const opened = await resumeControl(stub, {
+    const opened = await resumeWithCurrentVersion(stub, {
       actor: "version-fence-test", requestId: crypto.randomUUID(), reason: "open fixture gate",
     });
     assert.equal(opened.status, 200);
@@ -455,7 +455,7 @@ test("pause clears the recovery alarm and resume does not re-arm a cancelled lea
     assert.equal((await call(stub, "/__test/alarm-state")).body.alarmAt, null,
       "pause must clear a pending recovery alarm immediately");
 
-    const resumed = await resumeControl(stub, {
+    const resumed = await resumeWithCurrentVersion(stub, {
       actor: "alarm-resume-operator", requestId: crypto.randomUUID(), reason: "maintenance complete",
     });
     assert.equal(resumed.status, 200);
@@ -846,7 +846,7 @@ test("fresh State Store initializes schema v5 paused with conservative lease def
     const initialControl = await call(stub, "/control");
     assert.equal(initialControl.body.control.paused, true);
     assert.equal(initialControl.body.control.version, 0);
-    const opened = await resumeControl(stub, {
+    const opened = await resumeWithCurrentVersion(stub, {
       actor: "integration-test",
       requestId: crypto.randomUUID(),
       reason: "explicit test gate opening",
@@ -1249,7 +1249,7 @@ test("five terminal failures open the circuit breaker and fence every in-flight 
     assert.equal(lateCompletion.status, 409);
     assert.equal((await call(stub, "/usage")).body.inFlight, 0);
 
-    const resumed = await resumeControl(stub, {
+    const resumed = await resumeWithCurrentVersion(stub, {
       actor: "integration-test-resume",
       requestId: crypto.randomUUID(),
       reason: "verify cancelled work is never replayed automatically",
