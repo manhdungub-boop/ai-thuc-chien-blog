@@ -217,7 +217,7 @@ jobs:
           assert.match(e2eWorkflow, /github\\.ref == 'refs\\/heads\\/security\\/fence-leases-on-circuit-breaker-pause-20261123'/);
           assert.match(e2eWorkflow, /id-token: write/);
           assert.match(e2eWorkflow, /AGENT_OIDC_RUN_ENABLED:true/);
-          assert.match(e2eWorkflow, /--config agents\\/runtime\\/wrangler\\.preview\\.jsonc/);
+          assert.match(e2eWorkflow, /--config wrangler\\.preview\\.jsonc/);
           assert.match(e2eWorkflow, /if: always\\(\\)/, 'rollback must run even after an E2E failure');
           assert.match(e2eWorkflow, /AGENT_ENABLED:false|wrangler\\.preview\\.jsonc/, 'rollback must restore the checked-in disabled config');
           console.log('PASS: validation remains credential-free; the separately gated owner-only job uses OIDC, Preview-only deployment, and automatic rollback.');
@@ -341,7 +341,7 @@ jobs:
           esac
 
       - name: Deploy the one-shot read-only E2E configuration to dedicated Preview
-        id: deploy-e2e
+        id: deploy_e2e
         working-directory: agents/runtime
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}
@@ -434,7 +434,7 @@ jobs:
           NODE
 
       - name: Always restore Preview to disabled and paused configuration
-        if: always() && steps.deploy-e2e.outcome != 'skipped'
+        if: always() && steps.deploy_e2e.outcome != 'skipped'
         working-directory: agents/runtime
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}
