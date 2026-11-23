@@ -461,3 +461,44 @@ describe("authenticated read-only AI Bank reviewer routes", () => {
     expect(await stale.json()).toMatchObject({ error: "stale_candidate_release", evidence_recorded: false });
   });
 });
+
+
+it("reports unavailable operator usage separately from a measured zero", async () => {
+  const token = await createReviewerSessionToken();
+  const stub = {
+    async fetch(request) {
+      const path = new URL(request.url).pathname;
+      if (path === "/control") {
+        return Response.json({ ok: true, control: {
+          paused: false, changedAt: 1, version: 2, failureCountLast10m: 0,
+          circuitBreakerThreshold: 5, circuitBreakerWindowMs: 600000
+        } });
+      }
+      if (path === "/usage") {
+        return Response.json({ ok: false, error: "state_store_unavailable" }, { status: 503 });
+      }
+      throw new Error("unexpected_state_store_path");
+    }
+  };
+  const env = {
+    ...reviewerAuthEnv,
+    AGENT_OPERATOR_CONTROL_ENABLED: "true",
+    AGENT_OPERATOR_ALLOWED_EMAILS: "reviewer@example.com",
+    AGENT_STATE_STORE_TOKEN: "operator-usage-test-token-abcdefghijklmnopqrstuvwxyz",
+    AGENT_STATE_STORE: {
+      idFromName(name) { expect(name).toBe("agent-runtime-global"); return "fixed"; },
+      get(id) { expect(id).toBe("fixed"); return stub; }
+    }
+  };
+  const response = await handleReviewerHttpRequest(new Request(base + "/api/operator/runtime-control", {
+    headers: { cookie: "__Host-ai_reviewer_session=" + token }
+  }), env);
+  expect(response.status).toBe(200);
+  expect((await response.json()).health.task_admission).toEqual({
+    available: false,
+    accepted_today: null,
+    in_flight: null,
+    daily_limit: 100,
+    concurrency_limit: 5
+  });
+});
