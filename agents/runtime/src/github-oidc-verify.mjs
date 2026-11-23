@@ -30,8 +30,12 @@ function immutableRepositorySubject(expected) {
   if (separator <= 0 || expected.repository.indexOf("/", separator + 1) !== -1 ||
       expected.repository.slice(0, separator) !== expected.repositoryOwner) return null;
   const repositoryName = expected.repository.slice(separator + 1);
-  return "repo:" + expected.repositoryOwner + "@" + expected.repositoryOwnerId + "/" +
-    repositoryName + "@" + expected.repositoryId + ":ref:" + expected.ref;
+  const repositorySubject = "repo:" + expected.repositoryOwner + "@" + expected.repositoryOwnerId + "/" +
+    repositoryName + "@" + expected.repositoryId;
+  if (expected.environment !== undefined) {
+    return repositorySubject + ":environment:" + expected.environment;
+  }
+  return repositorySubject + ":ref:" + expected.ref;
 }
 
 function expectedConfigurationIsValid(expected) {
@@ -44,7 +48,8 @@ function expectedConfigurationIsValid(expected) {
     isNonEmptyString(expected.ref, 256) &&
     isNonEmptyString(expected.workflowRef, 512) &&
     isNonEmptyString(expected.actorId, 32) &&
-    expected.eventName === "workflow_dispatch";
+    ((expected.eventName === "workflow_dispatch" && expected.environment === undefined) ||
+      (expected.eventName === "push" && isNonEmptyString(expected.environment, 128)));
 }
 
 /**
