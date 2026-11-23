@@ -7,6 +7,10 @@ import { createReadOnlyAgentManager } from "./read-only-agent-manager.mjs";
 import { createReadOnlyTaskSnapshotAdapter } from "./task-snapshot-adapters.mjs";
 import { createPreviewReadOnlyReaders } from "./preview-read-only-sources.mjs";
 import { currentUtcBudgetDay } from "./utc-budget-day.mjs";
+import { discoverResearchSignals } from "./research-discovery.mjs";
+import { retrieveResearchEvidence } from "./research-evidence.mjs";
+import { buildArticleAuthoringBrief } from "./article-authoring-brief.mjs";
+import { selectProvider } from "./provider-policy.mjs";
 export { AgentStateStore } from "./state-store.mjs";
 export { AgentAIBankCandidateStore } from "./ai-bank-candidate-store.mjs";
 export { AgentDraftStore } from "./draft-artifact-store.mjs";
@@ -342,6 +346,70 @@ async function readStateStore(env, pathname) {
   return body;
 }
 
+
+const AUTHORING_IDEMPOTENCY_KEY = /^[A-Za-z0-9][A-Za-z0-9._:-]{15,127}$/;
+const CONTENT_RESEARCH_DAILY_LIMIT = 8;
+
+async function consumeContentResearchBudget(env, count) {
+  if (!Number.isSafeInteger(count) || count < 0 || count > CONTENT_RESEARCH_DAILY_LIMIT) {
+    throw Object.assign(new Error("research_budget_request_invalid"), { status: 503 });
+  }
+  if (count === 0) return { day: currentUtcBudgetDay(), used: 0, remaining: CONTENT_RESEARCH_DAILY_LIMIT };
+  const day = currentUtcBudgetDay();
+  const snapshot = await readStateStore(
+    env,
+    "/external-budget?day=" + encodeURIComponent(day) + "&scope=content_research",
+  );
+  let budget = snapshot?.budget;
+  const validBudget = (value) => value && value.ok === true && value.day === day &&
+    value.scope === "content_research" && Number.isSafeInteger(value.used) && value.used >= 0 &&
+    value.limit === CONTENT_RESEARCH_DAILY_LIMIT && Number.isSafeInteger(value.remaining) &&
+    value.remaining >= 0 && value.used + value.remaining === value.limit;
+  if (!validBudget(budget)) {
+    throw Object.assign(new Error("research_budget_snapshot_invalid"), { status: 503 });
+  }
+  if (budget.remaining < count) {
+    throw Object.assign(new Error("research_budget_exhausted"), { status: 429 });
+  }
+  for (let index = 0; index < count; index += 1) {
+    const consumed = await writeStateStore(env, "/external-budget/consume", {
+      day,
+      scope: "content_research",
+    });
+    const next = consumed?.budget;
+    if (!validBudget(next) || next.used < budget.used + 1 || next.remaining > budget.remaining - 1) {
+      throw Object.assign(new Error("research_budget_consumption_invalid"), { status: 503 });
+    }
+    budget = next;
+  }
+  return { day, used: budget.used, remaining: budget.remaining };
+}
+
+async function authoringArtifactId(idempotencyKey) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(idempotencyKey));
+  const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return "authoring-" + hex.slice(0, 48);
+}
+
+function authoringArtifactSummary(artifact) {
+  if (!artifact || typeof artifact.id !== "string" ||
+      !["pending_human_review", "needs_revision"].includes(artifact.status) ||
+      !Number.isSafeInteger(artifact.version) || artifact.version < 1 ||
+      !artifact.draft || typeof artifact.draft.title !== "string" ||
+      typeof artifact.draft.slug !== "string" ||
+      artifact.quality_review?.publication_authorized !== false) return null;
+  return {
+    id: artifact.id,
+    status: artifact.status,
+    version: artifact.version,
+    title: artifact.draft.title,
+    slug: artifact.draft.slug,
+    quality_status: artifact.quality_review.status || (artifact.quality_review.ok ? "pass" : "needs_revision"),
+    human_authoring_required: true,
+    publication_authorized: false,
+  };
+}
+
 const worker = {
   async fetch(request, env = {}, context) {
     if (context !== INTERNAL_SCHEDULED_DISPATCH) {
@@ -536,6 +604,156 @@ const worker = {
         return json({ ok: false, error: status === 429 ? "runtime_capacity_limited" : "durable_review_unavailable" }, status);
       }
     }
+
+    if (url.pathname === "/internal/authoring/prepare") {
+      if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
+      if (!isEnabled(env.AGENT_ENABLED) || env.AGENT_PAUSED !== "false") {
+        return json({ ok: false, error: "agent_disabled_or_paused" }, 503);
+      }
+      if (!await hasValidOperatorBearer(request, env)) return json({ ok: false, error: "operator_auth_required" }, 401);
+      if ([...url.searchParams.keys()].length > 0) return json({ ok: false, error: "request_invalid" }, 400);
+      if (!/^application\/json(?:\s*;|$)/i.test(request.headers.get("content-type") || "")) {
+        return json({ ok: false, error: "json_content_type_required" }, 415);
+      }
+      const parsed = await readBoundedJsonValueRequest(request, 2048);
+      if (!parsed.ok) {
+        return json({ ok: false, error: parsed.status === 413 ? "request_body_too_large" : "request_invalid" }, parsed.status);
+      }
+      const body = parsed.value;
+      if (!body || typeof body !== "object" || Array.isArray(body) ||
+          Object.keys(body).sort().join(",") !== "idempotencyKey,topic" ||
+          typeof body.topic !== "string" || body.topic.trim() !== body.topic ||
+          body.topic.length < 5 || body.topic.length > 200 ||
+          /[\u0000-\u001f\u007f]/.test(body.topic) ||
+          typeof body.idempotencyKey !== "string" || !AUTHORING_IDEMPOTENCY_KEY.test(body.idempotencyKey)) {
+        return json({ ok: false, error: "authoring_request_invalid" }, 400);
+      }
+
+      const provider = selectProvider("content_draft", [{
+        id: "article-authoring-brief",
+        status: "ready",
+        execution_surface: "agent_runtime",
+        cost_class: "no_external_execution",
+        capabilities: ["content_draft"],
+      }]);
+      if (provider.action !== "execute" || provider.provider !== "article-authoring-brief") {
+        return json({ ok: false, error: "authoring_provider_deferred" }, 503);
+      }
+      const namespace = env.AGENT_DRAFT_STORE;
+      if (!namespace || typeof namespace.idFromName !== "function" || typeof namespace.get !== "function") {
+        return json({ ok: false, error: "draft_store_unavailable" }, 503);
+      }
+      const draftStub = namespace.get(namespace.idFromName("agent-authoring-global"));
+      if (!draftStub || typeof draftStub.getDraft !== "function" || typeof draftStub.createDraft !== "function") {
+        return json({ ok: false, error: "draft_store_unavailable" }, 503);
+      }
+
+      try {
+        const artifactId = await authoringArtifactId(body.idempotencyKey);
+        const existing = await draftStub.getDraft(artifactId);
+        if (existing) {
+          if (existing.draft?.title !== body.topic.slice(0, 70)) {
+            return json({ ok: false, error: "authoring_idempotency_conflict" }, 409);
+          }
+          const summary = authoringArtifactSummary(existing);
+          if (!summary) return json({ ok: false, error: "draft_store_response_invalid" }, 503);
+          return json({
+            ok: true,
+            duplicate: true,
+            mode: "operator_triggered_research_to_authoring_brief",
+            execution: "local_deterministic_no_external_ai",
+            artifact: summary,
+            research: { sources_checked: 0, sources_succeeded: 0, signals: 0, evidence_retrieved: 0 },
+            claims_generated: false,
+            catalog_modified: false,
+            publication_authorized: false,
+          });
+        }
+
+        // Four fixed official feeds; reserve one unit before each outbound request.
+        await consumeContentResearchBudget(env, 4);
+        const discovery = await discoverResearchSignals({ now: Date.now(), lookbackDays: 14 });
+        if (!discovery.ok) return json({ ok: false, error: "research_sources_unavailable" }, 503);
+        const signals = Array.isArray(discovery.latest_signals) ? discovery.latest_signals.slice(0, 4) : [];
+        if (signals.length === 0) {
+          return json({
+            ok: true,
+            status: "no_fresh_research_signals",
+            mode: "operator_triggered_research_to_authoring_brief",
+            execution: "local_deterministic_no_external_ai",
+            research: { sources_checked: discovery.sources_checked, sources_succeeded: discovery.sources_succeeded, signals: 0, evidence_retrieved: 0 },
+            artifact_created: false,
+            claims_generated: false,
+            catalog_modified: false,
+            publication_authorized: false,
+          });
+        }
+
+        // Reserve only the number of source pages about to be fetched.
+        await consumeContentResearchBudget(env, signals.length);
+        const retrieval = await retrieveResearchEvidence(signals, { now: Date.now() });
+        const evidence = Array.isArray(retrieval.evidence)
+          ? retrieval.evidence.filter((item) => item?.status === "source_retrieved_not_fact_checked")
+          : [];
+        const brief = buildArticleAuthoringBrief({
+          topic: body.topic,
+          researchEvidence: evidence,
+          now: Date.now(),
+        });
+        if (!brief.prepared || !brief.draft) {
+          return json({
+            ok: false,
+            error: "authoring_brief_blocked",
+            reason: brief.reason || "research_evidence_insufficient",
+            research: {
+              sources_checked: discovery.sources_checked,
+              sources_succeeded: discovery.sources_succeeded,
+              signals: signals.length,
+              evidence_retrieved: evidence.length,
+            },
+            artifact_created: false,
+            claims_generated: false,
+            publication_authorized: false,
+          }, 422);
+        }
+
+        const persisted = await draftStub.createDraft(artifactId, brief.draft, evidence);
+        if (!persisted?.accepted || !persisted.artifact) {
+          const conflict = persisted?.reason === "artifact_id_conflict";
+          return json({ ok: false, error: conflict ? "authoring_idempotency_conflict" : "draft_persistence_rejected" }, conflict ? 409 : 422);
+        }
+        const summary = authoringArtifactSummary(persisted.artifact);
+        if (!summary) return json({ ok: false, error: "draft_store_response_invalid" }, 503);
+        return json({
+          ok: true,
+          duplicate: persisted.duplicate === true,
+          mode: "operator_triggered_research_to_authoring_brief",
+          execution: "local_deterministic_no_external_ai",
+          artifact: summary,
+          research: {
+            sources_checked: discovery.sources_checked,
+            sources_succeeded: discovery.sources_succeeded,
+            signals: signals.length,
+            evidence_retrieved: evidence.length,
+          },
+          claims_generated: false,
+          catalog_modified: false,
+          publication_authorized: false,
+          limitations: [
+            "human_authorship_required",
+            "source_excerpts_not_fact_checked_or_corroborated",
+            "no_ai_inference_or_paid_provider",
+            "no_catalog_or_publication_write",
+            "manual_operator_trigger_only",
+          ],
+        });
+      } catch (error) {
+        if (error?.status === 429) return json({ ok: false, error: "research_budget_exhausted" }, 429);
+        if (error?.status === 400) return json({ ok: false, error: "research_budget_exhausted_or_invalid" }, 429);
+        return json({ ok: false, error: "authoring_preparation_unavailable" }, 503);
+      }
+    }
+
     if (url.pathname === "/internal/enqueue") {
       if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
       if (!isEnabled(env.AGENT_ENABLED) || env.AGENT_PAUSED !== "false") {
