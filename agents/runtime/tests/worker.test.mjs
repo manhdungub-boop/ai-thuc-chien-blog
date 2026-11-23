@@ -901,12 +901,10 @@ test("run reserves, claims, reviews, and completes durable read-only tasks", asy
   };
   globalThis.fetch = async (input) => {
     const url = new URL(String(input));
-    if (url.hostname === "api.github.com" &&
-        url.pathname.endsWith("/contents/articles/demo-article.html") &&
-        url.searchParams.get("ref") === "main") return new Response(articleHtml, { status: 200 });
-    if (url.hostname === "api.github.com" &&
-        url.pathname.endsWith("/contents/data/ai-tools.json") &&
-        url.searchParams.get("ref") === "main") return new Response(JSON.stringify(catalog), { status: 200 });
+    if (url.hostname === "raw.githubusercontent.com" &&
+        url.pathname === "/manhdungub-boop/ai-thuc-chien-blog/main/articles/demo-article.html") return new Response(articleHtml, { status: 200 });
+    if (url.hostname === "raw.githubusercontent.com" &&
+        url.pathname === "/manhdungub-boop/ai-thuc-chien-blog/main/data/ai-tools.json") return new Response(JSON.stringify(catalog), { status: 200 });
     throw new Error("unexpected_source_url");
   };
   const { env, records, calls } = durableRunEnv();
@@ -1068,9 +1066,8 @@ test("scheduled dispatcher processes at most one queued read-only task per confi
     <a href="/thu-vien.html">Library</a><main>${"useful content ".repeat(270)}</main></body></html>`;
   globalThis.fetch = async (input) => {
     const url = new URL(String(input));
-    if (url.hostname === "api.github.com" &&
-        url.pathname.endsWith("/contents/articles/demo-article.html") &&
-        url.searchParams.get("ref") === "main") return new Response(articleHtml, { status: 200 });
+    if (url.hostname === "raw.githubusercontent.com" &&
+        url.pathname === "/manhdungub-boop/ai-thuc-chien-blog/main/articles/demo-article.html") return new Response(articleHtml, { status: 200 });
     throw new Error("unexpected_source_url");
   };
   const { env, records, calls } = durableRunEnv();
@@ -1108,9 +1105,8 @@ test("operator queue dispatcher processes only a bounded number of already-queue
     <a href="/thu-vien.html">Library</a><main>${"useful content ".repeat(270)}</main></body></html>`;
   globalThis.fetch = async (input) => {
     const url = new URL(String(input));
-    if (url.hostname === "api.github.com" &&
-        url.pathname.endsWith("/contents/articles/demo-article.html") &&
-        url.searchParams.get("ref") === "main") return new Response(articleHtml, { status: 200 });
+    if (url.hostname === "raw.githubusercontent.com" &&
+        url.pathname === "/manhdungub-boop/ai-thuc-chien-blog/main/articles/demo-article.html") return new Response(articleHtml, { status: 200 });
     throw new Error("unexpected_source_url");
   };
   const { env, records, calls } = durableRunEnv();
