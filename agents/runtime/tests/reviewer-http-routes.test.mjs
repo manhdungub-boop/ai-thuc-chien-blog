@@ -14,14 +14,18 @@ describe("reviewer and operator HTTP routes", () => {
     expect(response.headers.get("content-type")).toContain("text/html");
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(response.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
-    expect(await response.text()).toContain("operator-console.js");
+    const html = await response.text();
+    expect(html).toContain("operator-console.js");
+    expect(html).toContain("/auth/google/start?return_to=%2Foperator-console");
   });
 
   it("serves the reviewer console and same-origin JavaScript assets", async () => {
     const page = await handleReviewerHttpRequest(new Request(`${base}/reviewer-console`), {});
     const script = await handleReviewerHttpRequest(new Request(`${base}/reviewer-console.js`), {});
     expect(page.status).toBe(200);
-    expect((await page.text()).toLowerCase()).toContain("reviewer");
+    const html = await page.text();
+    expect(html.toLowerCase()).toContain("reviewer");
+    expect(html).toContain("/auth/google/start?return_to=%2Freviewer-console");
     expect(script.status).toBe(200);
     expect(script.headers.get("content-type")).toContain("application/javascript");
   });
