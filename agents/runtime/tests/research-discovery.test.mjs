@@ -4,15 +4,22 @@ import { RESEARCH_FEED_SOURCES, discoverResearchSignals } from "../src/research-
 
 const NOW = Date.parse("2026-11-18T12:00:00.000Z");
 
-function feedFor(source, index = 0, date = "2026-11-18T10:00:00.000Z") {
+function entryFor(source, index = 0, date = "2026-11-18T10:00:00.000Z") {
   const path = source.pathPrefix + "research-update-" + index;
   const link = "https://" + source.host + path;
-  const item = source.name === "Google DeepMind" || source.name === "Hugging Face"
+  return source.name === "Google DeepMind" || source.name === "Hugging Face"
     ? '<entry><title>AI agent research update</title><link href="' + link + '"/><updated>' + date + '</updated><summary>Research on AI agents and automation.</summary></entry>'
     : '<item><title>AI agent research update</title><link>' + link + '</link><pubDate>' + date + '</pubDate><description>Research on AI agents and automation.</description></item>';
+}
+
+function feedDocumentFor(source, entries) {
   return source.name === "Google DeepMind" || source.name === "Hugging Face"
-    ? "<feed>" + item + "</feed>"
-    : "<rss><channel>" + item + "</channel></rss>";
+    ? "<feed>" + entries + "</feed>"
+    : "<rss><channel>" + entries + "</channel></rss>";
+}
+
+function feedFor(source, index = 0, date = "2026-11-18T10:00:00.000Z") {
+  return feedDocumentFor(source, entryFor(source, index, date));
 }
 
 describe("read-only AI research discovery", () => {
@@ -46,6 +53,39 @@ describe("read-only AI research discovery", () => {
       deployment_performed: false
     });
     expect(new TextEncoder().encode(JSON.stringify(result)).byteLength).toBeLessThan(8192);
+  });
+
+  it("does not count HTTP 200 HTML error pages as successful feed scans", async () => {
+    const result = await discoverResearchSignals({
+      now: NOW,
+      fetchImpl: async () => new Response("<html><body>gateway error</body></html>", { status: 200 })
+    });
+    expect(result).toMatchObject({
+      ok: false,
+      status: "all_sources_failed",
+      sources_checked: 4,
+      sources_succeeded: 0,
+      signal_count: 0
+    });
+    expect(result.sources_failed).toHaveLength(4);
+    expect(result.sources_failed.every(item => item.error === "invalid_feed_document")).toBe(true);
+  });
+
+  it("filters future-dated feed entries before ranking the bounded result set", async () => {
+    const result = await discoverResearchSignals({
+      now: NOW,
+      fetchImpl: async url => {
+        const source = RESEARCH_FEED_SOURCES.find(item => item.feed === url);
+        const future = Array.from({ length: 4 }, (_, index) =>
+          entryFor(source, "future-" + index, new Date(NOW + 60 * 60 * 1000).toISOString())
+        ).join("");
+        const current = entryFor(source, "current", new Date(NOW - 60 * 1000).toISOString());
+        return new Response(feedDocumentFor(source, future + current), { status: 200 });
+      }
+    });
+    expect(result.signal_count).toBe(4);
+    expect(result.latest_signals).toHaveLength(4);
+    expect(result.latest_signals.every(item => item.url.includes("current"))).toBe(true);
   });
 
   it("rejects off-domain links and entries outside the lookback window", async () => {
