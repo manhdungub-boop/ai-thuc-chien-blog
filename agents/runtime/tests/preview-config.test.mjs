@@ -82,3 +82,13 @@ test("GitHub OIDC is enabled only for the pause-only Preview operator", () => {
   assert.equal(config.vars.AGENT_REVIEWER_AUTH_ENABLED, "false");
   assert.equal(config.vars.AGENT_OIDC_ACTOR_ID, "342528485");
 });
+
+
+test("GitHub OIDC Pause workflow pins the bearer-token destination to the exact Preview origin", () => {
+  const workflowPath = fileURLToPath(new URL("../../../.github/workflows/agent-runtime-operator.yml", import.meta.url));
+  const workflow = readFileSync(workflowPath, "utf8");
+  assert.match(workflow, /target\.origin !== 'https:\/\/ai-thuc-chien-agent-runtime-preview\.manhdungub\.workers\.dev'/);
+  assert.match(workflow, /target\.pathname !== '\/'/);
+  assert.doesNotMatch(workflow, /ai-thuc-chien-agent-runtime-preview\\\\\?\./);
+  assert.doesNotMatch(workflow, /workers\\\.dev\$\/i\.test\(target\.hostname\)/);
+});
