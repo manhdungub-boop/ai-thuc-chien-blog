@@ -410,17 +410,16 @@ if (url.pathname === "/task" && request.method === "GET") {
           "SELECT event_type AS eventType, COUNT(*) AS count FROM audit_events WHERE occurred_at>=? GROUP BY event_type ORDER BY count DESC, event_type ASC LIMIT 20",
           now - 24 * 60 * 60 * 1000,
         ).toArray();
-        const failureCountLast10m = readRow(this.sql,
-          "SELECT COUNT(*) AS count FROM tasks WHERE state='failed' AND terminal_at>=?", now - CIRCUIT_BREAKER.windowMs).count;
-        const control = this.controlState();
+        const control = this.controlState(now);
+        const failureCountLast10m = control.failureCountLast10m;
         const latestPause = readRow(this.sql,
-          "SELECT reason FROM runtime_control_audit WHERE action='pause' ORDER BY occurred_at DESC,event_id DESC LIMIT 1");
+          "SELECT actor FROM runtime_control_audit WHERE action='pause' ORDER BY occurred_at DESC,event_id DESC LIMIT 1");
         const acceptedToday = usage?.accepted_count ?? 0;
         const dailyUtilizationPercent = Math.round((acceptedToday / limits.daily) * 10000) / 100;
         const concurrentUtilizationPercent = Math.round(((counts.queued + counts.running) / limits.concurrent) * 10000) / 100;
         const dailyPressure = quotaPressure(dailyUtilizationPercent);
         const concurrentPressure = quotaPressure(concurrentUtilizationPercent);
-        const autoPaused = control.paused && latestPause?.reason === "circuit_breaker:5_failures_in_10m";
+        const autoPaused = control.paused && latestPause?.actor === "system:circuit_breaker";
         return jsonResponse({
           ok: true,
           observedAt: now,
@@ -601,12 +600,12 @@ if (url.pathname === "/task" && request.method === "GET") {
     };
   }
 
-  controlState() {
+  controlState(now = Date.now()) {
     const row = readRow(this.sql, "SELECT paused, changed_at, version FROM runtime_control WHERE singleton_id = 1");
     if (!row) throw new Error("runtime_control_missing");
     const failureCount = readRow(this.sql,
       "SELECT COUNT(*) AS count FROM audit_events WHERE event_type = 'task.terminal_failure' AND occurred_at >= ?",
-      Date.now() - CIRCUIT_BREAKER.windowMs,
+      now - CIRCUIT_BREAKER.windowMs,
     )?.count ?? 0;
     return {
       paused: row.paused === 1,
