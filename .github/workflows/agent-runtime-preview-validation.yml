@@ -249,7 +249,6 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' &&
       inputs.confirm_one_shot_preview_e2e == true &&
-      inputs.confirm_free_workers_plan == true &&
       github.repository == 'manhdungub-boop/ai-thuc-chien-blog' &&
       github.ref == 'refs/heads/security/fence-leases-on-circuit-breaker-pause-20261123' &&
       github.actor_id == '342528485' &&
