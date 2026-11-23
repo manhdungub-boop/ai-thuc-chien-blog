@@ -25,7 +25,7 @@ function encodeJson(value) {
   return encodeBase64Url(new TextEncoder().encode(JSON.stringify(value)));
 }
 
-async function makeToken() {
+async function makeToken(jti = "worker-oidc-pause-jti-000001") {
   const now = Math.floor(Date.now() / 1000);
   const keyPair = await crypto.subtle.generateKey(
     { name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" },
@@ -47,7 +47,7 @@ async function makeToken() {
     workflow_ref: EXPECTED.workflowRef,
     actor_id: EXPECTED.actorId,
     event_name: EXPECTED.eventName,
-    jti: "worker-oidc-pause-jti-000001",
+    jti,
     run_id: "99887766",
     run_attempt: "1",
     iat: now - 5,
@@ -98,7 +98,7 @@ test("OIDC pause verifies GitHub signature, consumes jti, and records only the v
             assert.equal(internalRequest.headers.get("cookie"), null);
             if (new URL(internalRequest.url).pathname === "/oidc/replay/consume") {
               assert.deepEqual(await internalRequest.json(), {
-                jti: "worker-oidc-pause-jti-000001",
+                jti,
                 expiresAt: String(expiresAt),
               });
               return Response.json({ ok: true, consumed: true });
@@ -131,4 +131,100 @@ test("OIDC pause verifies GitHub signature, consumes jti, and records only the v
   assert.equal(fetchCalls[1].options.redirect, "manual");
   assert.equal(fetchCalls[0].options.headers.Authorization, undefined);
   assert.equal(JSON.stringify(body).includes(STATE_TOKEN), false);
+});
+
+test("AI Bank ingestion requires exact GitHub OIDC, consumes replay state, and writes only review candidates", async (t) => {
+  const { token, jwks, expiresAt } = await makeToken("worker-oidc-ingest-jti-000001");
+  const fetchCalls = [];
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    fetchCalls.push({ url: String(url), options });
+    if (String(url) === ISSUER + "/.well-known/openid-configuration") {
+      return Response.json({ issuer: ISSUER, jwks_uri: ISSUER + "/.well-known/jwks" });
+    }
+    if (String(url) === ISSUER + "/.well-known/jwks") return Response.json(jwks);
+    throw new Error("unexpected_external_request");
+  });
+
+  const replayCalls = [];
+  const candidateCalls = [];
+  const env = {
+    AGENT_AI_BANK_INGESTION_ENABLED: "true",
+    AGENT_OIDC_ENABLED: "true",
+    AGENT_OIDC_AUDIENCE: AUDIENCE,
+    AGENT_OIDC_REPOSITORY: EXPECTED.repository,
+    AGENT_OIDC_REPOSITORY_OWNER: EXPECTED.repositoryOwner,
+    AGENT_OIDC_REPOSITORY_ID: EXPECTED.repositoryId,
+    AGENT_OIDC_REPOSITORY_OWNER_ID: EXPECTED.repositoryOwnerId,
+    AGENT_OIDC_REF: EXPECTED.ref,
+    AGENT_OIDC_WORKFLOW_REF: EXPECTED.workflowRef,
+    AGENT_OIDC_ACTOR_ID: EXPECTED.actorId,
+    AGENT_STATE_STORE_TOKEN: STATE_TOKEN,
+    AGENT_STATE_STORE: {
+      idFromName(name) { assert.equal(name, "agent-runtime-global"); return "fixed-id"; },
+      get(id) {
+        assert.equal(id, "fixed-id");
+        return { async fetch(internalRequest) {
+          replayCalls.push(internalRequest);
+          assert.equal(internalRequest.headers.get("authorization"), "Bearer " + STATE_TOKEN);
+          assert.equal(internalRequest.headers.get("cookie"), null);
+          assert.equal(new URL(internalRequest.url).pathname, "/oidc/replay/consume");
+          assert.deepEqual(await internalRequest.json(), {
+            jti: "worker-oidc-ingest-jti-000001", expiresAt: String(expiresAt),
+          });
+          return Response.json({ ok: true, consumed: true });
+        } };
+      },
+    },
+    AGENT_AI_BANK_CANDIDATE_STORE: {
+      idFromName(name) { assert.equal(name, "ai-bank-discovery-global"); return "candidate-store-id"; },
+      get(id) {
+        assert.equal(id, "candidate-store-id");
+        return { async upsertCandidatesAndAdvanceCursor(candidates, cursor, scanId, now) {
+          candidateCalls.push({ candidates, cursor, scanId, now });
+          return { accepted: true, duplicate: false, inserted: 1, updated: 0, unchanged: 0,
+            total: 1, cursor, scan_id: scanId, cursor_advanced: true,
+            catalog_write_authorized: false };
+        } };
+      },
+    },
+  };
+  const payload = { candidates: [], cursor: "2026-11-19T08:06:00.000Z", scanId: "run-123-attempt-1" };
+  const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/oidc/ai-bank-ingest", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + token, "Content-Type": "application/json", Cookie: "must-not-forward" },
+    body: JSON.stringify(payload),
+  }), env);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.ok, true);
+  assert.equal(body.cursor_advanced, true);
+  assert.equal(body.catalog_modified, false);
+  assert.equal(body.public_publication_authorized, false);
+  assert.equal(replayCalls.length, 1);
+  assert.equal(candidateCalls.length, 1);
+  assert.deepEqual(candidateCalls[0].candidates, payload.candidates);
+  assert.equal(candidateCalls[0].cursor, payload.cursor);
+  assert.equal(candidateCalls[0].scanId, payload.scanId);
+  assert.equal(fetchCalls.length, 2);
+  assert.equal(fetchCalls[0].options.redirect, "manual");
+  assert.equal(fetchCalls[1].options.redirect, "manual");
+  assert.equal(JSON.stringify(body).includes(STATE_TOKEN), false);
+});
+
+test("AI Bank ingestion remains disabled by default and does not verify tokens or contact stores", async () => {
+  let externalCalled = false;
+  let storeCalled = false;
+  const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/oidc/ai-bank-ingest", {
+    method: "POST",
+    headers: { Authorization: "Bearer not-a-jwt", "Content-Type": "application/json" },
+    body: JSON.stringify({ candidates: [], cursor: "2026-11-19T08:06:00.000Z", scanId: "run-124-attempt-1" }),
+  }), {
+    AGENT_OIDC_ENABLED: "true",
+    AGENT_STATE_STORE: { idFromName: () => "unused", get: () => ({ fetch: async () => { storeCalled = true; } }) },
+    AGENT_AI_BANK_CANDIDATE_STORE: { idFromName: () => "unused", get: () => ({ upsertCandidatesAndAdvanceCursor: async () => { storeCalled = true; } }) },
+  });
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).error, "ai_bank_ingestion_disabled");
+  assert.equal(externalCalled, false);
+  assert.equal(storeCalled, false);
 });
