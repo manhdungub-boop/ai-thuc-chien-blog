@@ -210,17 +210,17 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     const legacyReplay = await store.upsertCandidatesAndAdvanceCursor(
       [candidate()], firstCursor, "run-100-attempt-1", Date.parse("2026-11-19T08:07:30.000Z")
     );
-    expect(legacyReplay).toMatchObject({ accepted: true, duplicate: true, inserted: 0,
-      cursor: firstCursor, cursor_advanced: false, total: 1 });
+    expect(legacyReplay).toMatchObject({ accepted: false, reason: "discovery_scan_id_reused", cursor_advanced: false });
 
-    const replay = await store.upsertCandidatesAndAdvanceCursor(
-      [candidate()], firstCursor, "run-100-attempt-1", Date.parse("2026-11-19T08:08:00.000Z")
-    );
-    expect(replay).toMatchObject({ accepted: true, duplicate: true, inserted: 0,
-      cursor: firstCursor, cursor_advanced: false, total: 1 });
+    // A later candidate update changes mutable row timestamps. It must not let
+    // an empty replay masquerade as the original legacy batch.
+    await store.upsertCandidates([candidate()], Date.parse("2026-11-19T08:08:00.000Z"));
+    expect(await store.upsertCandidatesAndAdvanceCursor(
+      [], firstCursor, "run-100-attempt-1", Date.parse("2026-11-19T08:08:30.000Z")
+    )).toMatchObject({ accepted: false, reason: "discovery_scan_id_reused", cursor_advanced: false });
 
     expect(await store.upsertCandidatesAndAdvanceCursor(
-      [candidate(sources[1])], firstCursor, "run-100-attempt-1", Date.parse("2026-11-19T08:08:30.000Z")
+      [candidate(sources[1])], firstCursor, "run-100-attempt-1", Date.parse("2026-11-19T08:09:00.000Z")
     )).toMatchObject({ accepted: false, reason: "discovery_scan_id_reused", cursor_advanced: false });
 
     expect(await store.upsertCandidatesAndAdvanceCursor(
