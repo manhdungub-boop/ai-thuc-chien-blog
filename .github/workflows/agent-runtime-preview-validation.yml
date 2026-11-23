@@ -15,6 +15,21 @@ on:
       - ".github/workflows/agent-runtime-preview-validation.yml"
       - ".github/workflows/agent-runtime-operator.yml"
   workflow_dispatch:
+    inputs:
+      confirm_one_shot_preview_e2e:
+        description: "Authorize one read-only content.review task on the dedicated Preview Worker, followed by automatic disable/rollback"
+        required: true
+        type: boolean
+        default: false
+      confirm_free_workers_plan:
+        description: "Confirm this one-shot test must remain on the Workers Free plan only"
+        required: true
+        type: boolean
+        default: false
+      expected_sha:
+        description: "Exact 40-character PR branch commit SHA to deploy and test"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -183,22 +198,29 @@ jobs:
           console.log('PASS: Preview is isolated and has no recurring trigger; scheduled dispatch remains code-only until cost gates pass.');
           NODE
 
-      - name: Assert workflow is validation-only
+      - name: Assert validation job remains validation-only
         run: |
-          if grep -Eiq 'wrangler[[:space:]]+versions[[:space:]]+upload|CLOUDFLARE_[A-Z_]*TOKEN|secrets[.]' .github/workflows/agent-runtime-preview-validation.yml; then
-            echo "Unexpected upload command or Cloudflare secret reference in validation workflow"
-            exit 1
-          fi
           node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
           import { readFile } from 'node:fs/promises';
           const workflow = await readFile('.github/workflows/agent-runtime-preview-validation.yml', 'utf8');
-          const deployLines = workflow.split('\n').filter(line => line.trimStart().startsWith('npx --yes wrangler@4.166.0 deploy '));
-          assert.equal(deployLines.length, 1, 'only one Wrangler deploy command is allowed in this validation workflow');
-          assert.match(deployLines[0], /--dry-run/, 'Wrangler deploy must be dry-run only');
-          assert.match(deployLines[0], /--config wrangler\.preview\.jsonc/, 'dry-run must target only the dedicated Preview config');
-          assert.doesNotMatch(workflow, /CLOUDFLARE_[A-Z_]*TOKEN|secrets\./i);
-          console.log('PASS: Wrangler command is a single Preview-only dry-run; no Cloudflare credential or upload command.');
+          const parts = workflow.split('  one-shot-preview-e2e:\\n');
+          assert.equal(parts.length, 2, 'the separately gated one-shot E2E job must exist exactly once');
+          const validationWorkflow = parts[0];
+          const e2eWorkflow = parts[1];
+          const deployLines = validationWorkflow.split('\\n').filter(line => line.trimStart().startsWith('npx --yes wrangler@4.166.0 deploy '));
+          assert.equal(deployLines.length, 1, 'validation job must contain exactly one Wrangler command');
+          assert.match(deployLines[0], /--dry-run/, 'validation Wrangler command must be dry-run only');
+          assert.match(deployLines[0], /--config wrangler\\.preview\\.jsonc/, 'dry-run must target only dedicated Preview config');
+          assert.doesNotMatch(validationWorkflow, /CLOUDFLARE_[A-Z_]*TOKEN|secrets\\./i, 'validation job must not receive Cloudflare credentials');
+          assert.match(e2eWorkflow, /github\\.actor_id == '342528485'/, 'one-shot E2E must be restricted to repository owner actor');
+          assert.match(e2eWorkflow, /github\\.ref == 'refs\\/heads\\/security\\/fence-leases-on-circuit-breaker-pause-20261123'/);
+          assert.match(e2eWorkflow, /id-token: write/);
+          assert.match(e2eWorkflow, /AGENT_OIDC_RUN_ENABLED:true/);
+          assert.match(e2eWorkflow, /--config agents\\/runtime\\/wrangler\\.preview\\.jsonc/);
+          assert.match(e2eWorkflow, /if: always\\(\\)/, 'rollback must run even after an E2E failure');
+          assert.match(e2eWorkflow, /AGENT_ENABLED:false|wrangler\\.preview\\.jsonc/, 'rollback must restore the checked-in disabled config');
+          console.log('PASS: validation remains credential-free; the separately gated owner-only job uses OIDC, Preview-only deployment, and automatic rollback.');
           NODE
 
       - name: Verify OIDC operator workflow is manual and pause-only
@@ -219,3 +241,222 @@ jobs:
           assert.doesNotMatch(workflow, /internal\/oidc\/resume|wrangler\s+deploy|CLOUDFLARE_.*TOKEN/i);
           console.log('PASS: OIDC operator is manual-only, main-ref-only, minimally privileged, serialized, Preview-scoped, and pause-only.');
           NODE
+  one-shot-preview-e2e:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      inputs.confirm_one_shot_preview_e2e == true &&
+      inputs.confirm_free_workers_plan == true &&
+      github.repository == 'manhdungub-boop/ai-thuc-chien-blog' &&
+      github.ref == 'refs/heads/security/fence-leases-on-circuit-breaker-pause-20261123' &&
+      github.actor_id == '342528485' &&
+      github.sha == inputs.expected_sha
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: agent-runtime-preview
+    timeout-minutes: 15
+    concurrency:
+      group: agent-runtime-preview-deploy
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      CLOUDFLARE_ACCOUNT_ID: "92cf091bbac8b4879ec65feb30b4715b"
+      AGENT_RUNTIME_PREVIEW_URL: "https://ai-thuc-chien-agent-runtime-preview.manhdungub.workers.dev"
+    steps:
+      - name: Check out the exact authorized PR commit
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Verify exact branch, actor, and commit pin
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "manhdungub-boop/ai-thuc-chien-blog"
+          test "$GITHUB_REF" = "refs/heads/security/fence-leases-on-circuit-breaker-pause-20261123"
+          test "$GITHUB_ACTOR_ID" = "342528485"
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test -f agents/runtime/wrangler.preview.jsonc
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFile } from 'node:fs/promises';
+          const c = JSON.parse(await readFile('agents/runtime/wrangler.preview.jsonc', 'utf8'));
+          assert.equal(c.name, 'ai-thuc-chien-agent-runtime-preview');
+          assert.equal(c.vars.AGENT_ENABLED, 'false');
+          assert.equal(c.vars.AGENT_PAUSED, 'true');
+          assert.equal(c.vars.AGENT_SCHEDULER_ENABLED, 'false');
+          assert.equal(c.vars.AGENT_RECOVERY_ALARM_ENABLED, 'false');
+          assert.equal(c.vars.AGENT_REVIEWER_AUTH_ENABLED, 'false');
+          assert.equal(c.vars.AGENT_RATE_LIMIT_REQUIRED, 'true');
+          assert.equal((c.triggers?.crons ?? []).length, 0);
+          assert.equal('d1_databases' in c, false);
+          assert.equal('routes' in c, false);
+          NODE
+
+      - name: Verify Workers Free plan before deployment
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}
+          CONFIRM_FREE_WORKERS_PLAN: ${{ inputs.confirm_free_workers_plan }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+            echo "::error::Preview deployment credential is unavailable; no deployment attempted."
+            exit 1
+          fi
+          response="$RUNNER_TEMP/cloudflare-subscriptions.json"
+          status="$(curl --silent --show-error --output "$response" --write-out "%{http_code}" \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            --header "Accept: application/json" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/subscriptions")"
+          if [[ "$status" != "200" ]]; then
+            echo "::error::Workers plan could not be verified (HTTP $status); stopped before deployment."
+            exit 1
+          fi
+          plan_check="$(jq -r '
+            if .success != true then "invalid"
+            else
+              [.result[]? |
+                [
+                  (.rate_plan // {} | [.id // "", .public_name // "", .name // ""] | map(tostring) | join(" ")),
+                  (.product // "" | if type == "object" then (.name // .id // "") else . end | tostring)
+                ] | map(ascii_downcase) | join(" ") | select(test("worker"))
+              ] as $worker_plans |
+              if ($worker_plans | length) == 0 then "no-worker-subscription"
+              elif all($worker_plans[]; test("free")) then "free"
+              else "non-free"
+              end
+            end
+          ' "$response")"
+          case "$plan_check" in
+            free) echo "Workers subscription positively identifies Free." ;;
+            no-worker-subscription)
+              test "$CONFIRM_FREE_WORKERS_PLAN" = "true"
+              echo "No Workers subscription record; owner explicitly confirms default Workers Free."
+              ;;
+            *) echo "::error::Workers plan is not proven Free; deployment stopped."; exit 1 ;;
+          esac
+
+      - name: Deploy the one-shot read-only E2E configuration to dedicated Preview
+        id: deploy-e2e
+        working-directory: agents/runtime
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.166.0 deploy --config wrangler.preview.jsonc \
+            --var "AGENT_ENABLED:true" \
+            --var "AGENT_PAUSED:false" \
+            --var "AGENT_OIDC_RUN_ENABLED:true" \
+            --var "AGENT_OIDC_RUN_REF:refs/heads/security/fence-leases-on-circuit-breaker-pause-20261123" \
+            --var "AGENT_OIDC_RUN_WORKFLOW_REF:manhdungub-boop/ai-thuc-chien-blog/.github/workflows/agent-runtime-preview-validation.yml@refs/heads/security/fence-leases-on-circuit-breaker-pause-20261123" \
+            --var "AGENT_OIDC_RUN_ACTOR_ID:342528485" \
+            --message "One-shot OIDC read-only E2E; automatic disable/restore follows"
+
+      - name: Verify the isolated Preview is temporarily open only for the one-shot test
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 20 "$AGENT_RUNTIME_PREVIEW_URL/health" -o "$RUNNER_TEMP/preview-health.json"
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFile } from 'node:fs/promises';
+          const h = JSON.parse(await readFile(process.env.RUNNER_TEMP + '/preview-health.json', 'utf8'));
+          assert.equal(h.ok, true);
+          assert.equal(h.service, 'ai-thuc-chien-agent-runtime-preview');
+          assert.equal(h.enabled, true);
+          assert.equal(h.paused, false);
+          assert.equal(h.scheduler, 'manual_only_no_cron');
+          assert.equal(h.reviewer_auth_enabled, false);
+          assert.equal(h.publication_authorized, false);
+          NODE
+
+      - name: Invoke exactly one allowlisted task with a short-lived GitHub OIDC token
+        env:
+          OIDC_AUDIENCE: ai-thuc-chien-agent-runtime-preview
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          const requestUrl = process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
+          const requestToken = process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
+          if (!requestUrl || !requestToken) throw new Error('GitHub OIDC request context unavailable');
+          const tokenUrl = new URL(requestUrl);
+          tokenUrl.searchParams.set('audience', process.env.OIDC_AUDIENCE);
+          const tokenResponse = await fetch(tokenUrl, {
+            method: 'GET',
+            headers: { Authorization: 'Bearer ' + requestToken, Accept: 'application/json' },
+            redirect: 'error',
+            cache: 'no-store',
+          });
+          if (!tokenResponse.ok) throw new Error('GitHub OIDC token request failed: HTTP ' + tokenResponse.status);
+          const payload = await tokenResponse.json();
+          if (typeof payload.value !== 'string' || payload.value.length < 100 || payload.value.length > 16384) {
+            throw new Error('GitHub OIDC token response invalid');
+          }
+          const response = await fetch(process.env.AGENT_RUNTIME_PREVIEW_URL + '/internal/oidc/run', {
+            method: 'POST',
+            headers: {
+              Authorization: 'Bearer ' + payload.value,
+              'Content-Type': 'application/json',
+              Accept: 'application/json',
+            },
+            body: JSON.stringify({ task: {
+              type: 'content.review',
+              idempotencyKey: 'oidc-preview-e2e:' + process.env.GITHUB_RUN_ID + ':' + process.env.GITHUB_RUN_ATTEMPT,
+              payload: { articlePath: 'articles/ai-agent-thuc-hanh-tu-thiet-ke-den-kiem-soat.html' },
+            } }),
+            redirect: 'error',
+            cache: 'no-store',
+          });
+          const result = await response.json();
+          const item = result?.items?.[0];
+          if (!response.ok || result?.ok !== true || result?.summary?.total !== 1 ||
+              result?.summary?.succeeded !== 1 || item?.state !== 'succeeded' ||
+              item?.result?.taskType !== 'content.review' || result?.persistence?.verified !== true ||
+              result?.persistence?.state !== 'succeeded' ||
+              !['task.queued', 'task.claimed', 'task.succeeded'].every(type =>
+                result.persistence.auditEvents?.[type]?.after >= result.persistence.auditEvents?.[type]?.before + 1)) {
+            throw new Error('One-shot read-only task or durable audit verification failed: ' +
+              JSON.stringify({ httpStatus: response.status, error: result?.error, state: item?.state }));
+          }
+          console.log(JSON.stringify({
+            ok: true,
+            taskId: item.taskId,
+            state: item.state,
+            taskType: item.result.taskType,
+            reviewStatus: item.result.status,
+            findingCount: item.result.findingCount,
+            auditVerified: result.persistence.verified,
+            auditEventTypes: Object.keys(result.persistence.auditEvents),
+          }));
+          NODE
+
+      - name: Always restore Preview to disabled and paused configuration
+        if: always() && steps.deploy-e2e.outcome != 'skipped'
+        working-directory: agents/runtime
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+            echo "::error::Cannot restore Preview because the Cloudflare deployment credential is unavailable."
+            exit 1
+          fi
+          npx --yes wrangler@4.166.0 deploy --config wrangler.preview.jsonc \
+            --message "Restore Agent Runtime Preview disabled and paused after one-shot E2E"
+          curl --fail --silent --show-error --max-time 20 "$AGENT_RUNTIME_PREVIEW_URL/health" -o "$RUNNER_TEMP/preview-health-restored.json"
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFile } from 'node:fs/promises';
+          const h = JSON.parse(await readFile(process.env.RUNNER_TEMP + '/preview-health-restored.json', 'utf8'));
+          assert.equal(h.ok, true);
+          assert.equal(h.enabled, false);
+          assert.equal(h.paused, true);
+          assert.equal(h.scheduler, 'manual_only_no_cron');
+          assert.equal(h.reviewer_auth_enabled, false);
+          assert.equal(h.publication_authorized, false);
+          NODE
+          echo "Preview is restored and verified disabled/paused."
+
