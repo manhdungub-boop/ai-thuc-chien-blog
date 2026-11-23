@@ -61,8 +61,9 @@ async function reviewerSession(request, env) {
   if (!token) return { ok: false, status: 401, error: "reviewer_session_required" };
   const session = await verifyGoogleReviewerSessionToken(token, env);
   if (!session?.authenticated) {
-    const notConfigured = session?.reason === "reviewer_auth_not_configured";
-    return { ok: false, status: notConfigured ? 503 : 401, error: session?.reason || "reviewer_session_invalid" };
+    const status = session?.status || "reviewer_session_invalid";
+    const notConfigured = status === "reviewer_auth_not_configured";
+    return { ok: false, status: notConfigured ? 503 : 401, error: status };
   }
   return { ok: true, token, reviewer: session.reviewer };
 }
