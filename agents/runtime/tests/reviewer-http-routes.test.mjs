@@ -389,22 +389,46 @@ describe("authenticated read-only AI Bank reviewer routes", () => {
     expect(storeAccesses).toBe(0);
   });
 
-  it("does not expose an AI Bank evidence-write route", async () => {
+  it("requires same-origin authenticated access before touching the evidence writer", async () => {
     const token = await createReviewerSessionToken();
-    let storeAccesses = 0;
-    const env = {
-      ...reviewerAuthEnv,
-      AGENT_AI_BANK_CANDIDATE_STORE: {
-        idFromName() { storeAccesses += 1; return "unused"; },
-        get() { storeAccesses += 1; return {}; }
-      }
-    };
-    const response = await handleReviewerHttpRequest(new Request(base + "/api/reviewer/ai-bank/candidates/ollama/ollama/evidence", {
-      method: "POST",
-      headers: { origin: base, "content-type": "application/json", cookie: "__Host-ai_reviewer_session=" + token },
-      body: JSON.stringify({ evidence: { source_url: "https://example.com" } })
-    }), env);
-    expect(response.status).toBe(404);
-    expect(storeAccesses).toBe(0);
+    let calls = 0;
+    const stub = { async submitAuthorizedReviewEvidence() { calls += 1; return { accepted: true }; } };
+    const env = { ...reviewerAuthEnv, AGENT_AI_BANK_CANDIDATE_STORE: aiBankStoreNamespace(stub) };
+    const noSession = await handleReviewerHttpRequest(new Request(base + "/api/reviewer/ai-bank/candidates/ollama/ollama/evidence", { method: "POST", headers: { origin: base, "content-type": "application/json" }, body: "{}" }), env);
+    const crossOrigin = await handleReviewerHttpRequest(new Request(base + "/api/reviewer/ai-bank/candidates/ollama/ollama/evidence", { method: "POST", headers: { origin: "https://attacker.example", "content-type": "application/json", cookie: "__Host-ai_reviewer_session=" + token }, body: "{}" }), env);
+    expect(noSession.status).toBe(401);
+    expect(crossOrigin.status).toBe(403);
+    expect(calls).toBe(0);
+  });
+
+  it("submits evidence through the independently authorized Durable Object RPC", async () => {
+    const token = await createReviewerSessionToken();
+    const eventId = "a4e6d1c2-3b7f-4a91-8c22-1234567890ab";
+    const evidence = { check_type: "pricing_and_free_limits", source_title: "Official pricing", source_url: "https://ollama.com/pricing", excerpt: "Pending human review." };
+    let received;
+    const stub = { async submitAuthorizedReviewEvidence(...args) { received = args; return { accepted: true, evidence_id: "evidence-123", source_status: "submitted_source_not_verified", review_status: "pending_human_review", audit_event_id: eventId, replay_protected: true }; } };
+    const env = { ...reviewerAuthEnv, GOOGLE_REVIEWER_EVIDENCE_WRITER_EMAILS: "reviewer@example.com", AGENT_AI_BANK_CANDIDATE_STORE: aiBankStoreNamespace(stub) };
+    const response = await handleReviewerHttpRequest(new Request(base + "/api/reviewer/ai-bank/candidates/ollama/ollama/evidence", { method: "POST", headers: { origin: base, "content-type": "application/json", cookie: "__Host-ai_reviewer_session=" + token }, body: JSON.stringify({ audit_event_id: eventId, evidence }) }), env);
+    expect(response.status).toBe(201);
+    expect(received[0]).toBe("github:ollama/ollama");
+    expect(received[1]).toEqual(evidence);
+    expect(received[2]).toBe(token);
+    expect(received[3]).toBe(eventId);
+    expect(received[4].GOOGLE_REVIEWER_EVIDENCE_WRITER_EMAILS).toBe("reviewer@example.com");
+    expect(await response.json()).toEqual({ accepted: true, evidence: { evidence_id: "evidence-123", source_status: "submitted_source_not_verified", review_status: "pending_human_review" }, audit_event_id: eventId, replay_protected: true, verification_authorized: false, catalog_write_authorized: false, public_publication_authorized: false });
+  });
+
+  it("rejects malformed evidence payloads and maps writer authorization failures", async () => {
+    const token = await createReviewerSessionToken();
+    let calls = 0;
+    const stub = { async submitAuthorizedReviewEvidence() { calls += 1; return { accepted: false, reason: "evidence_writer_not_configured" }; } };
+    const env = { ...reviewerAuthEnv, AGENT_AI_BANK_CANDIDATE_STORE: aiBankStoreNamespace(stub) };
+    const invalid = await handleReviewerHttpRequest(new Request(base + "/api/reviewer/ai-bank/candidates/ollama/ollama/evidence", { method: "POST", headers: { origin: base, "content-type": "application/json", cookie: "__Host-ai_reviewer_session=" + token }, body: JSON.stringify({ audit_event_id: "bad", evidence: {}, extra: true }) }), env);
+    expect(invalid.status).toBe(400);
+    expect(calls).toBe(0);
+    const denied = await handleReviewerHttpRequest(new Request(base + "/api/reviewer/ai-bank/candidates/ollama/ollama/evidence", { method: "POST", headers: { origin: base, "content-type": "application/json", cookie: "__Host-ai_reviewer_session=" + token }, body: JSON.stringify({ audit_event_id: "a4e6d1c2-3b7f-4a91-8c22-1234567890ab", evidence: { check_type: "pricing_and_free_limits", source_title: "Pricing", source_url: "https://ollama.com/pricing", excerpt: "Pending review." } }) }), env);
+    expect(denied.status).toBe(503);
+    expect(await denied.json()).toMatchObject({ error: "evidence_writer_not_configured", evidence_recorded: false });
+    expect(calls).toBe(1);
   });
 });

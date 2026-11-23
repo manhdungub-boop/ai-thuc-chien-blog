@@ -199,7 +199,68 @@ export function isValidReviewerDraftAuthoringRequest(value) {
 async function handleAIBankReviewerApi(request, env, url) {
   const collection = url.pathname === "/api/reviewer/ai-bank/candidates";
   const detail = url.pathname.match(/^\/api\/reviewer\/ai-bank\/candidates\/([a-zA-Z0-9_.-]{1,100})\/([a-zA-Z0-9_.-]{1,100})$/);
-  if (!collection && !detail) return null;
+  const evidenceMatch = url.pathname.match(/^\/api\/reviewer\/ai-bank\/candidates\/([a-zA-Z0-9_.-]{1,100})\/([a-zA-Z0-9_.-]{1,100})\/evidence$/);
+  if (!collection && !detail && !evidenceMatch) return null;
+  if (evidenceMatch) {
+    if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
+    if (!sameOrigin(request, true)) return json({ ok: false, error: "review_request_origin_or_content_type_rejected" }, 403);
+    const writerAuth = await reviewerSession(request, env);
+    if (!writerAuth.ok) return json({ ok: false, error: writerAuth.error }, writerAuth.status);
+    const parsed = await readJson(request, 16 * 1024);
+    if (!parsed.ok) return json({ ok: false, error: parsed.error }, parsed.status);
+    const body = parsed.value;
+    const allowedBodyKeys = ["audit_event_id", "evidence"];
+    const evidenceKeys = ["check_type", "source_title", "source_url", "excerpt"];
+    if (Object.keys(body).some(key => !allowedBodyKeys.includes(key)) ||
+        Object.keys(body).length !== 2 ||
+        typeof body.audit_event_id !== "string" ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.audit_event_id) ||
+        !body.evidence || typeof body.evidence !== "object" || Array.isArray(body.evidence) ||
+        Object.keys(body.evidence).length !== 4 || Object.keys(body.evidence).some(key => !evidenceKeys.includes(key))) {
+      return json({ ok: false, error: "ai_bank_evidence_request_invalid", evidence_recorded: false }, 400);
+    }
+    const store = aiBankCandidateStore(env);
+    if (!store || typeof store.submitAuthorizedReviewEvidence !== "function") {
+      return json({ ok: false, error: "ai_bank_candidate_store_unavailable", evidence_recorded: false }, 503);
+    }
+    const candidateId = "github:" + evidenceMatch[1] + "/" + evidenceMatch[2];
+    const writerAuthConfig = {
+      AGENT_REVIEWER_AUTH_ENABLED: env.AGENT_REVIEWER_AUTH_ENABLED,
+      GOOGLE_REVIEWER_CLIENT_ID: env.GOOGLE_REVIEWER_CLIENT_ID,
+      GOOGLE_REVIEWER_CLIENT_SECRET: env.GOOGLE_REVIEWER_CLIENT_SECRET,
+      GOOGLE_REVIEWER_REDIRECT_URI: env.GOOGLE_REVIEWER_REDIRECT_URI,
+      GOOGLE_REVIEWER_ALLOWED_EMAILS: env.GOOGLE_REVIEWER_ALLOWED_EMAILS,
+      GOOGLE_REVIEWER_STATE_SECRET: env.GOOGLE_REVIEWER_STATE_SECRET,
+      GOOGLE_REVIEWER_SESSION_SECRET: env.GOOGLE_REVIEWER_SESSION_SECRET,
+      GOOGLE_REVIEWER_EVIDENCE_WRITER_EMAILS: env.GOOGLE_REVIEWER_EVIDENCE_WRITER_EMAILS
+    };
+    let result;
+    try {
+      result = await store.submitAuthorizedReviewEvidence(
+        candidateId, body.evidence, writerAuth.token, body.audit_event_id, writerAuthConfig
+      );
+    } catch {
+      return json({ ok: false, error: "ai_bank_evidence_writer_unavailable", evidence_recorded: false }, 503);
+    }
+    if (!result || !result.accepted) {
+      const reason = result?.reason || "ai_bank_evidence_writer_unavailable";
+      const status = reason === "evidence_writer_not_allowlisted" ? 403 :
+        reason === "duplicate_audit_event" || reason === "audit_event_id_reused" ? 409 :
+        reason === "evidence_audit_daily_limit_reached" ? 429 :
+        reason === "evidence_audit_capacity_reached" || reason === "reviewer_auth_not_configured" || reason === "evidence_writer_not_configured" ? 503 :
+        reason === "reviewer_session_invalid" || reason === "reviewer_session_expired" ? 401 : 400;
+      return json({ ok: false, error: reason, evidence_recorded: false }, status);
+    }
+    return json({
+      accepted: true,
+      evidence: { evidence_id: result.evidence_id, source_status: result.source_status, review_status: result.review_status },
+      audit_event_id: result.audit_event_id,
+      replay_protected: result.replay_protected,
+      verification_authorized: false,
+      catalog_write_authorized: false,
+      public_publication_authorized: false
+    }, 201);
+  }
   if (request.method !== "GET") return json({ ok: false, error: "method_not_allowed" }, 405);
   if (!sameOrigin(request)) return json({ ok: false, error: "review_request_origin_or_content_type_rejected" }, 403);
   const auth = await reviewerSession(request, env);
