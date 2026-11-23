@@ -4,6 +4,7 @@ import { handleReviewerHttpRequest } from "../src/reviewer-http-routes.mjs";
 import { Script } from "node:vm";
 import assert from "node:assert/strict";
 import { REVIEWER_CONSOLE_JS } from "../src/reviewer-console.mjs";
+import { OPERATOR_CONSOLE_JS } from "../src/operator-console.mjs";
 
 const base = "https://ai-thuc-chien-agent-runtime-preview.manhdungub.workers.dev";
 
@@ -17,6 +18,19 @@ describe("reviewer and operator HTTP routes", () => {
     const html = await response.text();
     expect(html).toContain("operator-console.js");
     expect(html).toContain("/auth/google/start?return_to=%2Foperator-console");
+  });
+
+  it("renders operator admission from the authenticated control response and ignores stale refreshes", () => {
+    expect(OPERATOR_CONSOLE_JS).toContain("operator.health?.task_admission");
+    expect(OPERATOR_CONSOLE_JS).toContain("requestSequence !== refreshSequence");
+    expect(OPERATOR_CONSOLE_JS).toContain("logout_failed");
+    expect(OPERATOR_CONSOLE_JS).toContain("Unavailable");
+  });
+
+  it("locks evidence inputs while submitting and keeps failed logout retryable", () => {
+    expect(REVIEWER_CONSOLE_JS).toContain("reviewInputs.forEach(input => { input.disabled = true; })");
+    expect(REVIEWER_CONSOLE_JS).toContain("logout_failed");
+    expect(REVIEWER_CONSOLE_JS).toContain("logout.disabled = false");
   });
 
   it("serves the reviewer console and same-origin JavaScript assets", async () => {
