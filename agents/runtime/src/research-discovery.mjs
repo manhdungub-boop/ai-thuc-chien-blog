@@ -173,7 +173,7 @@ function isFeedDocument(xml) {
       const prefix = separator === -1 ? "" : name.slice(0, separator);
       rootLocalName = separator === -1 ? name : name.slice(separator + 1);
       rootNamespaceURI = namespaceDeclarations.get(prefix) || "";
-      if (prefix && !namespaceDeclarations.has(prefix)) return false;
+      if (prefix && (!namespaceDeclarations.has(prefix) || !namespaceDeclarations.get(prefix))) return false;
     }
     if (!selfClosing) stack.push(name);
     index = end + 1;
