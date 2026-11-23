@@ -610,9 +610,18 @@ test("durable pause is atomic, survives restart, and resume never dispatches que
     assert.equal(paused.status, 200);
     assert.equal(paused.body.changed, true);
     assert.equal(paused.body.control.paused, true);
-    const duplicatePause = await call(active.stub, "/control/pause", { actor: "test-operator", requestId: crypto.randomUUID(), reason: "duplicate" });
+    const observedBeforeRepeatedPause = await call(active.stub, "/control");
+    const duplicatePause = await call(active.stub, "/control/pause", { actor: "test-operator", requestId: crypto.randomUUID(), reason: "duplicate emergency pause" });
     assert.equal(duplicatePause.status, 200);
     assert.equal(duplicatePause.body.changed, false);
+    assert.equal(duplicatePause.body.control.paused, true);
+    assert.equal(duplicatePause.body.control.version, observedBeforeRepeatedPause.body.control.version + 1);
+    const staleResume = await call(active.stub, "/control/resume", {
+      actor: "test-operator", requestId: crypto.randomUUID(), reason: "stale resume",
+      expectedVersion: observedBeforeRepeatedPause.body.control.version,
+    });
+    assert.equal(staleResume.status, 409);
+    assert.equal(staleResume.body.error, "runtime_control_version_conflict");
     assert.equal((await call(active.stub, "/reserve", task("durable-control-blocked"))).status, 503);
     assert.equal((await call(active.stub, "/claim", { taskId })).status, 503);
 
@@ -621,7 +630,7 @@ test("durable pause is atomic, survives restart, and resume never dispatches que
     restarted = await createRuntime({ persistDir: directory, resumeControl: false });
     const persisted = await call(restarted.stub, "/control");
     assert.equal(persisted.body.control.paused, true);
-    assert.equal(persisted.body.control.version, 2);
+    assert.equal(persisted.body.control.version, 3);
     assert.equal((await call(restarted.stub, "/claim", { taskId })).status, 503);
 
     const resumed = await resumeWithCurrentVersion(restarted.stub, { actor: "test-operator", requestId: crypto.randomUUID(), reason: "maintenance complete" });
