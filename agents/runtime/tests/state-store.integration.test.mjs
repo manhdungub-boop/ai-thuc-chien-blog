@@ -340,6 +340,45 @@ test("lease recovery alarm is disabled by default and recovers only expired leas
   });
 });
 
+test("terminal failures reached by recovery alarms count toward the circuit breaker", async () => {
+  await withRuntime({ recoveryAlarmEnabled: "true" }, async ({ stub }) => {
+    for (let index = 1; index <= 5; index += 1) {
+      const created = await call(stub, "/reserve", task("alarm-breaker-" + index));
+      assert.equal(created.status, 201);
+      const taskId = created.body.task.taskId;
+
+      const firstClaim = await call(stub, "/claim", { taskId });
+      assert.equal(firstClaim.status, 200);
+      const firstExpiry = await call(stub, "/__test/expire-and-fire", { taskId });
+      assert.equal(firstExpiry.body.task.state, "queued");
+
+      const secondClaim = await call(stub, "/claim", { taskId }, {
+        "x-test-now": new Date(Date.now() + 60_000).toISOString(),
+      });
+      assert.equal(secondClaim.status, 200);
+      const secondExpiry = await call(stub, "/__test/expire-and-fire", { taskId });
+      assert.equal(secondExpiry.body.task.state, "queued");
+
+      const thirdClaim = await call(stub, "/claim", { taskId }, {
+        "x-test-now": new Date(Date.now() + 3 * 60_000).toISOString(),
+      });
+      assert.equal(thirdClaim.status, 200);
+      const terminalExpiry = await call(stub, "/__test/expire-and-fire", { taskId });
+      assert.equal(terminalExpiry.body.task.state, "failed");
+      assert.equal(terminalExpiry.body.task.lease_owner, null);
+
+      const control = await call(stub, "/control");
+      assert.equal(control.body.control.failureCountLast10m, index);
+      assert.equal(control.body.control.paused, index === 5);
+    }
+
+    const metrics = await call(stub, "/metrics");
+    assert.equal(metrics.body.circuitBreaker.autoPaused, true);
+    assert.equal(metrics.body.circuitBreaker.failureCountLast10m, 5);
+    assert.equal(metrics.body.circuitBreaker.state, "open");
+  });
+});
+
 test("recovery alarm stops and clears itself while the durable operator pause cancels running work", async () => {
   await withRuntime({ recoveryAlarmEnabled: "true" }, async ({ stub }) => {
     const created = await call(stub, "/reserve", task("alarm-paused"));
