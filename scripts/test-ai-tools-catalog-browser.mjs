@@ -9,31 +9,52 @@ const catalog = JSON.parse(fs.readFileSync(catalogPath, "utf8"));
 const activeTools = catalog.tools.filter(t => t && t.status === "active");
 const needsReview = catalog.tools.filter(t => t.verification_status === "needs_review");
 const activeNeedsReview = activeTools.filter(t => t.verification_status === "needs_review");
-const newIds = ["anythingllm", "opencode", "comfyui", "qdrant", "whisper-cpp", "mlflow", "pydantic-ai", "haystack", "elevenlabs", "embeddinggemma-2", "google-ai-edge-gallery", "gemini-4-hydrogen"];
+const newIds = ["anythingllm", "opencode", "comfyui", "qdrant", "whisper-cpp", "mlflow", "pydantic-ai", "haystack", "elevenlabs", "embeddinggemma-2", "google-ai-edge-gallery", "gemini-4-hydrogen", "pocketpal-ai", "draw-things"];
 const expandedIds = ["invideo", "heygen", "metricool", "vidiq", "higgsfield"];
 const searchNames = [
   ["anythingllm", "AnythingLLM"], ["opencode", "OpenCode"], ["comfyui", "ComfyUI"],
   ["qdrant", "Qdrant"], ["whisper-cpp", "whisper.cpp"], ["mlflow", "MLflow"],
   ["pydantic-ai", "Pydantic AI"], ["haystack", "Haystack"], ["elevenlabs", "ElevenLabs"],
   ["embeddinggemma-2", "EmbeddingGemma 2"], ["google-ai-edge-gallery", "Google AI Edge Gallery"],
-  ["gemini-4-hydrogen", "Gemini 4 Hydrogen"], ["invideo", "InVideo"], ["heygen", "HeyGen"],
-  ["metricool", "Metricool"], ["vidiq", "vidIQ"], ["higgsfield", "Higgsfield"]
+  ["gemini-4-hydrogen", "Gemini 4 Hydrogen"], ["pocketpal-ai", "PocketPal AI"], ["draw-things", "Draw Things"],
+  ["invideo", "InVideo"], ["heygen", "HeyGen"],
+  ["metricool", "Metricool"], ["vidiq", "vidIQ"], ["higgsfield", "Higgsfield"],
+  ["cline", "Cline"], ["jan", "Jan"], ["librechat", "LibreChat"], ["browser-use", "Browser Use"], ["open-webui", "Open WebUI"]
 ].filter(([id]) => catalog.tools.some(tool => tool.id === id)).map(([, name]) => name);
-const expectedActiveByTotal = new Map([[36, 35], [39, 38], [44, 43]]);
+const expectedActiveByTotal = new Map([[36, 35], [39, 38], [44, 43], [46, 45], [49, 48], [51, 50]]);
 const expectedActive = expectedActiveByTotal.get(catalog.tools.length);
 
-assert.ok(expectedActive !== undefined, `catalog total ${catalog.tools.length} is not an approved baseline (36), reconciled catalog (39), or expanded catalog (44)`);
+assert.ok(expectedActive !== undefined, `catalog total ${catalog.tools.length} is not an approved baseline (36), reconciled catalog (39), expanded catalog (44), verified update (46), local-AI expansion (49), or browser-agent expansion (51)`);
 assert.equal(activeTools.length, expectedActive, "public AI Bank active count must match the approved catalog baseline; deprecated Flowise stays hidden");
 assert.deepEqual(needsReview.map(t => t.id).sort(), [], "all active catalog records have verified editorial status");
 assert.equal(activeNeedsReview.length, 0, "no active record should remain in the needs-review filter");
 for (const id of newIds) {
   const tool = catalog.tools.find(t => t.id === id);
-  if (catalog.tools.length === 39) assert.ok(tool, `${id} must exist in the reconciled catalog`);
+  if (catalog.tools.length === 39 && !["pocketpal-ai", "draw-things"].includes(id)) assert.ok(tool, `${id} must exist in the reconciled catalog`);
+  if (catalog.tools.length === 46 && !["cline", "jan", "librechat"].includes(id)) assert.ok(tool, `${id} must exist in the verified 46-record catalog`);
+  if (catalog.tools.length === 49) assert.ok(tool, `${id} must exist in the verified 49-record catalog`);
   if (tool) {
     assert.equal(tool.status, "active", `${id} must be active`);
     assert.equal(tool.verification_status, "verified", `${id} must pass editorial/source review`);
   }
 }
+if (catalog.tools.length === 51) {
+  for (const id of ["browser-use", "open-webui"]) {
+    const tool = catalog.tools.find(t => t.id === id);
+    assert.ok(tool, `${id} must exist in the verified 51-record catalog`);
+    assert.equal(tool.status, "active", `${id} must be active`);
+    assert.equal(tool.verification_status, "verified", `${id} must be source-verified`);
+  }
+}
+if (catalog.tools.length === 49) {
+  for (const id of ["cline", "jan", "librechat"]) {
+    const tool = catalog.tools.find(t => t.id === id);
+    assert.ok(tool, `${id} must exist in the verified 49-record catalog`);
+    assert.equal(tool.status, "active", `${id} must be active`);
+    assert.equal(tool.verification_status, "verified", `${id} must be source-verified`);
+  }
+}
+
 const flowise = catalog.tools.find(t => t.id === "flowise");
 assert.equal(flowise?.status, "deprecated", "Flowise must remain marked deprecated after its official sunset");
 assert.equal(flowise?.pricing_model, "unknown", "Flowise pricing model must not be inferred after sunset");
@@ -65,7 +86,8 @@ try {
   await page.waitForFunction(total => document.querySelector("#bank-count")?.textContent.includes(`Tổng danh mục: ${total}.`), activeTools.length);
   const cards = page.locator("#bank-grid .tool-card");
   assert.equal(await cards.count(), 24, "first page must show 24 active cards");
-  assert.match(await page.locator("#bank-pagination").innerText(), /Trang 1 \/ 2/);
+  const pageCount = Math.ceil(activeTools.length / 24);
+  assert.match(await page.locator("#bank-pagination").innerText(), new RegExp(`Trang 1 \\/ ${pageCount}`));
 
   for (const name of ["Langfuse", "NotebookLM", ...searchNames]) {
     await page.locator("#bank-search").fill(name);
@@ -78,9 +100,12 @@ try {
   await page.waitForFunction(() => document.querySelectorAll("#bank-grid .tool-card").length === 24);
   assert.match(await page.locator("#bank-grid .tool-card h2").first().innerText(), /^Activepieces$/);
 
-  await page.locator("#bank-pagination button").last().click();
-  await page.waitForFunction(count => document.querySelectorAll("#bank-grid .tool-card").length === count, activeTools.length - 24);
-  assert.match(await page.locator("#bank-pagination").innerText(), /Trang 2 \/ 2/);
+  for (let pageNumber = 1; pageNumber < pageCount; pageNumber++) {
+    await page.locator("#bank-pagination button").last().click();
+  }
+  const lastPageCount = activeTools.length - (pageCount - 1) * 24;
+  await page.waitForFunction(count => document.querySelectorAll("#bank-grid .tool-card").length === count, lastPageCount);
+  assert.match(await page.locator("#bank-pagination").innerText(), new RegExp(`Trang ${pageCount} \\/ ${pageCount}`));
   await page.locator("#bank-pagination button").first().click();
   await page.waitForFunction(() => document.querySelectorAll("#bank-grid .tool-card").length === 24);
 

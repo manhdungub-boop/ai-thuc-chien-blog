@@ -4,10 +4,9 @@
 <meta name="description" content="Ngân hàng AI: thư viện công cụ AI theo nhu cầu, tính năng, gói miễn phí và giới hạn sử dụng được đối chiếu từ nguồn chính thức.">
 <meta name="theme-color" content="#0b1020"><meta name="robots" content="index,follow"><meta name="author" content="DUNG - AI">
 <link rel="canonical" href="https://ai-thuc-chien-blog.manhdungub.workers.dev/ngan-hang-ai.html"><link rel="icon" type="image/svg+xml" href="favicon.svg">
-<meta property="og:type" content="website"><meta property="og:locale" content="vi_VN"><meta property="og:site_name" content="AI Thực Chiến"><meta property="og:title" content="Ngân hàng AI — Thư viện công cụ AI"><meta property="og:description" content="Tra cứu công cụ AI theo nhu cầu và mức phí."><meta property="og:url" content="https://ai-thuc-chien-blog.manhdungub.workers.dev/ngan-hang-ai.html">
-<meta name="twitter:card" content="summary"><title>Ngân hàng AI — Thư viện công cụ AI | AI Thực Chiến</title>
+<meta property="og:type" content="website"><meta property="og:locale" content="vi_VN"><meta property="og:site_name" content="AI Thực Chiến"><meta property="og:title" content="Ngân hàng AI — Thư viện công cụ AI | AI Thực Chiến"><meta property="og:description" content="Tra cứu công cụ AI theo nhu cầu, gói miễn phí, giới hạn, quyền riêng tư và giấy phép được đối chiếu từ nguồn chính thức."><meta property="og:url" content="https://ai-thuc-chien-blog.manhdungub.workers.dev/ngan-hang-ai.html">
+<meta name="twitter:card" content="summary"><meta name="twitter:title" content="Ngân hàng AI — Thư viện công cụ AI | AI Thực Chiến"><meta name="twitter:description" content="Tra cứu công cụ AI theo nhu cầu, gói miễn phí, giới hạn, quyền riêng tư và giấy phép từ nguồn chính thức."><title>Ngân hàng AI — Thư viện công cụ AI | AI Thực Chiến</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap" onload="this.onload=null;this.rel='stylesheet'"><noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap"></noscript>
 <link rel="stylesheet" href="styles.css">
 <style>
@@ -15,6 +14,17 @@
 @media(max-width:850px){.bank-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:600px){.ai-bank{padding-top:28px}.bank-hero{padding:23px 18px}.bank-controls{grid-template-columns:1fr}.bank-grid{grid-template-columns:1fr}.tool-card{padding:17px}}
 </style>
 <style>
+.bank-guides{margin:22px 0 26px;padding:20px;border:1px solid var(--line);border-radius:15px;background:linear-gradient(145deg,#151e32,#101a29)}
+.bank-guides h2{margin:0 0 7px;color:#f6f7fc;font:700 19px Manrope,sans-serif}
+.bank-guides>p{margin:0 0 15px;color:#b9c4d8;font-size:13px;line-height:1.7}
+.bank-guides-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:10px}
+.bank-guide-link{display:block;padding:13px;border:1px solid #ffffff1c;border-radius:11px;background:#ffffff08;color:#eaf1fb;text-decoration:none}
+.bank-guide-link strong{display:block;margin-bottom:6px;color:#a9e9d4;font-size:14px;line-height:1.45}
+.bank-guide-link span{display:block;color:#b9c4d8;font-size:12px;line-height:1.65}
+.bank-guide-link:hover{border-color:#8bf0ce88;text-decoration:none}
+.bank-guides-note{margin:14px 0 0;padding:12px 14px;border-left:3px solid #c7f94b;border-radius:8px;background:#ffffff08;color:#cbd4e6;font-size:12px;line-height:1.7}
+.bank-guides-note strong{color:#c7f94b}
+
 .bank-controls-extended{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin:22px 0 14px}
 .bank-controls-extended input,.bank-controls-extended select{width:100%;min-width:0;min-height:44px;border:1px solid var(--line);border-radius:11px;background:#141a2c;color:#f2f4fb;padding:10px 12px;font:500 12px 'Be Vietnam Pro',sans-serif}
 .bank-filters{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
@@ -49,7 +59,18 @@
 <a class="skip-link" href="#main-content">Bỏ qua đến nội dung chính</a>
 <header class="site-header"><a class="brand" href="./"><span class="brand-mark">AI</span><span>AI <b>Thực Chiến</b></span></a><a class="header-cta" href="./">← Trang chủ</a></header>
 <main id="main-content" class="section ai-bank">
-<section class="bank-hero"><div class="section-kicker">THƯ VIỆN CÔNG CỤ · DANH MỤC ĐƯỢC RÀ SOÁT ĐỊNH KỲ</div><h1>Ngân hàng <em>AI.</em></h1><p>Tra cứu công cụ theo việc bạn cần làm — từ viết, nghiên cứu, thiết kế, video đến lập trình và tự động hóa. Ưu tiên lựa chọn có thể bắt đầu miễn phí; thông tin gói và giới hạn dẫn về trang chính thức để bạn tự kiểm tra trước khi đăng ký.</p><div class="bank-meta"><span>Danh mục dữ liệu được cập nhật định kỳ</span><span>Nhiều nhóm nhu cầu</span><span>Ưu tiên miễn phí</span><span>Không xếp hạng trả phí</span></div></section>
+<section class="bank-hero"><div class="section-kicker">THƯ VIỆN CÔNG CỤ · DANH MỤC ĐƯỢC RÀ SOÁT ĐỊNH KỲ</div><h1>Ngân hàng <em>AI.</em></h1><p class="bank-last-verified">Dữ liệu được đối chiếu gần nhất: 20/11/2026. Giá, quota và giấy phép có thể thay đổi; xem nguồn chính thức trước khi sử dụng.</p><p>Tra cứu công cụ theo việc bạn cần làm — từ viết, nghiên cứu, thiết kế, video đến lập trình và tự động hóa. Ưu tiên lựa chọn có thể bắt đầu miễn phí; thông tin gói và giới hạn dẫn về trang chính thức để bạn tự kiểm tra trước khi đăng ký.</p><div class="bank-meta"><span>Danh mục dữ liệu được cập nhật định kỳ</span><span>Nhiều nhóm nhu cầu</span><span>Ưu tiên miễn phí</span><span>Không xếp hạng trả phí</span></div></section>
+<section class="bank-guides" aria-labelledby="bank-guides-title">
+<h2 id="bank-guides-title">Hướng dẫn trước khi chọn công cụ</h2>
+<p>Bắt đầu từ nhu cầu, giới hạn chi phí và mức độ nhạy cảm của dữ liệu. Các hướng dẫn dưới đây giúp bạn đánh giá công cụ trước khi đăng ký hoặc đưa vào công việc.</p>
+<div class="bank-guides-grid">
+<a class="bank-guide-link" href="/articles/chon-cong-cu-ai-theo-cong-viec"><strong>Chọn công cụ theo công việc ↗</strong><span>Xác định đầu ra cần có và tiêu chí so sánh thay vì chạy theo xu hướng.</span></a>
+<a class="bank-guide-link" href="/articles/so-sanh-goi-mien-phi-ai"><strong>So sánh gói miễn phí AI ↗</strong><span>Kiểm tra hạn mức, tính năng, vùng hỗ trợ và chi phí có thể phát sinh.</span></a>
+<a class="bank-guide-link" href="/articles/bao-ve-du-lieu-khi-dung-ai"><strong>Bảo vệ dữ liệu khi dùng AI ↗</strong><span>Phân loại dữ liệu và giảm rủi ro trước khi tải nội dung lên dịch vụ.</span></a>
+<a class="bank-guide-link" href="/articles/kiem-chung-cau-tra-loi-ai"><strong>Kiểm chứng câu trả lời AI ↗</strong><span>Đối chiếu nguồn và xác minh các thông tin quan trọng trước khi sử dụng.</span></a>
+</div>
+<p class="bank-guides-note"><strong>Lưu ý bảo mật:</strong> Không nhập mật khẩu, mã OTP, dữ liệu khách hàng hoặc tài liệu nội bộ chưa được phép vào công cụ AI.</p>
+</section>
 <div class="bank-controls bank-controls-extended">
 <label class="sr-only" for="bank-search">Tìm công cụ AI</label><input id="bank-search" type="search" placeholder="Tìm tên, nhà cung cấp, tính năng hoặc nhu cầu…">
 <label class="sr-only" for="bank-cost">Lọc mô hình giá</label><select id="bank-cost"><option value="all">Tất cả mô hình giá</option><option value="free">Miễn phí hoàn toàn</option><option value="freemium">Freemium</option><option value="trial_or_credits">Dùng thử / tín dụng giới hạn</option><option value="paid">Trả phí</option><option value="self_hosted_free_and_cloud_paid">Mã nguồn mở / tự lưu trữ</option><option value="unknown">Chưa rõ mô hình giá</option></select>
@@ -72,7 +93,7 @@ const $=id=>document.getElementById(id);
 const grid=$('bank-grid'),count=$('bank-count'),filters=$('bank-filters'),pager=$('bank-pagination');
 const controls={q:$('bank-search'),price:$('bank-cost'),license:$('bank-license'),platform:$('bank-platform'),verification:$('bank-verification'),sort:$('bank-sort')};
 const PAGE_SIZE=24;
-const categoryNames={assistant:'Trợ lý AI',writing:'Viết',research:'Nghiên cứu',search:'Tìm kiếm',documents:'Tài liệu',design:'Thiết kế',image:'Hình ảnh',video:'Video',editing:'Biên tập',coding:'Lập trình',developer:'Phát triển',automation:'Tự động hóa',agents:'AI Agent',integration:'Tích hợp',audio:'Âm thanh',transcription:'Chuyển giọng nói',translation:'Dịch thuật',data:'Dữ liệu',database:'Cơ sở dữ liệu',presentation:'Thuyết trình','3d':'3D'};
+const categoryNames = {assistant:'Trợ lý AI',writing:'Viết',research:'Nghiên cứu',search:'Tìm kiếm',documents:'Tài liệu',design:'Thiết kế',image:'Hình ảnh',video:'Video',editing:'Biên tập',coding:'Lập trình',developer:'Phát triển',automation:'Tự động hóa',agents:'AI Agent',integration:'Tích hợp',audio:'Âm thanh',transcription:'Chuyển giọng nói',translation:'Dịch thuật',data:'Dữ liệu',database:'Cơ sở dữ liệu',presentation:'Thuyết trình','3d':'3D', 'local-llm':'AI chạy cục bộ', voice:'Giọng nói'};
 const priceNames={free:'Miễn phí hoàn toàn',freemium:'Freemium',paid:'Trả phí',trial_or_credits:'Dùng thử / tín dụng giới hạn',self_hosted_free_and_cloud_paid:'Tự lưu trữ miễn phí · Cloud có phí',unknown:'Chưa rõ mô hình giá'};
 const priceStatusNames={verified_free:'Miễn phí',verified_free_tier:'Có gói miễn phí',limited_credits:'Tín dụng / hạn mức giới hạn',paid_only:'Chỉ trả phí',self_hosted_free:'Miễn phí khi tự lưu trữ',unknown:'Giá chưa xác minh'};
 const verificationNames={verified:'Đã xác minh',needs_review:'Cần rà soát',stale:'Thông tin quá hạn',disputed:'Thông tin cần đối chiếu'};

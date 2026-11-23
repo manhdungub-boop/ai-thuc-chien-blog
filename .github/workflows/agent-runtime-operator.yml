@@ -1,0 +1,107 @@
+name: Agent Runtime OIDC Operator
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Reason for pausing the isolated Agent Runtime Preview"
+        required: false
+        type: string
+
+permissions:
+  contents: none
+  id-token: write
+
+concurrency:
+  group: agent-runtime-oidc-operator
+  cancel-in-progress: false
+
+jobs:
+  pause-preview:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Request a short-lived GitHub OIDC token and pause Preview
+        env:
+          AGENT_RUNTIME_PREVIEW_URL: ${{ vars.AGENT_RUNTIME_PREVIEW_URL }}
+          OIDC_AUDIENCE: ai-thuc-chien-agent-runtime-preview
+          PAUSE_REASON: ${{ inputs.reason }}
+        run: |
+          node --input-type=module <<'NODE'
+          const base = process.env.AGENT_RUNTIME_PREVIEW_URL;
+          if (!base) throw new Error('AGENT_RUNTIME_PREVIEW_URL repository variable is not configured');
+          const target = new URL(base);
+          if (target.protocol !== 'https:' || target.username || target.password ||
+              target.pathname !== '/' || target.search || target.hash ||
+              !/^(?:[a-f0-9]{8}-)?ai-thuc-chien-agent-runtime-preview\.[a-z0-9-]+\.workers\.dev$/i.test(target.hostname)) {
+            throw new Error('Preview URL must be the dedicated Agent Runtime workers.dev hostname');
+          }
+
+          const requestUrl = process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
+          const requestToken = process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
+          if (!requestUrl || !requestToken) throw new Error('GitHub OIDC request context is unavailable');
+          const tokenUrl = new URL(requestUrl);
+          tokenUrl.searchParams.set('audience', process.env.OIDC_AUDIENCE);
+
+          const tokenResponse = await fetch(tokenUrl, {
+            method: 'GET',
+            headers: { Authorization: 'Bearer ' + requestToken, Accept: 'application/json' },
+            redirect: 'error',
+            cache: 'no-store',
+          });
+          if (!tokenResponse.ok) throw new Error('GitHub OIDC token request failed: HTTP ' + tokenResponse.status);
+          const tokenPayload = await tokenResponse.json();
+          if (typeof tokenPayload.value !== 'string' || tokenPayload.value.length < 100 ||
+              tokenPayload.value.length > 16384) throw new Error('GitHub OIDC token response is invalid');
+
+          // Emit only failed claim names, never token material or claim values.
+          const claims = JSON.parse(Buffer.from(tokenPayload.value.split('.')[1], 'base64url').toString('utf8'));
+          const expectedClaims = {
+            iss: 'https://token.actions.githubusercontent.com',
+            aud: process.env.OIDC_AUDIENCE,
+            repository: 'manhdungub-boop/ai-thuc-chien-blog',
+            repository_owner: 'manhdungub-boop',
+            repository_id: '1423636651',
+            repository_owner_id: '342528485',
+            ref: 'refs/heads/main',
+            workflow_ref: 'manhdungub-boop/ai-thuc-chien-blog/.github/workflows/agent-runtime-operator.yml@refs/heads/main',
+            event_name: 'workflow_dispatch',
+            actor_id: '342528485',
+            sub: 'repo:manhdungub-boop@342528485/ai-thuc-chien-blog@1423636651:ref:refs/heads/main',
+          };
+          const mismatches = Object.entries(expectedClaims)
+            .filter(([key, expected]) => {
+              const actual = key.endsWith('_id') ? String(claims[key] ?? '') : claims[key];
+              return key === 'aud'
+                ? !(actual === expected || (Array.isArray(actual) && actual.length === 1 && actual[0] === expected))
+                : actual !== expected;
+            })
+            .map(([key]) => key);
+          if (!claims.jti) mismatches.push('jti');
+          if (!/^\d+$/.test(String(claims.run_id ?? ''))) mismatches.push('run_id');
+          if (!/^\d+$/.test(String(claims.run_attempt ?? ''))) mismatches.push('run_attempt');
+          if (!Number.isSafeInteger(claims.iat)) mismatches.push('iat');
+          if (!Number.isSafeInteger(claims.exp)) mismatches.push('exp');
+          if (mismatches.length) throw new Error('GitHub OIDC claim mismatch keys: ' + mismatches.join(', '));
+          console.log('GitHub OIDC claims match the pinned Preview policy.');
+
+          const response = await fetch(new URL('/internal/oidc/pause', target), {
+            method: 'POST',
+            headers: {
+              Authorization: 'Bearer ' + tokenPayload.value,
+              'Content-Type': 'application/json',
+              Accept: 'application/json',
+            },
+            body: JSON.stringify({ reason: (process.env.PAUSE_REASON || 'GitHub Actions manual emergency pause').slice(0, 160) }),
+            redirect: 'error',
+            cache: 'no-store',
+          });
+          const text = await response.text();
+          if (!response.ok) throw new Error('Agent Runtime Preview pause failed: HTTP ' + response.status + ' ' + text.slice(0, 500));
+          const result = JSON.parse(text);
+          if (result.ok !== true || !result.control || result.control.paused !== true) {
+            throw new Error('Agent Runtime Preview did not confirm persisted pause');
+          }
+          console.log('Agent Runtime Preview persisted pause confirmed.');
+          NODE

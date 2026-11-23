@@ -4,6 +4,22 @@
     <title>AI Thực Chiến</title>
     <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/</link>
     <description>Kiến thức AI thực hành, tự động hóa và công nghệ cho người Việt.</description>
+    <item>
+      <title>Chạy AI cục bộ: chọn Jan, Ollama, LibreChat hay Cline? | AI Thực Chiến</title>
+      <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/ai-cuc-bo-jan-ollama-cline-librechat</link>
+      <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/ai-cuc-bo-jan-ollama-cline-librechat</guid>
+      <pubDate>Fri, 20 Nov 2026 22:16:00 +0700</pubDate>
+      <author>DUNG - AI</author>
+      <description>So sánh Jan, Ollama, LibreChat và Cline để chạy AI cục bộ hoặc tự lưu trữ; hướng dẫn chọn công cụ, tính đúng chi phí, đọc giấy phép model và bảo vệ dữ liệu.</description>
+    </item>
+    <item>
+      <title>Nên chọn Activepieces, n8n hay GitHub Actions? | AI Thực Chiến</title>
+      <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/nen-chon-activepieces-n8n-hay-github-actions</link>
+      <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/nen-chon-activepieces-n8n-hay-github-actions</guid>
+      <pubDate>Fri, 20 Nov 2026 20:00:00 +0700</pubDate>
+      <author>DUNG - AI</author>
+      <description>So sánh quota, giấy phép và cách vận hành Activepieces, n8n, GitHub Actions để chọn nền tảng tự động hóa phù hợp mà không phát sinh chi phí ngoài dự kiến.</description>
+    </item>
 <item>
     <title>Bảo mật MCP Server: OAuth, token và kết nối AI an toàn | AI Thực Chiến</title>
     <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/bao-mat-mcp-server-oauth-ai</link>
@@ -455,6 +471,13 @@
     <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/dong-goi-dich-vu-ai-cho-doanh-nghiep-nho</link>
     <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/dong-goi-dich-vu-ai-cho-doanh-nghiep-nho</guid>
     <description>Cách đóng gói dịch vụ AI cho doanh nghiệp nhỏ bằng phạm vi rõ, SOW một trang, KPI đo được, tiêu chí nghiệm thu và quy trình bảo vệ dữ liệu.</description>
+  </item>
+  <item>
+    <title>Xây AI Agent điều khiển trình duyệt an toàn: Browser Use và Playwright | AI Thực Chiến</title>
+    <link>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/xay-ai-agent-dieu-khien-trinh-duyet-an-toan</link>
+    <guid isPermaLink="true">https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/xay-ai-agent-dieu-khien-trinh-duyet-an-toan</guid>
+    <author>DUNG - AI</author>
+    <description>Hướng dẫn chọn Browser Use hay Playwright, thiết kế quyền tối thiểu, chặn prompt injection, kiểm soát thao tác có tác động và triển khai browser agent không phát sinh chi phí ngoài dự kiến.</description>
   </item>
   </channel>
 </rss>
