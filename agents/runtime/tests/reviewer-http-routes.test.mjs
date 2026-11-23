@@ -36,6 +36,19 @@ describe("reviewer and operator HTTP routes", () => {
     expect(await response.text()).toContain("reviewer_auth_not_configured");
   });
 
+  it("reports reviewer authentication as unavailable when a session reaches a disabled verifier", async () => {
+    const token = await createReviewerSessionToken();
+    const response = await handleReviewerHttpRequest(new Request(base + "/api/reviewer/drafts", {
+      headers: { origin: base, cookie: "__Host-ai_reviewer_session=" + token }
+    }), { ...reviewerAuthEnv, AGENT_REVIEWER_AUTH_ENABLED: "false" });
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({
+      ok: false,
+      error: "reviewer_auth_not_configured",
+      publication_authorized: false
+    });
+  });
+
   it("keeps operator controls disabled until the separate control gate is enabled", async () => {
     const response = await handleReviewerHttpRequest(new Request(`${base}/api/operator/runtime-control`), {
       AGENT_OPERATOR_CONTROL_ENABLED: "false"
