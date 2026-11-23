@@ -362,9 +362,10 @@ jobs:
         working-directory: agents/runtime
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}
+          GENERATED_CONFIG: .wrangler.e2e.generated.jsonc
         run: |
           set -euo pipefail
-          generated_config=".wrangler.e2e.generated.jsonc"
+          generated_config="$GENERATED_CONFIG"
           trap 'rm -f "$generated_config"' EXIT
           node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
@@ -388,7 +389,7 @@ jobs:
           assert.equal(config.vars.AGENT_RECOVERY_ALARM_ENABLED, 'false');
           assert.equal(config.vars.AGENT_REVIEWER_AUTH_ENABLED, 'false');
           assert.equal((config.triggers?.crons ?? []).length, 0);
-          await writeFile(generated_config, JSON.stringify(config, null, 2) + '\n', { mode: 0o600 });
+          await writeFile(process.env.GENERATED_CONFIG, JSON.stringify(config, null, 2) + '\n', { mode: 0o600 });
           NODE
           npx --yes wrangler@4.166.0 deploy --config "$generated_config" \
             --message "One-shot OIDC read-only E2E; automatic disable/restore follows"
