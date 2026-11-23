@@ -151,7 +151,7 @@ function isFeedDocument(xml) {
     const name = nameMatch[1];
     let attributes = nameMatch[2];
     const seenAttributes = new Set();
-    while (attributes.length) {
+    while (attributes.trim().length) {
       if (!/^\s/.test(attributes)) return false;
       const match = attributes.match(/^\s+([A-Za-z_:][A-Za-z0-9_.:-]*)\s*=\s*("[^"]*"|'[^']*')/);
       if (!match || seenAttributes.has(match[1])) return false;
