@@ -406,6 +406,36 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     });
   });
 
+  it("rejects inconsistent manifest counts and a modified manifest digest before writes", async () => {
+    const now = Date.parse("2026-11-19T10:00:00.000Z");
+    await store.upsertCandidates([candidate()], now);
+    const sourceSnapshot = await runInDurableObject(store, async (_instance, state) =>
+      captureTestSnapshot(state, 1)
+    );
+
+    const wrongCount = structuredClone(sourceSnapshot);
+    wrongCount.counts.ai_bank_candidates += 1;
+    const badManifestDigest = structuredClone(sourceSnapshot);
+    badManifestDigest.manifest_sha256 = "0".repeat(64);
+
+    const destination = env.AGENT_AI_BANK_CANDIDATE_STORE.getByName(
+      "agent-ai-bank-candidates-manifest-metadata-" + testIndex
+    );
+    await runInDurableObject(destination, async (_instance, state) => {
+      for (const malformed of [wrongCount, badManifestDigest]) {
+        expect(await restoreTestSnapshotInBatches(state, malformed, 1)).toEqual({
+          restored: false,
+          reason: "snapshot_integrity_invalid"
+        });
+      }
+      for (const table of SNAPSHOT_TABLES) {
+        expect(state.storage.sql.exec(
+          "SELECT COUNT(*) AS count FROM " + table.name
+        ).one().count).toBe(0);
+      }
+    });
+  });
+
   it("rejects truncated, missing-table, and digest-mismatched snapshots before writes", async () => {
     const now = Date.parse("2026-11-19T10:00:00.000Z");
     await store.upsertCandidates([candidate()], now);
