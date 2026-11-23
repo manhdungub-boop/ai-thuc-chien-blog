@@ -88,10 +88,106 @@ function maskNonElementMarkup(xml) {
   return output;
 }
 
+function extractFeedEntryBodies(xml) {
+  const entries = [];
+  const stack = [];
+  let rootLocalName = null;
+  let index = xml.charCodeAt(0) === 0xFEFF ? 1 : 0;
+
+  const findTagEnd = start => {
+    let quote = null;
+    for (let cursor = start; cursor < xml.length; cursor++) {
+      const character = xml[cursor];
+      if (quote) {
+        if (character === quote) quote = null;
+      } else if (character === '"' || character === "'") {
+        quote = character;
+      } else if (character === ">") {
+        return cursor;
+      }
+    }
+    return -1;
+  };
+
+  while (index < xml.length) {
+    if (xml[index] !== "<") {
+      const next = xml.indexOf("<", index);
+      index = next === -1 ? xml.length : next;
+      continue;
+    }
+    if (xml.startsWith("<!--", index)) {
+      const end = xml.indexOf("-->", index + 4);
+      if (end === -1) return [];
+      index = end + 3;
+      continue;
+    }
+    if (xml.startsWith("<![CDATA[", index)) {
+      const end = xml.indexOf("]]>", index + 9);
+      if (end === -1) return [];
+      index = end + 3;
+      continue;
+    }
+    if (xml.startsWith("<?", index)) {
+      const end = xml.indexOf("?>", index + 2);
+      if (end === -1) return [];
+      index = end + 2;
+      continue;
+    }
+    if (/^<!DOCTYPE\b/i.test(xml.slice(index))) {
+      let quote = null;
+      let subsetDepth = 0;
+      let end = -1;
+      for (let cursor = index + 9; cursor < xml.length; cursor++) {
+        const character = xml[cursor];
+        if (quote) {
+          if (character === quote) quote = null;
+        } else if (character === '"' || character === "'") {
+          quote = character;
+        } else if (character === "[") {
+          subsetDepth++;
+        } else if (character === "]" && subsetDepth) {
+          subsetDepth--;
+        } else if (character === ">" && subsetDepth === 0) {
+          end = cursor;
+          break;
+        }
+      }
+      if (end === -1) return [];
+      index = end + 1;
+      continue;
+    }
+    if (xml.startsWith("</", index)) {
+      const end = xml.indexOf(">", index + 2);
+      if (end === -1) return [];
+      const frame = stack.pop();
+      if (frame?.isEntry) entries.push(xml.slice(frame.bodyStart, index));
+      index = end + 1;
+      continue;
+    }
+    if (xml.startsWith("<!", index)) return [];
+    const end = findTagEnd(index + 1);
+    if (end === -1) return [];
+    let tagBody = xml.slice(index + 1, end);
+    const selfClosing = /\/\s*$/.test(tagBody);
+    if (selfClosing) tagBody = tagBody.replace(/\/\s*$/, "");
+    const name = tagBody.match(/^([A-Za-z_:][A-Za-z0-9_.:-]*)/)?.[1];
+    if (!name) return [];
+    const localName = name.slice(name.lastIndexOf(":") + 1).toLowerCase();
+    const parentLocalName = stack.at(-1)?.localName ?? null;
+    if (stack.length === 0) rootLocalName = localName;
+    const isEntry =
+      (rootLocalName === "feed" && parentLocalName === "feed" && localName === "entry") ||
+      (rootLocalName === "rss" && parentLocalName === "channel" && localName === "item") ||
+      (rootLocalName === "rdf" && parentLocalName === "rdf" && localName === "item");
+    if (!selfClosing) stack.push({ name, localName, isEntry, bodyStart: end + 1 });
+    index = end + 1;
+  }
+  return entries;
+}
+
 function parseItems(xml, source, cutoff, now) {
-  const searchableXml = maskNonElementMarkup(xml);
-  return [...searchableXml.matchAll(/<(item|entry)(?:\s[^>]*)?>([\s\S]*?)<\/\1>/gi)].map(match => {
-    const body = match[2];
+  return extractFeedEntryBodies(xml).map(rawBody => {
+    const body = maskNonElementMarkup(rawBody);
     const title = cleanText(elementText(body, "title"), 120);
     const summary = cleanText(elementText(body, "description") || elementText(body, "summary") || elementText(body, "content:encoded"), 160);
     const rawLink = body.match(/<link\b[^>]*href="([^"]+)"/i)?.[1] || cleanText(elementText(body, "link"), 300);
