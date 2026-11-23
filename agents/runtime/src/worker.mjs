@@ -529,7 +529,8 @@ const worker = {
       const actor = "github-actions:" + authorized.identity.actorId;
       const requestId = () => crypto.randomUUID();
       let response = null;
-      let pauseVerified = false;
+      let pauseVerified = true;
+      let resumeWasRequested = false;
       try {
         let observedControl;
         try {
@@ -542,6 +543,8 @@ const worker = {
             observedControl.control.version < 0) {
           return json({ ok: false, error: "oidc_run_control_state_invalid" }, 503);
         }
+        resumeWasRequested = true;
+        pauseVerified = false;
         await writeStateStore(env, "/control/resume", {
           actor,
           requestId: requestId(),
@@ -615,18 +618,21 @@ const worker = {
       } catch {
         response = json({ ok: false, error: "oidc_run_execution_unavailable" }, 503);
       } finally {
-        // Always close the durable admission latch, including when reserve,
-        // claim, heartbeat, execution, or persistence verification fails.
-        try {
-          await writeStateStore(env, "/control/pause", {
-            actor,
-            requestId: requestId(),
-            reason: "one-shot OIDC Preview E2E complete",
-          });
-          const control = await readStateStore(env, "/control");
-          pauseVerified = control?.control?.paused === true;
-        } catch {
-          pauseVerified = false;
+        // Close the durable admission latch only after this request attempted
+        // the conditional Resume; do not mutate an unrelated control state when
+        // the preflight control read fails or finds an already-open latch.
+        if (resumeWasRequested) {
+          try {
+            await writeStateStore(env, "/control/pause", {
+              actor,
+              requestId: requestId(),
+              reason: "one-shot OIDC Preview E2E complete",
+            });
+            const control = await readStateStore(env, "/control");
+            pauseVerified = control?.control?.paused === true;
+          } catch {
+            pauseVerified = false;
+          }
         }
       }
       if (!pauseVerified) return json({ ok: false, error: "oidc_run_pause_verification_failed" }, 503);
