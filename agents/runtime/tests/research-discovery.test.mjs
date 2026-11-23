@@ -176,6 +176,25 @@ describe("read-only AI research discovery", () => {
     expect(result.latest_signals.every(item => !item.url.endsWith("/wrong-namespace"))).toBe(true);
   });
 
+  it("rejects prefixed Atom roots bound to an empty namespace", async () => {
+    const result = await discoverResearchSignals({
+      now: NOW,
+      fetchImpl: async url => {
+        const source = RESEARCH_FEED_SOURCES.find(item => item.feed === url);
+        if (source.name !== "Google DeepMind") return new Response(feedFor(source), { status: 200 });
+        return new Response(
+          '<atom:feed xmlns:atom="">'+
+          entryFor(source, "empty-prefix-namespace") + "</atom:feed>",
+          { status: 200 }
+        );
+      }
+    });
+    expect(result.ok).toBe(true);
+    expect(result.sources_succeeded).toBe(3);
+    expect(result.sources_failed).toEqual([{ source: "Google DeepMind", error: "invalid_feed_document" }]);
+    expect(result.latest_signals.every(item => !item.url.endsWith("/empty-prefix-namespace"))).toBe(true);
+  });
+
   it("rejects unclosed or improperly nested XML elements", async () => {
     const malformed = ["<rss><channel></rss>", "<rss><channel><item></channel></item></rss>"];
     for (const document of malformed) {
