@@ -1,6 +1,7 @@
 const MAX_BYTES = 750_000;
 const TIMEOUT_MS = 8_000;
 const MAX_RESULTS = 4;
+const MAX_FUTURE_CLOCK_SKEW_MS = 5 * 60 * 1000;
 
 export const RESEARCH_FEED_SOURCES = [
   { name: "OpenAI News", host: "openai.com", pathPrefix: "/index/", feed: "https://openai.com/news/rss.xml" },
@@ -30,7 +31,7 @@ function elementText(xml, name) {
   return match ? match[1] : "";
 }
 
-function parseItems(xml, source, cutoff) {
+function parseItems(xml, source, cutoff, now) {
   return [...xml.matchAll(/<(item|entry)(?:\s[^>]*)?>([\s\S]*?)<\/\1>/gi)].map(match => {
     const body = match[2];
     const title = cleanText(elementText(body, "title"), 120);
@@ -38,7 +39,8 @@ function parseItems(xml, source, cutoff) {
     const rawLink = body.match(/<link\b[^>]*href="([^"]+)"/i)?.[1] || cleanText(elementText(body, "link"), 300);
     const rawDate = elementText(body, "published") || elementText(body, "updated") || elementText(body, "pubDate") || elementText(body, "dc:date");
     const date = new Date(cleanText(rawDate, 100));
-    if (!title || !rawLink || rawLink.length > 300 || !Number.isFinite(date.getTime()) || date.getTime() < cutoff) return null;
+    if (!title || !rawLink || rawLink.length > 300 || !Number.isFinite(date.getTime()) ||
+        date.getTime() < cutoff || date.getTime() > now + MAX_FUTURE_CLOCK_SKEW_MS) return null;
     let link;
     try { link = new URL(rawLink); } catch { return null; }
     if (link.protocol !== "https:" || link.hostname !== source.host || link.username || link.password ||
@@ -47,7 +49,14 @@ function parseItems(xml, source, cutoff) {
   }).filter(Boolean);
 }
 
-async function fetchFeed(source, fetchImpl, cutoff) {
+function isFeedDocument(xml) {
+  const document = xml.replace(/^\\uFEFF/, "").trimStart()
+    .replace(/^(?:<\\?xml\\b[^>]*>\\s*)?(?:<!--[\\s\\S]*?-->\\s*)*/i, "");
+  const root = document.match(/^<(rss|feed|rdf:RDF)\\b/i);
+  return Boolean(root && new RegExp("</" + root[1] + "\\\\s*>\\\\s*$", "i").test(document));
+}
+
+async function fetchFeed(source, fetchImpl, cutoff, now) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
@@ -72,7 +81,8 @@ async function fetchFeed(source, fetchImpl, cutoff) {
       xml += decoder.decode(part.value, { stream: true });
     }
     xml += decoder.decode();
-    return { source, records: parseItems(xml, source, cutoff), error: null };
+    if (!isFeedDocument(xml)) throw new Error("invalid_feed_document");
+    return { source, records: parseItems(xml, source, cutoff, now), error: null };
   } catch (error) {
     return { source, records: [], error: String(error?.message || error).replace(/[^a-zA-Z0-9_.:-]/g, "_").slice(0, 80) };
   } finally { clearTimeout(timer); }
@@ -81,7 +91,7 @@ async function fetchFeed(source, fetchImpl, cutoff) {
 export async function discoverResearchSignals({ fetchImpl = fetch, now = Date.now(), lookbackDays = 14 } = {}) {
   const days = Math.min(60, Math.max(1, Number(lookbackDays) || 14));
   const cutoff = now - days * 86_400_000;
-  const results = await Promise.all(RESEARCH_FEED_SOURCES.map(source => fetchFeed(source, fetchImpl, cutoff)));
+  const results = await Promise.all(RESEARCH_FEED_SOURCES.map(source => fetchFeed(source, fetchImpl, cutoff, now)));
   const seen = new Set();
   const records = results.flatMap(result => result.records).filter(record => {
     if (seen.has(record.url)) return false;
