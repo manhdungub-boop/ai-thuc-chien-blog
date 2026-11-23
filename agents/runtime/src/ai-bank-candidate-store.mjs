@@ -105,6 +105,15 @@ function validateCandidateBatch(candidates, now) {
   return { ok: true, validated };
 }
 
+function stableJson(value) {
+  if (Array.isArray(value)) return "[" + value.map(stableJson).join(",") + "]";
+  if (value && typeof value === "object") {
+    return "{" + Object.keys(value).filter(key => value[key] !== undefined).sort()
+      .map(key => JSON.stringify(key) + ":" + stableJson(value[key])).join(",") + "}";
+  }
+  return JSON.stringify(value);
+}
+
 function writeValidatedCandidateBatch(ctx, validated, now) {
   const timestamp = new Date(now).toISOString();
   let inserted = 0;
@@ -153,8 +162,17 @@ export class AgentAIBankCandidateStore {
     this.ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS ai_bank_discovery_cursor (" +
       "singleton_id INTEGER PRIMARY KEY CHECK(singleton_id = 1), " +
-      "cursor TEXT NOT NULL, scan_id TEXT NOT NULL, updated_at TEXT NOT NULL)"
+      "cursor TEXT NOT NULL, scan_id TEXT NOT NULL, updated_at TEXT NOT NULL, " +
+      "batch_sha256 TEXT NOT NULL DEFAULT '')"
     );
+    const cursorColumns = this.ctx.storage.sql.exec(
+      "PRAGMA table_info(ai_bank_discovery_cursor)"
+    ).toArray();
+    if (!cursorColumns.some(column => column.name === "batch_sha256")) {
+      this.ctx.storage.sql.exec(
+        "ALTER TABLE ai_bank_discovery_cursor ADD COLUMN batch_sha256 TEXT NOT NULL DEFAULT ''"
+      );
+    }
     this.ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS ai_bank_review_evidence (" +
       "evidence_id TEXT PRIMARY KEY, candidate_id TEXT NOT NULL, check_type TEXT NOT NULL, " +
@@ -243,7 +261,7 @@ export class AgentAIBankCandidateStore {
     return row ? { cursor: row.cursor, scan_id: row.scan_id, updated_at: row.updated_at } : null;
   }
 
-  upsertCandidatesAndAdvanceCursor(candidates, nextCursor, scanId, now = Date.now()) {
+  async upsertCandidatesAndAdvanceCursor(candidates, nextCursor, scanId, now = Date.now()) {
     const batch = validateCandidateBatch(candidates, now);
     if (!batch.ok) return { accepted: false, reason: batch.reason, cursor_advanced: false };
     const cursorMs = typeof nextCursor === "string" ? Date.parse(nextCursor) : NaN;
@@ -252,13 +270,20 @@ export class AgentAIBankCandidateStore {
         !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(scanId)) {
       return { accepted: false, reason: "invalid_discovery_cursor", cursor_advanced: false };
     }
+    const canonicalBatch = batch.validated.map(item => item.candidate)
+      .sort((a, b) => a.candidate_id.localeCompare(b.candidate_id));
+    const digest = await crypto.subtle.digest(
+      "SHA-256", new TextEncoder().encode(stableJson(canonicalBatch))
+    );
+    const batchSha256 = Array.from(new Uint8Array(digest),
+      byte => byte.toString(16).padStart(2, "0")).join("");
 
     return this.ctx.storage.transactionSync(() => {
       const current = this.ctx.storage.sql.exec(
-        "SELECT cursor, scan_id FROM ai_bank_discovery_cursor WHERE singleton_id = 1"
+        "SELECT cursor, scan_id, batch_sha256 FROM ai_bank_discovery_cursor WHERE singleton_id = 1"
       ).toArray()[0];
       if (current?.scan_id === scanId) {
-        if (current.cursor !== nextCursor) {
+        if (current.cursor !== nextCursor || current.batch_sha256 !== batchSha256) {
           return { accepted: false, reason: "discovery_scan_id_reused", cursor_advanced: false };
         }
         const total = this.ctx.storage.sql.exec(
@@ -275,9 +300,9 @@ export class AgentAIBankCandidateStore {
       const result = writeValidatedCandidateBatch(this.ctx, batch.validated, now);
       const timestamp = new Date(now).toISOString();
       this.ctx.storage.sql.exec(
-        "INSERT INTO ai_bank_discovery_cursor (singleton_id, cursor, scan_id, updated_at) VALUES (1, ?, ?, ?) " +
-        "ON CONFLICT(singleton_id) DO UPDATE SET cursor = excluded.cursor, scan_id = excluded.scan_id, updated_at = excluded.updated_at",
-        nextCursor, scanId, timestamp
+        "INSERT INTO ai_bank_discovery_cursor (singleton_id, cursor, scan_id, updated_at, batch_sha256) VALUES (1, ?, ?, ?, ?) " +
+        "ON CONFLICT(singleton_id) DO UPDATE SET cursor = excluded.cursor, scan_id = excluded.scan_id, updated_at = excluded.updated_at, batch_sha256 = excluded.batch_sha256",
+        nextCursor, scanId, timestamp, batchSha256
       );
       return { ...result, duplicate: false, cursor: nextCursor, scan_id: scanId, cursor_advanced: true };
     });
