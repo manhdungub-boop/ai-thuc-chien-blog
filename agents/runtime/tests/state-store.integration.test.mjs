@@ -664,6 +664,58 @@ test("control mutations enforce per-operator durable rate limits", async () => {
   });
 });
 
+test("one-shot OIDC cleanup Pause bypasses an exhausted actor rate limit without weakening operator limits", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const actor = "github-actions:342528485";
+    for (let index = 0; index < 9; index += 1) {
+      const paused = await call(stub, "/control/pause", {
+        actor, requestId: crypto.randomUUID(), reason: "rate-limit warmup",
+      });
+      assert.equal(paused.status, 200);
+    }
+
+    const control = await call(stub, "/control");
+    assert.equal(control.body.control.paused, true);
+    const resumed = await call(stub, "/control/resume", {
+      actor,
+      requestId: crypto.randomUUID(),
+      reason: "one-shot OIDC Preview E2E",
+      expectedVersion: control.body.control.version,
+    });
+    assert.equal(resumed.status, 200);
+    assert.equal(resumed.body.control.paused, false);
+
+    const invalidCleanup = await call(stub, "/control/pause", {
+      actor, requestId: crypto.randomUUID(), reason: "caller-selected reason", internalCleanup: true,
+    });
+    assert.equal(invalidCleanup.status, 400);
+
+    const invalidResume = await call(stub, "/control/resume", {
+      actor,
+      requestId: crypto.randomUUID(),
+      reason: "one-shot OIDC Preview E2E complete",
+      expectedVersion: resumed.body.control.version,
+      internalCleanup: true,
+    });
+    assert.equal(invalidResume.status, 400);
+
+    const cleanup = await call(stub, "/control/pause", {
+      actor,
+      requestId: crypto.randomUUID(),
+      reason: "one-shot OIDC Preview E2E complete",
+      internalCleanup: true,
+    });
+    assert.equal(cleanup.status, 200);
+    assert.equal(cleanup.body.control.paused, true);
+
+    const ordinaryPause = await call(stub, "/control/pause", {
+      actor, requestId: crypto.randomUUID(), reason: "ordinary operator pause",
+    });
+    assert.equal(ordinaryPause.status, 429);
+    assert.equal(ordinaryPause.body.error, "runtime_control_rate_limited");
+  });
+});
+
 test("concurrent paused admission and claim attempts remain fail-closed", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "ai-thuc-chien-do-pause-race-"));
   let active;
