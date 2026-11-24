@@ -207,16 +207,19 @@ jobs:
             const nextStepStart = nextStepOffset < 0 ? -1 : nextStepOffset + 1;
             assert.ok(validateJobStart >= 0 && assertionStepStart > validateJobStart && nextStepStart > assertionStepStart,
               'validation job, assertion, and immediate next-step boundaries must exist');
-            // Exclude only this assertion step; include every subsequent validation step.
-            return validationWorkflow.slice(validateJobStart, assertionStepStart) +
-              validationWorkflow.slice(nextStepStart);
+            return validationWorkflow.slice(validateJobStart, assertionStepStart) + validationWorkflow.slice(nextStepStart);
           };
           const parts = workflow.split('  one-shot-preview-e2e:\n');
           assert.equal(parts.length, 2, 'the separately gated one-shot E2E job must exist exactly once');
           const e2eWorkflow = parts[1];
+          const assertNoSecretReferences = source => {
+            if (/CLOUDFLARE_API_TOKEN:\s*\$\{\{\s*secrets\./i.test(source) || /secrets\.[A-Z0-9_]+/.test(source)) {
+              throw new Error('validation job must not reference secret values');
+            }
+          };
           const assertValidationOnly = source => {
             const validateJobSource = getValidationJobSource(source);
-            const deployLines = validateJobSource.split('\\n').filter(line => /^\\s*npx --yes wrangler@4\\.166\\.0 deploy\\b/.test(line));
+            const deployLines = validateJobSource.split('\n').filter(line => /^\s*npx --yes wrangler@4\.166\.0 deploy\b/.test(line));
             assert.equal(deployLines.length, 1, 'validation job must contain exactly one Wrangler command');
             assert.match(deployLines[0], /--dry-run/, 'validation Wrangler command must be dry-run only');
             assert.ok(deployLines[0].includes('--config wrangler.preview.jsonc'));
@@ -230,23 +233,19 @@ jobs:
           const injectedDeployStep = [
             '      - name: injected deployment regression step',
             '        run: npx --yes wrangler@4.166.0 deploy --config wrangler.preview.jsonc'
-          ].join('\\n');
-          assert.throws(
-            () => assertValidationOnly(injectValidationStep(workflow, injectedDeployStep)),
+          ].join('\n');
+          assert.throws(() => assertValidationOnly(injectValidationStep(workflow, injectedDeployStep)),
             /validation job must contain exactly one Wrangler command/,
-            'validation-only guard must inspect steps after its own assertion'
-          );
+            'validation-only guard must inspect steps inserted immediately after its own assertion');
           const injectedSecretStep = [
             '      - name: injected secret regression step',
             '        env:',
             '          CLOUDFLARE_API_TOKEN: ' + '$' + '{{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}',
             '        run: echo test'
-          ].join('\\n');
-          assert.throws(
-            () => assertValidationOnly(injectValidationStep(workflow, injectedSecretStep)),
+          ].join('\n');
+          assert.throws(() => assertValidationOnly(injectValidationStep(workflow, injectedSecretStep)),
             /must not reference secret values/,
-            'secret guard must inspect steps after its own assertion'
-          );
+            'secret guard must inspect steps inserted immediately after its own assertion');
           assert.ok(e2eWorkflow.includes("github.event.action == 'labeled'"));
           assert.ok(e2eWorkflow.includes("github.event.action == 'synchronize'"));
           assert.ok(e2eWorkflow.includes("github.event.label.name == 'agent-runtime'"));
@@ -273,7 +272,6 @@ jobs:
           assert.ok(e2eWorkflow.includes('timeout-minutes: 5'), 'rollback must retain its own bounded restoration window');
           console.log('PASS: validation remains credential-free; the separately gated owner-only job uses OIDC, Preview-only deployment, and automatic rollback.');
           NODE
-
       - name: Verify OIDC operator workflow is manual and pause-only
         run: |
           node --input-type=module <<'NODE'
