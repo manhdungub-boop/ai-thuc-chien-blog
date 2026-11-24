@@ -711,10 +711,12 @@ jobs:
           fi
           echo "Preview is restored and verified disabled/paused after bounded health polling."
           for path in /operator-console /operator-console.js /reviewer-console /reviewer-console.js; do
-            status="$(curl --silent --show-error --max-time 5 --output /dev/null --write-out "%{http_code}" "$AGENT_RUNTIME_PREVIEW_URL$path")"
-            if [[ "$status" != "404" ]]; then
-              echo "::error::Console asset $path returned HTTP $status while path-scoped Access is disabled; expected 404."
+            response_headers="$(curl --silent --show-error --max-time 5 --dump-header - --output /dev/null "$AGENT_RUNTIME_PREVIEW_URL$path")"
+            status="$(printf '%s\n' "$response_headers" | awk '/^HTTP\// { code=$2 } END { print code }')"
+            location="$(printf '%s\n' "$response_headers" | awk 'tolower($1) == "location:" { sub(/^[^:]*:[[:space:]]*/, ""); sub(/\r$/, ""); print; exit }')"
+            if [[ "$status" != "302" ]] || [[ ! "$location" =~ ^https://[A-Za-z0-9.-]+\.cloudflareaccess\.com/cdn-cgi/access/login/ ]]; then
+              echo "::error::Console asset $path did not redirect unauthenticated requests to Cloudflare Access (HTTP $status)."
               exit 1
             fi
           done
-          echo "All four human-facing console assets return 404 while Access is disabled."
+          echo "All four human-facing console assets redirect unauthenticated requests to the Cloudflare Access login."
