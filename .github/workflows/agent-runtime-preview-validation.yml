@@ -277,9 +277,9 @@ jobs:
           const injectedSecretStep = [
             '      - name: injected secret regression step',
             '        env:',
-            '          CLOUDFLARE_API_TOKEN: ' + '
+            '          CLOUDFLARE_API_TOKEN: ' + '$' + '{{ ' + 'secrets.' + 'CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}',
             '        run: echo test'
-          ].join('\n');
+          ].join('\\n');
           assert.throws(() => assertValidationOnly(injectValidationStep(workflow, injectedSecretStep)),
             /must not reference secret values/,
             'secret guard must inspect steps inserted immediately after its own assertion');
