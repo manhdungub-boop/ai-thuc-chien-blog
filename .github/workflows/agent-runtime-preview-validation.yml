@@ -270,9 +270,11 @@ jobs:
           assert.ok(e2eWorkflow.includes('--config "$generated_config"'));
           assert.ok(e2eWorkflow.includes("readFile('wrangler.preview.jsonc', 'utf8')"));
           assert.ok(e2eWorkflow.includes('if: always()'), 'rollback must run even after an E2E failure');
-          assert.ok(e2eWorkflow.includes('(.result | type)'), 'subscription API responses must be validated before classification');
-          assert.ok(e2eWorkflow.includes('result_info.total_count'), 'incomplete subscription pages must stop the deployment');
-          assert.ok(e2eWorkflow.includes('free-default'), 'an empty paid-subscription list must map to Cloudflare Workers Free, its documented default plan');
+          assert.ok(e2eWorkflow.includes('function classifyCloudflareWorkersPlan'), 'the Free-plan classifier must be present in the gated E2E job');
+          assert.ok(e2eWorkflow.includes('info.total_count !== payload.result.length'), 'missing or truncated subscription metadata must fail closed');
+          assert.ok(e2eWorkflow.includes('missing total_count must fail closed'));
+          assert.ok(e2eWorkflow.includes('any active paid subscription blocks the Free-only deployment gate'));
+          assert.ok(e2eWorkflow.includes('free-default'), 'an empty, fully enumerated subscription list may map to the documented default Free plan');
           assert.match(e2eWorkflow, /timeout-minutes:\s*20/, 'the E2E job must reserve a bounded total time budget');
           assert.ok(e2eWorkflow.includes('timeout-minutes: 2'), 'checkout and pre-deployment checks must have step deadlines');
           assert.ok(e2eWorkflow.includes('timeout-minutes: 3'), 'temporary deployment must have a step deadline');
@@ -385,25 +387,89 @@ jobs:
             exit 1
           fi
           # Cloudflare documents Workers Free as the default plan. A successful subscription-list response with no paid Workers subscription therefore means Workers Free.
-          plan_check="$(jq -r '
-            if .success != true or (.result | type) != "array" then "invalid"
-            elif ((.result_info.total_count // (.result | length)) > (.result | length)) then "incomplete"
-            else
-              [.result[]? |
-                [
-                  (.rate_plan // {} | [.id // "", .public_name // "", .name // ""] | map(tostring) | join(" ")),
-                  (.product // "" | if type == "object" then (.name // .id // "") else . end | tostring)
-                ] | map(ascii_downcase) | join(" ") | select(test("worker"))
-              ] as $worker_plans |
-              if ($worker_plans | length) == 0 then "free-default"
-              elif all($worker_plans[]; test("free")) then "free"
-              else "non-free"
-              end
-            end
-          ' "$response")"
+          plan_check="$(PLAN_RESPONSE="$response" node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFile } from 'node:fs/promises';
+
+          function classifyCloudflareWorkersPlan(payload) {
+            if (!payload || typeof payload !== 'object' || Array.isArray(payload) ||
+                payload.success !== true || !Array.isArray(payload.result)) return 'invalid';
+
+            const info = payload.result_info;
+            if (!info || typeof info !== 'object' || Array.isArray(info) ||
+                !Number.isSafeInteger(info.page) || info.page !== 1 ||
+                !Number.isSafeInteger(info.per_page) || info.per_page < 1 ||
+                !Number.isSafeInteger(info.count) || info.count !== payload.result.length ||
+                !Number.isSafeInteger(info.total_count) || info.total_count !== payload.result.length ||
+                info.per_page < info.count) return 'incomplete';
+
+            if (payload.result.length === 0) return 'free-default';
+
+            const allActiveSubscriptionsExplicitlyFree = payload.result.every(subscription => {
+              if (!subscription || typeof subscription !== 'object' || Array.isArray(subscription)) return false;
+              const state = subscription.state;
+              if (!['Trial', 'Provisioned', 'Paid', 'AwaitingPayment', 'Cancelled', 'Failed', 'Expired'].includes(state)) return false;
+              if (['Cancelled', 'Failed', 'Expired'].includes(state)) return true;
+              if (typeof subscription.price !== 'number' || subscription.price !== 0) return false;
+              const plan = subscription.rate_plan;
+              if (!plan || typeof plan !== 'object' || Array.isArray(plan)) return false;
+              const label = [plan.id, plan.public_name, plan.name]
+                .filter(value => typeof value === 'string')
+                .join(' ')
+                .toLowerCase();
+              return /(^|[^a-z0-9])free([^a-z0-9]|$)/.test(label);
+            });
+            return allActiveSubscriptionsExplicitlyFree ? 'free' : 'non-free';
+          }
+
+          const completeInfo = count => ({ page: 1, per_page: 20, count, total_count: count });
+          assert.equal(classifyCloudflareWorkersPlan({
+            success: true, result: [], result_info: completeInfo(0)
+          }), 'free-default');
+          assert.equal(classifyCloudflareWorkersPlan({
+            success: true,
+            result: [{ state: 'Paid', price: 0, rate_plan: { id: 'free', public_name: 'Free' } }],
+            result_info: completeInfo(1)
+          }), 'free');
+          assert.equal(classifyCloudflareWorkersPlan({
+            success: true,
+            result: [{ state: 'Paid', price: 5, rate_plan: { id: 'workers-paid', public_name: 'Workers Paid' } }],
+            result_info: completeInfo(1)
+          }), 'non-free');
+          assert.equal(classifyCloudflareWorkersPlan({
+            success: true,
+            result: [{ state: 'Paid', price: 20, rate_plan: { id: 'pro', public_name: 'Pro' } }],
+            result_info: completeInfo(1)
+          }), 'non-free', 'any active paid subscription blocks the Free-only deployment gate');
+          assert.equal(classifyCloudflareWorkersPlan({
+            success: true, result: [], result_info: { page: 1, per_page: 20, count: 0 }
+          }), 'incomplete', 'missing total_count must fail closed');
+          assert.equal(classifyCloudflareWorkersPlan({
+            success: true,
+            result: [{ state: 'Paid', price: 0, rate_plan: { id: 'free', public_name: 'Free' } }],
+            result_info: { page: 1, per_page: 20, count: 1, total_count: 2 }
+          }), 'incomplete', 'truncated subscription pages must fail closed');
+          assert.equal(classifyCloudflareWorkersPlan({
+            success: true, result: [], result_info: { page: 2, per_page: 20, count: 0, total_count: 0 }
+          }), 'incomplete', 'unexpected page must fail closed');
+          assert.equal(classifyCloudflareWorkersPlan({
+            success: true,
+            result: [{ state: 'Paid', rate_plan: { id: 'free', public_name: 'Free' } }],
+            result_info: completeInfo(1)
+          }), 'non-free', 'missing price must not be treated as zero-cost');
+          assert.equal(classifyCloudflareWorkersPlan({ success: true, result: {} }), 'invalid');
+
+          const payload = JSON.parse(await readFile(process.env.PLAN_RESPONSE, 'utf8'));
+          const classification = classifyCloudflareWorkersPlan(payload);
+          if (!['free', 'free-default'].includes(classification)) {
+            throw new Error('Workers plan is not proven Free (' + classification + '); stopped before deployment.');
+          }
+          console.log(classification);
+          NODE
+          )"
           case "$plan_check" in
             free|free-default)
-              echo "Workers Free plan verified (explicit Free subscription or Cloudflare default Free plan with no paid Workers subscription)."
+              echo "Workers Free plan verified from a complete subscription listing; every active subscription is explicitly Free and zero-price."
               ;;
             *) echo "::error::Workers plan is not proven Free; deployment stopped."; exit 1 ;;
           esac
