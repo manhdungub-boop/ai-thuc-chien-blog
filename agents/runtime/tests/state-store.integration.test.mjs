@@ -664,6 +664,36 @@ test("control mutations enforce per-operator durable rate limits", async () => {
   });
 });
 
+test("internal cleanup Pause bypasses the per-operator rate limit without weakening external controls", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const actor = "cleanup-rate-limit-test";
+    for (let index = 0; index < 10; index += 1) {
+      const result = await call(stub, "/control/pause", {
+        actor,
+        requestId: crypto.randomUUID(),
+        reason: "external control request",
+      });
+      assert.equal(result.status, 200);
+    }
+
+    const cleanup = await call(stub, "/control/pause-cleanup", {
+      actor,
+      requestId: crypto.randomUUID(),
+      reason: "one-shot Preview cleanup",
+    });
+    assert.equal(cleanup.status, 200);
+    assert.equal(cleanup.body.control.paused, true);
+
+    const external = await call(stub, "/control/pause", {
+      actor,
+      requestId: crypto.randomUUID(),
+      reason: "external request remains rate limited",
+    });
+    assert.equal(external.status, 429);
+    assert.equal(external.body.error, "runtime_control_rate_limited");
+  });
+});
+
 test("concurrent paused admission and claim attempts remain fail-closed", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "ai-thuc-chien-do-pause-race-"));
   let active;
