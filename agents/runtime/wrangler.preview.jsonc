@@ -1,6 +1,6 @@
 {
   "name": "ai-thuc-chien-agent-runtime-preview",
-  "main": "./src/worker-preview-recovery.mjs",
+  "main": "./src/worker.mjs",
   "compatibility_date": "2026-11-19",
   "workers_dev": true,
   "preview_urls": false,
