@@ -330,7 +330,7 @@ jobs:
           assert.match(workflow, /environment:\s*agent-runtime-preview/);
           assert.match(workflow, /CLOUDFLARE_AGENT_PREVIEW_API_TOKEN/);
           assert.match(workflow, /CLOUDFLARE_AGENT_PREVIEW_WORKER_TOKEN/);
-          assert.match(workflow, /ai-thuc-chien-agent-runtime-fault-test\.workers\.dev/);
+          assert.match(workflow, /ai-thuc-chien-agent-runtime-fault-test\.manhdungub\.workers\.dev/);
           assert.match(workflow, /secret put AGENT_FAULT_TEST_TOKEN/);
           assert.match(workflow, /wrangler@4\.166\.0 delete/);
           assert.doesNotMatch(workflow, /PREVIEW_WORKER_NAME|original_version_id|deployments\?force=true|wrangler@4\.166\.0 deploy --config agents\/runtime\/wrangler\.preview/);
