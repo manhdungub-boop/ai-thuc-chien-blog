@@ -271,9 +271,9 @@ jobs:
           assert.ok(e2eWorkflow.includes("readFile('wrangler.preview.jsonc', 'utf8')"));
           assert.ok(e2eWorkflow.includes('if: always()'), 'rollback must run even after an E2E failure');
           assert.ok(e2eWorkflow.includes('function classifyCloudflareWorkersPlan'), 'the Free-plan classifier must be present in the gated E2E job');
-          assert.ok(e2eWorkflow.includes('info.total_count !== payload.result.length'), 'missing or truncated subscription metadata must fail closed');
+          assert.ok(e2eWorkflow.includes('info.total_count === payload.result.length'), 'total_count must equal the returned result length when used as completeness proof');
           assert.ok(e2eWorkflow.includes('info.next_page === false'), 'an explicit no-next-page marker may prove complete enumeration');
-          assert.ok(e2eWorkflow.includes('missing total_count must fail closed'));
+          assert.ok(e2eWorkflow.includes('missing completeness metadata must fail closed'));
           assert.ok(e2eWorkflow.includes('any active paid subscription blocks the Free-only deployment gate'));
           assert.ok(e2eWorkflow.includes('free-default'), 'an empty, fully enumerated subscription list may map to the documented default Free plan');
           assert.match(e2eWorkflow, /timeout-minutes:\s*20/, 'the E2E job must reserve a bounded total time budget');
