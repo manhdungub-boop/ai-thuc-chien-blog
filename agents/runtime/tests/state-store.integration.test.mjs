@@ -705,7 +705,7 @@ test("one-shot OIDC cleanup Pause bypasses an exhausted actor rate limit without
       reason: "one-shot OIDC Preview E2E complete",
       internalCleanup: true,
     });
-    assert.equal(cleanup.status, 200);
+    assert.equal(cleanup.status, 200, "cleanup pause response: " + JSON.stringify(cleanup.body));
     assert.equal(cleanup.body.control.paused, true);
 
     const ordinaryPause = await call(stub, "/control/pause", {
