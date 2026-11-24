@@ -227,11 +227,15 @@ jobs:
           };
           const injectedDeployStep = [
             '      - name: injected deployment regression step',
-            '        run: npx --yes wrangler@4.166.0 deploy --config wrangler.preview.jsonc'
+            '        run: |',
+            '          npx --yes wrangler@4.166.0 deploy --config wrangler.preview.jsonc'
           ].join('\n');
-          assert.throws(() => assertValidationOnly(injectValidationStep(workflow, injectedDeployStep)),
+          const injectedDeployWorkflow = injectValidationStep(workflow, injectedDeployStep);
+          assert.notEqual(injectedDeployWorkflow, workflow, 'the deployment fixture must be inserted after the assertion step');
+          assert.throws(() => assertValidationOnly(injectedDeployWorkflow),
             /validation job must contain exactly one Wrangler command/,
-            'validation-only guard must inspect steps inserted immediately after its own assertion');
+            'validation-only guard must inspect steps after its own assertion'
+          );
           const injectedSecretStep = [
             '      - name: injected secret regression step',
             '        env:',
