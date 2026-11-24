@@ -22,7 +22,14 @@ function jsonResponse(body, status = 200) {
 export class TestAgentStateStore extends AgentStateStore {
   constructor(ctx, env = {}) {
     // Use a dedicated one-run test secret; never overwrite the Preview runtime secret.
-    super(ctx, { ...env, AGENT_STATE_STORE_TOKEN: env.AGENT_FAULT_TEST_TOKEN ?? env.AGENT_STATE_STORE_TOKEN });
+    super(ctx, {
+      ...env,
+      AGENT_STATE_STORE_TOKEN: env.AGENT_FAULT_TEST_TOKEN ?? env.AGENT_STATE_STORE_TOKEN,
+      // Only this isolated, token-gated test Durable Object enables state transitions.
+      // The outer test Worker remains disabled/paused and exposes no application routes.
+      AGENT_ENABLED: "true",
+      AGENT_PAUSED: "false",
+    });
   }
 
   requestTime(request) {
