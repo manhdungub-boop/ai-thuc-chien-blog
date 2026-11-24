@@ -9,8 +9,18 @@ import { OPERATOR_CONSOLE_JS } from "../src/operator-console.mjs";
 const base = "https://ai-thuc-chien-agent-runtime-preview.manhdungub.workers.dev";
 
 describe("reviewer and operator HTTP routes", () => {
-  it("serves the operator console with no-store and a restrictive CSP", async () => {
-    const response = await handleReviewerHttpRequest(new Request(`${base}/operator-console`), {});
+  it("hides the operator console unless path-scoped Access is enabled and supplies its assertion", async () => {
+    const blocked = await handleReviewerHttpRequest(new Request(`${base}/operator-console`), {});
+    expect(blocked.status).toBe(404);
+    const missingAssertion = await handleReviewerHttpRequest(
+      new Request(`${base}/operator-console`),
+      { AGENT_CONSOLE_ACCESS_PROTECTED: "true" }
+    );
+    expect(missingAssertion.status).toBe(404);
+    const response = await handleReviewerHttpRequest(
+      new Request(`${base}/operator-console`, { headers: { "Cf-Access-Jwt-Assertion": "edge-verified" } }),
+      { AGENT_CONSOLE_ACCESS_PROTECTED: "true" }
+    );
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("text/html");
     expect(response.headers.get("cache-control")).toBe("no-store");
@@ -33,9 +43,16 @@ describe("reviewer and operator HTTP routes", () => {
     expect(REVIEWER_CONSOLE_JS).toContain("logout.disabled = false");
   });
 
-  it("serves the reviewer console and same-origin JavaScript assets", async () => {
-    const page = await handleReviewerHttpRequest(new Request(`${base}/reviewer-console`), {});
-    const script = await handleReviewerHttpRequest(new Request(`${base}/reviewer-console.js`), {});
+  it("hides reviewer console assets until path-scoped Access is enabled", async () => {
+    const blockedPage = await handleReviewerHttpRequest(new Request(`${base}/reviewer-console`), {});
+    const blockedScript = await handleReviewerHttpRequest(new Request(`${base}/reviewer-console.js`), {});
+    expect(blockedPage.status).toBe(404);
+    expect(blockedScript.status).toBe(404);
+
+    const accessEnv = { AGENT_CONSOLE_ACCESS_PROTECTED: "true" };
+    const headers = { "Cf-Access-Jwt-Assertion": "edge-verified" };
+    const page = await handleReviewerHttpRequest(new Request(`${base}/reviewer-console`, { headers }), accessEnv);
+    const script = await handleReviewerHttpRequest(new Request(`${base}/reviewer-console.js`, { headers }), accessEnv);
     expect(page.status).toBe(200);
     const html = await page.text();
     expect(html.toLowerCase()).toContain("reviewer");

@@ -574,30 +574,39 @@ jobs:
           set -euo pipefail
           probe_body='{"task":{"type":"content.review","idempotencyKey":"oidc-preview-e2e:readiness-probe","payload":{"articlePath":"articles/ai-agent-thuc-hanh-tu-thiet-ke-den-kiem-soat.html"}}}'
           ready=false
-          for attempt in $(seq 1 8); do
+          ready_streak=0
+          for attempt in $(seq 1 12); do
             status="$(curl --silent --show-error --max-time 8 --output "$RUNNER_TEMP/oidc-readiness.json" --write-out "%{http_code}" \
               --request POST "$AGENT_RUNTIME_PREVIEW_URL/internal/oidc/run" \
               --header "Content-Type: application/json" \
               --header "Accept: application/json" \
               --data "$probe_body")"
             if [[ "$status" == "401" ]] && jq -e '.error == "github_oidc_token_required"' "$RUNNER_TEMP/oidc-readiness.json" >/dev/null; then
-              ready=true
-              break
+              ready_streak=$((ready_streak + 1))
+              echo "OIDC run gate readiness probe passed ($ready_streak/3 consecutive checks)."
+              if [[ "$ready_streak" -ge 3 ]]; then
+                ready=true
+                break
+              fi
+              sleep 1
+              continue
             fi
+            ready_streak=0
             if [[ "$status" != "503" ]]; then
               echo "::error::OIDC readiness probe returned an unexpected HTTP $status; refusing to request an operator token."
               cat "$RUNNER_TEMP/oidc-readiness.json"
               exit 1
             fi
-            echo "OIDC run gate is not ready yet (attempt $attempt/8); no task was submitted."
+            echo "OIDC run gate is not ready yet (attempt $attempt/12); no task was submitted."
             sleep 2
           done
           if [[ "$ready" != "true" ]]; then
-            echo "::error::OIDC run gate did not become ready; refusing to request a token or run a task."
+            echo "::error::OIDC run gate did not become stable; refusing to request a token or run a task."
             cat "$RUNNER_TEMP/oidc-readiness.json"
             exit 1
           fi
-          echo "OIDC run gate is ready; unauthenticated probe stopped at the expected token-required boundary."
+          echo "OIDC run gate remained at the expected token-required boundary across three consecutive probes."
+          sleep 2
       - name: Invoke exactly one allowlisted task with a short-lived GitHub OIDC token
         timeout-minutes: 1
         env:

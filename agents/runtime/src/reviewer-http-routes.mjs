@@ -376,10 +376,20 @@ export async function handleReviewerHttpRequest(request, env) {
     const authResponse = await handleGoogleReviewerAuth(request, env);
     if (authResponse) return authResponse;
     const url = new URL(request.url);
-    if (request.method === "GET" && url.pathname === "/operator-console") return staticResponse(OPERATOR_CONSOLE_HTML, "text/html; charset=utf-8");
-    if (request.method === "GET" && url.pathname === "/operator-console.js") return staticResponse(OPERATOR_CONSOLE_JS, "application/javascript; charset=utf-8");
-    if (request.method === "GET" && url.pathname === "/reviewer-console") return staticResponse(REVIEWER_CONSOLE_HTML, "text/html; charset=utf-8");
-    if (request.method === "GET" && url.pathname === "/reviewer-console.js") return staticResponse(REVIEWER_CONSOLE_JS, "application/javascript; charset=utf-8");
+    const consoleAssets = {
+      "/operator-console": [OPERATOR_CONSOLE_HTML, "text/html; charset=utf-8"],
+      "/operator-console.js": [OPERATOR_CONSOLE_JS, "application/javascript; charset=utf-8"],
+      "/reviewer-console": [REVIEWER_CONSOLE_HTML, "text/html; charset=utf-8"],
+      "/reviewer-console.js": [REVIEWER_CONSOLE_JS, "application/javascript; charset=utf-8"],
+    };
+    if (request.method === "GET" && Object.prototype.hasOwnProperty.call(consoleAssets, url.pathname)) {
+      const accessAssertion = request.headers.get("Cf-Access-Jwt-Assertion");
+      if (env.AGENT_CONSOLE_ACCESS_PROTECTED !== "true" || !accessAssertion) {
+        return json({ ok: false, error: "not_found" }, 404);
+      }
+      const [body, contentType] = consoleAssets[url.pathname];
+      return staticResponse(body, contentType);
+    }
     if (url.pathname === "/api/operator/runtime-control") return handleOperatorControl(request, env, url);
     if (url.pathname.startsWith("/api/reviewer/")) return handleReviewerApi(request, env, url);
     return null;
