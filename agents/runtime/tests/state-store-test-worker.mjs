@@ -1,4 +1,6 @@
 import { AgentStateStore } from "../src/worker.mjs";
+export { AgentStateStore };
+export { AgentAIBankCandidateStore, AgentDraftStore, AgentReviewerAuthStore } from "../src/worker.mjs";
 import { hasValidStateStoreBearer } from "../src/internal-auth.mjs";
 
 function jsonResponse(body, status = 200) {
@@ -18,6 +20,11 @@ function jsonResponse(body, status = 200) {
  * therefore cannot be enabled through a deployed Worker environment variable.
  */
 export class TestAgentStateStore extends AgentStateStore {
+  constructor(ctx, env = {}) {
+    // Use a dedicated one-run test secret; never overwrite the Preview runtime secret.
+    super(ctx, { ...env, AGENT_STATE_STORE_TOKEN: env.AGENT_FAULT_TEST_TOKEN ?? env.AGENT_STATE_STORE_TOKEN });
+  }
+
   requestTime(request) {
     const value = request.headers.get("x-test-now");
     if (value) {
@@ -392,7 +399,7 @@ export default {
     if (url.pathname !== "/__test/fault-suite" || request.method !== "POST") {
       return new Response("not_found", { status: 404, headers: { "Cache-Control": "no-store" } });
     }
-    if (!await hasValidStateStoreBearer(request, env)) {
+    if (!await hasValidStateStoreBearer(request, { ...env, AGENT_STATE_STORE_TOKEN: env.AGENT_FAULT_TEST_TOKEN ?? env.AGENT_STATE_STORE_TOKEN })) {
       return jsonResponse({ ok: false, error: "state_store_auth_required" }, 401);
     }
     if (!env.AGENT_STATE_STORE || typeof env.AGENT_STATE_STORE.idFromName !== "function" ||
