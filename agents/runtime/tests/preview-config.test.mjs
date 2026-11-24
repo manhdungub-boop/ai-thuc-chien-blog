@@ -134,3 +134,23 @@ test("GitHub OIDC Pause workflow pins the bearer-token destination to the exact 
   assert.match(workflow, /target\.pathname !== '\/'/);
   assert.doesNotMatch(workflow, /target\.hostname/);
 });
+
+test("fault-test workflow cleanup interpolates its scoped credential and disables public URLs", () => {
+  const workflowPath = fileURLToPath(new URL("../../../.github/workflows/agent-runtime-cloudflare-do-fault-test.yml", import.meta.url));
+  const workflow = readFileSync(workflowPath, "utf8");
+  const dollar = String.fromCharCode(36);
+  const backslash = String.fromCharCode(92);
+  assert.ok(workflow.includes("CLOUDFLARE_API_TOKEN: " + dollar + "{{ secrets.CLOUDFLARE_AGENT_PREVIEW_WORKER_TOKEN }}"));
+  assert.ok(workflow.includes('if [[ -z "' + dollar + '{CLOUDFLARE_API_TOKEN:-}" ]]; then'));
+  assert.equal(workflow.includes(backslash + dollar + "{{ secrets.CLOUDFLARE_AGENT_PREVIEW_WORKER_TOKEN }}"), false);
+  assert.ok(workflow.includes("if: always()"));
+  assert.ok(workflow.includes("--request POST"));
+  assert.ok(workflow.includes('{"enabled":false,"previews_enabled":false}'));
+  assert.ok(workflow.includes("--request DELETE"));
+  assert.ok(workflow.includes("$api/secrets/AGENT_FAULT_TEST_TOKEN"));
+  assert.ok(workflow.includes("$api/subdomain"));
+  assert.ok(workflow.includes(".result.enabled == false"));
+  assert.ok(workflow.includes(".result.previews_enabled == false"));
+  assert.ok(workflow.includes("attempt in 1 2 3"));
+  assert.equal(workflow.includes("wrangler@4.166.0 delete"), false);
+});
