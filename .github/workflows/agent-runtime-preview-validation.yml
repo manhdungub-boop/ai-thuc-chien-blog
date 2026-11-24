@@ -188,6 +188,14 @@ jobs:
           assert.equal(faultTest.main, './tests/state-store-test-worker.mjs');
           assert.deepEqual(faultTest.durable_objects?.bindings, [{ name: 'AGENT_STATE_STORE', class_name: 'TestAgentStateStore' }]);
           assert.deepEqual(faultTest.migrations, [{ tag: 'fault-test-v1', new_sqlite_classes: ['TestAgentStateStore'] }]);
+          const faultTestCleanup = JSON.parse(await readFile('agents/runtime/wrangler.fault-test.cleanup.jsonc', 'utf8'));
+          assert.equal(faultTestCleanup.name, faultTest.name);
+          assert.equal(faultTestCleanup.main, faultTest.main);
+          assert.equal(faultTestCleanup.workers_dev, false);
+          assert.equal(faultTestCleanup.preview_urls, false);
+          assert.deepEqual(faultTestCleanup.durable_objects, faultTest.durable_objects);
+          assert.deepEqual(faultTestCleanup.migrations, faultTest.migrations);
+          assert.deepEqual(faultTestCleanup.vars, faultTest.vars);
           const faultTestWorkerSource = await readFile('agents/runtime/tests/state-store-test-worker.mjs', 'utf8');
           assert.match(faultTestWorkerSource, /const faultSuiteMode = \{ active: false \}/);
           assert.match(faultTestWorkerSource, /faultSuiteMode\.active && property === "AGENT_ENABLED"/);

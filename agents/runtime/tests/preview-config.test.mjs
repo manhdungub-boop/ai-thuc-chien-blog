@@ -10,6 +10,8 @@ const configPath = fileURLToPath(new URL("../wrangler.preview.jsonc", import.met
 const config = JSON.parse(readFileSync(configPath, "utf8"));
 const faultTestConfigPath = fileURLToPath(new URL("../wrangler.fault-test.jsonc", import.meta.url));
 const faultTestConfig = JSON.parse(readFileSync(faultTestConfigPath, "utf8"));
+const faultTestCleanupConfigPath = fileURLToPath(new URL("../wrangler.fault-test.cleanup.jsonc", import.meta.url));
+const faultTestCleanupConfig = JSON.parse(readFileSync(faultTestCleanupConfigPath, "utf8"));
 
 test("dedicated Agent Runtime Preview config binds its isolated State Store and rate limiter and remains disabled", () => {
   assert.equal(config.name, "ai-thuc-chien-agent-runtime-preview");
@@ -60,6 +62,16 @@ test("dedicated Agent Runtime Preview config binds its isolated State Store and 
   ]) {
     assert.equal(Object.hasOwn(config, forbidden), false, "unexpected config key: " + forbidden);
   }
+});
+
+test("fault-test cleanup keeps the Worker but disables workers.dev and Preview URLs", () => {
+  assert.equal(faultTestCleanupConfig.name, faultTestConfig.name);
+  assert.equal(faultTestCleanupConfig.main, faultTestConfig.main);
+  assert.equal(faultTestCleanupConfig.workers_dev, false);
+  assert.equal(faultTestCleanupConfig.preview_urls, false);
+  assert.deepEqual(faultTestCleanupConfig.durable_objects, faultTestConfig.durable_objects);
+  assert.deepEqual(faultTestCleanupConfig.migrations, faultTestConfig.migrations);
+  assert.deepEqual(faultTestCleanupConfig.vars, faultTestConfig.vars);
 });
 
 test("fault-test harness remains disabled, paused, and migration-compatible", () => {
