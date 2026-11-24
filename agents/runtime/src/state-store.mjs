@@ -689,18 +689,26 @@ if (url.pathname === "/task" && request.method === "GET") {
         typeof body.requestId !== "string" || !/^[a-zA-Z0-9-]{16,64}$/.test(body.requestId) ||
         (!paused && (!Number.isSafeInteger(body.expectedVersion) || body.expectedVersion < 0)) ||
         (paused && body.expectedVersion !== undefined) ||
+        (body.internalCleanup !== undefined && (body.internalCleanup !== true || !paused)) ||
         (body.reason !== undefined && (typeof body.reason !== "string" || body.reason.length > 160 ||
           [...body.reason].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)))) {
       return { status: 400, body: { ok: false, error: "runtime_control_request_invalid" } };
     }
     try {
       return this.ctx.storage.transactionSync(() => {
-        const rate = readRow(this.sql, "SELECT window_started_at, request_count FROM runtime_control_rate_limit WHERE actor = ?", body.actor);
-        const windowStart = rate && now - rate.window_started_at < 60_000 ? rate.window_started_at : now;
-        const requestCount = rate && windowStart === rate.window_started_at ? rate.request_count : 0;
-        if (requestCount >= 10) return { status: 429, body: { ok: false, error: "runtime_control_rate_limited" } };
-        this.sql.exec("INSERT INTO runtime_control_rate_limit (actor, window_started_at, request_count) VALUES (?,?,1) ON CONFLICT(actor) DO UPDATE SET window_started_at=excluded.window_started_at, request_count=?",
-          body.actor, windowStart, requestCount + 1);
+        // Only the authenticated Worker one-shot cleanup path may set
+        // internalCleanup. Public operator routes never forward this field.
+        // Keep emergency cleanup independent of actor quotas so a denied
+        // cleanup cannot leave the admission latch open.
+        const internalCleanup = paused && body.internalCleanup === true;
+        if (!internalCleanup) {
+          const rate = readRow(this.sql, "SELECT window_started_at, request_count FROM runtime_control_rate_limit WHERE actor = ?", body.actor);
+          const windowStart = rate && now - rate.window_started_at < 60_000 ? rate.window_started_at : now;
+          const requestCount = rate && windowStart === rate.window_started_at ? rate.request_count : 0;
+          if (requestCount >= 10) return { status: 429, body: { ok: false, error: "runtime_control_rate_limited" } };
+          this.sql.exec("INSERT INTO runtime_control_rate_limit (actor, window_started_at, request_count) VALUES (?,?,1) ON CONFLICT(actor) DO UPDATE SET window_started_at=excluded.window_started_at, request_count=?",
+            body.actor, windowStart, requestCount + 1);
+        }
         const current = readRow(this.sql, "SELECT paused, changed_at, version FROM runtime_control WHERE singleton_id = 1");
         if (!current) return { status: 503, body: { ok: false, error: "runtime_control_unavailable" } };
         if (!paused && current.version !== body.expectedVersion) {
