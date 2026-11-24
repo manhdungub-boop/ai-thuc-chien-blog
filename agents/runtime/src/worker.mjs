@@ -633,7 +633,7 @@ const worker = {
         // competing Pause has invalidated this request's observed version.
         if (resumeWasRequested && !resumeRejectedConflict) {
           try {
-            await writeStateStore(env, "/control/pause", {
+            await writeStateStore(env, "/control/pause-cleanup", {
               actor,
               requestId: requestId(),
               reason: "one-shot OIDC Preview E2E complete",
