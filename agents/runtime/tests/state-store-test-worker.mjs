@@ -296,13 +296,29 @@ export class TestAgentStateStore extends AgentStateStore {
           if (sentinelLateWrite.status !== 409) throw new Error("circuit_breaker_stale_lease_not_fenced");
 
           // 5. A forced SQLite transaction exception must leave no committed row.
-          const rollbackAt = await super.fetch(new Request("https://state-store.internal/__test/rollback", {
-            method: "POST",
-            headers: { Authorization: "Bearer " + this.env.AGENT_STATE_STORE_TOKEN },
-          }));
-          const rollback = await rollbackAt.json();
-          if (rollback?.ok !== true || rollback?.rolledBack !== true || rollback?.acceptedToday !== 0) {
-            throw new Error("sqlite_transaction_rollback_probe_failed_" + JSON.stringify(rollback));
+          const rollbackDay = "2099-12-31";
+          this.sql.exec("DELETE FROM daily_usage WHERE day_utc = ?", rollbackDay);
+          let rollbackThrew = false;
+          try {
+            this.ctx.storage.transactionSync(() => {
+              this.sql.exec(
+                "INSERT INTO daily_usage (day_utc, accepted_count) VALUES (?, 1)",
+                rollbackDay
+              );
+              throw new Error("intentional_rollback_probe");
+            });
+          } catch (error) {
+            rollbackThrew = error?.message === "intentional_rollback_probe";
+          }
+          const rollbackRow = this.sql.exec(
+            "SELECT accepted_count FROM daily_usage WHERE day_utc = ?",
+            rollbackDay
+          ).toArray()[0] ?? null;
+          if (!rollbackThrew || rollbackRow !== null) {
+            throw new Error("sqlite_transaction_rollback_probe_failed_" + JSON.stringify({
+              rollbackThrew,
+              rollbackRow,
+            }));
           }
 
           // 6. Recovery alarms stay disabled in this harness.
