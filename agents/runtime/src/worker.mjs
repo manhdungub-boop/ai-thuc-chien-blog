@@ -1,5 +1,4 @@
 import { hasValidOperatorBearer } from "./operator-auth.mjs";
-import { AgentStateStore } from "./state-store.mjs";
 import { hasValidStateStoreBearer } from "./internal-auth.mjs";
 import { readBoundedJson as readBoundedJsonBody, readBoundedText } from "./bounded-json-body.mjs";
 import { handleReviewerHttpRequest } from "./reviewer-http-routes.mjs";
@@ -13,13 +12,11 @@ import { discoverResearchSignals } from "./research-discovery.mjs";
 import { retrieveResearchEvidence } from "./research-evidence.mjs";
 import { buildArticleAuthoringBrief } from "./article-authoring-brief.mjs";
 import { selectProvider } from "./provider-policy.mjs";
-export { AgentStateStore };
+export { AgentStateStore } from "./state-store.mjs";
 export { AgentAIBankCandidateStore } from "./ai-bank-candidate-store.mjs";
 export { AgentDraftStore } from "./draft-artifact-store.mjs";
 export { AgentReviewerAuthStore } from "./google-reviewer-auth-store.mjs";
 
-// Keep the one-run test migration class exportable without exposing test routes.
-export class TestAgentStateStore extends AgentStateStore {}
 
 const SECURITY_HEADERS = Object.freeze({
   "Cache-Control": "no-store",
