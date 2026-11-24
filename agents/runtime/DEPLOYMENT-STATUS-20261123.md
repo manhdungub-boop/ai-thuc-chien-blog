@@ -8,20 +8,20 @@
 - [PR #327](https://github.com/manhdungub-boop/ai-thuc-chien-blog/pull/327) remains OPEN / DRAFT / UNMERGED.
 - Base branch: `main` at `6a5cfa2398ee72f12335942b1ceb0830e6b8add9`.
 - Integration branch: `integration/agent-runtime-v5-preview-20261120`.
-- Current integration head at this status capture: `05b3218a4cc961e76d7136f37cea7e971faf1942` (includes PR #371 test-only change and the subsequent documentation-only evidence refresh).
+- Current integration head at this status capture: `23c54de0c5a853a87722c7afade364e5a6ca016d` (includes PR #371 test-only change and the documentation-only evidence reconciliation).
 - GitHub compares the PR as 478 commits ahead, 0 behind, 157 changed files (27,691 additions, 59 deletions at this capture). The size of this integration diff is a material review/release risk; successful CI is not by itself a reason to merge.
-- Child security PR [#368](https://github.com/manhdungub-boop/ai-thuc-chien-blog/pull/368) was merged into the integration branch through merge commit `473320bd20e4a1ed556b3cb6892a656e5c30134e`. Child commit `0846d66c97fcf7ae1d2a57e64dbb2de80b34331e` and the merge commit have the same Git tree `6143eaffb06176b8dc4ddfaf7499140b098e76da`; that runtime source tree passed the protected one-shot E2E. Test-only PR [#371](https://github.com/manhdungub-boop/ai-thuc-chien-blog/pull/371) was subsequently squash-merged into the integration branch; combined current head is `5007afd2dc5e8b69eefb34038a953129f9635292`.
+- Child security PR [#368](https://github.com/manhdungub-boop/ai-thuc-chien-blog/pull/368) was merged into the integration branch through merge commit `473320bd20e4a1ed556b3cb6892a656e5c30134e`. Child commit `0846d66c97fcf7ae1d2a57e64dbb2de80b34331e` and the merge commit have the same Git tree `6143eaffb06176b8dc4ddfaf7499140b098e76da`; that runtime source tree passed the protected one-shot E2E. Test-only PR [#371](https://github.com/manhdungub-boop/ai-thuc-chien-blog/pull/371) was subsequently squash-merged into the integration branch; combined current head before the subsequent documentation-only evidence refresh was `5007afd2dc5e8b69eefb34038a953129f9635292`; current head is `23c54de0c5a853a87722c7afade364e5a6ca016d`.
 - Security-gate [Issue #298](https://github.com/manhdungub-boop/ai-thuc-chien-blog/issues/298) was closed as completed on 2026-11-24 after the replacement acceptance criteria were met.
 - The repository owner waived the independent third-party human security-review prerequisite. The `daingo11` review is AI-assisted at the owner's direction, not an independent audit.
 
 ## Exact-head review and CI evidence
 
-For PR #327 current head at this capture `05b3218a4cc961e76d7136f37cea7e971faf1942`:
+For PR #327 current head at this capture `23c54de0c5a853a87722c7afade364e5a6ca016d`:
 
-- `daingo11` APPROVED the exact current head `05b3218a4cc961e76d7136f37cea7e971faf1942` at 2026-11-24 08:40:31 UTC. The review is AI-assisted at the owner's direction, not an independent third-party security audit.
+- `daingo11` APPROVED the prior exact head `05b3218a4cc961e76d7136f37cea7e971faf1942` at 2026-11-24 08:40:31 UTC. That review predates this documentation-only evidence reconciliation and is AI-assisted at the owner's direction, not an independent third-party security audit.
 - PR #371 received a separate AI-assisted APPROVE from the connected `daingo11` reviewer account for its exact test-only head `fad3ed3e88e7694c3d626d214c4091c38782db59` before it was merged.
 - All 3 inline review threads on PR #327 were resolved before PR #371 was merged.
-- Nine observed workflows for exact current head `05b3218a4cc961e76d7136f37cea7e971faf1942` completed with zero failed jobs: Agent Runtime Preview Shell Validation (`validate` success), Static CI Quality Gate, Staging Google OAuth integration, Editorial Release Readiness, AI Bank official-feed discovery, Verify Website Health, Content Quality Gate, Community API Bounded Body Security Tests, and CodeQL Offline Security Analysis. The `one-shot-preview-e2e` job was skipped by its explicit branch/event gate; do not count it as an exact-current-head E2E execution.
+- Nine observed workflows for prior docs head `05b3218a4cc961e76d7136f37cea7e971faf1942` completed with zero failed jobs: Agent Runtime Preview Shell Validation (`validate` success), Static CI Quality Gate, Staging Google OAuth integration, Editorial Release Readiness, AI Bank official-feed discovery, Verify Website Health, Content Quality Gate, Community API Bounded Body Security Tests, and CodeQL Offline Security Analysis. The `one-shot-preview-e2e` job was skipped by its explicit branch/event gate; do not count it as an exact-current-head E2E execution.
 - The protected one-shot Preview E2E passed on child commit `0846d66c97fcf7ae1d2a57e64dbb2de80b34331e`, [run 45342369885](https://github.com/manhdungub-boop/ai-thuc-chien-blog/actions/runs/45342369885): OIDC admission, one allowlisted read-only `content.review`, pass result with zero findings, persisted audit verification, all four console assets redirecting to Cloudflare Access login, automatic Preview restore, and cleanup. That evidence applies to the tested runtime source tree, not the later combined repository head.
 - The E2E workflow is intentionally restricted to a narrowly allowlisted PR synchronize event, repository, branch, actor, label, and protected Preview environment. The skipped parent check is expected for a merge commit pushed to the integration branch.
 
@@ -125,3 +125,9 @@ The successful one-shot E2E already proves the allowlisted read-only `content.re
 - The separate script-settings endpoint returned `logpush=false` and `observability=null`. Null is recorded as the API response; it is not interpreted as proof that every observability subfeature is disabled. No logging/trace setting was changed.
 - This resolves the stale historical statements in older threat-model and budget-review sections that described the Worker/DO namespaces as not deployed. The live status section above is the authoritative current inventory; older point-in-time notes remain historical evidence only.
 - These were Cloudflare API GET requests only. No deployment, configuration, secret, namespace, billing, or Production change was made.
+
+
+## Current documentation reconciliation commit
+
+- This document's latest reconciliation commit is `23c54de0c5a853a87722c7afade364e5a6ca016d` and changes this status document only.
+- The exact-head review and workflow evidence above is explicitly tied to the prior SHA where stated; new documentation commits must be rechecked and reviewed on their own exact HEAD before they are represented as current-head approval.
