@@ -65,15 +65,33 @@ test("required ingress limiter covers every route and keys by Cloudflare client 
   assert.deepEqual(received, { key: "ip:203.0.113.9" });
 });
 
-test("ingress limiter rejects requests before route handling", async () => {
-  const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/health", {
-    headers: { "cf-connecting-ip": "203.0.113.10" },
-  }), {
-    AGENT_RATE_LIMIT_REQUIRED: "true",
-    AGENT_INGRESS_RATE_LIMITER: { limit: async () => ({ success: false }) },
-  });
-  assert.equal(response.status, 429);
-  assert.equal((await response.json()).error, "rate_limited");
+test("ingress limiter rejects health, operator, metrics, and OIDC routes before route handling", async () => {
+  const cases = [
+    { path: "/health", method: "GET" },
+    { path: "/internal/control", method: "GET" },
+    { path: "/internal/metrics", method: "GET" },
+    { path: "/internal/oidc/pause", method: "POST", body: { reason: "rate-limit-test" } },
+  ];
+  let limiterCalls = 0;
+
+  for (const [index, route] of cases.entries()) {
+    const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev" + route.path, {
+      method: route.method,
+      headers: {
+        "cf-connecting-ip": "203.0.113." + String(20 + index),
+        ...(route.body ? { "content-type": "application/json" } : {}),
+      },
+      ...(route.body ? { body: JSON.stringify(route.body) } : {}),
+    }), {
+      AGENT_RATE_LIMIT_REQUIRED: "true",
+      AGENT_OIDC_ENABLED: "true",
+      AGENT_INGRESS_RATE_LIMITER: { limit: async () => { limiterCalls += 1; return { success: false }; } },
+    });
+    assert.equal(response.status, 429, route.method + " " + route.path);
+    assert.equal((await response.json()).error, "rate_limited", route.path);
+  }
+
+  assert.equal(limiterCalls, cases.length, "the ingress limiter must run for every representative route");
 });
 
 
