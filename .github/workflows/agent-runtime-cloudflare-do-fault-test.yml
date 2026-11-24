@@ -28,7 +28,8 @@ jobs:
       contents: read
     env:
       CLOUDFLARE_ACCOUNT_ID: "92cf091bbac8b4879ec65feb30b4715b"
-      FAULT_TEST_URL: "https://ai-thuc-chien-agent-runtime-fault-test.manhdungub.workers.dev"
+      PREVIEW_WORKER_NAME: "ai-thuc-chien-agent-runtime-preview"
+      FAULT_TEST_URL: "https://ai-thuc-chien-agent-runtime-preview.manhdungub.workers.dev"
       FAULT_TEST_CONFIG: "agents/runtime/wrangler.fault-test.jsonc"
     steps:
       - name: Check out the exact reviewed commit
@@ -96,26 +97,35 @@ jobs:
           console.log(JSON.stringify({ workersPlan: payload.result.length === 0 ? 'free-default' : 'free', subscriptions: payload.result.length }));
           NODE
 
-      - name: Validate isolated Worker configuration
+      - name: Validate isolated SQLite class and existing Preview bindings
         run: |
           node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
           import { readFile } from 'node:fs/promises';
           const c = JSON.parse(await readFile(process.env.FAULT_TEST_CONFIG, 'utf8'));
-          assert.equal(c.name, 'ai-thuc-chien-agent-runtime-fault-test');
+          assert.equal(c.name, 'ai-thuc-chien-agent-runtime-preview');
           assert.equal(c.main, './tests/state-store-test-worker.mjs');
           assert.equal(c.workers_dev, true);
           assert.equal(c.preview_urls, false);
           assert.deepEqual(c.durable_objects.bindings, [
-            { name: 'AGENT_STATE_STORE', class_name: 'TestAgentStateStore' }
+            { name: 'AGENT_STATE_STORE', class_name: 'TestAgentStateStore' },
+            { name: 'AGENT_STATE_STORE_ORIGINAL', class_name: 'AgentStateStore' },
+            { name: 'AGENT_REVIEWER_AUTH_STORE', class_name: 'AgentReviewerAuthStore' },
+            { name: 'AGENT_DRAFT_STORE', class_name: 'AgentDraftStore' },
+            { name: 'AGENT_AI_BANK_CANDIDATE_STORE', class_name: 'AgentAIBankCandidateStore' }
           ]);
           assert.deepEqual(c.migrations, [
+            { tag: 'v1', new_sqlite_classes: ['AgentStateStore'] },
+            { tag: 'v2', new_sqlite_classes: ['AgentReviewerAuthStore', 'AgentDraftStore'] },
+            { tag: 'v3-ai-bank-candidate-store', new_sqlite_classes: ['AgentAIBankCandidateStore'] },
             { tag: 'fault-test-v1', new_sqlite_classes: ['TestAgentStateStore'] }
           ]);
           assert.equal(c.vars.AGENT_ENABLED, 'true');
           assert.equal(c.vars.AGENT_PAUSED, 'false');
           assert.equal(c.vars.AGENT_SCHEDULER_ENABLED, 'false');
           assert.equal(c.vars.AGENT_RECOVERY_ALARM_ENABLED, 'false');
+          assert.equal(c.vars.AGENT_OIDC_ENABLED, 'false');
+          assert.equal(c.ratelimits?.[0]?.name, 'AGENT_INGRESS_RATE_LIMITER');
           assert.equal('routes' in c, false);
           assert.equal('d1_databases' in c, false);
           assert.equal('queues' in c, false);
@@ -123,25 +133,74 @@ jobs:
           assert.equal('vars' in c && Object.keys(c.vars).some(k => /TOKEN|SECRET|KEY/i.test(k)), false);
           NODE
 
-      - name: Deploy the isolated SQLite Durable Object test Worker
+      - name: Capture original fail-closed Preview deployment
+        id: capture_original
+        timeout-minutes: 2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_WORKER_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          base="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$PREVIEW_WORKER_NAME"
+          deployments="$RUNNER_TEMP/preview-deployments.json"
+          status="$(curl --silent --show-error --max-time 15 --output "$deployments" --write-out "%{http_code}" \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            --header "Accept: application/json" "$base/deployments")"
+          test "$status" = "200"
+          settings="$RUNNER_TEMP/preview-settings.json"
+          status="$(curl --silent --show-error --max-time 15 --output "$settings" --write-out "%{http_code}" \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            --header "Accept: application/json" "$base/settings")"
+          test "$status" = "200"
+          DEPLOYMENTS_FILE="$deployments" SETTINGS_FILE="$settings" node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFile, appendFile } from 'node:fs/promises';
+          const deployments = JSON.parse(await readFile(process.env.DEPLOYMENTS_FILE, 'utf8'));
+          assert.equal(deployments.success, true);
+          const list = deployments.result?.deployments;
+          assert.ok(Array.isArray(list) && list.length > 0, 'active Preview deployment must be present');
+          const active = list[0];
+          assert.equal(active.versions?.length, 1, 'Preview must have one active version before test');
+          assert.equal(active.versions[0]?.percentage, 100, 'Preview must be serving one version at 100%');
+          const originalVersionId = active.versions[0]?.version_id;
+          assert.match(originalVersionId ?? '', /^[0-9a-f-]{36}$/i, 'active version ID must be a UUID');
+          const settings = JSON.parse(await readFile(process.env.SETTINGS_FILE, 'utf8'));
+          assert.equal(settings.success, true);
+          const bindings = settings.result?.bindings;
+          assert.ok(Array.isArray(bindings));
+          const byName = new Map(bindings.map(binding => [binding.name, binding]));
+          for (const [name, value] of Object.entries({
+            AGENT_ENABLED: 'false',
+            AGENT_PAUSED: 'true',
+            AGENT_SCHEDULER_ENABLED: 'false',
+            AGENT_RECOVERY_ALARM_ENABLED: 'false'
+          })) assert.equal(byName.get(name)?.text, value, name + ' must be fail-closed before test');
+          assert.equal(byName.get('AGENT_STATE_STORE')?.type, 'durable_object_namespace');
+          assert.equal(byName.get('AGENT_STATE_STORE_TOKEN')?.type, 'secret_text');
+          assert.equal(byName.has('AGENT_FAULT_TEST_TOKEN'), false, 'test secret must not pre-exist');
+          await appendFile(process.env.GITHUB_OUTPUT, 'original_version_id=' + originalVersionId + '\\n');
+          console.log('Captured exact active Preview version; fail-closed flags verified.');
+          NODE
+
+      - name: Deploy the temporary SQLite fault harness to the existing Preview Worker
         timeout-minutes: 4
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_WORKER_TOKEN }}
         run: |
           set -euo pipefail
           timeout --signal=TERM --kill-after=10s 180s npx --yes wrangler@4.166.0 deploy --config "$FAULT_TEST_CONFIG" \
-            --message "Isolated Cloudflare Durable Object fault test; no Production bindings"
+            --message "Temporary isolated SQLite fault harness on Preview; restore captured version after test"
 
-      - name: Install a one-run random internal credential
+      - name: Install a one-run fault-test-only credential
         timeout-minutes: 2
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_WORKER_TOKEN }}
         run: |
           set -euo pipefail
           token="$(openssl rand -hex 32)"
           echo "::add-mask::$token"
           printf 'FAULT_TEST_TOKEN=%s\n' "$token" >> "$GITHUB_ENV"
-          printf '%s' "$token" | npx --yes wrangler@4.166.0 secret put AGENT_STATE_STORE_TOKEN --config "$FAULT_TEST_CONFIG"
+          printf '%s' "$token" | npx --yes wrangler@4.166.0 secret put AGENT_FAULT_TEST_TOKEN --config "$FAULT_TEST_CONFIG"
 
       - name: Run real Cloudflare SQLite Durable Object fault suite
         timeout-minutes: 5
@@ -187,16 +246,83 @@ jobs:
           console.log(JSON.stringify(r, null, 2));
           NODE
 
-      - name: Delete the isolated test Worker
-        if: always()
-        timeout-minutes: 3
+      - name: Remove one-run secret and restore exact original Preview version
+        if: always() && steps.capture_original.outputs.original_version_id != ''
+        timeout-minutes: 4
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_WORKER_TOKEN }}
+          ORIGINAL_VERSION_ID: ${{ steps.capture_original.outputs.original_version_id }}
         run: |
-          set +e
-          npx --yes wrangler@4.166.0 delete --config "$FAULT_TEST_CONFIG" --force
-          result=$?
-          if [[ "$result" -ne 0 ]]; then
-            echo "::warning::Cloudflare did not confirm deletion of the isolated test Worker. No Production resource was targeted."
+          set -euo pipefail
+          base="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$PREVIEW_WORKER_NAME"
+          cleanup_error=0
+          secret_status="$(curl --silent --show-error --max-time 15 --output "$RUNNER_TEMP/delete-test-secret.json" --write-out "%{http_code}" \
+            --request DELETE --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            --header "Accept: application/json" "$base/secrets/AGENT_FAULT_TEST_TOKEN")"
+          if [[ "$secret_status" != "200" && "$secret_status" != "204" && "$secret_status" != "404" ]]; then
+            echo "::error::Could not remove the one-run fault-test secret (HTTP $secret_status)."
+            cleanup_error=1
           fi
-          exit 0
+          printf '{"strategy":"percentage","versions":[{"version_id":"%s","percentage":100}],"annotations":{"workers/message":"Restore exact disabled and paused Preview version after isolated SQLite fault test"}}' \
+            "$ORIGINAL_VERSION_ID" > "$RUNNER_TEMP/restore-preview.json"
+          restore_status="$(curl --silent --show-error --max-time 20 --output "$RUNNER_TEMP/restore-preview.json.response" --write-out "%{http_code}" \
+            --request POST "$base/deployments?force=true" \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            --header "Content-Type: application/json" --header "Accept: application/json" \
+            --data-binary "@$RUNNER_TEMP/restore-preview.json")"
+          if [[ "$restore_status" != "200" ]]; then
+            cat "$RUNNER_TEMP/restore-preview.json.response"
+            echo "::error::Failed to restore the captured Preview Worker version (HTTP $restore_status)."
+            exit 1
+          fi
+          RESTORE_RESPONSE="$RUNNER_TEMP/restore-preview.json.response" ORIGINAL_VERSION_ID="$ORIGINAL_VERSION_ID" \
+            node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFile } from 'node:fs/promises';
+          const response = JSON.parse(await readFile(process.env.RESTORE_RESPONSE, 'utf8'));
+          assert.equal(response.success, true);
+          assert.ok(response.result?.versions?.some(v => v.version_id === process.env.ORIGINAL_VERSION_ID && v.percentage === 100));
+          NODE
+          deployments="$RUNNER_TEMP/restored-deployments.json"
+          status="$(curl --silent --show-error --max-time 15 --output "$deployments" --write-out "%{http_code}" \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            --header "Accept: application/json" "$base/deployments")"
+          test "$status" = "200"
+          settings="$RUNNER_TEMP/restored-settings.json"
+          status="$(curl --silent --show-error --max-time 15 --output "$settings" --write-out "%{http_code}" \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            --header "Accept: application/json" "$base/settings")"
+          test "$status" = "200"
+          secrets="$RUNNER_TEMP/restored-secrets.json"
+          status="$(curl --silent --show-error --max-time 15 --output "$secrets" --write-out "%{http_code}" \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            --header "Accept: application/json" "$base/secrets")"
+          test "$status" = "200"
+          DEPLOYMENTS_FILE="$deployments" SETTINGS_FILE="$settings" SECRETS_FILE="$secrets" ORIGINAL_VERSION_ID="$ORIGINAL_VERSION_ID" node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFile } from 'node:fs/promises';
+          const deployments = JSON.parse(await readFile(process.env.DEPLOYMENTS_FILE, 'utf8'));
+          assert.equal(deployments.success, true);
+          const active = deployments.result?.deployments?.[0];
+          assert.ok(active?.versions?.some(v => v.version_id === process.env.ORIGINAL_VERSION_ID && v.percentage === 100),
+            'original Preview version must be active after restoration');
+          const settings = JSON.parse(await readFile(process.env.SETTINGS_FILE, 'utf8'));
+          assert.equal(settings.success, true);
+          const bindings = settings.result?.bindings || [];
+          const byName = new Map(bindings.map(binding => [binding.name, binding]));
+          for (const [name, value] of Object.entries({
+            AGENT_ENABLED: 'false',
+            AGENT_PAUSED: 'true',
+            AGENT_SCHEDULER_ENABLED: 'false',
+            AGENT_RECOVERY_ALARM_ENABLED: 'false'
+          })) assert.equal(byName.get(name)?.text, value, name + ' must be restored fail-closed');
+          assert.equal(byName.get('AGENT_STATE_STORE')?.class_name, 'AgentStateStore');
+          assert.equal(byName.get('AGENT_STATE_STORE_TOKEN')?.type, 'secret_text');
+          assert.equal(byName.has('AGENT_FAULT_TEST_TOKEN'), false, 'one-run test secret must be absent from active version');
+          const secrets = JSON.parse(await readFile(process.env.SECRETS_FILE, 'utf8'));
+          assert.equal(secrets.success, true);
+          assert.equal((secrets.result || []).some(secret => secret.name === 'AGENT_FAULT_TEST_TOKEN'), false,
+            'one-run fault-test secret must be removed');
+          console.log('PASS: original Preview version restored, disabled/paused flags verified, temporary secret absent.');
+          NODE
+          test "$cleanup_error" -eq 0
