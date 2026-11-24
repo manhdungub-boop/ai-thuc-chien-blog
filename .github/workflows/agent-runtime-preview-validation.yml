@@ -309,7 +309,7 @@ jobs:
       contains(github.event.pull_request.labels.*.name, 'agent-runtime') &&
       github.repository == 'manhdungub-boop/ai-thuc-chien-blog' &&
       github.event.pull_request.head.repo.full_name == 'manhdungub-boop/ai-thuc-chien-blog' &&
-      github.event.pull_request.head.ref == 'security/fence-leases-on-circuit-breaker-pause-20261123' &&
+      (github.event.pull_request.head.ref == 'security/fence-leases-on-circuit-breaker-pause-20261123' || github.event.pull_request.head.ref == 'security/agent-runtime-oidc-replay-e2e-20261124') &&
       github.event.pull_request.base.ref == 'integration/agent-runtime-v5-preview-20261120' &&
       github.actor_id == '342528485'
     needs: validate
@@ -346,7 +346,7 @@ jobs:
           test "$GITHUB_EVENT_NAME" = "pull_request"
           test "$EVENT_ACTION" = "synchronize"
           node --input-type=module -e "import assert from 'node:assert/strict'; const labels = JSON.parse(process.env.EVENT_LABELS); assert.ok(labels.includes('agent-runtime'), 'required agent-runtime label must remain present')"
-          test "$EXPECTED_HEAD_REF" = "security/fence-leases-on-circuit-breaker-pause-20261123"
+          [[ "$EXPECTED_HEAD_REF" == "security/fence-leases-on-circuit-breaker-pause-20261123" || "$EXPECTED_HEAD_REF" == "security/agent-runtime-oidc-replay-e2e-20261124" ]]
           test "$GITHUB_ACTOR_ID" = "342528485"
           [[ "$GITHUB_REF" =~ ^refs/pull/[0-9]+/merge$ ]]
           test "$GITHUB_WORKFLOW_REF" = "$GITHUB_REPOSITORY/.github/workflows/agent-runtime-preview-validation.yml@$GITHUB_REF"
@@ -607,8 +607,8 @@ jobs:
           fi
           echo "OIDC run gate remained at the expected token-required boundary across three consecutive probes."
           sleep 2
-      - name: Invoke exactly one allowlisted task with a short-lived GitHub OIDC token
-        timeout-minutes: 1
+      - name: Verify signed invalid OIDC claims, run one task, and reject token replay
+        timeout-minutes: 2
         env:
           OIDC_AUDIENCE: ai-thuc-chien-agent-runtime-preview
         run: |
@@ -617,49 +617,95 @@ jobs:
           const requestUrl = process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
           const requestToken = process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
           if (!requestUrl || !requestToken) throw new Error('GitHub OIDC request context unavailable');
-          const tokenUrl = new URL(requestUrl);
-          tokenUrl.searchParams.set('audience', process.env.OIDC_AUDIENCE);
-          const tokenResponse = await fetch(tokenUrl, {
-            method: 'GET',
-            headers: { Authorization: 'Bearer ' + requestToken, Accept: 'application/json' },
-            redirect: 'error',
-            cache: 'no-store',
-            signal: AbortSignal.timeout(10000),
-          });
-          if (!tokenResponse.ok) throw new Error('GitHub OIDC token request failed: HTTP ' + tokenResponse.status);
-          const payload = JSON.parse(await tokenResponse.text());
-          if (typeof payload.value !== 'string' || payload.value.length < 100 || payload.value.length > 16384) {
-            throw new Error('GitHub OIDC token response invalid');
+
+          async function getOidcToken(audience) {
+            const tokenUrl = new URL(requestUrl);
+            tokenUrl.searchParams.set('audience', audience);
+            const response = await fetch(tokenUrl, {
+              method: 'GET',
+              headers: { Authorization: 'Bearer ' + requestToken, Accept: 'application/json' },
+              redirect: 'error',
+              cache: 'no-store',
+              signal: AbortSignal.timeout(10000),
+            });
+            if (!response.ok) throw new Error('GitHub OIDC token request failed: HTTP ' + response.status);
+            const payload = JSON.parse(await response.text());
+            if (typeof payload.value !== 'string' || payload.value.length < 100 || payload.value.length > 16384) {
+              throw new Error('GitHub OIDC token response invalid');
+            }
+            return payload.value;
           }
-          const response = await fetch(process.env.AGENT_RUNTIME_PREVIEW_URL + '/internal/oidc/run', {
-            method: 'POST',
-            headers: {
-              Authorization: 'Bearer ' + payload.value,
-              'Content-Type': 'application/json',
-              Accept: 'application/json',
-            },
-            body: JSON.stringify({ task: {
-              type: 'content.review',
-              idempotencyKey: `oidc-preview-e2e:pr368-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}`,
-              payload: { articlePath: 'articles/ai-agent-thuc-hanh-tu-thiet-ke-den-kiem-soat.html' },
-            } }),
-            redirect: 'error',
-            cache: 'no-store',
-            signal: AbortSignal.timeout(25000),
-          });
-          const result = JSON.parse(await response.text());
+
+          async function invokeRun(token, idempotencyKey, timeoutMs) {
+            const response = await fetch(process.env.AGENT_RUNTIME_PREVIEW_URL + '/internal/oidc/run', {
+              method: 'POST',
+              headers: {
+                Authorization: 'Bearer ' + token,
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+              },
+              body: JSON.stringify({ task: {
+                type: 'content.review',
+                idempotencyKey,
+                payload: { articlePath: 'articles/ai-agent-thuc-hanh-tu-thiet-ke-den-kiem-soat.html' },
+              } }),
+              redirect: 'error',
+              cache: 'no-store',
+              signal: AbortSignal.timeout(timeoutMs),
+            });
+            const text = await response.text();
+            let result;
+            try { result = JSON.parse(text); }
+            catch { throw new Error('Preview OIDC endpoint returned non-JSON HTTP ' + response.status); }
+            return { response, result };
+          }
+
+          const runKey = process.env.GITHUB_RUN_ID + '-' + process.env.GITHUB_RUN_ATTEMPT;
+
+          // This is a real GitHub-signed token with an intentionally wrong audience.
+          // It must fail claim validation before the replay store or task queue is touched.
+          const invalidAudienceToken = await getOidcToken(process.env.OIDC_AUDIENCE + '-invalid-claim');
+          const invalidAudience = await invokeRun(
+            invalidAudienceToken,
+            'oidc-preview-e2e:invalid-audience-' + runKey,
+            10000,
+          );
+          if (invalidAudience.response.status !== 401 ||
+              invalidAudience.result?.error !== 'github_oidc_token_invalid') {
+            throw new Error('Signed wrong-audience OIDC token was not rejected as expected: ' +
+              JSON.stringify({ status: invalidAudience.response.status, error: invalidAudience.result?.error }));
+          }
+          console.log('Signed wrong-audience OIDC token rejected with HTTP 401 before task admission.');
+
+          // Use one valid token for exactly one allowlisted read-only review.
+          const token = await getOidcToken(process.env.OIDC_AUDIENCE);
+          const first = await invokeRun(token, 'oidc-preview-e2e:task-' + runKey, 25000);
+          const result = first.result;
           const item = result?.items?.[0];
-          if (!response.ok || result?.ok !== true || result?.summary?.total !== 1 ||
+          if (!first.response.ok || result?.ok !== true || result?.summary?.total !== 1 ||
               result?.summary?.succeeded !== 1 || item?.state !== 'succeeded' ||
-              item?.result?.taskType !== 'content.review' || result?.persistence?.verified !== true ||
+              item?.result?.taskType !== 'content.review' || item?.result?.status !== 'pass' ||
+              item?.result?.findingCount !== 0 || result?.persistence?.verified !== true ||
               result?.persistence?.state !== 'succeeded' ||
               !['task.queued', 'task.claimed', 'task.succeeded'].every(type =>
                 result.persistence.auditEvents?.[type]?.after >= result.persistence.auditEvents?.[type]?.before + 1)) {
             throw new Error('One-shot read-only task or durable audit verification failed: ' +
-              JSON.stringify({ httpStatus: response.status, error: result?.error, diagnosticCode: result?.diagnosticCode, state: item?.state }));
+              JSON.stringify({ httpStatus: first.response.status, error: result?.error,
+                diagnosticCode: result?.diagnosticCode, state: item?.state }));
           }
+
+          // Reuse the exact same signed JWT with a different idempotency key.
+          // A 409 replay response proves the JTI fence is checked before a second task can be admitted.
+          const replay = await invokeRun(token, 'oidc-preview-e2e:replay-' + runKey, 10000);
+          if (replay.response.status !== 409 || replay.result?.error !== 'github_oidc_token_replayed') {
+            throw new Error('Reused GitHub OIDC token was not rejected as replay: ' +
+              JSON.stringify({ status: replay.response.status, error: replay.result?.error }));
+          }
+
           console.log(JSON.stringify({
             ok: true,
+            invalidAudienceRejected: true,
+            replayRejected: true,
             taskId: item.taskId,
             state: item.state,
             taskType: item.result.taskType,
@@ -667,6 +713,124 @@ jobs:
             findingCount: item.result.findingCount,
             auditVerified: result.persistence.verified,
             auditEventTypes: Object.keys(result.persistence.auditEvents),
+          }));
+          NODE
+
+      - name: Deploy a bounded low-threshold rate-limit probe configuration
+        timeout-minutes: 3
+        working-directory: agents/runtime
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}
+          GENERATED_CONFIG: .wrangler.ratelimit-probe.generated.jsonc
+        run: |
+          set -euo pipefail
+          if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+            echo "::error::Cannot run the bounded rate-limit probe without the Preview deployment credential."
+            exit 1
+          fi
+          generated_config="$GENERATED_CONFIG"
+          trap 'rm -f "$generated_config"' EXIT
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFile, writeFile } from 'node:fs/promises';
+          const config = JSON.parse(await readFile('wrangler.preview.jsonc', 'utf8'));
+          assert.equal(config.name, 'ai-thuc-chien-agent-runtime-preview');
+          assert.equal(config.vars.AGENT_ENABLED, 'false');
+          assert.equal(config.vars.AGENT_PAUSED, 'true');
+          assert.equal(config.vars.AGENT_SCHEDULER_ENABLED, 'false');
+          assert.equal(config.vars.AGENT_RECOVERY_ALARM_ENABLED, 'false');
+          assert.equal(config.vars.AGENT_REVIEWER_AUTH_ENABLED, 'false');
+          assert.equal(config.vars.AGENT_RATE_LIMIT_REQUIRED, 'true');
+          assert.equal(config.ratelimits?.length, 1);
+          assert.equal(config.ratelimits[0].name, 'AGENT_INGRESS_RATE_LIMITER');
+          assert.equal(config.ratelimits[0].simple.limit, 60);
+          assert.equal(config.ratelimits[0].simple.period, 60);
+          config.ratelimits[0].simple.limit = 1;
+          assert.equal(config.ratelimits[0].simple.limit, 1);
+          assert.equal(config.ratelimits[0].simple.period, 60);
+          assert.equal((config.triggers?.crons ?? []).length, 0);
+          assert.equal('d1_databases' in config, false);
+          assert.equal('routes' in config, false);
+          await writeFile(process.env.GENERATED_CONFIG, JSON.stringify(config, null, 2) + '\n', { mode: 0o600 });
+          NODE
+          timeout --signal=TERM --kill-after=10s 120s npx --yes wrangler@4.166.0 deploy --config "$generated_config" \
+            --message "Temporary disabled Preview rate-limit probe; restore follows"
+
+      - name: Verify live ingress rate limiting on one persistent Cloudflare connection
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import https from 'node:https';
+
+          const target = new URL(process.env.AGENT_RUNTIME_PREVIEW_URL + '/health');
+          const agent = new https.Agent({ keepAlive: true, maxSockets: 1, maxFreeSockets: 1 });
+          const colos = new Set();
+          let rejected = null;
+          let firstStatus = null;
+
+          function requestHealth() {
+            return new Promise((resolve, reject) => {
+              const request = https.request(target, {
+                method: 'GET',
+                agent,
+                headers: { Accept: 'application/json', Connection: 'keep-alive' },
+              }, (response) => {
+                let body = '';
+                response.setEncoding('utf8');
+                response.on('data', (chunk) => { body += chunk; });
+                response.on('end', () => {
+                  let json = null;
+                  try { json = JSON.parse(body); } catch {}
+                  const ray = response.headers['cf-ray'];
+                  const colo = typeof ray === 'string' ? ray.split('-').at(-1) : null;
+                  resolve({ status: response.statusCode, json, colo, ray });
+                });
+              });
+              request.on('error', reject);
+              request.end();
+            });
+          }
+
+          try {
+            for (let attempt = 1; attempt <= 20; attempt += 1) {
+              const result = await requestHealth();
+              if (result.colo) colos.add(result.colo);
+              if (firstStatus === null) firstStatus = result.status;
+
+              if (result.status === 429 && result.json?.error === 'rate_limited') {
+                rejected = { attempt, colo: result.colo, ray: result.ray };
+                break;
+              }
+              if (result.status !== 200) {
+                throw new Error('Expected HTTP 200 or 429 from disabled Preview health endpoint; got ' +
+                  JSON.stringify({ status: result.status, error: result.json?.error, ray: result.ray }));
+              }
+              assert.equal(result.json?.ok, true);
+              assert.equal(result.json?.enabled, false);
+              assert.equal(result.json?.paused, true);
+              await new Promise((resolve) => setTimeout(resolve, 50));
+            }
+          } finally {
+            agent.destroy();
+          }
+
+          if (colos.size !== 1) {
+            throw new Error('Rate-limit probe crossed Cloudflare locations or could not identify one; result is inconclusive: ' +
+              JSON.stringify([...colos]));
+          }
+          if (!rejected) {
+            throw new Error('Temporary limit=1 binding did not return HTTP 429 within 20 requests in one Cloudflare location.');
+          }
+          console.log(JSON.stringify({
+            ok: true,
+            firstStatus,
+            rejectedAtRequest: rejected.attempt,
+            colo: [...colos][0],
+            rateLimited: true,
+            previewDisabled: true,
+            previewPaused: true,
           }));
           NODE
 
@@ -720,3 +884,4 @@ jobs:
             fi
           done
           echo "All four human-facing console assets redirect unauthenticated requests to the Cloudflare Access login."
+
