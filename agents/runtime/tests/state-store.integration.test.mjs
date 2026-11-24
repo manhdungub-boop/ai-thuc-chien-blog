@@ -1704,3 +1704,64 @@ test("all seven task mutation routes reject non-JSON media types before mutation
     }
   });
 });
+
+test("rejected bodies on every task mutation route leave task, usage, lease, and audit state unchanged", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const queued = await call(stub, "/reserve", task("rejected-body-queued"));
+    const running = await call(stub, "/reserve", task("rejected-body-running"));
+    assert.equal(queued.status, 201);
+    assert.equal(running.status, 201);
+    const claimed = await call(stub, "/claim", { taskId: running.body.task.taskId });
+    assert.equal(claimed.status, 200);
+
+    const taskIds = [queued.body.task.taskId, running.body.task.taskId];
+    const snapshot = async () => {
+      const metrics = (await call(stub, "/metrics")).body;
+      const usage = (await call(stub, "/usage")).body;
+      const tasks = [];
+      for (const taskId of taskIds) {
+        const result = await call(stub, "/task?id=" + encodeURIComponent(taskId));
+        assert.equal(result.status, 200);
+        tasks.push(result.body.task);
+      }
+      return {
+        tasks,
+        usage,
+        counters: {
+          totalRetained: metrics.tasks.totalRetained,
+          queued: metrics.tasks.queued,
+          running: metrics.tasks.running,
+          succeededRetained: metrics.tasks.succeededRetained,
+          failedRetained: metrics.tasks.failedRetained,
+          cancelledRetained: metrics.tasks.cancelledRetained,
+          acceptedToday: metrics.quota.acceptedToday,
+          inFlight: metrics.quota.inFlight,
+          auditLast24h: metrics.auditLast24h,
+        },
+      };
+    };
+
+    const before = await snapshot();
+    const routes = ["/reserve", "/claim", "/claim-next", "/heartbeat", "/complete", "/recover", "/transition"];
+    const invalidBodies = [
+      { label: "oversized", body: " ".repeat(16 * 1024 + 1), status: 413, error: "request_body_too_large" },
+      { label: "malformed JSON", body: "{", status: 400, error: "request_invalid" },
+      { label: "empty", body: "", status: 400, error: "request_invalid" },
+      { label: "invalid UTF-8", body: new Uint8Array([0xC3, 0x28]), status: 400, error: "request_invalid" },
+    ];
+
+    for (const pathname of routes) {
+      for (const invalid of invalidBodies) {
+        const response = await stub.fetch("http://do.local" + pathname, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: "Bearer " + TEST_STATE_STORE_TOKEN },
+          body: invalid.body,
+        });
+        assert.equal(response.status, invalid.status, pathname + " " + invalid.label);
+        assert.equal((await response.json()).error, invalid.error, pathname + " " + invalid.label);
+      }
+    }
+
+    assert.deepEqual(await snapshot(), before);
+  });
+});
