@@ -55,6 +55,25 @@ describe("read-only AI research discovery", () => {
     expect(new TextEncoder().encode(JSON.stringify(result)).byteLength).toBeLessThan(8192);
   });
 
+  it("parses single-quoted Atom link attributes", async () => {
+    const result = await discoverResearchSignals({
+      now: NOW,
+      fetchImpl: async url => {
+        const source = RESEARCH_FEED_SOURCES.find(item => item.feed === url);
+        const atom = source.name === "Google DeepMind" || source.name === "Hugging Face";
+        if (!atom) return new Response(feedFor(source), { status: 200 });
+        const link = "https://" + source.host + source.pathPrefix + "single-quoted-link";
+        const entry = "<entry><title>AI agent research update</title>" +
+          "<link rel='alternate' href='" + link + "'/>" +
+          "<updated>2026-11-18T10:00:00.000Z</updated>" +
+          "<summary>Research on AI agents and automation.</summary></entry>";
+        return new Response("<feed>" + entry + "</feed>", { status: 200 });
+      }
+    });
+    expect(result.sources_succeeded).toBe(4);
+    expect(result.latest_signals.filter(item => item.url.endsWith("/single-quoted-link"))).toHaveLength(2);
+  });
+
   it("does not extract fake entries embedded in XML comments or CDATA", async () => {
     const result = await discoverResearchSignals({
       now: NOW,
