@@ -21,7 +21,7 @@ async function readBoundedResponse(response, limit, signal) {
     while (true) {
       if (signal?.aborted) throw abortError(signal);
       const { done, value } = await reader.read();
-      if (signal?.aborted) throw new Error("task_execution_aborted");
+      if (signal?.aborted) throw abortError(signal);
       if (done) break;
       total += value.byteLength;
       if (total > limit) {
@@ -31,6 +31,7 @@ async function readBoundedResponse(response, limit, signal) {
       chunks.push(value);
     }
   } finally {
+    if (signal?.aborted) { try { await reader.cancel(signal.reason); } catch {} }
     try { reader.releaseLock(); } catch {}
   }
   const bytes = new Uint8Array(total);
