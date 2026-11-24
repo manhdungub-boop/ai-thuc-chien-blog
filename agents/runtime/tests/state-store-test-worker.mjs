@@ -1,4 +1,4 @@
-import worker, { AgentStateStore } from "../src/worker.mjs";
+import { AgentStateStore } from "../src/worker.mjs";
 import { hasValidStateStoreBearer } from "../src/internal-auth.mjs";
 
 function jsonResponse(body, status = 200) {
