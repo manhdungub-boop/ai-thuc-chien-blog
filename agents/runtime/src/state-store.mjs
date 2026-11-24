@@ -283,12 +283,13 @@ export class AgentStateStore {
         const result = await this.consumeOidcJti(parsedBody.value, this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
-      if ((url.pathname === "/control/pause" || url.pathname === "/control/resume") && request.method === "POST") {
+      if ((url.pathname === "/control/pause" || url.pathname === "/control/resume" || url.pathname === "/control/pause-cleanup") && request.method === "POST") {
         const parsedBody = await readBoundedControlJson(request, 16 * 1024);
         if (!parsedBody.ok) {
           return jsonResponse({ ok: false, error: parsedBody.status === 413 ? "request_body_too_large" : "request_invalid" }, parsedBody.status);
         }
-        const result = this.setPaused(url.pathname.endsWith("/pause"), parsedBody.value, this.requestTime(request));
+        const cleanupPause = url.pathname === "/control/pause-cleanup";
+        const result = this.setPaused(cleanupPause || url.pathname.endsWith("/pause"), parsedBody.value, this.requestTime(request), { bypassRateLimit: cleanupPause });
         if (result.status === 200) await this.scheduleRecoveryAlarm(this.requestTime(request));
         return jsonResponse(result.body, result.status);
       }
@@ -683,7 +684,7 @@ if (url.pathname === "/task" && request.method === "GET") {
     }
   }
 
-  setPaused(paused, body, now) {
+  setPaused(paused, body, now, { bypassRateLimit = false } = {}) {
     if (!isObject(body) || Object.keys(body).some((key) => !["reason", "actor", "requestId", "expectedVersion"].includes(key)) ||
         typeof body.actor !== "string" || !/^[a-zA-Z0-9._:-]{3,64}$/.test(body.actor) ||
         typeof body.requestId !== "string" || !/^[a-zA-Z0-9-]{16,64}$/.test(body.requestId) ||
@@ -695,12 +696,15 @@ if (url.pathname === "/task" && request.method === "GET") {
     }
     try {
       return this.ctx.storage.transactionSync(() => {
-        const rate = readRow(this.sql, "SELECT window_started_at, request_count FROM runtime_control_rate_limit WHERE actor = ?", body.actor);
-        const windowStart = rate && now - rate.window_started_at < 60_000 ? rate.window_started_at : now;
-        const requestCount = rate && windowStart === rate.window_started_at ? rate.request_count : 0;
-        if (requestCount >= 10) return { status: 429, body: { ok: false, error: "runtime_control_rate_limited" } };
-        this.sql.exec("INSERT INTO runtime_control_rate_limit (actor, window_started_at, request_count) VALUES (?,?,1) ON CONFLICT(actor) DO UPDATE SET window_started_at=excluded.window_started_at, request_count=?",
-          body.actor, windowStart, requestCount + 1);
+        if (!bypassRateLimit) {
+          const rate = readRow(this.sql, "SELECT window_started_at, request_count FROM runtime_control_rate_limit WHERE actor = ?", body.actor);
+          const windowStart = rate && now - rate.window_started_at < 60_000 ? rate.window_started_at : now;
+          const requestCount = rate && windowStart === rate.window_started_at ? rate.request_count : 0;
+          if (requestCount >= 10) return { status: 429, body: { ok: false, error: "runtime_control_rate_limited" } };
+          this.sql.exec("INSERT INTO runtime_control_rate_limit (actor, window_started_at, request_count) VALUES (?,?,1) ON CONFLICT(actor) DO UPDATE SET window_started_at=excluded.window_started_at, request_count=?",
+            body.actor, windowStart, requestCount + 1);
+  
+        }
         const current = readRow(this.sql, "SELECT paused, changed_at, version FROM runtime_control WHERE singleton_id = 1");
         if (!current) return { status: 503, body: { ok: false, error: "runtime_control_unavailable" } };
         if (!paused && current.version !== body.expectedVersion) {
