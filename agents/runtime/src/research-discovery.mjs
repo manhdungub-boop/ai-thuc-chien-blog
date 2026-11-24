@@ -273,7 +273,7 @@ function parseItems(xml, source, cutoff, now) {
     );
     const directChildren = directChildElements(body);
     if (!directChildren) return null;
-    const childContent = name => directChildren.find(element => element.name.toLowerCase() === name)?.content ?? "";
+    const childContent = name => directChildren.find(element => element.name.toLowerCase() === name.toLowerCase())?.content ?? "";
     const title = cleanText(restoreCdata(childContent("title")), 120);
     const summary = cleanText(restoreCdata(childContent("description") || childContent("summary") || childContent("content:encoded")), 160);
     const atomLink = directChildren.find(element => {
