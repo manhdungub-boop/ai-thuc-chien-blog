@@ -11,6 +11,7 @@ on:
     - "test/agent-runtime-**"
     - "security/agent-runtime-**"
     - "security/fence-leases-on-circuit-breaker-pause-20261123"
+    - "security/cloudflare-do-fault-suite-20261124"
     - "chore/agent-runtime-**"
     paths:
       - "agents/runtime/**"
@@ -284,6 +285,38 @@ jobs:
           assert.ok(e2eWorkflow.includes('timeout-minutes: 5'), 'rollback must retain its own bounded restoration window');
           console.log('PASS: validation remains credential-free; the separately gated owner-only job uses OIDC, Preview-only deployment, and automatic rollback.');
           NODE
+      - name: Verify Cloudflare fault harness is isolated from application and Production
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFile } from 'node:fs/promises';
+          const testConfig = JSON.parse(await readFile('agents/runtime/wrangler.fault-test.jsonc', 'utf8'));
+          const preview = JSON.parse(await readFile('agents/runtime/wrangler.preview.jsonc', 'utf8'));
+          const production = JSON.parse(await readFile('agents/runtime/wrangler.jsonc', 'utf8'));
+          const harness = await readFile('agents/runtime/tests/state-store-test-worker.mjs', 'utf8');
+          const workflow = await readFile('.github/workflows/agent-runtime-cloudflare-do-fault-test.yml', 'utf8');
+          assert.equal(testConfig.name, 'ai-thuc-chien-agent-runtime-fault-test');
+          assert.equal(testConfig.main, './tests/state-store-test-worker.mjs');
+          assert.equal(preview.main, './src/worker.mjs');
+          assert.equal(production.main, './src/worker.mjs');
+          assert.equal(testConfig.vars.AGENT_SCHEDULER_ENABLED, 'false');
+          assert.equal(testConfig.vars.AGENT_RECOVERY_ALARM_ENABLED, 'false');
+          assert.equal(testConfig.vars.AGENT_OIDC_ENABLED, 'false');
+          assert.equal(testConfig.vars.AGENT_PAUSED, 'false', 'the isolated store starts fail-closed in durable control and is paused by the suite cleanup');
+          assert.deepEqual(testConfig.durable_objects.bindings, [
+            { name: 'AGENT_STATE_STORE', class_name: 'TestAgentStateStore' }
+          ]);
+          assert.equal(harness.includes('export class TestAgentStateStore extends AgentStateStore'), true);
+          assert.equal(harness.includes('"/__test/fault-suite"'), true);
+          assert.equal(workflow.includes('workflow_dispatch:'), true);
+          assert.doesNotMatch(workflow, /schedule:|pull_request:|push:/);
+          assert.match(workflow, /environment:\s*agent-runtime-preview/);
+          assert.match(workflow, /CLOUDFLARE_AGENT_PREVIEW_API_TOKEN/);
+          assert.match(workflow, /wrangler@4\.166\.0 delete/);
+          assert.doesNotMatch(workflow, /wrangler[^\n]*--env production|wrangler[^\n]*--env prod/);
+          console.log('PASS: Cloudflare fault harness is a separate test Worker/SQLite namespace, manual-only, no Production bindings, no cron, and has cleanup.');
+          NODE
+
       - name: Verify OIDC operator workflow is manual and pause-only
         run: |
           node --input-type=module <<'NODE'
