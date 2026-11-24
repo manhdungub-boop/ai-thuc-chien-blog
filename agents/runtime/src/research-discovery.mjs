@@ -480,7 +480,7 @@ async function fetchFeed(source, fetchImpl, cutoff, now) {
     if (Number(response.headers.get("content-length") || 0) > MAX_BYTES) throw new Error("feed_too_large");
     if (!response.body) throw new Error("empty_response");
     const reader = response.body.getReader();
-    const decoder = new TextDecoder();
+    const decoder = new TextDecoder("utf-8", { fatal: true });
     let bytes = 0;
     let xml = "";
     while (true) {
@@ -488,9 +488,18 @@ async function fetchFeed(source, fetchImpl, cutoff, now) {
       if (part.done) break;
       bytes += part.value.byteLength;
       if (bytes > MAX_BYTES) { await reader.cancel(); throw new Error("feed_too_large"); }
-      xml += decoder.decode(part.value, { stream: true });
+      try {
+        xml += decoder.decode(part.value, { stream: true });
+      } catch {
+        try { await reader.cancel(); } catch {}
+        throw new Error("invalid_utf8_feed");
+      }
     }
-    xml += decoder.decode();
+    try {
+      xml += decoder.decode();
+    } catch {
+      throw new Error("invalid_utf8_feed");
+    }
     if (!isFeedDocument(xml)) throw new Error("invalid_feed_document");
     return { source, records: parseItems(xml, source, cutoff, now), error: null };
   } catch (error) {
