@@ -19,8 +19,8 @@ const valid = {
 };
 
 describe("reviewer OAuth Preview configuration preflight", () => {
-  it("keeps human-facing console assets disabled until path-scoped Access is configured", () => {
-    expect(previewConfig.vars.AGENT_CONSOLE_ACCESS_PROTECTED).toBe("false");
+  it("requires human-facing console assets to validate the path-scoped Access assertion", () => {
+    expect(previewConfig.vars.AGENT_CONSOLE_ACCESS_PROTECTED).toBe("true");
   });
 
   it("accepts a complete isolated Preview configuration while keeping auth and runtime disabled", () => {
