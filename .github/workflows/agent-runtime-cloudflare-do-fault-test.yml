@@ -196,10 +196,10 @@ jobs:
         if: always()
         timeout-minutes: 5
         env:
-          CLOUDFLARE_API_TOKEN: \${{ secrets.CLOUDFLARE_AGENT_PREVIEW_WORKER_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_WORKER_TOKEN }}
         run: |
           set -euo pipefail
-          if [[ -z "\${CLOUDFLARE_API_TOKEN:-}" ]]; then
+          if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
             echo "::error::Cannot remove the one-run secret or disable public routes without the scoped Worker credential."
             exit 1
           fi
