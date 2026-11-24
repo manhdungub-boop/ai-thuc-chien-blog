@@ -255,7 +255,12 @@ describe("read-only AI research discovery", () => {
   });
 
   it("rejects unclosed or improperly nested XML elements", async () => {
-    const malformed = ["<rss><channel></rss>", "<rss><channel><item></channel></item></rss>"];
+    const malformed = [
+      "<rss><channel></rss>",
+      "<rss><channel><item></channel></item></rss>",
+      "<rss><channel></ channel></rss>",
+      "<rss><channel></\tchannel></rss>"
+    ];
     for (const document of malformed) {
       const result = await discoverResearchSignals({
         now: NOW,
