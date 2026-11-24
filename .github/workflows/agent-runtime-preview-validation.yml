@@ -196,7 +196,7 @@ jobs:
             const validationWorkflow = parts[0];
             const validateJobStart = validationWorkflow.indexOf('  validate:\n');
             const assertionStepStart = validationWorkflow.indexOf('      - name: Assert validation job remains validation-only', validateJobStart);
-            const nextStepOffset = validationWorkflow.indexOf('\n      - name:', assertionStepStart + 1);
+            const nextStepOffset = validationWorkflow.indexOf('\n      - ', assertionStepStart + 1);
             const nextStepStart = nextStepOffset < 0 ? -1 : nextStepOffset + 1;
             assert.ok(validateJobStart >= 0 && assertionStepStart > validateJobStart && nextStepStart > assertionStepStart,
               'validation job, assertion, and immediate next-step boundaries must exist');
@@ -235,6 +235,14 @@ jobs:
           assert.throws(() => assertValidationOnly(injectedDeployWorkflow),
             /validation job must contain exactly one Wrangler command/,
             'validation-only guard must inspect steps after its own assertion'
+          );
+          const injectedUnnamedDeployStep = [
+            '      - run: |',
+            '          npx --yes wrangler@4.166.0 deploy --config wrangler.preview.jsonc'
+          ].join('\n');
+          assert.throws(() => assertValidationOnly(injectValidationStep(workflow, injectedUnnamedDeployStep)),
+            /validation job must contain exactly one Wrangler command/,
+            'validation-only guard must inspect unnamed steps after its own assertion'
           );
           const injectedSecretStep = [
             '      - name: injected secret regression step',
