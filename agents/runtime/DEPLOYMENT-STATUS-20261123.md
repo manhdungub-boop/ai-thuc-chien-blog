@@ -131,3 +131,11 @@ The successful one-shot E2E already proves the allowlisted read-only `content.re
 
 - This document's latest reconciliation commit is `23c54de0c5a853a87722c7afade364e5a6ca016d` and changes this status document only.
 - The exact-head review and workflow evidence above is explicitly tied to the prior SHA where stated; new documentation commits must be rechecked and reviewed on their own exact HEAD before they are represented as current-head approval.
+
+
+## Controlled one-shot Preview E2E revalidation (2026-11-24)
+
+- Purpose: re-run the repository's pre-existing owner-only, GitHub OIDC-gated, one-shot read-only E2E against the dedicated Preview Worker after confirming its deployed runtime inventory.
+- Scope is limited to one allowlisted `content.review` task, durable audit verification, unauthenticated console Access redirects, and automatic restoration to disabled/paused state. No production route, D1, content write, social post, scheduler, recurring trigger, or AI publication is permitted.
+- This is a test-trigger documentation change only. The workflow must independently prove Workers Free from a complete subscription listing before any temporary Preview deployment; if the plan check, OIDC gate, task result, or restoration check fails, the run must fail closed and its final evidence must be recorded as incomplete.
+- Result (2026-11-24 08:52 UTC): PR #372 `pull_request.synchronize` started validation run `45359626561`. The `validate` job passed all steps, including the isolated Worker tests, type/bundle dry-run, Preview isolation checks, validation-only guard, and manual pause-only operator guard. The `one-shot-preview-e2e` job concluded `failure` before exposing any job steps through the available GitHub job/log APIs; the cause is not confirmed, so this is not counted as a live E2E pass. A Cloudflare API GET immediately afterward showed the Preview deployment history unchanged (latest deployment remains `0c6fb457-d981-412d-88ec-0af21bf4cb63`, created 2026-11-24 06:43:36 UTC), indicating the temporary deploy step was not reached. Therefore no task invocation or temporary configuration change is evidenced, and no rollback was needed. The `agent-runtime` label was removed after this failed attempt to prevent unintended repeated E2E runs. No Production configuration was changed.
