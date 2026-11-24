@@ -562,6 +562,11 @@ test("control mutation bridge rejects missing operator identity and caller-suppl
     body: JSON.stringify({ actor: "attacker", reason: "spoof" }),
   }), env);
   assert.equal(spoofed.status, 400);
+  const cleanupSpoof = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/control/pause", {
+    method: "POST", headers: { Authorization: "Bearer " + OPERATOR_TOKEN, "Content-Type": "application/json" },
+    body: JSON.stringify({ reason: "one-shot OIDC Preview E2E complete", internalCleanup: true }),
+  }), env);
+  assert.equal(cleanupSpoof.status, 400);
   assert.equal(calls.length, 0);
 });
 
