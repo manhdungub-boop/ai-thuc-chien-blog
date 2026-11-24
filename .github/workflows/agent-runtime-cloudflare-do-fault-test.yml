@@ -2,6 +2,12 @@ name: Agent Runtime Cloudflare DO Fault Test
 
 on:
   workflow_dispatch:
+    inputs:
+      cleanup_only:
+        description: "Restore the known fail-closed Preview version and remove the one-run test secret without rerunning the test"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -136,6 +142,11 @@ jobs:
         run: |
           set -euo pipefail
           test -n "${CLOUDFLARE_API_TOKEN:-}"
+          if [[ "${{ inputs.cleanup_only }}" == "true" ]]; then
+            echo "original_version_id=b0c464ca-e5ec-4840-a6f5-4e6082c637fd" >> "$GITHUB_OUTPUT"
+            echo "Cleanup-only mode: selected known fail-closed Preview version 71."
+            exit 0
+          fi
           base="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$PREVIEW_WORKER_NAME"
           deployments="$RUNNER_TEMP/preview-deployments.json"
           status="$(curl --silent --show-error --max-time 15 --output "$deployments" --write-out "%{http_code}" \
@@ -159,6 +170,7 @@ jobs:
           NODE
 
       - name: Deploy the temporary SQLite fault harness to the existing Preview Worker
+        if: inputs.cleanup_only != true
         timeout-minutes: 4
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_WORKER_TOKEN }}
@@ -168,6 +180,7 @@ jobs:
             --message "Temporary isolated SQLite fault harness on Preview; restore captured version after test"
 
       - name: Install a one-run fault-test-only credential
+        if: inputs.cleanup_only != true
         timeout-minutes: 2
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_WORKER_TOKEN }}
@@ -179,6 +192,7 @@ jobs:
           printf '%s' "$token" | npx --yes wrangler@4.166.0 secret put AGENT_FAULT_TEST_TOKEN --config "$FAULT_TEST_CONFIG"
 
       - name: Run real Cloudflare SQLite Durable Object fault suite
+        if: inputs.cleanup_only != true
         timeout-minutes: 5
         run: |
           set -euo pipefail
@@ -234,10 +248,11 @@ jobs:
           secret_status="$(curl --silent --show-error --max-time 15 --output "$RUNNER_TEMP/delete-test-secret.json" --write-out "%{http_code}" \
             --request DELETE --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             --header "Accept: application/json" "$base/secrets/AGENT_FAULT_TEST_TOKEN")"
+          secret_cleanup_failed=false
           if [[ "$secret_status" != "200" && "$secret_status" != "204" && "$secret_status" != "404" ]]; then
-            echo "::error::Could not remove the one-run fault-test secret (HTTP $secret_status)."
+            echo "::warning::Could not remove the one-run fault-test secret (HTTP $secret_status); continuing with mandatory Preview restore."
             cat "$RUNNER_TEMP/delete-test-secret.json"
-            exit 1
+            secret_cleanup_failed=true
           fi
           printf '{"strategy":"percentage","versions":[{"version_id":"%s","percentage":100}],"annotations":{"workers/message":"Restore exact Preview version after isolated SQLite fault test"}}' \
             "$ORIGINAL_VERSION_ID" > "$RUNNER_TEMP/restore-preview.json"
@@ -274,3 +289,7 @@ jobs:
             'original Preview version must be active after restoration');
           console.log('PASS: exact original Preview version restored after the fault suite.');
           NODE
+          if [[ "$secret_cleanup_failed" == "true" ]]; then
+            echo "::error::Preview restored, but the one-run fault-test secret still requires removal."
+            exit 1
+          fi
