@@ -295,26 +295,44 @@ jobs:
           const production = JSON.parse(await readFile('agents/runtime/wrangler.jsonc', 'utf8'));
           const harness = await readFile('agents/runtime/tests/state-store-test-worker.mjs', 'utf8');
           const workflow = await readFile('.github/workflows/agent-runtime-cloudflare-do-fault-test.yml', 'utf8');
-          assert.equal(testConfig.name, 'ai-thuc-chien-agent-runtime-fault-test');
+          assert.equal(testConfig.name, 'ai-thuc-chien-agent-runtime-preview');
           assert.equal(testConfig.main, './tests/state-store-test-worker.mjs');
+          assert.equal(preview.name, testConfig.name);
           assert.equal(preview.main, './src/worker.mjs');
           assert.equal(production.main, './src/worker.mjs');
           assert.equal(testConfig.vars.AGENT_SCHEDULER_ENABLED, 'false');
           assert.equal(testConfig.vars.AGENT_RECOVERY_ALARM_ENABLED, 'false');
           assert.equal(testConfig.vars.AGENT_OIDC_ENABLED, 'false');
-          assert.equal(testConfig.vars.AGENT_PAUSED, 'false', 'the isolated store starts fail-closed in durable control and is paused by the suite cleanup');
+          assert.equal(testConfig.vars.AGENT_PAUSED, 'false');
           assert.deepEqual(testConfig.durable_objects.bindings, [
-            { name: 'AGENT_STATE_STORE', class_name: 'TestAgentStateStore' }
+            { name: 'AGENT_STATE_STORE', class_name: 'TestAgentStateStore' },
+            { name: 'AGENT_STATE_STORE_ORIGINAL', class_name: 'AgentStateStore' },
+            { name: 'AGENT_REVIEWER_AUTH_STORE', class_name: 'AgentReviewerAuthStore' },
+            { name: 'AGENT_DRAFT_STORE', class_name: 'AgentDraftStore' },
+            { name: 'AGENT_AI_BANK_CANDIDATE_STORE', class_name: 'AgentAIBankCandidateStore' }
           ]);
+          assert.deepEqual(testConfig.migrations.at(-1), {
+            tag: 'fault-test-v1', new_sqlite_classes: ['TestAgentStateStore']
+          });
           assert.equal(harness.includes('export class TestAgentStateStore extends AgentStateStore'), true);
+          assert.equal(harness.includes('AGENT_FAULT_TEST_TOKEN'), true);
+          assert.equal(harness.includes('env.AGENT_FAULT_TEST_TOKEN ?? env.AGENT_STATE_STORE_TOKEN'), true);
           assert.equal(harness.includes('"/__test/fault-suite"'), true);
-          assert.equal(workflow.includes('workflow_dispatch:'), true);
+          assert.match(workflow, /workflow_dispatch:/);
           assert.doesNotMatch(workflow, /schedule:|pull_request:|push:/);
-          assert.match(workflow, /environment:\s*agent-runtime-preview/);
+          assert.match(workflow, /environment:\\s*agent-runtime-preview/);
           assert.match(workflow, /CLOUDFLARE_AGENT_PREVIEW_API_TOKEN/);
-          assert.match(workflow, /wrangler@4\.166\.0 delete/);
-          assert.doesNotMatch(workflow, /wrangler[^\n]*--env production|wrangler[^\n]*--env prod/);
-          console.log('PASS: Cloudflare fault harness is a separate test Worker/SQLite namespace, manual-only, no Production bindings, no cron, and has cleanup.');
+          assert.match(workflow, /CLOUDFLARE_AGENT_PREVIEW_WORKER_TOKEN/);
+          assert.match(workflow, /original_version_id/);
+          assert.match(workflow, /deployments\\?force=true/);
+          assert.match(workflow, /secrets\\/AGENT_FAULT_TEST_TOKEN/);
+          assert.doesNotMatch(workflow, /wrangler@4\\.166\\.0 delete/);
+          assert.doesNotMatch(workflow, /wrangler[^\\n]*--env production|wrangler[^\\n]*--env prod/);
+          assert.equal('routes' in testConfig, false);
+          assert.equal('d1_databases' in testConfig, false);
+          assert.equal('queues' in testConfig, false);
+          assert.equal('triggers' in testConfig, false);
+          console.log('PASS: fault suite uses a dedicated SQLite class on the existing Preview Worker, preserves original DO bindings, uses a per-Worker token, and restores the exact prior version; no Production bindings or broad Worker Admin.');
           NODE
 
       - name: Verify OIDC operator workflow is manual and pause-only
