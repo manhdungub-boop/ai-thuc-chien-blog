@@ -196,6 +196,13 @@ jobs:
           assert.deepEqual(faultTestCleanup.durable_objects, faultTest.durable_objects);
           assert.deepEqual(faultTestCleanup.migrations, faultTest.migrations);
           assert.deepEqual(faultTestCleanup.vars, faultTest.vars);
+          const faultTestWorkflowSource = await readFile('.github/workflows/agent-runtime-cloudflare-do-fault-test.yml', 'utf8');
+          assert.ok(faultTestWorkflowSource.includes('$api/secrets/AGENT_FAULT_TEST_TOKEN'));
+          assert.ok(faultTestWorkflowSource.includes('--request POST'));
+          assert.ok(faultTestWorkflowSource.includes('{"enabled":false,"previews_enabled":false}'));
+          assert.ok(faultTestWorkflowSource.includes('--request DELETE'));
+          assert.ok(faultTestWorkflowSource.includes('$api/subdomain'));
+          assert.equal(faultTestWorkflowSource.includes('wrangler@4.166.0 delete'), false);
           const faultTestWorkerSource = await readFile('agents/runtime/tests/state-store-test-worker.mjs', 'utf8');
           assert.match(faultTestWorkerSource, /const faultSuiteMode = \{ active: false \}/);
           assert.match(faultTestWorkerSource, /faultSuiteMode\.active && property === "AGENT_ENABLED"/);

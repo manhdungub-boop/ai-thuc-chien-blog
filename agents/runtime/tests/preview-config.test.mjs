@@ -10,6 +10,8 @@ const configPath = fileURLToPath(new URL("../wrangler.preview.jsonc", import.met
 const config = JSON.parse(readFileSync(configPath, "utf8"));
 const faultTestConfigPath = fileURLToPath(new URL("../wrangler.fault-test.jsonc", import.meta.url));
 const faultTestConfig = JSON.parse(readFileSync(faultTestConfigPath, "utf8"));
+const faultTestWorkflowPath = fileURLToPath(new URL("../../../.github/workflows/agent-runtime-cloudflare-do-fault-test.yml", import.meta.url));
+const faultTestWorkflowSource = readFileSync(faultTestWorkflowPath, "utf8");
 const faultTestCleanupConfigPath = fileURLToPath(new URL("../wrangler.fault-test.cleanup.jsonc", import.meta.url));
 const faultTestCleanupConfig = JSON.parse(readFileSync(faultTestCleanupConfigPath, "utf8"));
 
@@ -64,14 +66,14 @@ test("dedicated Agent Runtime Preview config binds its isolated State Store and 
   }
 });
 
-test("fault-test cleanup keeps the Worker but disables workers.dev and Preview URLs", () => {
-  assert.equal(faultTestCleanupConfig.name, faultTestConfig.name);
-  assert.equal(faultTestCleanupConfig.main, faultTestConfig.main);
-  assert.equal(faultTestCleanupConfig.workers_dev, false);
-  assert.equal(faultTestCleanupConfig.preview_urls, false);
-  assert.deepEqual(faultTestCleanupConfig.durable_objects, faultTestConfig.durable_objects);
-  assert.deepEqual(faultTestCleanupConfig.migrations, faultTestConfig.migrations);
-  assert.deepEqual(faultTestCleanupConfig.vars, faultTestConfig.vars);
+
+test("fault-test cleanup removes the one-run secret and disables public routes without deleting the Worker", () => {
+  assert.ok(faultTestWorkflowSource.includes("$api/secrets/AGENT_FAULT_TEST_TOKEN"));
+  assert.ok(faultTestWorkflowSource.includes("--request POST"));
+  assert.ok(faultTestWorkflowSource.includes('{"enabled":false,"previews_enabled":false}'));
+  assert.ok(faultTestWorkflowSource.includes("--request DELETE"));
+  assert.ok(faultTestWorkflowSource.includes("$api/subdomain"));
+  assert.equal(faultTestWorkflowSource.includes("wrangler@4.166.0 delete"), false);
 });
 
 test("fault-test harness remains disabled, paused, and migration-compatible", () => {

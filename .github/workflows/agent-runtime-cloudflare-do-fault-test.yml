@@ -30,7 +30,6 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: "92cf091bbac8b4879ec65feb30b4715b"
       FAULT_TEST_URL: "https://ai-thuc-chien-agent-runtime-fault-test.manhdungub.workers.dev"
       FAULT_TEST_CONFIG: "agents/runtime/wrangler.fault-test.jsonc"
-      FAULT_TEST_CLEANUP_CONFIG: "agents/runtime/wrangler.fault-test.cleanup.jsonc"
     steps:
       - name: Check out the exact reviewed commit
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -128,22 +127,6 @@ jobs:
           assert.equal('vars' in c && Object.keys(c.vars).some(k => /TOKEN|SECRET|KEY/i.test(k)), false);
           NODE
 
-      - name: Validate cleanup configuration disables public endpoints
-        run: |
-          node --input-type=module <<'NODE'
-          import assert from 'node:assert/strict';
-          import { readFile } from 'node:fs/promises';
-          const active = JSON.parse(await readFile(process.env.FAULT_TEST_CONFIG, 'utf8'));
-          const cleanup = JSON.parse(await readFile(process.env.FAULT_TEST_CLEANUP_CONFIG, 'utf8'));
-          assert.equal(cleanup.name, active.name);
-          assert.equal(cleanup.main, active.main);
-          assert.equal(cleanup.workers_dev, false);
-          assert.equal(cleanup.preview_urls, false);
-          assert.deepEqual(cleanup.durable_objects, active.durable_objects);
-          assert.deepEqual(cleanup.migrations, active.migrations);
-          assert.deepEqual(cleanup.vars, active.vars);
-          NODE
-
       - name: Deploy the isolated SQLite Durable Object test Worker
         timeout-minutes: 4
         env:
@@ -224,7 +207,20 @@ jobs:
           api="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$script"
           cleanup_failed=0
 
-          # Delete the ephemeral bearer. A 404 is acceptable only if the later list confirms absence.
+          # Disable public URLs first. If this succeeds, a later secret-delete failure still leaves the test Worker unreachable.
+          disable_response="$RUNNER_TEMP/fault-worker-disable.json"
+          disable_status="$(curl --silent --show-error --max-time 15 --output "$disable_response" --write-out "%{http_code}" \
+            --request POST --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            --header "Content-Type: application/json" --header "Accept: application/json" \
+            --data '{"enabled":false,"previews_enabled":false}' "$api/subdomain")"
+          if [[ "$disable_status" == "200" ]] && jq -e '.success == true and .result.enabled == false and .result.previews_enabled == false' "$disable_response" >/dev/null; then
+            echo "PASS: workers.dev and Preview URLs disabled."
+          else
+            echo "::error::Could not disable public test Worker URLs (HTTP $disable_status)."
+            cleanup_failed=1
+          fi
+
+          # Remove the ephemeral bearer. A 404 is acceptable only if the later list confirms absence.
           delete_response="$RUNNER_TEMP/fault-secret-delete.json"
           delete_status="$(curl --silent --show-error --max-time 15 --output "$delete_response" --write-out "%{http_code}" \
             --request DELETE --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
@@ -233,22 +229,6 @@ jobs:
             echo "Secret deletion request completed or secret was already absent (HTTP $delete_status)."
           else
             echo "::error::Could not delete the one-run secret (HTTP $delete_status)."
-            cleanup_failed=1
-          fi
-
-          # Keep the pre-created Worker for repeatable least-privilege runs, but disable all public URLs.
-          disable_log="$RUNNER_TEMP/fault-worker-disable.log"
-          set +e
-          timeout --signal=TERM --kill-after=10s 180s npx --yes wrangler@4.166.0 deploy \
-            --config "$FAULT_TEST_CLEANUP_CONFIG" \
-            --message "Disable workers.dev and preview URLs after isolated DO fault test" >"$disable_log" 2>&1
-          disable_status=$?
-          set -e
-          if [[ "$disable_status" == "0" ]]; then
-            cat "$disable_log"
-          else
-            cat "$disable_log"
-            echo "::error::Failed to disable the dedicated test Worker public URLs (exit $disable_status)."
             cleanup_failed=1
           fi
 
@@ -267,27 +247,16 @@ jobs:
             echo "PASS: one-run AGENT_FAULT_TEST_TOKEN is absent."
           fi
 
-          # Verify workers.dev and Preview URLs are both disabled.
+          # Verify both public URL switches remain disabled.
           subdomain_response="$RUNNER_TEMP/fault-worker-subdomain.json"
           subdomain_status="$(curl --silent --show-error --max-time 15 --output "$subdomain_response" --write-out "%{http_code}" \
             --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             --header "Accept: application/json" "$api/subdomain")"
-          if [[ "$subdomain_status" != "200" ]]; then
-            echo "::error::Could not verify Worker subdomain state (HTTP $subdomain_status)."
-            cleanup_failed=1
-          elif ! SUBDOMAIN_RESPONSE="$subdomain_response" node --input-type=module <<'NODE'
-          import assert from 'node:assert/strict';
-          import { readFile } from 'node:fs/promises';
-          const payload = JSON.parse(await readFile(process.env.SUBDOMAIN_RESPONSE, 'utf8'));
-          assert.equal(payload.success, true);
-          assert.equal(payload.result?.enabled, false, 'workers.dev must be disabled');
-          assert.equal(payload.result?.previews_enabled, false, 'Preview URLs must be disabled');
-          NODE
-          then
-            echo "::error::Worker public URL disable verification failed."
+          if [[ "$subdomain_status" != "200" ]] || ! jq -e '.success == true and .result.enabled == false and .result.previews_enabled == false' "$subdomain_response" >/dev/null; then
+            echo "::error::Worker public URL disable verification failed (HTTP $subdomain_status)."
             cleanup_failed=1
           else
-            echo "PASS: workers.dev and Preview URLs are disabled; the dedicated Worker remains dormant for repeatable tests."
+            echo "PASS: the pre-created test Worker remains dormant for repeatable least-privilege runs."
           fi
 
           if [[ "$cleanup_failed" != "0" ]]; then
