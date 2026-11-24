@@ -310,10 +310,10 @@ jobs:
           assert.equal(harness.includes('"/__test/fault-suite"'), true);
           assert.equal(workflow.includes('workflow_dispatch:'), true);
           assert.doesNotMatch(workflow, /schedule:|pull_request:|push:/);
-          assert.match(workflow, /environment:\\s*agent-runtime-preview/);
+          assert.match(workflow, /environment:\s*agent-runtime-preview/);
           assert.match(workflow, /CLOUDFLARE_AGENT_PREVIEW_API_TOKEN/);
-          assert.match(workflow, /wrangler@4\\.166\\.0 delete/);
-          assert.doesNotMatch(workflow, /wrangler[^\\n]*--env production|wrangler[^\\n]*--env prod/);
+          assert.match(workflow, /wrangler@4\.166\.0 delete/);
+          assert.doesNotMatch(workflow, /wrangler[^\n]*--env production|wrangler[^\n]*--env prod/);
           console.log('PASS: Cloudflare fault harness is a separate test Worker/SQLite namespace, manual-only, no Production bindings, no cron, and has cleanup.');
           NODE
 
