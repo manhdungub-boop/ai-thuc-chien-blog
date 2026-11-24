@@ -392,7 +392,7 @@ export class TestAgentStateStore extends AgentStateStore {
         this.sql.exec("INSERT INTO daily_usage (day_utc, accepted_count) VALUES ('2099-12-31', 1)");
         throw new Error("intentional_rollback_probe");
       });
-    } catch {
+    } catch (error) {
       if (url.pathname === "/__test/rollback") {
         const usage = this.sql.exec(
           "SELECT accepted_count FROM daily_usage WHERE day_utc = '2099-12-31'"
@@ -403,7 +403,10 @@ export class TestAgentStateStore extends AgentStateStore {
           acceptedToday: usage?.accepted_count ?? 0,
         });
       }
-      return jsonResponse({ ok: false, error: "test_fixture_operation_failed" }, 500);
+      const diagnostic = String(error?.message ?? error ?? "unknown")
+        .replace(/[^a-zA-Z0-9_.:-]/g, "_")
+        .slice(0, 180);
+      return jsonResponse({ ok: false, error: "test_fixture_operation_failed", diagnostic }, 500);
     }
     return jsonResponse({ ok: false, error: "rollback_probe_did_not_throw" }, 500);
   }
