@@ -53,12 +53,6 @@
       "new_sqlite_classes": [
         "AgentAIBankCandidateStore"
       ]
-    },
-    {
-      "tag": "fault-test-v1",
-      "new_sqlite_classes": [
-        "TestAgentStateStore"
-      ]
     }
   ],
   "vars": {
