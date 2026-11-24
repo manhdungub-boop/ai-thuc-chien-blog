@@ -17,13 +17,6 @@ on:
       - ".github/workflows/agent-runtime-preview-validation.yml"
       - ".github/workflows/agent-runtime-operator.yml"
   workflow_dispatch:
-  push:
-    branches:
-      - "security/fence-leases-on-circuit-breaker-pause-20261123"
-    paths:
-      - "agents/runtime/**"
-      - ".github/workflows/agent-runtime-preview-validation.yml"
-      - ".github/workflows/agent-runtime-operator.yml"
 permissions:
   contents: read
 
