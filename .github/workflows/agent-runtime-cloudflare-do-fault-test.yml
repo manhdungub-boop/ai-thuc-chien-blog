@@ -200,13 +200,16 @@ jobs:
           base="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$PREVIEW_WORKER_NAME"
           curl --silent --show-error --max-time 20 --fail --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" --header "Accept: application/json" "$base/deployments" > "$RUNNER_TEMP/deployments.json"
           version_id="$(node --input-type=module -e 'import fs from "node:fs"; const d=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(!d.success) process.exit(2); const v=d.result?.deployments?.[0]?.versions?.find(x=>x.percentage===100); if(!v) process.exit(3); process.stdout.write(v.version_id);' "$RUNNER_TEMP/deployments.json")"
-          curl --silent --show-error --max-time 20 --fail --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" --header "Accept: application/json" "$base/versions/$version_id" > "$RUNNER_TEMP/version.json"
+          version_base="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/workers/$PREVIEW_WORKER_NAME/versions/$version_id?include=modules"
+          curl --silent --show-error --max-time 20 --fail --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" --header "Accept: application/json" "$version_base" > "$RUNNER_TEMP/version.json"
           curl --silent --show-error --max-time 20 --fail --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" --header "Accept: application/json" "$base/secrets" > "$RUNNER_TEMP/secrets.json"
           VERSION_FILE="$RUNNER_TEMP/version.json" SECRETS_FILE="$RUNNER_TEMP/secrets.json" node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
           import fs from 'node:fs';
           const version = JSON.parse(fs.readFileSync(process.env.VERSION_FILE, 'utf8'));
           assert.equal(version.success, true);
+          assert.equal(version.result?.migration_tag, 'fault-test-v1');
+          assert.ok(version.result?.modules?.some(m => m.name === 'worker-preview-recovery.js'));
           const bindings = version.result?.bindings ?? [];
           const value = name => bindings.find(b => b.name === name)?.text;
           assert.equal(value('AGENT_ENABLED'), 'false');
