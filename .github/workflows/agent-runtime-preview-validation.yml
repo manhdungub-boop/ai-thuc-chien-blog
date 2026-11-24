@@ -17,6 +17,13 @@ on:
       - "agents/runtime/**"
       - ".github/workflows/agent-runtime-preview-validation.yml"
       - ".github/workflows/agent-runtime-operator.yml"
+  push:
+    branches:
+      - "fix/agent-runtime-fault-test-20261124"
+    paths:
+      - "agents/runtime/**"
+      - ".github/workflows/agent-runtime-preview-validation.yml"
+      - ".github/workflows/agent-runtime-cloudflare-do-fault-test.yml"
   workflow_dispatch:
 permissions:
   contents: read
