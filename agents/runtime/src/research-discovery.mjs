@@ -105,7 +105,8 @@ function directChildElements(xml) {
 }
 
 function directChildAttribute(element, name) {
-  const match = element.attributes.match(new RegExp("(?:^|\\s)" + name + "\\s*=\\s*(?:\\"([^\\"]*)\\"|'([^']*)')", "i"));
+  const escapedName = name.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&");
+  const match = element.attributes.match(new RegExp(`(?:^|\\\\s)${escapedName}\\\\s*=\\\\s*(?:\"([^\"]*)\"|'([^']*)')`, "i"));
   return match ? (match[1] ?? match[2] ?? "") : "";
 }
 
