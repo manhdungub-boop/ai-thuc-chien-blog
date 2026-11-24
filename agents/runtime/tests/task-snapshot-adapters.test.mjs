@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createReadOnlyTaskSnapshotAdapter, TASK_SNAPSHOT_ADAPTER_LIMITS } from "../src/task-snapshot-adapters.mjs";
 import { handleReadOnlyTask } from "../src/task-handlers.mjs";
+import { createPreviewReadOnlyReaders } from "../src/preview-read-only-sources.mjs";
 
 const key = "task-2026-11-20-000001";
 const contentTask = { type: "content.review", idempotencyKey: key, payload: { articlePath: "articles/example.html" } };
@@ -73,7 +74,7 @@ test("SEO adapter requires explicit sitemap and broken-link evidence", async () 
 test("article parsing removes raw blocks with spaced end tags and decodes entities only once", async () => {
   const source = `<html><head><title>&amp;lt;script&amp;gt;literal</title></head><body>
     <p>Visible article text</p>
-    <script>hidden script payload</script 	
+    <script>hidden script payload</script \t
  bar>
     <style>hidden style payload</style >
     <svg><text>hidden vector payload</text></svg   >
@@ -113,6 +114,18 @@ test("source exceptions and oversized or malformed snapshots fail closed", async
     async readSeoPage() { return { html: "<html></html>", statusCode: 200, sitemapIncluded: "yes", brokenInternalLinkCount: 0 }; },
   });
   assert.equal((await adapter.getSnapshot(contentTask)).error, "read_only_source_error");
+  const classified = createReadOnlyTaskSnapshotAdapter({
+    async readArticleHtml() { throw new Error("preview_source_fetch_failed"); },
+    async readAiBankCatalog() { return catalog; },
+    async readSeoPage() { return {}; },
+  });
+  assert.equal((await classified.getSnapshot(contentTask)).error, "preview_source_fetch_failed");
+  const untrusted = createReadOnlyTaskSnapshotAdapter({
+    async readArticleHtml() { throw new Error("private token and upstream response body"); },
+    async readAiBankCatalog() { return catalog; },
+    async readSeoPage() { return {}; },
+  });
+  assert.equal((await untrusted.getSnapshot(contentTask)).error, "read_only_source_error");
   assert.equal((await adapter.getSnapshot(bankTask)).error, "candidate_source_unavailable");
   assert.equal((await adapter.getSnapshot(seoTask)).error, "seo_source_unavailable");
 
@@ -128,4 +141,129 @@ test("reader interface is mandatory and source bounds are explicit", () => {
   assert.throws(() => createReadOnlyTaskSnapshotAdapter({}), /read_only_readers_required/);
   assert.equal(TASK_SNAPSHOT_ADAPTER_LIMITS.maxSourceBytes, 512 * 1024);
   assert.equal(TASK_SNAPSHOT_ADAPTER_LIMITS.maxCatalogItems, 1000);
+});
+
+test("Preview repository reader fetches the fixed raw GitHub path without using the rate-limited Contents API", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestedUrl;
+  let requestedOptions;
+  globalThis.fetch = async (url, options) => {
+    requestedUrl = String(url);
+    requestedOptions = options;
+    return new Response("<html><title>Preview source</title></html>", {
+      status: 200,
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+    });
+  };
+  try {
+    const readers = createPreviewReadOnlyReaders();
+    const result = await readers.readArticleHtml("articles/example.html");
+    assert.equal(result, "<html><title>Preview source</title></html>");
+    assert.equal(requestedUrl,
+      "https://raw.githubusercontent.com/manhdungub-boop/ai-thuc-chien-blog/main/articles/example.html");
+    assert.equal(requestedOptions.method, "GET");
+    assert.equal(requestedOptions.redirect, "manual");
+    assert.equal(requestedOptions.headers.Accept, "text/plain");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Preview repository reader follows only the exact allowlisted raw GitHub redirect", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url: String(url), options });
+    if (calls.length === 1) {
+      return new Response(null, {
+        status: 302,
+        headers: { Location: "https://raw.githubusercontent.com/manhdungub-boop/ai-thuc-chien-blog/main/articles/example.html" },
+      });
+    }
+    return new Response("<html><title>Redirected source</title></html>", { status: 200 });
+  };
+  try {
+    const readers = createPreviewReadOnlyReaders();
+    const result = await readers.readArticleHtml("articles/example.html");
+    assert.equal(result, "<html><title>Redirected source</title></html>");
+    assert.equal(calls.length, 2);
+    assert.equal(calls[0].url,
+      "https://raw.githubusercontent.com/manhdungub-boop/ai-thuc-chien-blog/main/articles/example.html");
+    assert.equal(calls[0].options.redirect, "manual");
+    assert.equal(calls[1].url,
+      "https://raw.githubusercontent.com/manhdungub-boop/ai-thuc-chien-blog/main/articles/example.html");
+    assert.equal(calls[1].options.redirect, "manual");
+    assert.equal(calls[1].options.headers.Accept, "text/plain");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Preview repository reader rejects redirects outside the exact repository path", async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    return new Response(null, {
+      status: 302,
+      headers: { Location: "https://raw.githubusercontent.com/other-owner/other-repo/main/articles/example.html" },
+    });
+  };
+  try {
+    const readers = createPreviewReadOnlyReaders();
+    await assert.rejects(
+      readers.readArticleHtml("articles/example.html"),
+      /preview_source_redirect_rejected_raw_302/,
+    );
+    assert.equal(calls, 1, "untrusted redirect targets must never be fetched");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Preview repository reader rejects a second redirect instead of following it", async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    if (calls === 1) {
+      return new Response(null, {
+        status: 302,
+        headers: { Location: "https://raw.githubusercontent.com/manhdungub-boop/ai-thuc-chien-blog/main/articles/example.html" },
+      });
+    }
+    return new Response(null, {
+      status: 302,
+      headers: { Location: "https://attacker.example/redirect" },
+    });
+  };
+  try {
+    const readers = createPreviewReadOnlyReaders();
+    await assert.rejects(
+      readers.readArticleHtml("articles/example.html"),
+      /preview_source_redirect_rejected_raw_302/,
+    );
+    assert.equal(calls, 2, "a second redirect must be rejected without another request");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Preview repository reader reports an upstream 403 without exposing response bodies", async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    return new Response("private upstream details must not be surfaced", { status: 403 });
+  };
+  try {
+    const readers = createPreviewReadOnlyReaders();
+    await assert.rejects(
+      readers.readArticleHtml("articles/example.html"),
+      /preview_source_http_error_raw_403/,
+    );
+    assert.equal(calls, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

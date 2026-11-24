@@ -84,7 +84,7 @@ function parseControlJson(text) {
   skipWhitespace();
   if (text[index++] !== "{") throw new Error("control_json_invalid");
   const result = {};
-  const allowedKeys = new Set(["reason", "actor", "requestId", "jti", "expiresAt"]);
+  const allowedKeys = new Set(["reason", "actor", "requestId", "jti", "expiresAt", "expectedVersion", "internalCleanup"]);
   skipWhitespace();
   if (text[index] === "}") {
     index++;
@@ -101,7 +101,28 @@ function parseControlJson(text) {
     skipWhitespace();
     if (text[index++] !== ":") throw new Error("control_json_invalid");
     skipWhitespace();
-    result[key] = readString();
+    if (key === "expectedVersion") {
+      const match = /^(?:0|[1-9][0-9]*)/.exec(text.slice(index));
+      if (!match) throw new Error("control_json_invalid");
+      index += match[0].length;
+      const delimiter = text[index];
+      if (delimiter !== "," && delimiter !== "}" && !/[\t\n\r ]/.test(delimiter ?? "")) {
+        throw new Error("control_json_invalid");
+      }
+      const value = Number(match[0]);
+      if (!Number.isSafeInteger(value) || value < 0) throw new Error("control_json_invalid");
+      result[key] = value;
+    } else if (key === "internalCleanup") {
+      if (text.slice(index, index + 4) !== "true") throw new Error("control_json_invalid");
+      index += 4;
+      const delimiter = text[index];
+      if (delimiter !== "," && delimiter !== "}" && !/[\t\n\r ]/.test(delimiter ?? "")) {
+        throw new Error("control_json_invalid");
+      }
+      result[key] = true;
+    } else {
+      result[key] = readString();
+    }
     skipWhitespace();
     if (text[index] === "}") {
       index++;
@@ -197,6 +218,20 @@ export class AgentStateStore {
           for (const statement of columns) this.sql.exec(statement);
           this.sql.exec("CREATE INDEX IF NOT EXISTS tasks_retry_due_idx ON tasks(state, next_attempt_at)");
           this.sql.exec("CREATE INDEX IF NOT EXISTS tasks_lease_expiry_idx ON tasks(state, lease_expires_at)");
+          const migrationNow = Date.now();
+          const legacyRunning = this.sql.exec(
+            "SELECT task_id FROM tasks WHERE state='running'"
+          ).toArray();
+          for (const row of legacyRunning) {
+            this.sql.exec(
+              "UPDATE tasks SET state='cancelled', updated_at=?, terminal_at=?, error_code='legacy_running_lease_missing', last_error_code='legacy_running_lease_missing' WHERE task_id=? AND state='running'",
+              migrationNow, migrationNow, row.task_id
+            );
+            this.audit(row.task_id, "task.cancelled", migrationNow, {
+              source: "schema_migration_v1_to_v2",
+              reason: "legacy_running_lease_missing",
+            });
+          }
           this.sql.exec("UPDATE runtime_meta SET value = '2' WHERE key = 'schema_version'");
           version = { value: "2" };
         }
@@ -410,17 +445,16 @@ if (url.pathname === "/task" && request.method === "GET") {
           "SELECT event_type AS eventType, COUNT(*) AS count FROM audit_events WHERE occurred_at>=? GROUP BY event_type ORDER BY count DESC, event_type ASC LIMIT 20",
           now - 24 * 60 * 60 * 1000,
         ).toArray();
-        const failureCountLast10m = readRow(this.sql,
-          "SELECT COUNT(*) AS count FROM tasks WHERE state='failed' AND terminal_at>=?", now - CIRCUIT_BREAKER.windowMs).count;
-        const control = this.controlState();
+        const control = this.controlState(now);
+        const failureCountLast10m = control.failureCountLast10m;
         const latestPause = readRow(this.sql,
-          "SELECT reason FROM runtime_control_audit WHERE action='pause' ORDER BY occurred_at DESC,event_id DESC LIMIT 1");
+          "SELECT actor FROM runtime_control_audit WHERE action='pause' ORDER BY occurred_at DESC,event_id DESC LIMIT 1");
         const acceptedToday = usage?.accepted_count ?? 0;
         const dailyUtilizationPercent = Math.round((acceptedToday / limits.daily) * 10000) / 100;
         const concurrentUtilizationPercent = Math.round(((counts.queued + counts.running) / limits.concurrent) * 10000) / 100;
         const dailyPressure = quotaPressure(dailyUtilizationPercent);
         const concurrentPressure = quotaPressure(concurrentUtilizationPercent);
-        const autoPaused = control.paused && latestPause?.reason === "circuit_breaker:5_failures_in_10m";
+        const autoPaused = control.paused && latestPause?.actor === "system:circuit_breaker";
         return jsonResponse({
           ok: true,
           observedAt: now,
@@ -468,7 +502,15 @@ if (url.pathname === "/task" && request.method === "GET") {
         }
         const usage = readRow(this.sql, "SELECT accepted_count FROM daily_usage WHERE day_utc = ?", day);
         const active = readRow(this.sql, "SELECT COUNT(*) AS count FROM tasks WHERE state IN ('queued','running')");
-        return jsonResponse({ ok: true, dayUtc: day, acceptedToday: usage?.accepted_count ?? 0, inFlight: active?.count ?? 0 });
+        const limits = this.limits();
+        return jsonResponse({
+          ok: true,
+          dayUtc: day,
+          acceptedToday: usage?.accepted_count ?? 0,
+          inFlight: active?.count ?? 0,
+          dailyLimit: limits.daily,
+          concurrentLimit: limits.concurrent,
+        });
       }
       if (request.method !== "GET" && request.method !== "POST") return jsonResponse({ ok: false, error: "method_not_allowed" }, 405);
       return jsonResponse({ ok: false, error: "not_found" }, 404);
@@ -550,6 +592,10 @@ if (url.pathname === "/task" && request.method === "GET") {
             leaseGeneration: row.lease_generation,
             source: "durable_object_alarm",
           });
+          if (decision.outcome === "failed") {
+            this.audit(row.task_id, "task.terminal_failure", now, { errorCode: fields.error_code });
+            this.evaluateCircuitBreaker(row.task_id, now);
+          }
           count++;
         }
         return count;
@@ -601,12 +647,12 @@ if (url.pathname === "/task" && request.method === "GET") {
     };
   }
 
-  controlState() {
+  controlState(now = Date.now()) {
     const row = readRow(this.sql, "SELECT paused, changed_at, version FROM runtime_control WHERE singleton_id = 1");
     if (!row) throw new Error("runtime_control_missing");
     const failureCount = readRow(this.sql,
       "SELECT COUNT(*) AS count FROM audit_events WHERE event_type = 'task.terminal_failure' AND occurred_at >= ?",
-      Date.now() - CIRCUIT_BREAKER.windowMs,
+      now - CIRCUIT_BREAKER.windowMs,
     )?.count ?? 0;
     return {
       paused: row.paused === 1,
@@ -646,23 +692,34 @@ if (url.pathname === "/task" && request.method === "GET") {
   }
 
   setPaused(paused, body, now) {
-    if (!isObject(body) || Object.keys(body).some((key) => !["reason", "actor", "requestId"].includes(key)) ||
+    if (!isObject(body) || Object.keys(body).some((key) => !["reason", "actor", "requestId", "expectedVersion", "internalCleanup"].includes(key)) ||
         typeof body.actor !== "string" || !/^[a-zA-Z0-9._:-]{3,64}$/.test(body.actor) ||
         typeof body.requestId !== "string" || !/^[a-zA-Z0-9-]{16,64}$/.test(body.requestId) ||
+        (!paused && (!Number.isSafeInteger(body.expectedVersion) || body.expectedVersion < 0)) ||
+        (paused && body.expectedVersion !== undefined) ||
+        (body.internalCleanup !== undefined && (body.internalCleanup !== true || !paused ||
+          !/^github-actions:[0-9]{1,20}$/.test(body.actor) ||
+          body.reason !== "one-shot OIDC Preview E2E complete")) ||
         (body.reason !== undefined && (typeof body.reason !== "string" || body.reason.length > 160 ||
           [...body.reason].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)))) {
       return { status: 400, body: { ok: false, error: "runtime_control_request_invalid" } };
     }
+    const internalCleanup = body.internalCleanup === true;
     try {
       return this.ctx.storage.transactionSync(() => {
-        const rate = readRow(this.sql, "SELECT window_started_at, request_count FROM runtime_control_rate_limit WHERE actor = ?", body.actor);
-        const windowStart = rate && now - rate.window_started_at < 60_000 ? rate.window_started_at : now;
-        const requestCount = rate && windowStart === rate.window_started_at ? rate.request_count : 0;
-        if (requestCount >= 10) return { status: 429, body: { ok: false, error: "runtime_control_rate_limited" } };
-        this.sql.exec("INSERT INTO runtime_control_rate_limit (actor, window_started_at, request_count) VALUES (?,?,1) ON CONFLICT(actor) DO UPDATE SET window_started_at=excluded.window_started_at, request_count=?",
-          body.actor, windowStart, requestCount + 1);
+        if (!internalCleanup) {
+          const rate = readRow(this.sql, "SELECT window_started_at, request_count FROM runtime_control_rate_limit WHERE actor = ?", body.actor);
+          const windowStart = rate && now - rate.window_started_at < 60_000 ? rate.window_started_at : now;
+          const requestCount = rate && windowStart === rate.window_started_at ? rate.request_count : 0;
+          if (requestCount >= 10) return { status: 429, body: { ok: false, error: "runtime_control_rate_limited" } };
+          this.sql.exec("INSERT INTO runtime_control_rate_limit (actor, window_started_at, request_count) VALUES (?,?,1) ON CONFLICT(actor) DO UPDATE SET window_started_at=excluded.window_started_at, request_count=?",
+            body.actor, windowStart, requestCount + 1);
+        }
         const current = readRow(this.sql, "SELECT paused, changed_at, version FROM runtime_control WHERE singleton_id = 1");
         if (!current) return { status: 503, body: { ok: false, error: "runtime_control_unavailable" } };
+        if (!paused && current.version !== body.expectedVersion) {
+          return { status: 409, body: { ok: false, error: "runtime_control_version_conflict" } };
+        }
         const cancelRunningTasks = () => {
           const running = this.sql.exec(
             "SELECT task_id, task_type, lease_generation FROM tasks WHERE state='running'",
@@ -680,9 +737,21 @@ if (url.pathname === "/task" && request.method === "GET") {
           }
         };
         if (current.paused === (paused ? 1 : 0)) {
-          // Repeated Pause is idempotent but still repairs any stale running
-          // lease left by an earlier runtime version or interrupted rollout.
-          if (paused) cancelRunningTasks();
+          // A repeated emergency Pause must fence any Resume that observed an
+          // earlier control version, even though the paused state is unchanged.
+          if (paused) {
+            const version = current.version + 1;
+            this.sql.exec("UPDATE runtime_control SET changed_at = ?, version = ? WHERE singleton_id = 1 AND version = ? AND paused = 1",
+              now, version, current.version);
+            const updated = this.controlState();
+            if (updated.version !== version || !updated.paused) {
+              return { status: 409, body: { ok: false, error: "runtime_control_conflict" } };
+            }
+            this.sql.exec("INSERT INTO runtime_control_audit (event_id, action, occurred_at, actor, reason, request_id) VALUES (?,?,?,?,?,?)",
+              crypto.randomUUID(), "pause", now, body.actor, body.reason ?? "", body.requestId);
+            cancelRunningTasks();
+            return { status: 200, body: { ok: true, changed: false, control: updated } };
+          }
           return { status: 200, body: { ok: true, changed: false, control: this.controlState() } };
         }
         const version = current.version + 1;
@@ -1060,8 +1129,28 @@ if (url.pathname === "/task" && request.method === "GET") {
       crypto.randomUUID(), "pause", now, "system:circuit_breaker",
       "circuit_breaker:5_failures_in_10m", crypto.randomUUID(),
     );
+
+    // Fence every lease that was already in flight when the breaker opened.
+    // Clearing the owner and moving the row to a terminal state makes late
+    // heartbeats/completions fail atomically through the existing lease checks.
+    const running = this.sql.exec(
+      "SELECT task_id, task_type, lease_generation FROM tasks WHERE state='running'",
+    ).toArray();
+    this.sql.exec(
+      "UPDATE tasks SET state='cancelled', updated_at=?, terminal_at=?, error_code='circuit_breaker_paused', lease_owner=NULL, lease_expires_at=NULL, lease_max_expires_at=NULL, next_attempt_at=NULL, last_error_code='circuit_breaker_paused' WHERE state='running'",
+      now, now,
+    );
+    for (const task of running) {
+      this.audit(task.task_id, "task.cancelled", now, {
+        taskType: task.task_type,
+        leaseGeneration: task.lease_generation,
+        reason: "circuit_breaker_auto_pause",
+      });
+    }
+
     this.audit(taskId, "runtime.circuit_breaker_auto_pause", now, {
       failureCount,
+      cancelledRunningTasks: running.length,
       threshold: CIRCUIT_BREAKER.threshold,
       windowMs: CIRCUIT_BREAKER.windowMs,
     });

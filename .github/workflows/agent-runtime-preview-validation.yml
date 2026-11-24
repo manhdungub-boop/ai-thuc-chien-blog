@@ -2,6 +2,7 @@ name: Agent Runtime Preview Shell Validation
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened]
     branches:
     - main
     - integration/agent-runtime-v5-preview-20261120
@@ -9,18 +10,18 @@ on:
     - "fix/agent-runtime-**"
     - "test/agent-runtime-**"
     - "security/agent-runtime-**"
+    - "security/fence-leases-on-circuit-breaker-pause-20261123"
     - "chore/agent-runtime-**"
     paths:
       - "agents/runtime/**"
       - ".github/workflows/agent-runtime-preview-validation.yml"
       - ".github/workflows/agent-runtime-operator.yml"
   workflow_dispatch:
-
 permissions:
   contents: read
 
 concurrency:
-  group: agent-runtime-preview-validation-${{ github.ref }}
+  group: agent-runtime-preview-validation-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -61,13 +62,26 @@ jobs:
       - name: Report exact npm dependency advisories
         if: always()
         run: |
-          npm audit --prefix "$RUNNER_TEMP/agent-runtime-audit" --json > "$RUNNER_TEMP/agent-runtime-npm-audit.json" || true
-          node --input-type=module <<'NODE'
+          audit_exit=0
+          npm audit --prefix "$RUNNER_TEMP/agent-runtime-audit" --audit-level=high --json > "$RUNNER_TEMP/agent-runtime-npm-audit.json" || audit_exit=$?
+          NPM_AUDIT_EXIT_CODE="$audit_exit" node --input-type=module <<'NODE'
           import { readFile } from 'node:fs/promises';
           const report = JSON.parse(await readFile(process.env.RUNNER_TEMP + '/agent-runtime-npm-audit.json', 'utf8'));
           const vulnerabilities = report.vulnerabilities ?? {};
-          const totals = report.metadata?.vulnerabilities ?? {};
+          const totals = report.metadata?.vulnerabilities;
+          const countFields = ['info', 'low', 'moderate', 'high', 'critical', 'total'];
+          if (!totals || !countFields.every(field => Number.isSafeInteger(totals[field]) && totals[field] >= 0)) {
+            throw new Error('npm audit did not return complete vulnerability metadata; refusing to treat the scan as clean.');
+          }
+          const auditExitCode = Number(process.env.NPM_AUDIT_EXIT_CODE);
+          if (!Number.isInteger(auditExitCode) || auditExitCode < 0) {
+            throw new Error('npm audit exit status is unavailable; refusing to treat the scan as clean.');
+          }
+          if (auditExitCode !== 0 && totals.total === 0) {
+            throw new Error('npm audit failed without reporting vulnerability metadata; refusing to treat the scan as clean.');
+          }
           console.log(JSON.stringify({
+            audit_exit_code: auditExitCode,
             totals,
             packages: Object.entries(vulnerabilities).map(([name, item]) => ({
               name,
@@ -85,7 +99,7 @@ jobs:
               }))
             }))
           }, null, 2));
-          if ((totals.high ?? 0) > 0 || (totals.critical ?? 0) > 0) {
+          if (totals.high > 0 || totals.critical > 0) {
             throw new Error('High or critical dependency advisories remain in the isolated test dependency tree.');
           }
           NODE
@@ -170,24 +184,106 @@ jobs:
           console.log('PASS: Preview is isolated and has no recurring trigger; scheduled dispatch remains code-only until cost gates pass.');
           NODE
 
-      - name: Assert workflow is validation-only
+      - name: Assert validation job remains validation-only
         run: |
-          if grep -Eiq 'wrangler[[:space:]]+versions[[:space:]]+upload|CLOUDFLARE_[A-Z_]*TOKEN|secrets[.]' .github/workflows/agent-runtime-preview-validation.yml; then
-            echo "Unexpected upload command or Cloudflare secret reference in validation workflow"
-            exit 1
-          fi
           node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
           import { readFile } from 'node:fs/promises';
           const workflow = await readFile('.github/workflows/agent-runtime-preview-validation.yml', 'utf8');
-          const deployLines = workflow.split('\n').filter(line => line.trimStart().startsWith('npx --yes wrangler@4.166.0 deploy '));
-          assert.equal(deployLines.length, 1, 'only one Wrangler deploy command is allowed in this validation workflow');
-          assert.match(deployLines[0], /--dry-run/, 'Wrangler deploy must be dry-run only');
-          assert.match(deployLines[0], /--config wrangler\.preview\.jsonc/, 'dry-run must target only the dedicated Preview config');
-          assert.doesNotMatch(workflow, /CLOUDFLARE_[A-Z_]*TOKEN|secrets\./i);
-          console.log('PASS: Wrangler command is a single Preview-only dry-run; no Cloudflare credential or upload command.');
+          const getValidationJobSource = source => {
+            const parts = source.split('  one-shot-preview-e2e:\n');
+            assert.equal(parts.length, 2, 'the separately gated one-shot E2E job must exist exactly once');
+            const validationWorkflow = parts[0];
+            const validateJobStart = validationWorkflow.indexOf('  validate:\n');
+            const assertionStepStart = validationWorkflow.indexOf('      - name: Assert validation job remains validation-only', validateJobStart);
+            const nextStepOffset = validationWorkflow.indexOf('\n      - ', assertionStepStart + 1);
+            const nextStepStart = nextStepOffset < 0 ? -1 : nextStepOffset + 1;
+            assert.ok(validateJobStart >= 0 && assertionStepStart > validateJobStart && nextStepStart > assertionStepStart,
+              'validation job, assertion, and immediate next-step boundaries must exist');
+            return validationWorkflow.slice(validateJobStart, assertionStepStart) + validationWorkflow.slice(nextStepStart);
+          };
+          const parts = workflow.split('  one-shot-preview-e2e:\n');
+          assert.equal(parts.length, 2, 'the separately gated one-shot E2E job must exist exactly once');
+          const e2eWorkflow = parts[1];
+          const assertNoSecretReferences = source => {
+            if (/CLOUDFLARE_API_TOKEN:\s*\$\{\{\s*secrets\./i.test(source) || /secrets\.[A-Z0-9_]+/.test(source)) {
+              throw new Error('validation job must not reference secret values');
+            }
+          };
+          const assertValidationOnly = source => {
+            const validateJobSource = getValidationJobSource(source);
+            const deployLines = validateJobSource.split('\n').filter(line => /^\s*(?:run:\s*)?npx --yes wrangler@4\.166\.0 deploy\b/.test(line));
+            assert.equal(deployLines.length, 1, 'validation job must contain exactly one Wrangler command');
+            assert.match(deployLines[0], /--dry-run/, 'validation Wrangler command must be dry-run only');
+            assert.ok(deployLines[0].includes('--config wrangler.preview.jsonc'));
+            assertNoSecretReferences(validateJobSource);
+          };
+          assertValidationOnly(workflow);
+          const injectValidationStep = (source, step) => {
+            const marker = '\n      - name: Verify OIDC operator workflow is manual and pause-only';
+            const markerIndex = source.lastIndexOf(marker);
+            assert.ok(markerIndex > 0, 'the actual following workflow step must exist');
+            return source.slice(0, markerIndex) + '\n' + step + source.slice(markerIndex);
+          };
+          const injectedDeployStep = [
+            '      - name: injected deployment regression step',
+            '        run: |',
+            '          npx --yes wrangler@4.166.0 deploy --config wrangler.preview.jsonc'
+          ].join('\n');
+          const injectedDeployWorkflow = injectValidationStep(workflow, injectedDeployStep);
+          assert.notEqual(injectedDeployWorkflow, workflow, 'the deployment fixture must be inserted after the assertion step');
+          assert.throws(() => assertValidationOnly(injectedDeployWorkflow),
+            /validation job must contain exactly one Wrangler command/,
+            'validation-only guard must inspect steps after its own assertion'
+          );
+          const injectedUnnamedDeployStep = [
+            '      - run: |',
+            '          npx --yes wrangler@4.166.0 deploy --config wrangler.preview.jsonc'
+          ].join('\n');
+          assert.throws(() => assertValidationOnly(injectValidationStep(workflow, injectedUnnamedDeployStep)),
+            /validation job must contain exactly one Wrangler command/,
+            'validation-only guard must inspect unnamed steps after its own assertion'
+          );
+          const injectedSecretStep = [
+            '      - name: injected secret regression step',
+            '        env:',
+            '          CLOUDFLARE_API_TOKEN: ' + '$' + '{{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}',
+            '        run: echo test'
+          ].join('\n');
+          assert.throws(() => assertValidationOnly(injectValidationStep(workflow, injectedSecretStep)),
+            /must not reference secret values/,
+            'secret guard must inspect steps inserted immediately after its own assertion');
+          assert.ok(e2eWorkflow.includes("github.event.action == 'synchronize'"));
+          assert.ok(e2eWorkflow.includes("github.event.pull_request.labels.*.name"));
+          assert.ok(e2eWorkflow.includes("github.actor_id == '342528485'"), 'one-shot E2E must be restricted to repository owner actor');
+          assert.ok(e2eWorkflow.includes("github.event.pull_request.head.ref == 'security/fence-leases-on-circuit-breaker-pause-20261123'"));
+          assert.ok(e2eWorkflow.includes('id-token: write'));
+          assert.ok(e2eWorkflow.includes('Probe OIDC run gate readiness before requesting the token'));
+          assert.ok(e2eWorkflow.includes('github_oidc_token_required'));
+          assert.ok(e2eWorkflow.includes("config.vars.AGENT_OIDC_RUN_ENABLED = 'true'"));
+          assert.ok(e2eWorkflow.includes('config.vars.AGENT_OIDC_RUN_REF = process.env.GITHUB_REF'));
+          assert.ok(e2eWorkflow.includes('config.vars.AGENT_OIDC_RUN_WORKFLOW_REF = process.env.GITHUB_WORKFLOW_REF'));
+          assert.ok(e2eWorkflow.includes('config.vars.AGENT_OIDC_RUN_ACTOR_ID = process.env.GITHUB_ACTOR_ID'));
+          assert.ok(e2eWorkflow.includes("GENERATED_CONFIG: .wrangler.e2e.generated.jsonc"));
+          assert.ok(e2eWorkflow.includes('generated_config="$GENERATED_CONFIG"'));
+          assert.ok(e2eWorkflow.includes("writeFile(process.env.GENERATED_CONFIG,"));
+          assert.ok(e2eWorkflow.includes('--config "$generated_config"'));
+          assert.ok(e2eWorkflow.includes("readFile('wrangler.preview.jsonc', 'utf8')"));
+          assert.ok(e2eWorkflow.includes('if: always()'), 'rollback must run even after an E2E failure');
+          assert.ok(e2eWorkflow.includes('function classifyCloudflareWorkersPlan'), 'the Free-plan classifier must be present in the gated E2E job');
+          assert.ok(e2eWorkflow.includes('info.total_count === payload.result.length'), 'total_count must equal the returned result length when used as completeness proof');
+          assert.ok(e2eWorkflow.includes('info.next_page === undefined'), 'total_count cannot override an explicit or malformed next_page marker');
+          assert.ok(e2eWorkflow.includes('info.next_page === false'), 'an explicit no-next-page marker may prove complete enumeration');
+          assert.ok(e2eWorkflow.includes('explicit next_page=true must override matching totals'), 'contradictory pagination metadata must fail closed');
+          assert.ok(e2eWorkflow.includes('missing completeness metadata must fail closed'));
+          assert.ok(e2eWorkflow.includes('any active paid subscription blocks the Free-only deployment gate'));
+          assert.ok(e2eWorkflow.includes('free-default'), 'an empty, fully enumerated subscription list may map to the documented default Free plan');
+          assert.match(e2eWorkflow, /timeout-minutes:\s*20/, 'the E2E job must reserve a bounded total time budget');
+          assert.ok(e2eWorkflow.includes('timeout-minutes: 2'), 'checkout and pre-deployment checks must have step deadlines');
+          assert.ok(e2eWorkflow.includes('timeout-minutes: 3'), 'temporary deployment must have a step deadline');
+          assert.ok(e2eWorkflow.includes('timeout-minutes: 5'), 'rollback must retain its own bounded restoration window');
+          console.log('PASS: validation remains credential-free; the separately gated owner-only job uses OIDC, Preview-only deployment, and automatic rollback.');
           NODE
-
       - name: Verify OIDC operator workflow is manual and pause-only
         run: |
           node --input-type=module <<'NODE'
@@ -206,3 +302,421 @@ jobs:
           assert.doesNotMatch(workflow, /internal\/oidc\/resume|wrangler\s+deploy|CLOUDFLARE_.*TOKEN/i);
           console.log('PASS: OIDC operator is manual-only, main-ref-only, minimally privileged, serialized, Preview-scoped, and pause-only.');
           NODE
+  one-shot-preview-e2e:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.action == 'synchronize' &&
+      contains(github.event.pull_request.labels.*.name, 'agent-runtime') &&
+      github.repository == 'manhdungub-boop/ai-thuc-chien-blog' &&
+      github.event.pull_request.head.repo.full_name == 'manhdungub-boop/ai-thuc-chien-blog' &&
+      github.event.pull_request.head.ref == 'security/fence-leases-on-circuit-breaker-pause-20261123' &&
+      github.event.pull_request.base.ref == 'integration/agent-runtime-v5-preview-20261120' &&
+      github.actor_id == '342528485'
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: agent-runtime-preview
+    timeout-minutes: 20
+    concurrency:
+      group: agent-runtime-preview-deploy
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      CLOUDFLARE_ACCOUNT_ID: "92cf091bbac8b4879ec65feb30b4715b"
+      AGENT_RUNTIME_PREVIEW_URL: "https://ai-thuc-chien-agent-runtime-preview.manhdungub.workers.dev"
+    steps:
+      - name: Check out the exact authorized PR commit
+        timeout-minutes: 2
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Verify exact branch, actor, and commit pin
+        timeout-minutes: 2
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+          EXPECTED_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          EVENT_ACTION: ${{ github.event.action }}
+          EVENT_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "manhdungub-boop/ai-thuc-chien-blog"
+          test "$GITHUB_EVENT_NAME" = "pull_request"
+          test "$EVENT_ACTION" = "synchronize"
+          node --input-type=module -e "import assert from 'node:assert/strict'; const labels = JSON.parse(process.env.EVENT_LABELS); assert.ok(labels.includes('agent-runtime'), 'required agent-runtime label must remain present')"
+          test "$EXPECTED_HEAD_REF" = "security/fence-leases-on-circuit-breaker-pause-20261123"
+          test "$GITHUB_ACTOR_ID" = "342528485"
+          [[ "$GITHUB_REF" =~ ^refs/pull/[0-9]+/merge$ ]]
+          test "$GITHUB_WORKFLOW_REF" = "$GITHUB_REPOSITORY/.github/workflows/agent-runtime-preview-validation.yml@$GITHUB_REF"
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test -f agents/runtime/wrangler.preview.jsonc
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFile } from 'node:fs/promises';
+          const c = JSON.parse(await readFile('agents/runtime/wrangler.preview.jsonc', 'utf8'));
+          assert.equal(c.name, 'ai-thuc-chien-agent-runtime-preview');
+          assert.equal(c.preview_urls, false, 'the exact PR head must keep Preview URLs disabled');
+          assert.equal(c.vars.AGENT_ENABLED, 'false');
+          assert.equal(c.vars.AGENT_PAUSED, 'true');
+          assert.equal(c.vars.AGENT_SCHEDULER_ENABLED, 'false');
+          assert.equal(c.vars.AGENT_RECOVERY_ALARM_ENABLED, 'false');
+          assert.equal(c.vars.AGENT_REVIEWER_AUTH_ENABLED, 'false');
+          assert.equal(c.vars.AGENT_RATE_LIMIT_REQUIRED, 'true');
+          assert.equal((c.triggers?.crons ?? []).length, 0);
+          assert.equal('d1_databases' in c, false);
+          assert.equal('routes' in c, false);
+          NODE
+
+      - name: Verify Workers Free plan before deployment
+        timeout-minutes: 2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+            echo "::error::Preview deployment credential is unavailable; no deployment attempted."
+            exit 1
+          fi
+          response="$RUNNER_TEMP/cloudflare-subscriptions.json"
+          status="$(curl --silent --show-error --max-time 15 --output "$response" --write-out "%{http_code}" \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            --header "Accept: application/json" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/subscriptions")"
+          if [[ "$status" != "200" ]]; then
+            echo "::error::Workers plan could not be verified (HTTP $status); stopped before deployment."
+            exit 1
+          fi
+          # Cloudflare documents Workers Free as the default plan. A successful subscription-list response with no paid Workers subscription therefore means Workers Free.
+          plan_check="$(PLAN_RESPONSE="$response" node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFile } from 'node:fs/promises';
+
+          function classifyCloudflareWorkersPlan(payload) {
+            if (!payload || typeof payload !== 'object' || Array.isArray(payload) ||
+                payload.success !== true || !Array.isArray(payload.result)) return 'invalid';
+
+            const info = payload.result_info;
+            if (!info || typeof info !== 'object' || Array.isArray(info) ||
+                !Number.isSafeInteger(info.page) || info.page !== 1 ||
+                !Number.isSafeInteger(info.per_page) || info.per_page < 1 ||
+                info.per_page < payload.result.length) return 'incomplete';
+
+            const completeByTotalCount =
+              info.next_page === undefined &&
+              Number.isSafeInteger(info.count) && info.count === payload.result.length &&
+              Number.isSafeInteger(info.total_count) && info.total_count === payload.result.length;
+            const completeByNextPage =
+              info.next_page === false &&
+              (info.count === undefined || (Number.isSafeInteger(info.count) && info.count === payload.result.length)) &&
+              (info.total_count === undefined || (Number.isSafeInteger(info.total_count) && info.total_count === payload.result.length));
+            if (!completeByTotalCount && !completeByNextPage) return 'incomplete';
+
+            if (payload.result.length === 0) return 'free-default';
+
+            const allActiveSubscriptionsExplicitlyFree = payload.result.every(subscription => {
+              if (!subscription || typeof subscription !== 'object' || Array.isArray(subscription)) return false;
+              const state = subscription.state;
+              if (!['Trial', 'Provisioned', 'Paid', 'AwaitingPayment', 'Cancelled', 'Failed', 'Expired'].includes(state)) return false;
+              if (['Cancelled', 'Failed', 'Expired'].includes(state)) return true;
+              if (typeof subscription.price !== 'number' || subscription.price !== 0) return false;
+              const plan = subscription.rate_plan;
+              if (!plan || typeof plan !== 'object' || Array.isArray(plan)) return false;
+              const label = [plan.id, plan.public_name, plan.name]
+                .filter(value => typeof value === 'string')
+                .join(' ')
+                .toLowerCase();
+              return /(^|[^a-z0-9])free([^a-z0-9]|$)/.test(label);
+            });
+            return allActiveSubscriptionsExplicitlyFree ? 'free' : 'non-free';
+          }
+
+          const completeInfo = count => ({ page: 1, per_page: 20, count, total_count: count });
+          assert.equal(classifyCloudflareWorkersPlan({
+            success: true, result: [], result_info: completeInfo(0)
+          }), 'free-default');
+          assert.equal(classifyCloudflareWorkersPlan({
+            success: true,
+            result: [{ state: 'Paid', price: 0, rate_plan: { id: 'free', public_name: 'Free' } }],
+            result_info: completeInfo(1)
+          }), 'free');
+          assert.equal(classifyCloudflareWorkersPlan({
+            success: true,
+            result: [{ state: 'Paid', price: 5, rate_plan: { id: 'workers-paid', public_name: 'Workers Paid' } }],
+            result_info: completeInfo(1)
+          }), 'non-free');
+          assert.equal(classifyCloudflareWorkersPlan({
+            success: true,
+            result: [{ state: 'Paid', price: 20, rate_plan: { id: 'pro', public_name: 'Pro' } }],
+            result_info: completeInfo(1)
+          }), 'non-free', 'any active paid subscription blocks the Free-only deployment gate');
+          assert.equal(classifyCloudflareWorkersPlan({
+            success: true, result: [], result_info: { page: 1, per_page: 25, next_page: false }
+          }), 'free-default', 'explicit next_page=false proves complete enumeration when total_count is omitted');
+          assert.equal(classifyCloudflareWorkersPlan({
+            success: true, result: [], result_info: { page: 1, per_page: 25, next_page: true }
+          }), 'incomplete', 'a remaining page must fail closed');
+          assert.equal(classifyCloudflareWorkersPlan({
+            success: true, result: [], result_info: { page: 1, per_page: 25, count: 0, total_count: 0, next_page: true }
+          }), 'incomplete', 'explicit next_page=true must override matching totals');
+          assert.equal(classifyCloudflareWorkersPlan({
+            success: true, result: [], result_info: { page: 1, per_page: 25, count: 0, total_count: 0, next_page: 'false' }
+          }), 'incomplete', 'malformed next_page metadata must fail closed');
+          assert.equal(classifyCloudflareWorkersPlan({
+            success: true, result: [], result_info: { page: 1, per_page: 20, count: 0 }
+          }), 'incomplete', 'missing completeness metadata must fail closed');
+          assert.equal(classifyCloudflareWorkersPlan({
+            success: true,
+            result: [{ state: 'Paid', price: 0, rate_plan: { id: 'free', public_name: 'Free' } }],
+            result_info: { page: 1, per_page: 20, count: 1, total_count: 2 }
+          }), 'incomplete', 'truncated subscription pages must fail closed');
+          assert.equal(classifyCloudflareWorkersPlan({
+            success: true, result: [], result_info: { page: 2, per_page: 20, count: 0, total_count: 0 }
+          }), 'incomplete', 'unexpected page must fail closed');
+          assert.equal(classifyCloudflareWorkersPlan({
+            success: true,
+            result: [{ state: 'Paid', rate_plan: { id: 'free', public_name: 'Free' } }],
+            result_info: completeInfo(1)
+          }), 'non-free', 'missing price must not be treated as zero-cost');
+          assert.equal(classifyCloudflareWorkersPlan({ success: true, result: {} }), 'invalid');
+
+          const payload = JSON.parse(await readFile(process.env.PLAN_RESPONSE, 'utf8'));
+          const classification = classifyCloudflareWorkersPlan(payload);
+          if (!['free', 'free-default'].includes(classification)) {
+            throw new Error('Workers plan is not proven Free (' + classification + '); stopped before deployment.');
+          }
+          console.log(classification);
+          NODE
+          )"
+          case "$plan_check" in
+            free|free-default)
+              echo "Workers Free plan verified from a complete subscription listing; every active subscription is explicitly Free and zero-price."
+              ;;
+            *) echo "::error::Workers plan is not proven Free; deployment stopped."; exit 1 ;;
+          esac
+
+      - name: Deploy the one-shot read-only E2E configuration to dedicated Preview
+        timeout-minutes: 3
+        id: deploy_e2e
+        working-directory: agents/runtime
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}
+          GENERATED_CONFIG: .wrangler.e2e.generated.jsonc
+        run: |
+          set -euo pipefail
+          generated_config="$GENERATED_CONFIG"
+          trap 'rm -f "$generated_config"' EXIT
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFile, writeFile } from 'node:fs/promises';
+          const config = JSON.parse(await readFile('wrangler.preview.jsonc', 'utf8'));
+          assert.equal(config.name, 'ai-thuc-chien-agent-runtime-preview');
+          assert.equal(config.vars.AGENT_ENABLED, 'false');
+          assert.equal(config.vars.AGENT_PAUSED, 'true');
+          assert.equal(config.vars.AGENT_SCHEDULER_ENABLED, 'false');
+          assert.equal(config.vars.AGENT_RECOVERY_ALARM_ENABLED, 'false');
+          config.vars.AGENT_ENABLED = 'true';
+          config.vars.AGENT_PAUSED = 'false';
+          config.vars.AGENT_OIDC_RUN_ENABLED = 'true';
+          config.vars.AGENT_OIDC_RUN_REF = process.env.GITHUB_REF;
+          config.vars.AGENT_OIDC_RUN_WORKFLOW_REF = process.env.GITHUB_WORKFLOW_REF;
+          config.vars.AGENT_OIDC_RUN_ACTOR_ID = process.env.GITHUB_ACTOR_ID;
+          assert.equal(config.vars.AGENT_ENABLED, 'true');
+          assert.equal(config.vars.AGENT_PAUSED, 'false');
+          assert.equal(config.vars.AGENT_OIDC_RUN_ENABLED, 'true');
+          assert.equal(config.vars.AGENT_SCHEDULER_ENABLED, 'false');
+          assert.equal(config.vars.AGENT_RECOVERY_ALARM_ENABLED, 'false');
+          assert.equal(config.vars.AGENT_REVIEWER_AUTH_ENABLED, 'false');
+          assert.equal((config.triggers?.crons ?? []).length, 0);
+          await writeFile(process.env.GENERATED_CONFIG, JSON.stringify(config, null, 2) + '\n', { mode: 0o600 });
+          NODE
+          timeout --signal=TERM --kill-after=10s 120s npx --yes wrangler@4.166.0 deploy --config "$generated_config" \
+            --message "One-shot OIDC read-only E2E; automatic disable/restore follows"
+
+      - name: Wait for the expected enabled Preview configuration before invoking the task
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          ready=false
+          for attempt in $(seq 1 8); do
+            if curl --fail --silent --show-error --max-time 5 "$AGENT_RUNTIME_PREVIEW_URL/health" -o "$RUNNER_TEMP/preview-health.json" 2>/dev/null &&
+              node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFile } from 'node:fs/promises';
+          const h = JSON.parse(await readFile(process.env.RUNNER_TEMP + '/preview-health.json', 'utf8'));
+          assert.equal(h.ok, true);
+          assert.equal(h.service, 'ai-thuc-chien-agent-runtime-preview');
+          assert.equal(h.enabled, true);
+          assert.equal(h.paused, false);
+          assert.equal(h.scheduler, 'manual_only_no_cron');
+          assert.equal(h.reviewer_auth_enabled, false);
+          assert.equal(h.publication_authorized, false);
+          NODE
+            then
+              ready=true
+              break
+            fi
+            echo "The expected enabled Preview version is not serving yet (attempt $attempt/8)."
+            sleep 2
+          done
+          if [[ "$ready" != "true" ]]; then
+            echo "::error::The expected enabled Preview configuration did not become healthy; refusing to invoke the task."
+            exit 1
+          fi
+
+      - name: Probe OIDC run gate readiness before requesting the token
+        timeout-minutes: 1
+        env:
+          AGENT_RUNTIME_PREVIEW_URL: ${{ env.AGENT_RUNTIME_PREVIEW_URL }}
+        run: |
+          set -euo pipefail
+          probe_body='{"task":{"type":"content.review","idempotencyKey":"oidc-preview-e2e:readiness-probe","payload":{"articlePath":"articles/ai-agent-thuc-hanh-tu-thiet-ke-den-kiem-soat.html"}}}'
+          ready=false
+          ready_streak=0
+          for attempt in $(seq 1 12); do
+            status="$(curl --silent --show-error --max-time 8 --output "$RUNNER_TEMP/oidc-readiness.json" --write-out "%{http_code}" \
+              --request POST "$AGENT_RUNTIME_PREVIEW_URL/internal/oidc/run" \
+              --header "Content-Type: application/json" \
+              --header "Accept: application/json" \
+              --data "$probe_body")"
+            if [[ "$status" == "401" ]] && jq -e '.error == "github_oidc_token_required"' "$RUNNER_TEMP/oidc-readiness.json" >/dev/null; then
+              ready_streak=$((ready_streak + 1))
+              echo "OIDC run gate readiness probe passed ($ready_streak/3 consecutive checks)."
+              if [[ "$ready_streak" -ge 3 ]]; then
+                ready=true
+                break
+              fi
+              sleep 1
+              continue
+            fi
+            ready_streak=0
+            if [[ "$status" != "503" ]]; then
+              echo "::error::OIDC readiness probe returned an unexpected HTTP $status; refusing to request an operator token."
+              cat "$RUNNER_TEMP/oidc-readiness.json"
+              exit 1
+            fi
+            echo "OIDC run gate is not ready yet (attempt $attempt/12); no task was submitted."
+            sleep 2
+          done
+          if [[ "$ready" != "true" ]]; then
+            echo "::error::OIDC run gate did not become stable; refusing to request a token or run a task."
+            cat "$RUNNER_TEMP/oidc-readiness.json"
+            exit 1
+          fi
+          echo "OIDC run gate remained at the expected token-required boundary across three consecutive probes."
+          sleep 2
+      - name: Invoke exactly one allowlisted task with a short-lived GitHub OIDC token
+        timeout-minutes: 1
+        env:
+          OIDC_AUDIENCE: ai-thuc-chien-agent-runtime-preview
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          const requestUrl = process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
+          const requestToken = process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
+          if (!requestUrl || !requestToken) throw new Error('GitHub OIDC request context unavailable');
+          const tokenUrl = new URL(requestUrl);
+          tokenUrl.searchParams.set('audience', process.env.OIDC_AUDIENCE);
+          const tokenResponse = await fetch(tokenUrl, {
+            method: 'GET',
+            headers: { Authorization: 'Bearer ' + requestToken, Accept: 'application/json' },
+            redirect: 'error',
+            cache: 'no-store',
+            signal: AbortSignal.timeout(10000),
+          });
+          if (!tokenResponse.ok) throw new Error('GitHub OIDC token request failed: HTTP ' + tokenResponse.status);
+          const payload = JSON.parse(await tokenResponse.text());
+          if (typeof payload.value !== 'string' || payload.value.length < 100 || payload.value.length > 16384) {
+            throw new Error('GitHub OIDC token response invalid');
+          }
+          const response = await fetch(process.env.AGENT_RUNTIME_PREVIEW_URL + '/internal/oidc/run', {
+            method: 'POST',
+            headers: {
+              Authorization: 'Bearer ' + payload.value,
+              'Content-Type': 'application/json',
+              Accept: 'application/json',
+            },
+            body: JSON.stringify({ task: {
+              type: 'content.review',
+              idempotencyKey: `oidc-preview-e2e:pr368-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}`,
+              payload: { articlePath: 'articles/ai-agent-thuc-hanh-tu-thiet-ke-den-kiem-soat.html' },
+            } }),
+            redirect: 'error',
+            cache: 'no-store',
+            signal: AbortSignal.timeout(25000),
+          });
+          const result = JSON.parse(await response.text());
+          const item = result?.items?.[0];
+          if (!response.ok || result?.ok !== true || result?.summary?.total !== 1 ||
+              result?.summary?.succeeded !== 1 || item?.state !== 'succeeded' ||
+              item?.result?.taskType !== 'content.review' || result?.persistence?.verified !== true ||
+              result?.persistence?.state !== 'succeeded' ||
+              !['task.queued', 'task.claimed', 'task.succeeded'].every(type =>
+                result.persistence.auditEvents?.[type]?.after >= result.persistence.auditEvents?.[type]?.before + 1)) {
+            throw new Error('One-shot read-only task or durable audit verification failed: ' +
+              JSON.stringify({ httpStatus: response.status, error: result?.error, diagnosticCode: result?.diagnosticCode, state: item?.state }));
+          }
+          console.log(JSON.stringify({
+            ok: true,
+            taskId: item.taskId,
+            state: item.state,
+            taskType: item.result.taskType,
+            reviewStatus: item.result.status,
+            findingCount: item.result.findingCount,
+            auditVerified: result.persistence.verified,
+            auditEventTypes: Object.keys(result.persistence.auditEvents),
+          }));
+          NODE
+
+      - name: Always restore Preview to disabled and paused configuration
+        timeout-minutes: 5
+        if: always() && steps.deploy_e2e.outcome != 'skipped'
+        working-directory: agents/runtime
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+            echo "::error::Cannot restore Preview because the Cloudflare deployment credential is unavailable."
+            exit 1
+          fi
+          timeout --signal=TERM --kill-after=10s 120s npx --yes wrangler@4.166.0 deploy --config wrangler.preview.jsonc \
+            --message "Restore Agent Runtime Preview disabled and paused after one-shot E2E"
+          restored=false
+          for attempt in $(seq 1 10); do
+            if curl --fail --silent --show-error --max-time 5 "$AGENT_RUNTIME_PREVIEW_URL/health" -o "$RUNNER_TEMP/preview-health-restored.json" 2>/dev/null &&
+              node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFile } from 'node:fs/promises';
+          const h = JSON.parse(await readFile(process.env.RUNNER_TEMP + '/preview-health-restored.json', 'utf8'));
+          assert.equal(h.ok, true);
+          assert.equal(h.enabled, false);
+          assert.equal(h.paused, true);
+          assert.equal(h.scheduler, 'manual_only_no_cron');
+          assert.equal(h.reviewer_auth_enabled, false);
+          assert.equal(h.publication_authorized, false);
+          NODE
+            then
+              restored=true
+              break
+            fi
+            echo "Preview health has not converged to disabled/paused yet (attempt $attempt/10)."
+            sleep 3
+          done
+          if [[ "$restored" != "true" ]]; then
+            echo "::error::Preview did not report the required disabled/paused state within the bounded rollback verification window."
+            exit 1
+          fi
+          echo "Preview is restored and verified disabled/paused after bounded health polling."
+          for path in /operator-console /operator-console.js /reviewer-console /reviewer-console.js; do
+            response_headers="$(curl --silent --show-error --max-time 5 --dump-header - --output /dev/null "$AGENT_RUNTIME_PREVIEW_URL$path")"
+            status="$(printf '%s\n' "$response_headers" | awk '/^HTTP\// { code=$2 } END { print code }')"
+            location="$(printf '%s\n' "$response_headers" | awk 'tolower($1) == "location:" { sub(/^[^:]*:[[:space:]]*/, ""); sub(/\r$/, ""); print; exit }')"
+            if [[ "$status" != "302" ]] || [[ ! "$location" =~ ^https://[A-Za-z0-9.-]+\.cloudflareaccess\.com/cdn-cgi/access/login/ ]]; then
+              echo "::error::Console asset $path did not redirect unauthenticated requests to Cloudflare Access (HTTP $status)."
+              exit 1
+            fi
+          done
+          echo "All four human-facing console assets redirect unauthenticated requests to the Cloudflare Access login."

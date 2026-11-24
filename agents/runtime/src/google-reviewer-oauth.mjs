@@ -133,6 +133,12 @@ export async function handleGoogleReviewerAuth(request, env, { fetchImpl = fetch
 
   if (path === "/auth/google/start") {
     if (url.origin !== cfg.redirectOrigin) return json({ error: "preview_origin_mismatch" }, 400);
+    const returnToValues = url.searchParams.getAll("return_to");
+    if (returnToValues.length > 1) return json({ error: "login_return_path_rejected" }, 400);
+    const returnPath = returnToValues.length === 0 ? "/" : returnToValues[0];
+    if (!["/", "/reviewer-console", "/operator-console"].includes(returnPath)) {
+      return json({ error: "login_return_path_rejected" }, 400);
+    }
     const rateLimit = await store.consumeStartRateLimit(nowSeconds);
     if (!rateLimit.allowed) return json({ error: "login_start_rate_limited" }, 429, { "retry-after": String(rateLimit.retry_after_seconds) });
     const state = randomToken();
@@ -142,7 +148,7 @@ export async function handleGoogleReviewerAuth(request, env, { fetchImpl = fetch
     const challenge = b64url(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))));
     const stateHash = await digest(state);
     const browserHash = await digest(binding);
-    const created = await store.createTransaction(stateHash, browserHash, nonce, verifier, nowSeconds);
+    const created = await store.createTransaction(stateHash, browserHash, nonce, verifier, nowSeconds, returnPath);
     if (!created?.created) return json({ error: "login_transaction_create_failed" }, 503);
     const signedBinding = await signPayload(env.GOOGLE_REVIEWER_STATE_SECRET, { binding, exp: nowSeconds + TX_TTL_SECONDS });
     const auth = new URL(GOOGLE_AUTH_URL);
@@ -205,7 +211,7 @@ export async function handleGoogleReviewerAuth(request, env, { fetchImpl = fetch
       reviewer_ref: identity.reviewer.reviewer_ref, iat: nowSeconds, exp: nowSeconds + SESSION_TTL_SECONDS
     });
     return new Response(null, { status: 302, headers: [
-      ["location", cfg.redirectOrigin + "/"],
+      ["location", cfg.redirectOrigin + (["/reviewer-console", "/operator-console"].includes(transaction.return_path) ? transaction.return_path : "/")],
       ["cache-control", "no-store"],
       ["set-cookie", cookie(SESSION_COOKIE, session, SESSION_TTL_SECONDS)],
       ["set-cookie", clearCookie(TX_COOKIE)],

@@ -180,6 +180,42 @@ describe("article evidence readiness", () => {
     expect(result.publication_authorized).toBe(false);
   });
 
+  it("does not treat ordered-list numbering as an unreviewed quantitative claim", async () => {
+    const reviewRecord = await makeReview();
+    const draft = makeDraft();
+    draft.body_markdown = draft.body_markdown.replace(
+      "## Quy trình",
+      "## Quy trình\n\n1. Chuẩn bị dữ liệu.\n2. Kiểm tra nguồn."
+    );
+    const result = await assessArticleEvidenceReadiness({
+      draft,
+      ledger,
+      reviewRecord,
+      authenticatedReviewer: { authenticated: true, reviewer_ref: reviewRecord.reviewer_ref },
+      now
+    });
+    expect(result.status).toBe("eligible_for_owner_release_review");
+    expect(result.quantitative_claim_scan).toEqual({ status: "heuristic_scan_completed", unreviewed_candidates: 0 });
+  });
+
+  it("still flags quantitative statements inside ordered-list items", async () => {
+    const reviewRecord = await makeReview();
+    const draft = makeDraft();
+    draft.body_markdown = draft.body_markdown.replace(
+      "## Quy trình",
+      "## Quy trình\n\n1. Tỷ lệ xử lý đạt 95% trong năm 2026. [1]"
+    );
+    const result = await assessArticleEvidenceReadiness({
+      draft,
+      ledger,
+      reviewRecord,
+      authenticatedReviewer: { authenticated: true, reviewer_ref: reviewRecord.reviewer_ref },
+      now
+    });
+    expect(result.status).toBe("article_claim_evidence_not_ready");
+    expect(result.issues.some(issue => issue.code === "unreviewed_quantitative_claim_candidate" && issue.excerpt.includes("95%"))).toBe(true);
+  });
+
   it("does not treat inline numeric citation markers as quantitative claim candidates", async () => {
     const reviewRecord = await makeReview();
     const result = await assessArticleEvidenceReadiness({

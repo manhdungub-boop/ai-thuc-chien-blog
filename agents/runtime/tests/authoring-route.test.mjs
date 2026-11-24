@@ -59,7 +59,7 @@ function makeEnv({ remaining = 8 } = {}) {
       get(id) { assert.equal(id, "fixed-draft-store"); return draftStub; },
     },
   };
-  return { env, budgetCalls, draftCalls, artifacts, get used() { return used; } };
+  return { env, budgetCalls, draftCalls, artifacts, get used() { return used; }, resetBudgetForTest() { used = 0; } };
 }
 
 function makeRequest({ topic = "Ứng dụng AI Agent trong tự động hóa", key = "authoring-idempotency-0001", query = "", body = null, token = OPERATOR_TOKEN, contentType = "application/json" } = {}) {
@@ -174,6 +174,30 @@ test("authoring route returns an existing idempotent artifact without spending q
     assert.equal(network.calls.length, beforeCalls);
     assert.equal(runtime.budgetCalls.length, beforeBudget);
     assert.equal(runtime.draftCalls.length, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("authoring idempotency binds the full topic, not only its first 70 characters", async () => {
+  const originalFetch = globalThis.fetch;
+  const network = mockOfficialFetch();
+  globalThis.fetch = network.fetch;
+  const runtime = makeEnv();
+  const prefix = "A".repeat(70);
+  try {
+    const first = await worker.fetch(makeRequest({ topic: prefix + " first suffix" }), runtime.env);
+    const firstBody = await first.json();
+    assert.equal(first.status, 200);
+    // Reset only the mock budget counter so this test isolates full-topic idempotency.
+    runtime.resetBudgetForTest();
+    const second = await worker.fetch(makeRequest({ topic: prefix + " second suffix" }), runtime.env);
+    const secondBody = await second.json();
+    assert.equal(second.status, 200);
+    assert.equal(secondBody.duplicate, false);
+    assert.notEqual(secondBody.artifact.id, firstBody.artifact.id);
+    assert.equal(runtime.draftCalls.length, 2);
+    assert.equal(network.calls.length, 16);
   } finally {
     globalThis.fetch = originalFetch;
   }

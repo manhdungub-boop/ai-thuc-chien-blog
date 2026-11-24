@@ -55,8 +55,9 @@ async function readReplayResponse(response) {
  * after replay consumption succeeds. Callers must perform no state change before
  * this function returns ok:true.
  *
- * The Worker uses this primitive only for the dedicated OIDC Pause endpoint.
- * It does not authorize Resume, recovery, task submission, or task execution.
+ * The Worker uses this primitive for the dedicated OIDC Pause endpoint and the
+ * separately pinned one-shot, read-only Preview task endpoint. It does not
+ * authorize Resume, recovery, publishing, or arbitrary task execution.
  */
 export async function authorizeGitHubActionsOperator(token, {
   env = {},

@@ -41,7 +41,7 @@ export async function authorizeAIBankEvidenceWriter(token, env, eventId, now = D
       email,
       reviewer_ref: verified.reviewer.reviewer_ref
     },
-    audit_event_id: eventId,
+    audit_event_id: eventId.toLowerCase(),
     authorized_at: new Date(now).toISOString(),
     verification_authorized: false,
     catalog_write_authorized: false,

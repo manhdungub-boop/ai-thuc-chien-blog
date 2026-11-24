@@ -20,6 +20,7 @@ test("dedicated Agent Runtime Preview config binds its isolated State Store and 
     AGENT_RECOVERY_ALARM_ENABLED: "false",
     AGENT_OIDC_ENABLED: "true",
     AGENT_REVIEWER_AUTH_ENABLED: "false",
+    AGENT_CONSOLE_ACCESS_PROTECTED: "true",
     AGENT_RATE_LIMIT_REQUIRED: "true",
     AGENT_OIDC_AUDIENCE: "ai-thuc-chien-agent-runtime-preview",
     AGENT_OIDC_REPOSITORY: "manhdungub-boop/ai-thuc-chien-blog",
@@ -81,4 +82,13 @@ test("GitHub OIDC is enabled only for the pause-only Preview operator", () => {
   assert.equal(config.vars.AGENT_RECOVERY_ALARM_ENABLED, "false");
   assert.equal(config.vars.AGENT_REVIEWER_AUTH_ENABLED, "false");
   assert.equal(config.vars.AGENT_OIDC_ACTOR_ID, "342528485");
+});
+
+
+test("GitHub OIDC Pause workflow pins the bearer-token destination to the exact Preview origin", () => {
+  const workflowPath = fileURLToPath(new URL("../../../.github/workflows/agent-runtime-operator.yml", import.meta.url));
+  const workflow = readFileSync(workflowPath, "utf8");
+  assert.match(workflow, /target\.origin !== 'https:\/\/ai-thuc-chien-agent-runtime-preview\.manhdungub\.workers\.dev'/);
+  assert.match(workflow, /target\.pathname !== '\/'/);
+  assert.doesNotMatch(workflow, /target\.hostname/);
 });

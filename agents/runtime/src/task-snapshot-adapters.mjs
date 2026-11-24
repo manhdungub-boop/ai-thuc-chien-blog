@@ -168,6 +168,26 @@ function candidateSnapshot(candidateId, catalog) {
   };
 }
 
+const SAFE_SOURCE_ERROR_CODES = new Set([
+  "preview_source_http_error",
+  "preview_source_http_error_body_404",
+  "preview_source_http_error_body_403",
+  "preview_source_http_error_body_429",
+  "preview_source_body_unavailable",
+  "preview_source_too_large",
+  "preview_source_invalid_utf8",
+  "preview_source_fetch_failed",
+  "preview_source_path_not_allowlisted",
+  "preview_ai_bank_catalog_invalid",
+]);
+
+function safeSourceErrorCode(error) {
+  const message = error?.message || "";
+  return SAFE_SOURCE_ERROR_CODES.has(message) ||
+    /^preview_source_(?:http_error|redirect_rejected)_(?:contents|raw|body)_\d{3}$/.test(message)
+    ? message : "read_only_source_error";
+}
+
 function unavailable(reason) {
   return Object.freeze({
     ok: false,
@@ -238,7 +258,7 @@ export function createReadOnlyTaskSnapshotAdapter(readers) {
         }
       } catch (error) {
         if (signal?.aborted || error?.name === "AbortError") throw new Error("task_execution_aborted");
-        return unavailable("read_only_source_error");
+        return unavailable(safeSourceErrorCode(error));
       }
       return unavailable("task_type_not_allowed");
     },

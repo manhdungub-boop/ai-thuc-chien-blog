@@ -19,6 +19,10 @@ const valid = {
 };
 
 describe("reviewer OAuth Preview configuration preflight", () => {
+  it("requires human-facing console assets to validate the path-scoped Access assertion", () => {
+    expect(previewConfig.vars.AGENT_CONSOLE_ACCESS_PROTECTED).toBe("true");
+  });
+
   it("accepts a complete isolated Preview configuration while keeping auth and runtime disabled", () => {
     expect(inspectReviewerAuthPreviewConfig(valid, previewConfig)).toMatchObject({
       ready_for_manual_review: true,

@@ -61,8 +61,9 @@ async function reviewerSession(request, env) {
   if (!token) return { ok: false, status: 401, error: "reviewer_session_required" };
   const session = await verifyGoogleReviewerSessionToken(token, env);
   if (!session?.authenticated) {
-    const notConfigured = session?.reason === "reviewer_auth_not_configured";
-    return { ok: false, status: notConfigured ? 503 : 401, error: session?.reason || "reviewer_session_invalid" };
+    const status = session?.status || "reviewer_session_invalid";
+    const notConfigured = status === "reviewer_auth_not_configured";
+    return { ok: false, status: notConfigured ? 503 : 401, error: status };
   }
   return { ok: true, token, reviewer: session.reviewer };
 }
@@ -134,7 +135,7 @@ async function handleOperatorControl(request, env, url) {
   if (!sameOrigin(request)) return json({ ok: false, error: "same_origin_required" }, 403);
   if (env.AGENT_OPERATOR_CONTROL_ENABLED !== "true") return json({ ok: false, error: "operator_control_disabled" }, 503);
   const auth = await reviewerSession(request, env);
-  if (!auth.ok) return json({ ok: false, error: auth.error }, auth.status);
+  if (!auth.ok) return json({ ok: false, error: auth.error, publication_authorized: false }, auth.status);
   const allowed = String(env.AGENT_OPERATOR_ALLOWED_EMAILS || "").split(/[\s,]+/).map((email) => email.trim().toLowerCase()).filter(Boolean);
   const email = String(auth.reviewer?.email || "").toLowerCase();
   if (!email || !allowed.includes(email)) return json({ ok: false, error: "operator_not_allowlisted" }, 403);
@@ -145,7 +146,12 @@ async function handleOperatorControl(request, env, url) {
       stateStoreRequest(env, "/usage")
     ]);
     if (!controlResult.ok) return json(controlResult.body, controlResult.status);
-    const usage = usageResult.ok ? usageResult.body : {};
+    const usage = usageResult.ok ? usageResult.body : null;
+    const usageAvailable = Boolean(usage &&
+      Number.isSafeInteger(usage.acceptedToday) && usage.acceptedToday >= 0 &&
+      Number.isSafeInteger(usage.inFlight) && usage.inFlight >= 0 &&
+      Number.isSafeInteger(usage.dailyLimit) && usage.dailyLimit >= 1 &&
+      Number.isSafeInteger(usage.concurrentLimit) && usage.concurrentLimit >= 1);
     return json({
       ok: true,
       control: controlView(controlResult.body.control),
@@ -157,10 +163,11 @@ async function handleOperatorControl(request, env, url) {
         quality_review_executor_registered: false,
         quality_review_executor_enabled: false,
         task_admission: {
-          accepted_today: usage.acceptedToday ?? 0,
-          in_flight: usage.inFlight ?? 0,
-          daily_limit: 100,
-          concurrency_limit: 5
+          available: usageAvailable,
+          accepted_today: usageAvailable ? usage.acceptedToday : null,
+          in_flight: usageAvailable ? usage.inFlight : null,
+          daily_limit: usageAvailable ? usage.dailyLimit : null,
+          concurrency_limit: usageAvailable ? usage.concurrentLimit : null
         }
       }
     });
@@ -209,11 +216,13 @@ async function handleAIBankReviewerApi(request, env, url) {
     const parsed = await readJson(request, 16 * 1024);
     if (!parsed.ok) return json({ ok: false, error: parsed.error }, parsed.status);
     const body = parsed.value;
-    const allowedBodyKeys = ["audit_event_id", "evidence"];
+    const allowedBodyKeys = ["audit_event_id", "evidence", "reviewed_release_url"];
     const evidenceKeys = ["check_type", "source_title", "source_url", "excerpt"];
     if (Object.keys(body).some(key => !allowedBodyKeys.includes(key)) ||
-        Object.keys(body).length !== 2 ||
+        Object.keys(body).length !== 3 ||
         typeof body.audit_event_id !== "string" ||
+        typeof body.reviewed_release_url !== "string" ||
+        !body.reviewed_release_url.trim() || body.reviewed_release_url.length > 1000 ||
         !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.audit_event_id) ||
         !body.evidence || typeof body.evidence !== "object" || Array.isArray(body.evidence) ||
         Object.keys(body.evidence).length !== 4 || Object.keys(body.evidence).some(key => !evidenceKeys.includes(key))) {
@@ -237,7 +246,7 @@ async function handleAIBankReviewerApi(request, env, url) {
     let result;
     try {
       result = await store.submitAuthorizedReviewEvidence(
-        candidateId, body.evidence, writerAuth.token, body.audit_event_id, writerAuthConfig
+        candidateId, body.evidence, writerAuth.token, body.audit_event_id, body.reviewed_release_url, writerAuthConfig
       );
     } catch {
       return json({ ok: false, error: "ai_bank_evidence_writer_unavailable", evidence_recorded: false }, 503);
@@ -245,7 +254,8 @@ async function handleAIBankReviewerApi(request, env, url) {
     if (!result || !result.accepted) {
       const reason = result?.reason || "ai_bank_evidence_writer_unavailable";
       const status = reason === "evidence_writer_not_allowlisted" ? 403 :
-        reason === "duplicate_audit_event" || reason === "audit_event_id_reused" ? 409 :
+        reason === "stale_candidate_release" || reason === "duplicate_audit_event" || reason === "audit_event_id_reused" ? 409 :
+        reason === "reviewed_release_identity_required" ? 400 :
         reason === "evidence_audit_daily_limit_reached" ? 429 :
         reason === "evidence_audit_capacity_reached" || reason === "reviewer_auth_not_configured" || reason === "evidence_writer_not_configured" ? 503 :
         reason === "reviewer_session_invalid" || reason === "reviewer_session_expired" ? 401 : 400;
@@ -264,7 +274,7 @@ async function handleAIBankReviewerApi(request, env, url) {
   if (request.method !== "GET") return json({ ok: false, error: "method_not_allowed" }, 405);
   if (!sameOrigin(request)) return json({ ok: false, error: "review_request_origin_or_content_type_rejected" }, 403);
   const auth = await reviewerSession(request, env);
-  if (!auth.ok) return json({ ok: false, error: auth.error }, auth.status);
+  if (!auth.ok) return json({ ok: false, error: auth.error, publication_authorized: false }, auth.status);
 
   let limit = 20;
   if (collection) {
@@ -316,7 +326,7 @@ async function handleReviewerApi(request, env, url) {
   }
   if (!sameOrigin(request, request.method === "POST")) return json({ ok: false, error: "same_origin_required" }, 403);
   const auth = await reviewerSession(request, env);
-  if (!auth.ok) return json({ ok: false, error: auth.error }, auth.status);
+  if (!auth.ok) return json({ ok: false, error: auth.error, publication_authorized: false }, auth.status);
   const store = draftStore(env);
   if (!store) return json({ ok: false, error: "draft_store_not_configured" }, 503);
   const limit = parseLimit(url);
@@ -366,10 +376,20 @@ export async function handleReviewerHttpRequest(request, env) {
     const authResponse = await handleGoogleReviewerAuth(request, env);
     if (authResponse) return authResponse;
     const url = new URL(request.url);
-    if (request.method === "GET" && url.pathname === "/operator-console") return staticResponse(OPERATOR_CONSOLE_HTML, "text/html; charset=utf-8");
-    if (request.method === "GET" && url.pathname === "/operator-console.js") return staticResponse(OPERATOR_CONSOLE_JS, "application/javascript; charset=utf-8");
-    if (request.method === "GET" && url.pathname === "/reviewer-console") return staticResponse(REVIEWER_CONSOLE_HTML, "text/html; charset=utf-8");
-    if (request.method === "GET" && url.pathname === "/reviewer-console.js") return staticResponse(REVIEWER_CONSOLE_JS, "application/javascript; charset=utf-8");
+    const consoleAssets = {
+      "/operator-console": [OPERATOR_CONSOLE_HTML, "text/html; charset=utf-8"],
+      "/operator-console.js": [OPERATOR_CONSOLE_JS, "application/javascript; charset=utf-8"],
+      "/reviewer-console": [REVIEWER_CONSOLE_HTML, "text/html; charset=utf-8"],
+      "/reviewer-console.js": [REVIEWER_CONSOLE_JS, "application/javascript; charset=utf-8"],
+    };
+    if (request.method === "GET" && Object.prototype.hasOwnProperty.call(consoleAssets, url.pathname)) {
+      const accessAssertion = request.headers.get("Cf-Access-Jwt-Assertion");
+      if (env.AGENT_CONSOLE_ACCESS_PROTECTED !== "true" || !accessAssertion) {
+        return json({ ok: false, error: "not_found" }, 404);
+      }
+      const [body, contentType] = consoleAssets[url.pathname];
+      return staticResponse(body, contentType);
+    }
     if (url.pathname === "/api/operator/runtime-control") return handleOperatorControl(request, env, url);
     if (url.pathname.startsWith("/api/reviewer/")) return handleReviewerApi(request, env, url);
     return null;

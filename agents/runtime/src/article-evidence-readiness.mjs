@@ -39,7 +39,10 @@ function findUnmanifestedQuantitativeCandidates(markdown, reviewedClaims) {
   const prose = removeFencedCode(markdown);
   const paragraphs = prose.split(/\n{2,}/);
   for (const [paragraphIndex, paragraph] of paragraphs.entries()) {
-    const sentences = paragraph.split(/(?<=[.!?。！？])\s+|\n+/u);
+    const withoutListMarkers = paragraph.split("\n")
+      .map(line => line.replace(/^\s*(?:[-*+]\s+|\d+[.)]\s+)/, ""))
+      .join("\n");
+    const sentences = withoutListMarkers.split(/(?<=[.!?。！？])\s+|\n+/u);
     for (const sentence of sentences) {
       const candidate = sentence
         .replace(/!?\[[^\]]*\]\([^)]*\)/g, " ")

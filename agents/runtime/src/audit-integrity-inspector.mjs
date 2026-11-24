@@ -3,6 +3,19 @@ const EVENT_TYPES = new Set([
   "task.queued", "task.claimed", "task.lease_heartbeat",
   "task.succeeded", "task.failed", "task.cancelled",
   "task.lease_expired_requeued", "task.lease_expired_failed",
+  "task.terminal_failure", "runtime.circuit_breaker_auto_pause",
+]);
+const EVENT_ORDER = new Map([
+  ["task.queued", 10],
+  ["task.claimed", 20],
+  ["task.lease_heartbeat", 30],
+  ["task.lease_expired_requeued", 35],
+  ["task.lease_expired_failed", 35],
+  ["task.succeeded", 40],
+  ["task.failed", 40],
+  ["task.cancelled", 40],
+  ["task.terminal_failure", 50],
+  ["runtime.circuit_breaker_auto_pause", 60],
 ]);
 const MAX_TASKS = 1000;
 const MAX_EVENTS = 5000;
@@ -28,10 +41,12 @@ function record(value) {
  * Cross-checks bounded task and audit snapshots exported by a trusted read-only adapter.
  * This function does not query SQLite, authenticate a source, mutate records or repair gaps.
  */
-export function inspectAuditIntegrity(snapshot, { nowMs = Date.now() } = {}) {
+export function inspectAuditIntegrity(snapshot, { nowMs = Date.now(), findingOffset = 0, findingLimit = 100 } = {}) {
   if (!record(snapshot) || !Array.isArray(snapshot.tasks) || !Array.isArray(snapshot.events) ||
       snapshot.tasks.length > MAX_TASKS || snapshot.events.length > MAX_EVENTS ||
-      !Number.isSafeInteger(nowMs) || nowMs < 0) return invalid("audit_snapshot_invalid");
+      !Number.isSafeInteger(nowMs) || nowMs < 0 ||
+      !Number.isSafeInteger(findingOffset) || findingOffset < 0 ||
+      !Number.isSafeInteger(findingLimit) || findingLimit < 1 || findingLimit > 100) return invalid("audit_snapshot_invalid");
 
   const findings = [];
   const tasks = new Map();
@@ -91,7 +106,9 @@ export function inspectAuditIntegrity(snapshot, { nowMs = Date.now() } = {}) {
       ));
       continue;
     }
-    events.sort((a, b) => a.occurredAt - b.occurredAt || a.eventId.localeCompare(b.eventId));
+    events.sort((a, b) => a.occurredAt - b.occurredAt ||
+      (EVENT_ORDER.get(a.eventType) ?? 100) - (EVENT_ORDER.get(b.eventType) ?? 100) ||
+      a.eventId.localeCompare(b.eventId));
     for (let i = 1; i < events.length; i++) {
       if (events[i].occurredAt === events[i - 1].occurredAt) {
         findings.push(finding("audit_timestamp_tie_order_ambiguous", "warning", taskId, events[i].eventId));
@@ -104,7 +121,19 @@ export function inspectAuditIntegrity(snapshot, { nowMs = Date.now() } = {}) {
       if (event.occurredAt < lastAt) findings.push(finding("audit_timestamp_regression", "error", taskId, event.eventId));
       lastAt = Math.max(lastAt, event.occurredAt);
       const meta = event.metadata;
-      if (event.eventType === "task.queued") {
+      if (event.eventType === "task.terminal_failure") {
+        if (state !== "failed" || typeof meta.errorCode !== "string" ||
+            !/^[a-z0-9_.:-]{1,64}$/.test(meta.errorCode)) {
+          findings.push(finding("terminal_failure_annotation_invalid", "error", taskId, event.eventId));
+        }
+      } else if (event.eventType === "runtime.circuit_breaker_auto_pause") {
+        if (state !== "failed" || !Number.isSafeInteger(meta.failureCount) ||
+            !Number.isSafeInteger(meta.threshold) || meta.failureCount < meta.threshold ||
+            !Number.isSafeInteger(meta.cancelledRunningTasks) || meta.cancelledRunningTasks < 0 ||
+            !Number.isSafeInteger(meta.windowMs) || meta.windowMs < 1) {
+          findings.push(finding("circuit_breaker_annotation_invalid", "error", taskId, event.eventId));
+        }
+      } else if (event.eventType === "task.queued") {
         if (state !== null) findings.push(finding("duplicate_or_unexpected_queued_event", "error", taskId, event.eventId));
         state = "queued";
       } else if (event.eventType === "task.claimed") {
@@ -126,7 +155,7 @@ export function inspectAuditIntegrity(snapshot, { nowMs = Date.now() } = {}) {
         state = event.eventType === "task.lease_expired_requeued" ? "queued" : "failed";
       } else {
         const next = event.eventType.slice("task.".length);
-        const allowed = next === "cancelled" ? state === "queued" : state === "running";
+        const allowed = next === "cancelled" ? state === "queued" || state === "running" : state === "running";
         if (!allowed || (state === "running" && meta.leaseGeneration !== generation)) {
           findings.push(finding("terminal_event_transition_invalid", "error", taskId, event.eventId));
         }
@@ -140,13 +169,24 @@ export function inspectAuditIntegrity(snapshot, { nowMs = Date.now() } = {}) {
     }
   }
 
+  for (const taskId of tasks.keys()) {
+    if (!grouped.has(taskId)) findings.push(finding("task_without_audit_events", "error", taskId));
+  }
+
   const errors = findings.filter(item => item.severity === "error").length;
   const warnings = findings.filter(item => item.severity === "warning").length;
   return Object.freeze({
     ok: true,
     mode: "read_only_audit_integrity",
     status: errors ? "integrity_error" : warnings ? "review_required" : "consistent",
-    findings: Object.freeze(findings.slice(0, 100)),
+    findings: Object.freeze(findings.slice(findingOffset, findingOffset + findingLimit)),
+    pagination: Object.freeze({
+      offset: findingOffset,
+      limit: findingLimit,
+      total: findings.length,
+      hasMore: findingOffset + findingLimit < findings.length,
+      nextOffset: findingOffset + findingLimit < findings.length ? findingOffset + findingLimit : null,
+    }),
     summary: Object.freeze({ errors, warnings, checkedTasks: tasks.size, checkedEvents: eventIds.size }),
     sideEffects: Object.freeze([]),
     limitations: Object.freeze([

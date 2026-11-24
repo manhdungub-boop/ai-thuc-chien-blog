@@ -5,6 +5,7 @@ on:
     branches:
       - security/release-readiness-hardening-20261110
       - integration/agent-runtime-v5-preview-20261120
+      - security/fence-leases-on-circuit-breaker-pause-20261123
   pull_request:
     branches:
       - main

@@ -81,7 +81,7 @@ export function heartbeatLease(row, {
   return {
     ok: true,
     fields: {
-      lease_expires_at: Math.min(now + leaseDurationMs, row.lease_max_expires_at),
+      lease_expires_at: Math.max(row.lease_expires_at, Math.min(now + leaseDurationMs, row.lease_max_expires_at)),
       updated_at: now,
     },
   };

@@ -44,7 +44,8 @@ jobs:
         run: |
           node --input-type=module <<'NODE'
           const base = new URL(process.env.AGENT_RUNTIME_PREVIEW_URL || "");
-          if (base.protocol !== "https:" || !base.hostname.endsWith(".workers.dev") || base.username || base.password || base.search || base.hash) {
+          if (base.origin !== "https://ai-thuc-chien-agent-runtime-preview.manhdungub.workers.dev" ||
+              base.pathname !== "/" || base.username || base.password || base.search || base.hash) {
             throw new Error("dedicated_runtime_preview_url_invalid");
           }
           if (!process.env.ACTIONS_ID_TOKEN_REQUEST_URL || !process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN) {
@@ -122,7 +123,11 @@ jobs:
         run: |
           node --input-type=module <<'NODE'
           import fs from "node:fs";
-          const base = new URL(process.env.AGENT_RUNTIME_PREVIEW_URL);
+          const base = new URL(process.env.AGENT_RUNTIME_PREVIEW_URL || "");
+          if (base.origin !== "https://ai-thuc-chien-agent-runtime-preview.manhdungub.workers.dev" ||
+              base.pathname !== "/" || base.username || base.password || base.search || base.hash) {
+            throw new Error("dedicated_runtime_preview_url_invalid");
+          }
           const tokenUrl = new URL(process.env.ACTIONS_ID_TOKEN_REQUEST_URL);
           tokenUrl.searchParams.set("audience", "ai-thuc-chien-agent-runtime-preview");
           const tokenResponse = await fetch(tokenUrl, {

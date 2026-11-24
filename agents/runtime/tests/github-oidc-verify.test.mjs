@@ -81,6 +81,47 @@ test("accepts a valid GitHub Actions token bound to the exact repository, workfl
   assert.equal(result.identity.runId, "987654321");
 });
 
+test("accepts an owner-pinned pull_request workflow using the exact Preview environment subject", async () => {
+  const pushExpected = Object.freeze({
+    ...expected,
+    ref: "refs/pull/368/merge",
+    workflowRef: "manhdungub-boop/ai-thuc-chien-blog/.github/workflows/agent-runtime-preview-validation.yml@refs/pull/368/merge",
+    eventName: "pull_request",
+    environment: "agent-runtime-preview",
+  });
+  const pushSubject = "repo:manhdungub-boop@342528485/ai-thuc-chien-blog@1423636651:environment:agent-runtime-preview";
+  const token = await signedToken({
+    sub: pushSubject,
+    ref: pushExpected.ref,
+    workflow_ref: pushExpected.workflowRef,
+    event_name: "pull_request",
+  });
+  const result = await verify(token, { expected: pushExpected });
+  assert.equal(result.ok, true);
+  assert.equal(result.identity.eventName, "pull_request");
+  assert.equal(result.identity.ref, pushExpected.ref);
+  assert.equal(result.identity.workflowRef, pushExpected.workflowRef);
+});
+
+test("rejects pull_request OIDC tokens without the exact environment-bound subject", async () => {
+  const pushExpected = Object.freeze({
+    ...expected,
+    ref: "refs/pull/368/merge",
+    workflowRef: "manhdungub-boop/ai-thuc-chien-blog/.github/workflows/agent-runtime-preview-validation.yml@refs/pull/368/merge",
+    eventName: "pull_request",
+    environment: "agent-runtime-preview",
+  });
+  const token = await signedToken({
+    sub: "repo:manhdungub-boop@342528485/ai-thuc-chien-blog@1423636651:ref:" + pushExpected.ref,
+    ref: pushExpected.ref,
+    workflow_ref: pushExpected.workflowRef,
+    event_name: "pull_request",
+  });
+  const result = await verify(token, { expected: pushExpected });
+  assert.equal(result.ok, false);
+  assert.equal(result.error, "oidc_claims_invalid");
+});
+
 test("rejects a token with a bad signature", async () => {
   const token = await signedToken();
   const parts = token.split(".");

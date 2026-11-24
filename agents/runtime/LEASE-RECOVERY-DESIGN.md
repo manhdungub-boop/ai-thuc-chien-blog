@@ -55,6 +55,26 @@ Important limitation: a stop cannot undo an HTTP request already transmitted or 
 
 A resume action must require a separate explicit operator authorization, a recorded reason, and a new stop epoch. Resume must not automatically replay tasks whose external outcome is unknown.
 
+## Circuit-breaker cancellation and operator recovery
+
+The current consolidated Preview remediation uses terminal `cancelled` state with `circuit_breaker_paused` when the global breaker opens. This is a deliberate fail-closed fence, not an automatic retry decision:
+
+- All leases that were `running` at the breaker transaction are revoked; late heartbeat and completion requests must conflict.
+- Cancellation does not prove that a worker stopped an HTTP request already sent or that a remote service did not accept an action.
+- Manual resume reopens admission only. It must not requeue or reopen breaker-cancelled tasks.
+- The original idempotency key continues to identify the terminal cancelled record; repeating the same reservation returns that record and must not start a new attempt.
+
+Before any executor is enabled, the operator recovery procedure must:
+
+1. Keep scheduler/recovery triggers disabled while reviewing the paused queue.
+2. Inspect the task record and ordered audit history, including the cancellation reason and lease generation.
+3. Classify the task as read-only or side-effecting and reconcile any outbound request using its stable effect ID and destination read-after-write/idempotency evidence.
+4. Leave tasks with unknown external outcomes blocked; never blindly replay them.
+5. Only after reconciliation and explicit operator authorization, create a new task with a new task idempotency key. Do not mutate the terminal task or reuse its key. Side-effecting task types remain prohibited until their separate effect-ledger contract and destination allowlist are implemented.
+
+Required regression coverage includes breaker cancellation of an unrelated in-flight task, rejection of late heartbeat/completion, manual resume without automatic requeue, and same-key reservation returning the existing terminal cancellation. This test coverage does not replace external-side-effect reconciliation or independent security review.
+
+
 ## External side-effect idempotency
 
 Task-level reservation idempotency is insufficient for publishing or other remote effects. Add a separate effect ledger keyed by a stable `effect_id` derived from task ID + named action (not from mutable content).

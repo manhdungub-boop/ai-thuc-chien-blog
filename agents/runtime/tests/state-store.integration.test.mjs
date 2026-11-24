@@ -36,7 +36,7 @@ async function createRuntime({ daily = 100, concurrent = 5, persistDir, enabled 
   // Tests that exercise an enabled runtime explicitly open the durable control gate.
   // Fresh-store defaults remain paused unless the test opts into this fixture setup.
   if (resumeControl && enabled === "true" && paused === "false") {
-    const opened = await call(stub, "/control/resume", {
+    const opened = await resumeWithCurrentVersion(stub, {
       actor: "integration-test",
       requestId: crypto.randomUUID(),
       reason: "test fixture initialization",
@@ -66,6 +66,18 @@ async function call(stub, pathname, body, headers = {}) {
   return { status: response.status, body: await response.json() };
 }
 
+async function resumeWithCurrentVersion(stub, body) {
+  const observed = await call(stub, "/control");
+  if (observed.status !== 200 || !Number.isSafeInteger(observed.body?.control?.version)) {
+    throw new Error("test_control_state_unavailable");
+  }
+  return call(stub, "/control/resume", {
+    ...body,
+    expectedVersion: observed.body.control.version,
+  });
+}
+
+
 test("read-only metrics report bounded aggregate task, quota, age, and audit data", async () => {
   await withRuntime({ daily: 10, concurrent: 4 }, async ({ stub }) => {
     const created = await call(stub, "/reserve", task("metrics-queued"));
@@ -94,6 +106,71 @@ test("read-only metrics report bounded aggregate task, quota, age, and audit dat
     assert.equal((await call(stub, "/metrics?day=2026-11-20")).status, 400);
     assert.equal(JSON.stringify(metrics.body).includes("integration-test-key"), false);
   });
+});
+
+test("metrics distinguish qualifying breaker failures from budget failures and pause actor from reason text", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const created = await call(stub, "/reserve", task("metrics-budget-failure"));
+    assert.equal(created.status, 201);
+    const claimed = await call(stub, "/claim", { taskId: created.body.task.taskId });
+    assert.equal(claimed.status, 200);
+    const completed = await call(stub, "/complete", {
+      taskId: created.body.task.taskId,
+      leaseOwner: claimed.body.lease.owner,
+      leaseGeneration: claimed.body.lease.generation,
+      status: "failed",
+      errorCode: "daily_external_request_budget_exhausted",
+    });
+    assert.equal(completed.status, 200);
+
+    const paused = await call(stub, "/control/pause", {
+      actor: "integration-test",
+      requestId: crypto.randomUUID(),
+      reason: "circuit_breaker:5_failures_in_10m",
+    });
+    assert.equal(paused.status, 200);
+
+    const metrics = await call(stub, "/metrics");
+    assert.equal(metrics.status, 200);
+    assert.equal(metrics.body.circuitBreaker.paused, true);
+    assert.equal(metrics.body.circuitBreaker.failureCountLast10m, 0);
+    assert.equal(metrics.body.circuitBreaker.autoPaused, false);
+    assert.equal(metrics.body.circuitBreaker.state, "closed");
+  });
+});
+
+test("v1 migration cancels legacy running rows that have no lease identity", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "ai-thuc-chien-v1-migration-"));
+  let first;
+  let migrated;
+  try {
+    first = await createRuntime({ persistDir: directory });
+    const created = await call(first.stub, "/reserve", task("legacy-running"));
+    assert.equal(created.status, 201);
+    const claimed = await call(first.stub, "/claim", { taskId: created.body.task.taskId });
+    assert.equal(claimed.status, 200);
+    const downgraded = await call(first.stub, "/__test/downgrade-v1", {});
+    assert.equal(downgraded.status, 200);
+    await first.mf.dispose();
+    first = null;
+
+    migrated = await createRuntime({ persistDir: directory });
+    const taskResult = await call(migrated.stub, "/task?id=" + encodeURIComponent(created.body.task.taskId));
+    assert.equal(taskResult.status, 200);
+    assert.equal(taskResult.body.task.state, "cancelled");
+    assert.equal(taskResult.body.task.errorCode, "legacy_running_lease_missing");
+    const metrics = await call(migrated.stub, "/metrics");
+    assert.equal(metrics.status, 200);
+    assert.equal(metrics.body.tasks.running, 0);
+    assert.equal(metrics.body.tasks.cancelledRetained, 1);
+    assert.ok(metrics.body.auditLast24h.some(event =>
+      event.eventType === "task.cancelled" && event.count >= 1
+    ));
+  } finally {
+    if (first) await first.mf.dispose();
+    if (migrated) await migrated.mf.dispose();
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 test("quota pressure reports daily 80/90/100 and concurrent 80/100 boundaries without changing admission policy", async () => {
@@ -275,6 +352,45 @@ test("lease recovery alarm is disabled by default and recovers only expired leas
   });
 });
 
+test("terminal failures reached by recovery alarms count toward the circuit breaker", async () => {
+  await withRuntime({ recoveryAlarmEnabled: "true" }, async ({ stub }) => {
+    for (let index = 1; index <= 5; index += 1) {
+      const created = await call(stub, "/reserve", task("alarm-breaker-" + index));
+      assert.equal(created.status, 201);
+      const taskId = created.body.task.taskId;
+
+      const firstClaim = await call(stub, "/claim", { taskId });
+      assert.equal(firstClaim.status, 200);
+      const firstExpiry = await call(stub, "/__test/expire-and-fire", { taskId });
+      assert.equal(firstExpiry.body.task.state, "queued");
+
+      const secondClaim = await call(stub, "/claim", { taskId }, {
+        "x-test-now": new Date(Date.now() + 60_000).toISOString(),
+      });
+      assert.equal(secondClaim.status, 200);
+      const secondExpiry = await call(stub, "/__test/expire-and-fire", { taskId });
+      assert.equal(secondExpiry.body.task.state, "queued");
+
+      const thirdClaim = await call(stub, "/claim", { taskId }, {
+        "x-test-now": new Date(Date.now() + 3 * 60_000).toISOString(),
+      });
+      assert.equal(thirdClaim.status, 200);
+      const terminalExpiry = await call(stub, "/__test/expire-and-fire", { taskId });
+      assert.equal(terminalExpiry.body.task.state, "failed");
+      assert.equal(terminalExpiry.body.task.lease_owner, null);
+
+      const control = await call(stub, "/control");
+      assert.equal(control.body.control.failureCountLast10m, index);
+      assert.equal(control.body.control.paused, index === 5);
+    }
+
+    const metrics = await call(stub, "/metrics");
+    assert.equal(metrics.body.circuitBreaker.autoPaused, true);
+    assert.equal(metrics.body.circuitBreaker.failureCountLast10m, 5);
+    assert.equal(metrics.body.circuitBreaker.state, "open");
+  });
+});
+
 test("recovery alarm stops and clears itself while the durable operator pause cancels running work", async () => {
   await withRuntime({ recoveryAlarmEnabled: "true" }, async ({ stub }) => {
     const created = await call(stub, "/reserve", task("alarm-paused"));
@@ -294,6 +410,36 @@ test("recovery alarm stops and clears itself while the durable operator pause ca
   });
 });
 
+test("resume rejects an observed control version after a newer Pause commits", async () => {
+  await withRuntime({ resumeControl: false }, async ({ stub }) => {
+    const initial = await call(stub, "/control");
+    assert.equal(initial.body.control.paused, true);
+    const opened = await resumeWithCurrentVersion(stub, {
+      actor: "version-fence-test", requestId: crypto.randomUUID(), reason: "open fixture gate",
+    });
+    assert.equal(opened.status, 200);
+    const observed = await call(stub, "/control");
+    assert.equal(observed.body.control.paused, false);
+    const newerPause = await call(stub, "/control/pause", {
+      actor: "version-fence-operator", requestId: crypto.randomUUID(), reason: "newer emergency pause",
+    });
+    assert.equal(newerPause.status, 200);
+    assert.equal(newerPause.body.control.version, observed.body.control.version + 1);
+
+    const staleResume = await call(stub, "/control/resume", {
+      actor: "version-fence-test",
+      requestId: crypto.randomUUID(),
+      reason: "stale one-shot resume",
+      expectedVersion: observed.body.control.version,
+    });
+    assert.equal(staleResume.status, 409);
+    assert.equal(staleResume.body.error, "runtime_control_version_conflict");
+    const finalControl = await call(stub, "/control");
+    assert.equal(finalControl.body.control.paused, true);
+    assert.equal(finalControl.body.control.version, newerPause.body.control.version);
+  });
+});
+
 test("pause clears the recovery alarm and resume does not re-arm a cancelled lease", async () => {
   await withRuntime({ recoveryAlarmEnabled: "true" }, async ({ stub }) => {
     const created = await call(stub, "/reserve", task("alarm-pause-resume"));
@@ -309,7 +455,7 @@ test("pause clears the recovery alarm and resume does not re-arm a cancelled lea
     assert.equal((await call(stub, "/__test/alarm-state")).body.alarmAt, null,
       "pause must clear a pending recovery alarm immediately");
 
-    const resumed = await call(stub, "/control/resume", {
+    const resumed = await resumeWithCurrentVersion(stub, {
       actor: "alarm-resume-operator", requestId: crypto.randomUUID(), reason: "maintenance complete",
     });
     assert.equal(resumed.status, 200);
@@ -464,9 +610,18 @@ test("durable pause is atomic, survives restart, and resume never dispatches que
     assert.equal(paused.status, 200);
     assert.equal(paused.body.changed, true);
     assert.equal(paused.body.control.paused, true);
-    const duplicatePause = await call(active.stub, "/control/pause", { actor: "test-operator", requestId: crypto.randomUUID(), reason: "duplicate" });
+    const observedBeforeRepeatedPause = await call(active.stub, "/control");
+    const duplicatePause = await call(active.stub, "/control/pause", { actor: "test-operator", requestId: crypto.randomUUID(), reason: "duplicate emergency pause" });
     assert.equal(duplicatePause.status, 200);
     assert.equal(duplicatePause.body.changed, false);
+    assert.equal(duplicatePause.body.control.paused, true);
+    assert.equal(duplicatePause.body.control.version, observedBeforeRepeatedPause.body.control.version + 1);
+    const staleResume = await call(active.stub, "/control/resume", {
+      actor: "test-operator", requestId: crypto.randomUUID(), reason: "stale resume",
+      expectedVersion: observedBeforeRepeatedPause.body.control.version,
+    });
+    assert.equal(staleResume.status, 409);
+    assert.equal(staleResume.body.error, "runtime_control_version_conflict");
     assert.equal((await call(active.stub, "/reserve", task("durable-control-blocked"))).status, 503);
     assert.equal((await call(active.stub, "/claim", { taskId })).status, 503);
 
@@ -475,10 +630,10 @@ test("durable pause is atomic, survives restart, and resume never dispatches que
     restarted = await createRuntime({ persistDir: directory, resumeControl: false });
     const persisted = await call(restarted.stub, "/control");
     assert.equal(persisted.body.control.paused, true);
-    assert.equal(persisted.body.control.version, 2);
+    assert.equal(persisted.body.control.version, 3);
     assert.equal((await call(restarted.stub, "/claim", { taskId })).status, 503);
 
-    const resumed = await call(restarted.stub, "/control/resume", { actor: "test-operator", requestId: crypto.randomUUID(), reason: "maintenance complete" });
+    const resumed = await resumeWithCurrentVersion(restarted.stub, { actor: "test-operator", requestId: crypto.randomUUID(), reason: "maintenance complete" });
     assert.equal(resumed.status, 200);
     assert.equal(resumed.body.changed, true);
     assert.equal(resumed.body.control.paused, false);
@@ -506,6 +661,58 @@ test("control mutations enforce per-operator durable rate limits", async () => {
     const results = await Promise.all(requests);
     assert.equal(results.filter((result) => result.status === 200).length, 10);
     assert.equal(results.filter((result) => result.status === 429).length, 1);
+  });
+});
+
+test("one-shot OIDC cleanup Pause bypasses an exhausted actor rate limit without weakening operator limits", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const actor = "github-actions:342528485";
+    for (let index = 0; index < 9; index += 1) {
+      const paused = await call(stub, "/control/pause", {
+        actor, requestId: crypto.randomUUID(), reason: "rate-limit warmup",
+      });
+      assert.equal(paused.status, 200);
+    }
+
+    const control = await call(stub, "/control");
+    assert.equal(control.body.control.paused, true);
+    const resumed = await call(stub, "/control/resume", {
+      actor,
+      requestId: crypto.randomUUID(),
+      reason: "one-shot OIDC Preview E2E",
+      expectedVersion: control.body.control.version,
+    });
+    assert.equal(resumed.status, 200);
+    assert.equal(resumed.body.control.paused, false);
+
+    const invalidCleanup = await call(stub, "/control/pause", {
+      actor, requestId: crypto.randomUUID(), reason: "caller-selected reason", internalCleanup: true,
+    });
+    assert.equal(invalidCleanup.status, 400);
+
+    const invalidResume = await call(stub, "/control/resume", {
+      actor,
+      requestId: crypto.randomUUID(),
+      reason: "one-shot OIDC Preview E2E complete",
+      expectedVersion: resumed.body.control.version,
+      internalCleanup: true,
+    });
+    assert.equal(invalidResume.status, 400);
+
+    const cleanup = await call(stub, "/control/pause", {
+      actor,
+      requestId: crypto.randomUUID(),
+      reason: "one-shot OIDC Preview E2E complete",
+      internalCleanup: true,
+    });
+    assert.equal(cleanup.status, 200, "cleanup pause response: " + JSON.stringify(cleanup.body));
+    assert.equal(cleanup.body.control.paused, true);
+
+    const ordinaryPause = await call(stub, "/control/pause", {
+      actor, requestId: crypto.randomUUID(), reason: "ordinary operator pause",
+    });
+    assert.equal(ordinaryPause.status, 429);
+    assert.equal(ordinaryPause.body.error, "runtime_control_rate_limited");
   });
 });
 
@@ -700,7 +907,7 @@ test("fresh State Store initializes schema v5 paused with conservative lease def
     const initialControl = await call(stub, "/control");
     assert.equal(initialControl.body.control.paused, true);
     assert.equal(initialControl.body.control.version, 0);
-    const opened = await call(stub, "/control/resume", {
+    const opened = await resumeWithCurrentVersion(stub, {
       actor: "integration-test",
       requestId: crypto.randomUUID(),
       reason: "explicit test gate opening",
@@ -1047,8 +1254,15 @@ test("expired leases are requeued after bounded delay and fail at the attempt ce
   });
 });
 
-test("five terminal failures within ten minutes durably open the circuit breaker", async () => {
+test("five terminal failures open the circuit breaker and fence every in-flight lease", async () => {
   await withRuntime({}, async ({ stub }) => {
+    const inFlight = await call(stub, "/reserve", task("circuit-breaker-in-flight"));
+    assert.equal(inFlight.status, 201);
+    const inFlightTaskId = inFlight.body.task.taskId;
+    const inFlightClaim = await call(stub, "/claim", { taskId: inFlightTaskId });
+    assert.equal(inFlightClaim.status, 200);
+    const inFlightLease = inFlightClaim.body.lease;
+
     for (let index = 1; index <= 5; index++) {
       const created = await call(stub, "/reserve", task("circuit-breaker-" + index));
       assert.equal(created.status, 201);
@@ -1076,6 +1290,46 @@ test("five terminal failures within ten minutes durably open the circuit breaker
     assert.equal(control.body.control.paused, true);
     assert.equal(control.body.control.circuitBreakerThreshold, 5);
     assert.equal(control.body.control.circuitBreakerWindowMs, 10 * 60 * 1000);
+
+    const fenced = await call(stub, "/task?id=" + encodeURIComponent(inFlightTaskId));
+    assert.equal(fenced.status, 200);
+    assert.equal(fenced.body.task.state, "cancelled");
+    assert.equal(fenced.body.task.errorCode, "circuit_breaker_paused");
+    const lateHeartbeat = await call(stub, "/heartbeat", {
+      taskId: inFlightTaskId,
+      leaseOwner: inFlightLease.owner,
+      leaseGeneration: inFlightLease.generation,
+    });
+    assert.equal(lateHeartbeat.status, 409);
+    const lateCompletion = await call(stub, "/complete", {
+      taskId: inFlightTaskId,
+      leaseOwner: inFlightLease.owner,
+      leaseGeneration: inFlightLease.generation,
+      status: "succeeded",
+    });
+    assert.equal(lateCompletion.status, 409);
+    assert.equal((await call(stub, "/usage")).body.inFlight, 0);
+
+    const resumed = await resumeWithCurrentVersion(stub, {
+      actor: "integration-test-resume",
+      requestId: crypto.randomUUID(),
+      reason: "verify cancelled work is never replayed automatically",
+    });
+    assert.equal(resumed.status, 200);
+    assert.equal(resumed.body.control.paused, false);
+
+    const afterResume = await call(stub, "/task?id=" + encodeURIComponent(inFlightTaskId));
+    assert.equal(afterResume.status, 200);
+    assert.equal(afterResume.body.task.state, "cancelled");
+    assert.equal(afterResume.body.task.errorCode, "circuit_breaker_paused");
+
+    const sameIdempotencyKey = await call(stub, "/reserve", task("circuit-breaker-in-flight"));
+    assert.equal(sameIdempotencyKey.status, 200);
+    assert.equal(sameIdempotencyKey.body.duplicate, true);
+    assert.equal(sameIdempotencyKey.body.task.state, "cancelled");
+
+    const noAutomaticReclaim = await call(stub, "/claim", { taskId: inFlightTaskId });
+    assert.equal(noAutomaticReclaim.status, 409);
   });
 });
 
@@ -1500,5 +1754,66 @@ test("all seven task mutation routes reject non-JSON media types before mutation
       assert.equal(response.status, 400, pathname);
       assert.equal((await response.json()).error, "request_invalid", pathname);
     }
+  });
+});
+
+test("rejected bodies on every task mutation route leave task, usage, lease, and audit state unchanged", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const queued = await call(stub, "/reserve", task("rejected-body-queued"));
+    const running = await call(stub, "/reserve", task("rejected-body-running"));
+    assert.equal(queued.status, 201);
+    assert.equal(running.status, 201);
+    const claimed = await call(stub, "/claim", { taskId: running.body.task.taskId });
+    assert.equal(claimed.status, 200);
+
+    const taskIds = [queued.body.task.taskId, running.body.task.taskId];
+    const snapshot = async () => {
+      const metrics = (await call(stub, "/metrics")).body;
+      const usage = (await call(stub, "/usage")).body;
+      const tasks = [];
+      for (const taskId of taskIds) {
+        const result = await call(stub, "/task?id=" + encodeURIComponent(taskId));
+        assert.equal(result.status, 200);
+        tasks.push(result.body.task);
+      }
+      return {
+        tasks,
+        usage,
+        counters: {
+          totalRetained: metrics.tasks.totalRetained,
+          queued: metrics.tasks.queued,
+          running: metrics.tasks.running,
+          succeededRetained: metrics.tasks.succeededRetained,
+          failedRetained: metrics.tasks.failedRetained,
+          cancelledRetained: metrics.tasks.cancelledRetained,
+          acceptedToday: metrics.quota.acceptedToday,
+          inFlight: metrics.quota.inFlight,
+          auditLast24h: metrics.auditLast24h,
+        },
+      };
+    };
+
+    const before = await snapshot();
+    const routes = ["/reserve", "/claim", "/claim-next", "/heartbeat", "/complete", "/recover", "/transition"];
+    const invalidBodies = [
+      { label: "oversized", body: " ".repeat(16 * 1024 + 1), status: 413, error: "request_body_too_large" },
+      { label: "malformed JSON", body: "{", status: 400, error: "request_invalid" },
+      { label: "empty", body: "", status: 400, error: "request_invalid" },
+      { label: "invalid UTF-8", body: new Uint8Array([0xC3, 0x28]), status: 400, error: "request_invalid" },
+    ];
+
+    for (const pathname of routes) {
+      for (const invalid of invalidBodies) {
+        const response = await stub.fetch("http://do.local" + pathname, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: "Bearer " + TEST_STATE_STORE_TOKEN },
+          body: invalid.body,
+        });
+        assert.equal(response.status, invalid.status, pathname + " " + invalid.label);
+        assert.equal((await response.json()).error, invalid.error, pathname + " " + invalid.label);
+      }
+    }
+
+    assert.deepEqual(await snapshot(), before);
   });
 });

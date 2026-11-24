@@ -3,6 +3,7 @@ import { hasValidStateStoreBearer } from "./internal-auth.mjs";
 import { readBoundedJson as readBoundedJsonBody, readBoundedText } from "./bounded-json-body.mjs";
 import { handleReviewerHttpRequest } from "./reviewer-http-routes.mjs";
 import { authorizeGitHubActionsOperator } from "./github-oidc-authorize.mjs";
+import { validateTaskRequest } from "./task-contract.mjs";
 import { createReadOnlyAgentManager } from "./read-only-agent-manager.mjs";
 import { createReadOnlyTaskSnapshotAdapter } from "./task-snapshot-adapters.mjs";
 import { createPreviewReadOnlyReaders } from "./preview-read-only-sources.mjs";
@@ -26,13 +27,31 @@ const SECURITY_HEADERS = Object.freeze({
 const MAX_INTERNAL_RESPONSE_BYTES = 16 * 1024;
 const LEASE_HEARTBEAT_INTERVAL_MS = 10_000;
 const INTERNAL_SCHEDULED_DISPATCH = Symbol("internal-scheduled-dispatch");
+const INTERNAL_OIDC_RUN = Symbol("internal-oidc-run");
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: SECURITY_HEADERS });
 }
 function isEnabled(value) { return value === "true"; }
 
 const SAFE_TASK_TYPES = new Set(["content.review", "ai_bank.candidate_review", "seo.audit"]);
-function safeReviewResult(item) {
+const SAFE_OIDC_DIAGNOSTIC_CODES = new Set([
+  "read_only_source_error",
+  "preview_source_http_error",
+  "preview_source_body_unavailable",
+  "preview_source_too_large",
+  "preview_source_invalid_utf8",
+  "preview_source_fetch_failed",
+  "preview_source_path_not_allowlisted",
+  "preview_ai_bank_catalog_invalid",
+  "article_source_unavailable",
+  "candidate_source_unavailable",
+  "seo_source_unavailable",
+]);
+function isSafeOidcDiagnosticCode(value) {
+  return SAFE_OIDC_DIAGNOSTIC_CODES.has(value) ||
+    (typeof value === "string" && /^preview_source_(?:http_error|redirect_rejected)_(?:contents|raw|body)_\d{3}$/.test(value));
+}
+export function safeReviewResult(item) {
   if (!item || item.ok !== true || !SAFE_TASK_TYPES.has(item.taskType) ||
       !["pass", "attention", "review_required"].includes(item.status) ||
       !Number.isSafeInteger(item.findingCount) || item.findingCount < 0 || item.findingCount > 20 ||
@@ -46,18 +65,22 @@ function safeReviewResult(item) {
         typeof finding.code !== "string" || !/^[a-z][a-z0-9_]{1,79}$/.test(finding.code) ||
         !["error", "warning"].includes(finding.severity) ||
         typeof finding.message !== "string" || finding.message.length < 1 || finding.message.length > 256 ||
-        finding.message.trim() !== finding.message || /[\\u0000-\\u001f\\u007f]/.test(finding.message)) {
+        finding.message.trim() !== finding.message || /[\u0000-\u001f\u007f]/.test(finding.message)) {
       return { ok: false, errorCode: "read_only_review_failed" };
     }
     findings.push({ code: finding.code, severity: finding.severity, message: finding.message });
   }
-  return {
+  const result = {
     ok: true,
     taskType: item.taskType,
     status: item.status,
     findingCount: item.findingCount,
     findings,
   };
+  if (new TextEncoder().encode(JSON.stringify(result)).byteLength > 4096) {
+    return { ok: false, errorCode: "read_only_review_failed" };
+  }
+  return result;
 }
 
 function isValidClientIp(address) {
@@ -385,8 +408,8 @@ async function consumeContentResearchBudget(env, count) {
   return { day, used: budget.used, remaining: budget.remaining };
 }
 
-async function authoringArtifactId(idempotencyKey) {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(idempotencyKey));
+async function authoringArtifactId(idempotencyKey, topic) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify([idempotencyKey, topic])));
   const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
   return "authoring-" + hex.slice(0, 48);
 }
@@ -412,7 +435,7 @@ function authoringArtifactSummary(artifact) {
 
 const worker = {
   async fetch(request, env = {}, context) {
-    if (context !== INTERNAL_SCHEDULED_DISPATCH) {
+    if (context !== INTERNAL_SCHEDULED_DISPATCH && context !== INTERNAL_OIDC_RUN) {
       const limited = await enforceIngressRateLimit(request, env);
       if (limited) return limited;
     }
@@ -434,6 +457,197 @@ const worker = {
         publication_authorized: false,
         execution: "operator_triggered_read_only_analysis",
       });
+    }
+    if (url.pathname === "/internal/oidc/run") {
+      if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
+      if (env.AGENT_OIDC_RUN_ENABLED !== "true") return json({ ok: false, error: "oidc_run_disabled" }, 503);
+      if (env.AGENT_OIDC_ENABLED !== "true") return json({ ok: false, error: "oidc_operator_disabled" }, 503);
+      if (!isEnabled(env.AGENT_ENABLED) || env.AGENT_PAUSED !== "false") {
+        return json({ ok: false, error: "agent_disabled_or_paused" }, 503);
+      }
+      if ([...url.searchParams.keys()].length > 0) return json({ ok: false, error: "request_invalid" }, 400);
+
+      const parsedBody = await readBoundedJsonValueRequest(request, 2048);
+      if (!parsedBody.ok) return json({ ok: false, error: "request_invalid" }, parsedBody.status);
+      const body = parsedBody.value;
+      if (!body || typeof body !== "object" || Array.isArray(body) ||
+          Object.keys(body).length !== 1 || !Object.hasOwn(body, "task")) {
+        return json({ ok: false, error: "oidc_run_request_invalid" }, 400);
+      }
+      const validation = validateTaskRequest(body.task);
+      if (!validation.ok || validation.task.type !== "content.review" ||
+          validation.task.payload.articlePath !== "articles/ai-agent-thuc-hanh-tu-thiet-ke-den-kiem-soat.html" ||
+          !validation.task.idempotencyKey.startsWith("oidc-preview-e2e:")) {
+        return json({ ok: false, error: "oidc_run_task_not_allowlisted" }, 400);
+      }
+
+      const authorization = request.headers.get("authorization") || "";
+      const tokenMatch = /^Bearer ([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/.exec(authorization);
+      if (!tokenMatch || tokenMatch[1].length > 16384) {
+        return json({ ok: false, error: "github_oidc_token_required" }, 401);
+      }
+      const expected = {
+        audience: env.AGENT_OIDC_AUDIENCE,
+        repository: env.AGENT_OIDC_REPOSITORY,
+        repositoryOwner: env.AGENT_OIDC_REPOSITORY_OWNER,
+        repositoryId: env.AGENT_OIDC_REPOSITORY_ID,
+        repositoryOwnerId: env.AGENT_OIDC_REPOSITORY_OWNER_ID,
+        ref: env.AGENT_OIDC_RUN_REF,
+        workflowRef: env.AGENT_OIDC_RUN_WORKFLOW_REF,
+        actorId: env.AGENT_OIDC_RUN_ACTOR_ID,
+        eventName: "pull_request",
+        environment: "agent-runtime-preview",
+      };
+      if (!Object.entries(expected).every(([key, value]) =>
+        typeof value === "string" && value.length > 0 && value.length <= (key === "workflowRef" ? 512 : 256)) ||
+        !/^\d{1,20}$/.test(expected.actorId) ||
+        !/^\d{1,20}$/.test(expected.repositoryId) ||
+        !/^\d{1,20}$/.test(expected.repositoryOwnerId)) {
+        return json({ ok: false, error: "github_oidc_run_policy_unconfigured" }, 503);
+      }
+      const authorized = await authorizeGitHubActionsOperator(tokenMatch[1], { env, expected });
+      if (!authorized.ok) {
+        if (authorized.error === "oidc_token_replayed") return json({ ok: false, error: "github_oidc_token_replayed" }, 409);
+        if (authorized.error?.includes("unavailable") || authorized.error === "oidc_replay_response_invalid") {
+          return json({ ok: false, error: "github_oidc_verification_unavailable" }, 503);
+        }
+        return json({ ok: false, error: "github_oidc_token_invalid" }, 401);
+      }
+
+      // Capture aggregate audit counters before the single task so persistence
+      // can be checked without exposing the State Store binding publicly.
+      let beforeMetrics;
+      try {
+        beforeMetrics = await readStateStore(env, "/metrics");
+      } catch {
+        return json({ ok: false, error: "oidc_run_audit_unavailable" }, 503);
+      }
+
+      // Resume the Durable Object's independent admission latch only after exact
+      // GitHub OIDC authorization. This route is task- and workflow-allowlisted,
+      // and the latch is paused again in finally before any result is returned.
+      const actor = "github-actions:" + authorized.identity.actorId;
+      const requestId = () => crypto.randomUUID();
+      let response = null;
+      let pauseVerified = true;
+      let resumeWasRequested = false;
+      let resumeRejectedConflict = false;
+      try {
+        let observedControl;
+        try {
+          observedControl = await readStateStore(env, "/control");
+        } catch {
+          return json({ ok: false, error: "oidc_run_control_state_unavailable" }, 503);
+        }
+        if (observedControl?.control?.paused !== true ||
+            !Number.isSafeInteger(observedControl.control.version) ||
+            observedControl.control.version < 0) {
+          return json({ ok: false, error: "oidc_run_control_state_invalid" }, 503);
+        }
+        resumeWasRequested = true;
+        pauseVerified = false;
+        await writeStateStore(env, "/control/resume", {
+          actor,
+          requestId: requestId(),
+          reason: "one-shot OIDC Preview E2E",
+          expectedVersion: observedControl.control.version,
+        });
+
+        // The private symbol cannot be supplied by an HTTP caller. It authorizes
+        // exactly this in-process handoff to the existing leased /run implementation.
+        const runResponse = await worker.fetch(new Request("https://agent-runtime.internal/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tasks: [validation.task] }),
+        }), env, INTERNAL_OIDC_RUN);
+        if (!runResponse.ok) {
+          response = runResponse;
+        } else {
+          let runResult;
+          try {
+            runResult = await readBoundedJson(runResponse);
+          } catch {
+            response = json({ ok: false, error: "oidc_run_result_invalid" }, 503);
+          }
+          if (response === null) {
+            const item = runResult?.items?.[0];
+            if (runResult?.ok !== true || runResult?.summary?.total !== 1 ||
+                runResult?.summary?.succeeded !== 1 || item?.state !== "succeeded" ||
+                typeof item.taskId !== "string" || item.result?.taskType !== "content.review") {
+              const diagnosticCode = isSafeOidcDiagnosticCode(item?.diagnosticCode)
+                ? item.diagnosticCode : undefined;
+              response = json({ ok: false, error: "oidc_run_not_succeeded",
+                ...(diagnosticCode ? { diagnosticCode } : {}) }, 503);
+            } else {
+              try {
+                const persisted = await readStateStore(env, "/task?id=" + encodeURIComponent(item.taskId));
+                const afterMetrics = await readStateStore(env, "/metrics");
+                const eventTypes = ["task.queued", "task.claimed", "task.succeeded"];
+                const count = (metrics, eventType) => {
+                  const entry = Array.isArray(metrics?.auditLast24h)
+                    ? metrics.auditLast24h.find((event) => event?.eventType === eventType)
+                    : null;
+                  return Number.isSafeInteger(entry?.count) && entry.count >= 0 ? entry.count : 0;
+                };
+                const auditEvents = Object.fromEntries(eventTypes.map((eventType) => [
+                  eventType,
+                  { before: count(beforeMetrics, eventType), after: count(afterMetrics, eventType) },
+                ]));
+                const auditVerified = eventTypes.every((eventType) =>
+                  auditEvents[eventType].after >= auditEvents[eventType].before + 1);
+                if (persisted?.task?.taskId !== item.taskId || persisted.task.state !== "succeeded" ||
+                    persisted.task.type !== "content.review" || !persisted.task.result ||
+                    persisted.task.result.taskType !== "content.review" || !auditVerified) {
+                  response = json({ ok: false, error: "oidc_run_persistence_verification_failed" }, 503);
+                } else {
+                  response = json({
+                    ...runResult,
+                    persistence: {
+                      verified: true,
+                      taskId: item.taskId,
+                      state: persisted.task.state,
+                      auditEvents,
+                    },
+                  });
+                }
+              } catch {
+                response = json({ ok: false, error: "oidc_run_persistence_verification_unavailable" }, 503);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        if (error?.status === 409) {
+          // A competing Pause won after our control read. Do not issue a cleanup
+          // Pause: it could close the winning request's latch and cancel its task.
+          resumeRejectedConflict = true;
+          pauseVerified = true;
+          response = json({ ok: false, error: "runtime_control_version_conflict" }, 409);
+        } else {
+          response = json({ ok: false, error: "oidc_run_execution_unavailable" }, 503);
+        }
+      } finally {
+        // Close the durable admission latch only after this request attempted
+        // the conditional Resume; do not mutate an unrelated control state when
+        // the preflight control read fails, finds an already-open latch, or a
+        // competing Pause has invalidated this request's observed version.
+        if (resumeWasRequested && !resumeRejectedConflict) {
+          try {
+            await writeStateStore(env, "/control/pause", {
+              actor,
+              requestId: requestId(),
+              reason: "one-shot OIDC Preview E2E complete",
+              internalCleanup: true,
+            });
+            const control = await readStateStore(env, "/control");
+            pauseVerified = control?.control?.paused === true;
+          } catch {
+            pauseVerified = false;
+          }
+        }
+      }
+      if (!pauseVerified) return json({ ok: false, error: "oidc_run_pause_verification_failed" }, 503);
+      return response ?? json({ ok: false, error: "oidc_run_result_unavailable" }, 503);
     }
     if (url.pathname === "/internal/oidc/pause") {
       if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
@@ -653,7 +867,7 @@ const worker = {
       if (!isEnabled(env.AGENT_ENABLED) || env.AGENT_PAUSED !== "false") {
         return json({ ok: false, error: "agent_disabled_or_paused" }, 503);
       }
-      if (!await hasValidOperatorBearer(request, env)) return json({ ok: false, error: "operator_auth_required" }, 401);
+      if (context !== INTERNAL_OIDC_RUN && !await hasValidOperatorBearer(request, env)) return json({ ok: false, error: "operator_auth_required" }, 401);
       if ([...url.searchParams.keys()].length > 0) return json({ ok: false, error: "request_invalid" }, 400);
       const parsed = await readBoundedJsonValueRequest(request, 16 * 1024);
       if (!parsed.ok) {
@@ -730,17 +944,21 @@ const worker = {
             taskId: stored.taskId,
             state: completion.task?.state || (reviewSucceeded ? "succeeded" : "failed"),
             result,
+            ...(context === INTERNAL_OIDC_RUN && !reviewSucceeded &&
+                isSafeOidcDiagnosticCode(item?.error)
+              ? { diagnosticCode: item.error } : {}),
           });
         }
         const summary = {
           total: items.length,
           succeeded: items.filter((item) => item.state === "succeeded").length,
           failed: items.filter((item) => item.state === "failed").length,
+          cancelled: items.filter((item) => item.state === "cancelled").length,
           queued: items.filter((item) => item.state === "queued").length,
           running: items.filter((item) => item.state === "running").length,
         };
         return json({
-          ok: summary.failed === 0 && summary.queued === 0 && summary.running === 0,
+          ok: summary.succeeded === summary.total,
           mode: "operator_triggered_durable_read_only_review",
           execution: "synchronous_leased_read_only_review",
           items,
@@ -801,7 +1019,7 @@ const worker = {
       }
 
       try {
-        const artifactId = await authoringArtifactId(body.idempotencyKey);
+        const artifactId = await authoringArtifactId(body.idempotencyKey, body.topic);
         const existing = await draftStub.getDraft(artifactId);
         if (existing) {
           if (existing.draft?.title !== body.topic.slice(0, 70)) {
@@ -1085,15 +1303,33 @@ const worker = {
         return json({ ok: false, error: "request_invalid" }, 400);
       }
       const action = url.pathname.endsWith("/pause") ? "pause" : "resume";
+      let expectedVersion;
+      if (action === "resume") {
+        // Resume is conditional: a newer emergency Pause must win over an
+        // operator request that observed an older control version.
+        try {
+          const observed = await readStateStore(env, "/control");
+          if (!Number.isSafeInteger(observed?.control?.version) || observed.control.version < 0) {
+            return json({ ok: false, error: "control_unavailable" }, 503);
+          }
+          expectedVersion = observed.control.version;
+        } catch {
+          return json({ ok: false, error: "control_unavailable" }, 503);
+        }
+      }
       try {
         const result = await writeStateStore(env, "/control/" + action, {
           actor,
           requestId: crypto.randomUUID(),
           ...(body.reason === undefined ? {} : { reason: body.reason }),
+          ...(action === "resume" ? { expectedVersion } : {}),
         });
         return json({ ok: true, changed: result.changed, control: result.control });
       } catch (error) {
-        if ([400, 401, 409, 429, 503].includes(error?.status)) {
+        if (error?.status === 409) {
+          return json({ ok: false, error: "runtime_control_version_conflict" }, 409);
+        }
+        if ([400, 401, 429, 503].includes(error?.status)) {
           return json({ ok: false, error: error.status === 429 ? "rate_limited" : "control_unavailable" }, error.status);
         }
         return json({ ok: false, error: "control_unavailable" }, 503);

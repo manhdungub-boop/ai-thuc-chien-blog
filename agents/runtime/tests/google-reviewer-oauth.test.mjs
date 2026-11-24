@@ -73,11 +73,42 @@ describe("Google reviewer OAuth session flow", () => {
     expect(location.searchParams.get("code_challenge")).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(response.headers.get("set-cookie")).toContain("HttpOnly");
     expect(response.headers.get("set-cookie")).toContain("SameSite=Lax");
-    expect(stored).toHaveLength(5);
+    expect(stored).toHaveLength(6);
+    expect(stored[5]).toBe("/");
     expect(stored[0]).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(stored[1]).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(stored[2]).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(stored[3]).toMatch(/^[A-Za-z0-9_-]{64}$/);
+  });
+
+  it("accepts only the two console return paths and rejects open redirects", async () => {
+    let created;
+    let creates = 0;
+    const testEnv = {
+      ...env,
+      AGENT_REVIEWER_AUTH_STORE: {
+        getByName() {
+          return {
+            consumeStartRateLimit: async () => ({ allowed: true, remaining: 9 }),
+            createTransaction: async (...args) => { creates += 1; created = args; return { created: true }; }
+          };
+        }
+      }
+    };
+    const operator = await handleGoogleReviewerAuth(
+      new Request(origin + "/auth/google/start?return_to=%2Foperator-console"), testEnv, { now }
+    );
+    expect(operator.status).toBe(302);
+    expect(created[5]).toBe("/operator-console");
+    const external = await handleGoogleReviewerAuth(
+      new Request(origin + "/auth/google/start?return_to=https%3A%2F%2Fattacker.example"), testEnv, { now }
+    );
+    const duplicate = await handleGoogleReviewerAuth(
+      new Request(origin + "/auth/google/start?return_to=%2Freviewer-console&return_to=%2Foperator-console"), testEnv, { now }
+    );
+    expect(external.status).toBe(400);
+    expect(duplicate.status).toBe(400);
+    expect(creates).toBe(1);
   });
 
   it("consumes a browser-bound login transaction once and rejects replay", async () => {
@@ -145,7 +176,7 @@ describe("Google reviewer OAuth session flow", () => {
               if (!stored || consumed || stateHash !== stored[0] || browserHash !== stored[1] ||
                   nowSeconds >= stored[4] + 300) return null;
               consumed = true;
-              return { nonce: stored[2], code_verifier: stored[3] };
+              return { nonce: stored[2], code_verifier: stored[3], return_path: stored[5] };
             }
           };
         }
@@ -153,7 +184,7 @@ describe("Google reviewer OAuth session flow", () => {
     };
 
     const start = await handleGoogleReviewerAuth(
-      new Request(origin + "/auth/google/start"),
+      new Request(origin + "/auth/google/start?return_to=%2Freviewer-console"),
       testEnv,
       { now }
     );
@@ -221,7 +252,7 @@ describe("Google reviewer OAuth session flow", () => {
       { now, fetchImpl }
     );
     expect(callback.status).toBe(302);
-    expect(callback.headers.get("location")).toBe(origin + "/");
+    expect(callback.headers.get("location")).toBe(origin + "/reviewer-console");
     expect(calls.map(call => call.url)).toEqual([
       "https://oauth2.googleapis.com/token",
       "https://www.googleapis.com/oauth2/v3/certs"

@@ -12,7 +12,7 @@ export const REVIEWER_CONSOLE_HTML = `<!doctype html>
     <p>Preview riêng biệt · Biên tập và duyệt bằng chứng có xác thực · Không có quyền xuất bản</p>
     <p id="session-status" role="status">Đang kiểm tra phiên đăng nhập…</p>
     <p>
-      <a id="login-link" href="/auth/google/start">Đăng nhập Google</a>
+      <a id="login-link" href="/auth/google/start?return_to=%2Freviewer-console">Đăng nhập Google</a>
       <button id="logout-button" type="button" hidden>Đăng xuất</button>
       <button id="refresh-button" type="button">Làm mới hàng chờ</button>
     </p>
@@ -198,6 +198,8 @@ export const REVIEWER_CONSOLE_JS = `"use strict";
         encodeURIComponent(owner) + "/" + encodeURIComponent(repo));
       aiBankDetail.replaceChildren();
       add(aiBankDetail, "h2", "Hồ sơ " + owner + "/" + repo);
+      const reviewedReleaseUrl = result.packet?.candidate?.candidate?.latest_release?.source_url;
+      add(aiBankDetail, "p", "Release đang được rà soát: " + (reviewedReleaseUrl || "Chưa xác định"));
       add(aiBankDetail, "p", "Bằng chứng đang chờ người rà soát; chưa được xác minh.");
       add(aiBankDetail, "pre", JSON.stringify(result.packet || {}, null, 2));
       add(aiBankDetail, "p", "Xem hồ sơ không đồng nghĩa với xác nhận công cụ, cập nhật catalog hoặc cho phép xuất bản.");
@@ -357,6 +359,8 @@ export const REVIEWER_CONSOLE_JS = `"use strict";
         submitReview.type = "button";
         submitReview.addEventListener("click", async () => {
           submitReview.disabled = true;
+          const reviewInputs = [...reviewSection.querySelectorAll("select, textarea")];
+          reviewInputs.forEach(input => { input.disabled = true; });
           try {
             const decisions = decisionForms.map(item => ({
               claim_id: item.claim_id,
@@ -383,6 +387,7 @@ export const REVIEWER_CONSOLE_JS = `"use strict";
             await loadDetail(artifact.id);
           } catch (error) {
             add(reviewSection, "p", "Không ghi nhận được: " + (error.message || "unknown_error"));
+            reviewInputs.forEach(input => { input.disabled = false; });
           } finally {
             submitReview.disabled = false;
           }
@@ -421,8 +426,15 @@ export const REVIEWER_CONSOLE_JS = `"use strict";
     await loadAIBankQueue();
   });
   logout.addEventListener("click", async () => {
-    try { await fetch("/auth/google/logout", { method: "POST", credentials: "same-origin", cache: "no-store" }); }
-    finally { window.location.reload(); }
+    logout.disabled = true;
+    try {
+      const response = await fetch("/auth/google/logout", { method: "POST", credentials: "same-origin", cache: "no-store" });
+      if (!response.ok) throw new Error("logout_failed");
+      window.location.reload();
+    } catch {
+      status.textContent = "Không thể đăng xuất do yêu cầu chưa được xác nhận. Bạn có thể thử lại.";
+      logout.disabled = false;
+    }
   });
   init();
 })();`;

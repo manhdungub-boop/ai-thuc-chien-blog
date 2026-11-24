@@ -4,24 +4,59 @@ import { handleReviewerHttpRequest } from "../src/reviewer-http-routes.mjs";
 import { Script } from "node:vm";
 import assert from "node:assert/strict";
 import { REVIEWER_CONSOLE_JS } from "../src/reviewer-console.mjs";
+import { OPERATOR_CONSOLE_JS } from "../src/operator-console.mjs";
 
 const base = "https://ai-thuc-chien-agent-runtime-preview.manhdungub.workers.dev";
 
 describe("reviewer and operator HTTP routes", () => {
-  it("serves the operator console with no-store and a restrictive CSP", async () => {
-    const response = await handleReviewerHttpRequest(new Request(`${base}/operator-console`), {});
+  it("hides the operator console unless path-scoped Access is enabled and supplies its assertion", async () => {
+    const blocked = await handleReviewerHttpRequest(new Request(`${base}/operator-console`), {});
+    expect(blocked.status).toBe(404);
+    const missingAssertion = await handleReviewerHttpRequest(
+      new Request(`${base}/operator-console`),
+      { AGENT_CONSOLE_ACCESS_PROTECTED: "true" }
+    );
+    expect(missingAssertion.status).toBe(404);
+    const response = await handleReviewerHttpRequest(
+      new Request(`${base}/operator-console`, { headers: { "Cf-Access-Jwt-Assertion": "edge-verified" } }),
+      { AGENT_CONSOLE_ACCESS_PROTECTED: "true" }
+    );
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("text/html");
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(response.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
-    expect(await response.text()).toContain("operator-console.js");
+    const html = await response.text();
+    expect(html).toContain("operator-console.js");
+    expect(html).toContain("/auth/google/start?return_to=%2Foperator-console");
   });
 
-  it("serves the reviewer console and same-origin JavaScript assets", async () => {
-    const page = await handleReviewerHttpRequest(new Request(`${base}/reviewer-console`), {});
-    const script = await handleReviewerHttpRequest(new Request(`${base}/reviewer-console.js`), {});
+  it("renders operator admission from the authenticated control response and ignores stale refreshes", () => {
+    expect(OPERATOR_CONSOLE_JS).toContain("operator.health?.task_admission");
+    expect(OPERATOR_CONSOLE_JS).toContain("requestSequence !== refreshSequence");
+    expect(OPERATOR_CONSOLE_JS).toContain("logout_failed");
+    expect(OPERATOR_CONSOLE_JS).toContain("Unavailable");
+  });
+
+  it("locks evidence inputs while submitting and keeps failed logout retryable", () => {
+    expect(REVIEWER_CONSOLE_JS).toContain("reviewInputs.forEach(input => { input.disabled = true; })");
+    expect(REVIEWER_CONSOLE_JS).toContain("logout_failed");
+    expect(REVIEWER_CONSOLE_JS).toContain("logout.disabled = false");
+  });
+
+  it("hides reviewer console assets until path-scoped Access is enabled", async () => {
+    const blockedPage = await handleReviewerHttpRequest(new Request(`${base}/reviewer-console`), {});
+    const blockedScript = await handleReviewerHttpRequest(new Request(`${base}/reviewer-console.js`), {});
+    expect(blockedPage.status).toBe(404);
+    expect(blockedScript.status).toBe(404);
+
+    const accessEnv = { AGENT_CONSOLE_ACCESS_PROTECTED: "true" };
+    const headers = { "Cf-Access-Jwt-Assertion": "edge-verified" };
+    const page = await handleReviewerHttpRequest(new Request(`${base}/reviewer-console`, { headers }), accessEnv);
+    const script = await handleReviewerHttpRequest(new Request(`${base}/reviewer-console.js`, { headers }), accessEnv);
     expect(page.status).toBe(200);
-    expect((await page.text()).toLowerCase()).toContain("reviewer");
+    const html = await page.text();
+    expect(html.toLowerCase()).toContain("reviewer");
+    expect(html).toContain("/auth/google/start?return_to=%2Freviewer-console");
     expect(script.status).toBe(200);
     expect(script.headers.get("content-type")).toContain("application/javascript");
   });
@@ -30,6 +65,19 @@ describe("reviewer and operator HTTP routes", () => {
     const response = await handleReviewerHttpRequest(new Request(`${base}/auth/google/start`), {});
     expect(response.status).toBe(503);
     expect(await response.text()).toContain("reviewer_auth_not_configured");
+  });
+
+  it("reports reviewer authentication as unavailable when a session reaches a disabled verifier", async () => {
+    const token = await createReviewerSessionToken();
+    const response = await handleReviewerHttpRequest(new Request(base + "/api/reviewer/drafts", {
+      headers: { origin: base, cookie: "__Host-ai_reviewer_session=" + token }
+    }), { ...reviewerAuthEnv, AGENT_REVIEWER_AUTH_ENABLED: "false" });
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({
+      ok: false,
+      error: "reviewer_auth_not_configured",
+      publication_authorized: false
+    });
   });
 
   it("keeps operator controls disabled until the separate control gate is enabled", async () => {
@@ -261,6 +309,7 @@ describe("reviewer console script", () => {
   it("parses as JavaScript and contains the read-only AI Bank queue", () => {
     assert.doesNotThrow(() => new Script(REVIEWER_CONSOLE_JS));
     expect(REVIEWER_CONSOLE_JS).toContain("/api/reviewer/ai-bank/candidates?limit=20");
+    expect(REVIEWER_CONSOLE_JS).toContain("Release đang được rà soát:");
     expect(REVIEWER_CONSOLE_JS).toContain("Chỉ đọc; không xác minh, chỉnh sửa hoặc xuất bản.");
   });
 });
@@ -291,8 +340,8 @@ describe("authenticated read-only AI Bank reviewer routes", () => {
     const response = await handleReviewerHttpRequest(new Request(collection, {
       headers: { cookie: "__Host-ai_reviewer_session=forged" }
     }), { AGENT_REVIEWER_AUTH_ENABLED: "false" });
-    expect(response.status).toBe(401);
-    expect(await response.json()).toMatchObject({ ok: false });
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ ok: false, error: "reviewer_auth_not_configured" });
   });
 
   it("rejects unsupported methods without touching the candidate store", async () => {
@@ -404,17 +453,19 @@ describe("authenticated read-only AI Bank reviewer routes", () => {
   it("submits evidence through the independently authorized Durable Object RPC", async () => {
     const token = await createReviewerSessionToken();
     const eventId = "a4e6d1c2-3b7f-4a91-8c22-1234567890ab";
+    const reviewedReleaseUrl = "https://github.com/ollama/ollama/releases/tag/v1.2.3";
     const evidence = { check_type: "pricing_and_free_limits", source_title: "Official pricing", source_url: "https://ollama.com/pricing", excerpt: "Pending human review." };
     let received;
     const stub = { async submitAuthorizedReviewEvidence(...args) { received = args; return { accepted: true, evidence_id: "evidence-123", source_status: "submitted_source_not_verified", review_status: "pending_human_review", audit_event_id: eventId, replay_protected: true }; } };
     const env = { ...reviewerAuthEnv, GOOGLE_REVIEWER_EVIDENCE_WRITER_EMAILS: "reviewer@example.com", AGENT_AI_BANK_CANDIDATE_STORE: aiBankStoreNamespace(stub) };
-    const response = await handleReviewerHttpRequest(new Request(base + "/api/reviewer/ai-bank/candidates/ollama/ollama/evidence", { method: "POST", headers: { origin: base, "content-type": "application/json", cookie: "__Host-ai_reviewer_session=" + token }, body: JSON.stringify({ audit_event_id: eventId, evidence }) }), env);
+    const response = await handleReviewerHttpRequest(new Request(base + "/api/reviewer/ai-bank/candidates/ollama/ollama/evidence", { method: "POST", headers: { origin: base, "content-type": "application/json", cookie: "__Host-ai_reviewer_session=" + token }, body: JSON.stringify({ audit_event_id: eventId, reviewed_release_url: reviewedReleaseUrl, evidence }) }), env);
     expect(response.status).toBe(201);
     expect(received[0]).toBe("github:ollama/ollama");
     expect(received[1]).toEqual(evidence);
     expect(received[2]).toBe(token);
     expect(received[3]).toBe(eventId);
-    expect(received[4].GOOGLE_REVIEWER_EVIDENCE_WRITER_EMAILS).toBe("reviewer@example.com");
+    expect(received[4]).toBe(reviewedReleaseUrl);
+    expect(received[5].GOOGLE_REVIEWER_EVIDENCE_WRITER_EMAILS).toBe("reviewer@example.com");
     expect(await response.json()).toEqual({ accepted: true, evidence: { evidence_id: "evidence-123", source_status: "submitted_source_not_verified", review_status: "pending_human_review" }, audit_event_id: eventId, replay_protected: true, verification_authorized: false, catalog_write_authorized: false, public_publication_authorized: false });
   });
 
@@ -426,9 +477,99 @@ describe("authenticated read-only AI Bank reviewer routes", () => {
     const invalid = await handleReviewerHttpRequest(new Request(base + "/api/reviewer/ai-bank/candidates/ollama/ollama/evidence", { method: "POST", headers: { origin: base, "content-type": "application/json", cookie: "__Host-ai_reviewer_session=" + token }, body: JSON.stringify({ audit_event_id: "bad", evidence: {}, extra: true }) }), env);
     expect(invalid.status).toBe(400);
     expect(calls).toBe(0);
-    const denied = await handleReviewerHttpRequest(new Request(base + "/api/reviewer/ai-bank/candidates/ollama/ollama/evidence", { method: "POST", headers: { origin: base, "content-type": "application/json", cookie: "__Host-ai_reviewer_session=" + token }, body: JSON.stringify({ audit_event_id: "a4e6d1c2-3b7f-4a91-8c22-1234567890ab", evidence: { check_type: "pricing_and_free_limits", source_title: "Pricing", source_url: "https://ollama.com/pricing", excerpt: "Pending review." } }) }), env);
+    const denied = await handleReviewerHttpRequest(new Request(base + "/api/reviewer/ai-bank/candidates/ollama/ollama/evidence", { method: "POST", headers: { origin: base, "content-type": "application/json", cookie: "__Host-ai_reviewer_session=" + token }, body: JSON.stringify({ audit_event_id: "a4e6d1c2-3b7f-4a91-8c22-1234567890ab", reviewed_release_url: "https://github.com/ollama/ollama/releases/tag/v1.2.3", evidence: { check_type: "pricing_and_free_limits", source_title: "Pricing", source_url: "https://ollama.com/pricing", excerpt: "Pending review." } }) }), env);
     expect(denied.status).toBe(503);
     expect(await denied.json()).toMatchObject({ error: "evidence_writer_not_configured", evidence_recorded: false });
     expect(calls).toBe(1);
+
+    const missingRelease = await handleReviewerHttpRequest(new Request(base + "/api/reviewer/ai-bank/candidates/ollama/ollama/evidence", { method: "POST", headers: { origin: base, "content-type": "application/json", cookie: "__Host-ai_reviewer_session=" + token }, body: JSON.stringify({ audit_event_id: "a4e6d1c2-3b7f-4a91-8c22-1234567890ac", evidence: { check_type: "pricing_and_free_limits", source_title: "Pricing", source_url: "https://ollama.com/pricing", excerpt: "Pending review." } }) }), env);
+    expect(missingRelease.status).toBe(400);
+
+    const staleStub = { async submitAuthorizedReviewEvidence() { return { accepted: false, reason: "stale_candidate_release" }; } };
+    const staleEnv = { ...reviewerAuthEnv, GOOGLE_REVIEWER_EVIDENCE_WRITER_EMAILS: "reviewer@example.com", AGENT_AI_BANK_CANDIDATE_STORE: aiBankStoreNamespace(staleStub) };
+    const stale = await handleReviewerHttpRequest(new Request(base + "/api/reviewer/ai-bank/candidates/ollama/ollama/evidence", { method: "POST", headers: { origin: base, "content-type": "application/json", cookie: "__Host-ai_reviewer_session=" + token }, body: JSON.stringify({ audit_event_id: "a4e6d1c2-3b7f-4a91-8c22-1234567890ad", reviewed_release_url: "https://github.com/ollama/ollama/releases/tag/v1.2.3", evidence: { check_type: "pricing_and_free_limits", source_title: "Pricing", source_url: "https://ollama.com/pricing", excerpt: "Pending review." } }) }), staleEnv);
+    expect(stale.status).toBe(409);
+    expect(await stale.json()).toMatchObject({ error: "stale_candidate_release", evidence_recorded: false });
+  });
+});
+
+
+it("reports the State Store's actual operator usage limits", async () => {
+  const token = await createReviewerSessionToken();
+  const stub = {
+    async fetch(request) {
+      const path = new URL(request.url).pathname;
+      if (path === "/control") {
+        return Response.json({ ok: true, control: {
+          paused: false, changedAt: 1, version: 2, failureCountLast10m: 0,
+          circuitBreakerThreshold: 5, circuitBreakerWindowMs: 600000
+        } });
+      }
+      if (path === "/usage") {
+        return Response.json({ ok: true, acceptedToday: 4, inFlight: 2, dailyLimit: 20, concurrentLimit: 3 });
+      }
+      throw new Error("unexpected_state_store_path");
+    }
+  };
+  const env = {
+    ...reviewerAuthEnv,
+    AGENT_OPERATOR_CONTROL_ENABLED: "true",
+    AGENT_OPERATOR_ALLOWED_EMAILS: "reviewer@example.com",
+    AGENT_STATE_STORE_TOKEN: "operator-usage-test-token-abcdefghijklmnopqrstuvwxyz",
+    AGENT_STATE_STORE: {
+      idFromName(name) { expect(name).toBe("agent-runtime-global"); return "fixed"; },
+      get(id) { expect(id).toBe("fixed"); return stub; }
+    }
+  };
+  const response = await handleReviewerHttpRequest(new Request(base + "/api/operator/runtime-control", {
+    headers: { cookie: "__Host-ai_reviewer_session=" + token }
+  }), env);
+  expect(response.status).toBe(200);
+  expect((await response.json()).health.task_admission).toEqual({
+    available: true,
+    accepted_today: 4,
+    in_flight: 2,
+    daily_limit: 20,
+    concurrency_limit: 3
+  });
+});
+
+it("reports unavailable operator usage separately from a measured zero", async () => {
+  const token = await createReviewerSessionToken();
+  const stub = {
+    async fetch(request) {
+      const path = new URL(request.url).pathname;
+      if (path === "/control") {
+        return Response.json({ ok: true, control: {
+          paused: false, changedAt: 1, version: 2, failureCountLast10m: 0,
+          circuitBreakerThreshold: 5, circuitBreakerWindowMs: 600000
+        } });
+      }
+      if (path === "/usage") {
+        return Response.json({ ok: false, error: "state_store_unavailable" }, { status: 503 });
+      }
+      throw new Error("unexpected_state_store_path");
+    }
+  };
+  const env = {
+    ...reviewerAuthEnv,
+    AGENT_OPERATOR_CONTROL_ENABLED: "true",
+    AGENT_OPERATOR_ALLOWED_EMAILS: "reviewer@example.com",
+    AGENT_STATE_STORE_TOKEN: "operator-usage-test-token-abcdefghijklmnopqrstuvwxyz",
+    AGENT_STATE_STORE: {
+      idFromName(name) { expect(name).toBe("agent-runtime-global"); return "fixed"; },
+      get(id) { expect(id).toBe("fixed"); return stub; }
+    }
+  };
+  const response = await handleReviewerHttpRequest(new Request(base + "/api/operator/runtime-control", {
+    headers: { cookie: "__Host-ai_reviewer_session=" + token }
+  }), env);
+  expect(response.status).toBe(200);
+  expect((await response.json()).health.task_admission).toEqual({
+    available: false,
+    accepted_today: null,
+    in_flight: null,
+    daily_limit: null,
+    concurrency_limit: null
   });
 });

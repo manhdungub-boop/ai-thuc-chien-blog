@@ -105,6 +105,15 @@ function validateCandidateBatch(candidates, now) {
   return { ok: true, validated };
 }
 
+function stableJson(value) {
+  if (Array.isArray(value)) return "[" + value.map(stableJson).join(",") + "]";
+  if (value && typeof value === "object") {
+    return "{" + Object.keys(value).filter(key => value[key] !== undefined).sort()
+      .map(key => JSON.stringify(key) + ":" + stableJson(value[key])).join(",") + "}";
+  }
+  return JSON.stringify(value);
+}
+
 function writeValidatedCandidateBatch(ctx, validated, now) {
   const timestamp = new Date(now).toISOString();
   let inserted = 0;
@@ -153,8 +162,17 @@ export class AgentAIBankCandidateStore {
     this.ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS ai_bank_discovery_cursor (" +
       "singleton_id INTEGER PRIMARY KEY CHECK(singleton_id = 1), " +
-      "cursor TEXT NOT NULL, scan_id TEXT NOT NULL, updated_at TEXT NOT NULL)"
+      "cursor TEXT NOT NULL, scan_id TEXT NOT NULL, updated_at TEXT NOT NULL, " +
+      "batch_sha256 TEXT NOT NULL DEFAULT '')"
     );
+    const cursorColumns = this.ctx.storage.sql.exec(
+      "PRAGMA table_info(ai_bank_discovery_cursor)"
+    ).toArray();
+    if (!cursorColumns.some(column => column.name === "batch_sha256")) {
+      this.ctx.storage.sql.exec(
+        "ALTER TABLE ai_bank_discovery_cursor ADD COLUMN batch_sha256 TEXT NOT NULL DEFAULT ''"
+      );
+    }
     this.ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS ai_bank_review_evidence (" +
       "evidence_id TEXT PRIMARY KEY, candidate_id TEXT NOT NULL, check_type TEXT NOT NULL, " +
@@ -243,7 +261,7 @@ export class AgentAIBankCandidateStore {
     return row ? { cursor: row.cursor, scan_id: row.scan_id, updated_at: row.updated_at } : null;
   }
 
-  upsertCandidatesAndAdvanceCursor(candidates, nextCursor, scanId, now = Date.now()) {
+  async upsertCandidatesAndAdvanceCursor(candidates, nextCursor, scanId, now = Date.now()) {
     const batch = validateCandidateBatch(candidates, now);
     if (!batch.ok) return { accepted: false, reason: batch.reason, cursor_advanced: false };
     const cursorMs = typeof nextCursor === "string" ? Date.parse(nextCursor) : NaN;
@@ -252,13 +270,25 @@ export class AgentAIBankCandidateStore {
         !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(scanId)) {
       return { accepted: false, reason: "invalid_discovery_cursor", cursor_advanced: false };
     }
+    const canonicalBatch = batch.validated.map(item => item.candidate)
+      .sort((a, b) => a.candidate_id.localeCompare(b.candidate_id));
+    const digest = await crypto.subtle.digest(
+      "SHA-256", new TextEncoder().encode(stableJson(canonicalBatch))
+    );
+    const batchSha256 = Array.from(new Uint8Array(digest),
+      byte => byte.toString(16).padStart(2, "0")).join("");
 
     return this.ctx.storage.transactionSync(() => {
       const current = this.ctx.storage.sql.exec(
-        "SELECT cursor, scan_id FROM ai_bank_discovery_cursor WHERE singleton_id = 1"
+        "SELECT cursor, scan_id, updated_at, batch_sha256 FROM ai_bank_discovery_cursor WHERE singleton_id = 1"
       ).toArray()[0];
       if (current?.scan_id === scanId) {
-        if (current.cursor !== nextCursor) {
+        // A legacy cursor has no immutable batch digest. Candidate rows are
+        // mutable (last_seen_at and metadata can change), so they cannot safely
+        // reconstruct the originally committed batch identity. Fail closed.
+        const sameBatch = current.cursor === nextCursor &&
+          current.batch_sha256 !== "" && current.batch_sha256 === batchSha256;
+        if (!sameBatch) {
           return { accepted: false, reason: "discovery_scan_id_reused", cursor_advanced: false };
         }
         const total = this.ctx.storage.sql.exec(
@@ -275,9 +305,9 @@ export class AgentAIBankCandidateStore {
       const result = writeValidatedCandidateBatch(this.ctx, batch.validated, now);
       const timestamp = new Date(now).toISOString();
       this.ctx.storage.sql.exec(
-        "INSERT INTO ai_bank_discovery_cursor (singleton_id, cursor, scan_id, updated_at) VALUES (1, ?, ?, ?) " +
-        "ON CONFLICT(singleton_id) DO UPDATE SET cursor = excluded.cursor, scan_id = excluded.scan_id, updated_at = excluded.updated_at",
-        nextCursor, scanId, timestamp
+        "INSERT INTO ai_bank_discovery_cursor (singleton_id, cursor, scan_id, updated_at, batch_sha256) VALUES (1, ?, ?, ?, ?) " +
+        "ON CONFLICT(singleton_id) DO UPDATE SET cursor = excluded.cursor, scan_id = excluded.scan_id, updated_at = excluded.updated_at, batch_sha256 = excluded.batch_sha256",
+        nextCursor, scanId, timestamp, batchSha256
       );
       return { ...result, duplicate: false, cursor: nextCursor, scan_id: scanId, cursor_advanced: true };
     });
@@ -304,11 +334,12 @@ export class AgentAIBankCandidateStore {
     return row ? safeCandidate(row) : null;
   }
 
-  async submitAuthorizedReviewEvidence(candidateId, evidence, sessionToken, eventId, authConfig, now = Date.now()) {
+  async submitAuthorizedReviewEvidence(candidateId, evidence, sessionToken, eventId, reviewedReleaseUrl, authConfig, now = Date.now()) {
     const authorization = await authorizeAIBankEvidenceWriter(sessionToken, authConfig, eventId, now);
     if (!authorization.authorized) {
       return { accepted: false, reason: authorization.reason || "evidence_writer_not_authorized" };
     }
+    const auditEventId = authorization.audit_event_id;
     if (!evidence || typeof evidence !== "object" || Array.isArray(evidence) ||
         Object.keys(evidence).some(key => !["check_type", "source_title", "source_url", "excerpt"].includes(key)) ||
         Object.keys(evidence).length !== 4) {
@@ -316,6 +347,7 @@ export class AgentAIBankCandidateStore {
     }
     const fingerprintPayload = JSON.stringify({
       candidate_id: candidateId,
+      reviewed_release_url: reviewedReleaseUrl,
       check_type: evidence.check_type,
       source_title: typeof evidence.source_title === "string" ? evidence.source_title.trim() : null,
       source_url: evidence.source_url,
@@ -324,13 +356,15 @@ export class AgentAIBankCandidateStore {
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(fingerprintPayload));
     const requestSha256 = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
     return this.ctx.storage.transactionSync(() => {
-      const prior = this.ctx.storage.sql.exec(
-        "SELECT actor_subject, request_sha256 FROM ai_bank_evidence_audit_events WHERE event_id = ?",
-        eventId
-      ).toArray()[0];
-      if (prior) {
-        const sameRequest = prior.actor_subject === authorization.actor.subject &&
-          prior.request_sha256 === requestSha256;
+      const priorRows = this.ctx.storage.sql.exec(
+        "SELECT actor_subject, request_sha256 FROM ai_bank_evidence_audit_events WHERE lower(event_id) = ?",
+        auditEventId
+      ).toArray();
+      if (priorRows.length) {
+        const sameRequest = priorRows.every(prior =>
+          prior.actor_subject === authorization.actor.subject &&
+          prior.request_sha256 === requestSha256
+        );
         return { accepted: false, reason: sameRequest ? "duplicate_audit_event" : "audit_event_id_reused" };
       }
       const totalAuditCount = this.ctx.storage.sql.exec(
@@ -348,28 +382,33 @@ export class AgentAIBankCandidateStore {
       if (dailyAuditCount >= MAX_AUDIT_EVENTS_PER_UTC_DAY) {
         return { accepted: false, reason: "evidence_audit_daily_limit_reached" };
       }
-      const result = this.#submitReviewEvidence(candidateId, evidence, now);
+      const result = this.#submitReviewEvidence(candidateId, evidence, reviewedReleaseUrl, now);
       if (!result.accepted) return result;
       this.ctx.storage.sql.exec(
         "INSERT INTO ai_bank_evidence_audit_events (event_id, actor_subject, actor_email, request_sha256, evidence_id, recorded_at) VALUES (?, ?, ?, ?, ?, ?)",
-        eventId, authorization.actor.subject, authorization.actor.email,
+        auditEventId, authorization.actor.subject, authorization.actor.email,
         requestSha256, result.evidence_id, authorization.authorized_at
       );
       return {
         ...result,
-        audit_event_id: eventId,
+        audit_event_id: auditEventId,
         actor_ref: authorization.actor.reviewer_ref,
         replay_protected: true
       };
     });
   }
 
-  #submitReviewEvidence(candidateId, evidence, now = Date.now()) {
+  #submitReviewEvidence(candidateId, evidence, reviewedReleaseUrl, now = Date.now()) {
     const candidateRow = this.ctx.storage.sql.exec(
       "SELECT * FROM ai_bank_candidates WHERE candidate_id = ?", candidateId
     ).toArray()[0];
     const candidate = candidateRow ? safeCandidate(candidateRow) : null;
     if (!candidate) return { accepted: false, reason: "candidate_not_found" };
+    if (typeof reviewedReleaseUrl !== "string" || !reviewedReleaseUrl.trim() || reviewedReleaseUrl.length > 1000) {
+      return { accepted: false, reason: "reviewed_release_identity_required" };
+    }
+    const releaseUrl = candidate.candidate.latest_release.source_url;
+    if (reviewedReleaseUrl !== releaseUrl) return { accepted: false, reason: "stale_candidate_release" };
     if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) {
       return { accepted: false, reason: "invalid_evidence" };
     }
@@ -403,7 +442,6 @@ export class AgentAIBankCandidateStore {
     if (!Number.isSafeInteger(now) || now < 0 || !Number.isFinite(new Date(now).getTime())) {
       return { accepted: false, reason: "invalid_evidence_timestamp" };
     }
-    const releaseUrl = candidate.candidate.latest_release.source_url;
     const existing = this.ctx.storage.sql.exec(
       "SELECT evidence_id FROM ai_bank_review_evidence WHERE candidate_id = ? AND check_type = ? AND source_url = ?",
       candidateId, checkType, sourceUrl.href

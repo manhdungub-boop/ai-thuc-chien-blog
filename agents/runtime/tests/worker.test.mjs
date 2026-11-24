@@ -1,6 +1,54 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import worker, { runWithLeaseHeartbeat } from "../src/worker.mjs";
+import worker, { runWithLeaseHeartbeat, safeReviewResult } from "../src/worker.mjs";
+import { createPreviewReadOnlyReaders } from "../src/preview-read-only-sources.mjs";
+
+test("safe review results stay within the Durable Object 4 KiB persistence limit", () => {
+  const valid = safeReviewResult({
+    ok: true, taskType: "seo.audit", status: "attention", findingCount: 1,
+    findings: [{ code: "meta_description_missing", severity: "warning", message: "A concise description is missing." }]
+  });
+  assert.equal(valid.ok, true);
+  const oversized = safeReviewResult({
+    ok: true, taskType: "seo.audit", status: "attention", findingCount: 20,
+    findings: Array.from({ length: 20 }, (_, index) => ({
+      code: "finding_" + String(index).padStart(2, "0"),
+      severity: "warning",
+      message: "x".repeat(256),
+    }))
+  });
+  assert.deepEqual(oversized, { ok: false, errorCode: "read_only_review_failed" });
+});
+
+
+test("Preview repository reads enforce a fetch deadline and propagate lease cancellation", async () => {
+  const originalFetch = globalThis.fetch;
+  let observedSignal;
+  globalThis.fetch = async (_input, init = {}) => new Promise((_, reject) => {
+    observedSignal = init.signal;
+    const fail = () => reject(init.signal?.reason ?? new Error("aborted"));
+    if (init.signal?.aborted) fail();
+    else init.signal?.addEventListener("abort", fail, { once: true });
+  });
+  try {
+    const readers = createPreviewReadOnlyReaders();
+    await assert.rejects(
+      readers.readArticleHtml("articles/demo-article.html", { timeoutMs: 10 }),
+      /preview_source_timeout/
+    );
+    assert.equal(observedSignal?.aborted, true);
+
+    const parent = new AbortController();
+    const pending = readers.readArticleHtml("articles/demo-article.html", {
+      signal: parent.signal,
+      timeoutMs: 1_000,
+    });
+    parent.abort(new Error("lease_cancelled"));
+    await assert.rejects(pending, /task_execution_aborted/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 
 test("required ingress limiter covers every route and keys by Cloudflare client IP", async () => {
   let received;
@@ -236,6 +284,7 @@ function bridgeEnv({ responseBody = { ok: true, dayUtc: "2026-11-19", acceptedTo
           budget: { ok: true, day, scope, used: 0, limit, remaining: limit },
         });
       }
+      if (typeof response === "function") return response(internalRequest);
       return response ?? Response.json(responseBody, { status: responseStatus });
     },
   };
@@ -445,6 +494,61 @@ test("control mutation bridge uses configured actor and dedicated internal crede
   assert.equal(JSON.stringify(forwarded).includes(STATE_TOKEN), false);
 });
 
+test("operator resume bridge sends the observed control version and preserves stale-version conflicts", async () => {
+  const { env, calls } = bridgeEnv({
+    response: async (internalRequest) => {
+      const url = new URL(internalRequest.url);
+      if (internalRequest.method === "GET" && url.pathname === "/control") {
+        return Response.json({ ok: true, control: { paused: true, version: 7 } });
+      }
+      if (url.pathname === "/control/resume") {
+        const body = await internalRequest.clone().json();
+        assert.equal(body.expectedVersion, 7);
+        return Response.json({ ok: true, changed: true, control: { paused: false, version: 8 } });
+      }
+      throw new Error("unexpected State Store request");
+    },
+  });
+  const incoming = new Request("https://agent-runtime-preview.example.workers.dev/internal/control/resume", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + OPERATOR_TOKEN, "Content-Type": "application/json" },
+    body: JSON.stringify({ reason: "operator resume" }),
+  });
+  const response = await worker.fetch(incoming, env);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.control.paused, false);
+  assert.equal(calls.length, 2);
+  assert.equal(new URL(calls[0].url).pathname, "/control");
+  assert.equal(new URL(calls[1].url).pathname, "/control/resume");
+  const forwarded = await calls[1].json();
+  assert.equal(forwarded.expectedVersion, 7);
+  assert.equal(forwarded.actor, "project-operator-01");
+});
+
+test("operator resume bridge returns 409 without retrying after a newer Pause", async () => {
+  const { env, calls } = bridgeEnv({
+    response: async (internalRequest) => {
+      const url = new URL(internalRequest.url);
+      if (internalRequest.method === "GET" && url.pathname === "/control") {
+        return Response.json({ ok: true, control: { paused: true, version: 11 } });
+      }
+      if (url.pathname === "/control/resume") {
+        return Response.json({ ok: false, error: "runtime_control_version_conflict" }, { status: 409 });
+      }
+      throw new Error("unexpected State Store request");
+    },
+  });
+  const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/control/resume", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + OPERATOR_TOKEN, "Content-Type": "application/json" },
+    body: JSON.stringify({ reason: "stale operator resume" }),
+  }), env);
+  assert.equal(response.status, 409);
+  assert.equal((await response.json()).error, "runtime_control_version_conflict");
+  assert.equal(calls.length, 2, "a stale resume must not be retried automatically");
+});
+
 test("control mutation bridge rejects missing operator identity and caller-supplied actor", async () => {
   const { env, calls } = bridgeEnv();
   delete env.AGENT_OPERATOR_ID;
@@ -458,6 +562,11 @@ test("control mutation bridge rejects missing operator identity and caller-suppl
     body: JSON.stringify({ actor: "attacker", reason: "spoof" }),
   }), env);
   assert.equal(spoofed.status, 400);
+  const cleanupSpoof = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/control/pause", {
+    method: "POST", headers: { Authorization: "Bearer " + OPERATOR_TOKEN, "Content-Type": "application/json" },
+    body: JSON.stringify({ reason: "one-shot OIDC Preview E2E complete", internalCleanup: true }),
+  }), env);
+  assert.equal(cleanupSpoof.status, 400);
   assert.equal(calls.length, 0);
 });
 
@@ -687,6 +796,69 @@ test("OIDC pause endpoint remains disabled by default and does not contact State
   assert.equal(called, false);
 });
 
+test("OIDC one-shot run endpoint is disabled by default and does not contact State Store", async () => {
+  let called = false;
+  const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/oidc/run", {
+    method: "POST",
+    headers: { Authorization: "Bearer a.b.c", "Content-Type": "application/json" },
+    body: JSON.stringify({ task: {
+      type: "content.review",
+      idempotencyKey: "oidc-preview-e2e:0123456789abcdef",
+      payload: { articlePath: "articles/ai-agent-thuc-hanh-tu-thiet-ke-den-kiem-soat.html" },
+    } }),
+  }), {
+    AGENT_OIDC_RUN_ENABLED: "false",
+    AGENT_OIDC_ENABLED: "true",
+    AGENT_ENABLED: "true",
+    AGENT_PAUSED: "false",
+    AGENT_STATE_STORE: { idFromName: () => "unused", get: () => ({ fetch: async () => { called = true; } }) },
+  });
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).error, "oidc_run_disabled");
+  assert.equal(called, false);
+});
+
+test("OIDC one-shot run endpoint remains fail-closed while Agent Runtime is disabled or paused", async () => {
+  let called = false;
+  const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/oidc/run", {
+    method: "POST",
+    headers: { Authorization: "Bearer a.b.c", "Content-Type": "application/json" },
+    body: JSON.stringify({ task: {
+      type: "content.review",
+      idempotencyKey: "oidc-preview-e2e:0123456789abcdef",
+      payload: { articlePath: "articles/ai-agent-thuc-hanh-tu-thiet-ke-den-kiem-soat.html" },
+    } }),
+  }), {
+    AGENT_OIDC_RUN_ENABLED: "true",
+    AGENT_OIDC_ENABLED: "true",
+    AGENT_ENABLED: "false",
+    AGENT_PAUSED: "true",
+    AGENT_STATE_STORE: { idFromName: () => "unused", get: () => ({ fetch: async () => { called = true; } }) },
+  });
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).error, "agent_disabled_or_paused");
+  assert.equal(called, false);
+});
+
+test("OIDC one-shot run endpoint rejects any task outside the fixed public article review", async () => {
+  const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/oidc/run", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ task: {
+      type: "seo.audit",
+      idempotencyKey: "oidc-preview-e2e:0123456789abcdef",
+      payload: { path: "/" },
+    } }),
+  }), {
+    AGENT_OIDC_RUN_ENABLED: "true",
+    AGENT_OIDC_ENABLED: "true",
+    AGENT_ENABLED: "true",
+    AGENT_PAUSED: "false",
+  });
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).error, "oidc_run_task_not_allowlisted");
+});
+
 test("OIDC pause endpoint fails closed when the exact actor trust policy is incomplete", async () => {
   let called = false;
   const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/oidc/pause", {
@@ -820,9 +992,11 @@ test("run reserves, claims, reviews, and completes durable read-only tasks", asy
     }],
   };
   globalThis.fetch = async (input) => {
-    const url = String(input);
-    if (url.endsWith("/articles/demo-article.html")) return new Response(articleHtml, { status: 200 });
-    if (url.endsWith("/data/ai-tools.json")) return new Response(JSON.stringify(catalog), { status: 200 });
+    const url = new URL(String(input));
+    if (url.hostname === "raw.githubusercontent.com" &&
+        url.pathname === "/manhdungub-boop/ai-thuc-chien-blog/main/articles/demo-article.html") return new Response(articleHtml, { status: 200 });
+    if (url.hostname === "raw.githubusercontent.com" &&
+        url.pathname === "/manhdungub-boop/ai-thuc-chien-blog/main/data/ai-tools.json") return new Response(JSON.stringify(catalog), { status: 200 });
     throw new Error("unexpected_source_url");
   };
   const { env, records, calls } = durableRunEnv();
@@ -870,6 +1044,37 @@ test("run reserves, claims, reviews, and completes durable read-only tasks", asy
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("run reports cancelled duplicate tasks as unsuccessful instead of a successful batch", async () => {
+  const { env, records } = durableRunEnv();
+  const task = {
+    type: "content.review",
+    idempotencyKey: "content-review-cancelled-0001",
+    payload: { articlePath: "articles/demo-article.html" },
+  };
+  const enqueue = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/enqueue", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + RUN_TOKEN, "Content-Type": "application/json" },
+    body: JSON.stringify({ tasks: [task] }),
+  }), env);
+  assert.equal(enqueue.status, 200);
+  const stored = [...records.values()][0];
+  stored.state = "cancelled";
+
+  const response = await worker.fetch(new Request(RUN_URL, {
+    method: "POST",
+    headers: { Authorization: "Bearer " + RUN_TOKEN, "Content-Type": "application/json" },
+    body: JSON.stringify({ tasks: [task] }),
+  }), env);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.ok, false);
+  assert.equal(body.summary.total, 1);
+  assert.equal(body.summary.succeeded, 0);
+  assert.equal(body.summary.cancelled, 1);
+  assert.equal(body.items[0].ok, false);
+  assert.equal(body.items[0].state, "cancelled");
 });
 
 test("operator queue admission stores bounded idempotent tasks without executing them", async () => {
@@ -952,7 +1157,9 @@ test("scheduled dispatcher processes at most one queued read-only task per confi
     </head><body><section class="article-author-note">Bài viết gốc DUNG - AI; vui lòng ghi công và dẫn liên kết về bài viết.</section>
     <a href="/thu-vien.html">Library</a><main>${"useful content ".repeat(270)}</main></body></html>`;
   globalThis.fetch = async (input) => {
-    if (String(input).endsWith("/articles/demo-article.html")) return new Response(articleHtml, { status: 200 });
+    const url = new URL(String(input));
+    if (url.hostname === "raw.githubusercontent.com" &&
+        url.pathname === "/manhdungub-boop/ai-thuc-chien-blog/main/articles/demo-article.html") return new Response(articleHtml, { status: 200 });
     throw new Error("unexpected_source_url");
   };
   const { env, records, calls } = durableRunEnv();
@@ -989,7 +1196,9 @@ test("operator queue dispatcher processes only a bounded number of already-queue
     </head><body><section class="article-author-note">Bài viết gốc DUNG - AI; vui lòng ghi công và dẫn liên kết về bài viết.</section>
     <a href="/thu-vien.html">Library</a><main>${"useful content ".repeat(270)}</main></body></html>`;
   globalThis.fetch = async (input) => {
-    if (String(input).endsWith("/articles/demo-article.html")) return new Response(articleHtml, { status: 200 });
+    const url = new URL(String(input));
+    if (url.hostname === "raw.githubusercontent.com" &&
+        url.pathname === "/manhdungub-boop/ai-thuc-chien-blog/main/articles/demo-article.html") return new Response(articleHtml, { status: 200 });
     throw new Error("unexpected_source_url");
   };
   const { env, records, calls } = durableRunEnv();
