@@ -333,7 +333,14 @@ jobs:
           assert.match(workflow, /ai-thuc-chien-agent-runtime-fault-test\.manhdungub\.workers\.dev/);
           assert.match(workflow, /secret put AGENT_FAULT_TEST_TOKEN/);
           assert.match(workflow, /wrangler@4\.166\.0 delete/);
-          assert.doesNotMatch(workflow, /PREVIEW_WORKER_NAME|original_version_id|deployments\?force=true|wrangler@4\.166\.0 deploy --config agents\/runtime\/wrangler\.preview/);
+
+          const cleanupStart = workflow.indexOf('      - name: Delete and verify absence of the isolated test Worker');
+          assert.notEqual(cleanupStart, -1, 'cleanup must be an explicit always-run step');
+          const cleanup = workflow.slice(cleanupStart);
+          assert.match(cleanup, /before_status.*404/);
+          assert.match(cleanup, /after_status.*404/);
+          assert.match(cleanup, /attempt in 1 2 3/);
+          assert.match(cleanup, /::error::Isolated test Worker still exists/);          assert.doesNotMatch(workflow, /PREVIEW_WORKER_NAME|original_version_id|deployments\?force=true|wrangler@4\.166\.0 deploy --config agents\/runtime\/wrangler\.preview/);
           assert.doesNotMatch(workflow, /wrangler[^\n]*--env production|wrangler[^\n]*--env prod/);
           assert.equal('routes' in testConfig, false);
           assert.equal('d1_databases' in testConfig, false);
