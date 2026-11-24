@@ -507,7 +507,7 @@ test("control status bridge requires operator bearer and strips query parameters
 });
 
 test("control mutation bridge pre-fences the draft store before acknowledging Pause", async () => {
-  const { env, calls, draftControl: getDraftControl } = bridgeEnv({
+  const runtime = bridgeEnv({
     response: async (internalRequest) => {
       const url = new URL(internalRequest.url);
       if (url.pathname === "/control" && internalRequest.method === "GET") {
@@ -519,6 +519,7 @@ test("control mutation bridge pre-fences the draft store before acknowledging Pa
       throw new Error("unexpected State Store request");
     },
   });
+  const { env, calls } = runtime;
   const incoming = new Request("https://agent-runtime-preview.example.workers.dev/internal/control/pause", {
     method: "POST",
     headers: {
@@ -539,7 +540,7 @@ test("control mutation bridge pre-fences the draft store before acknowledging Pa
   assert.equal(calls[1].method, "POST");
   assert.equal(calls[1].headers.get("authorization"), "Bearer " + STATE_TOKEN);
   assert.equal(calls[1].headers.get("cookie"), null);
-  assert.deepEqual(getDraftControl, { paused: true, version: 5 });
+  assert.deepEqual(runtime.draftControl, { paused: true, version: 5 });
   const forwarded = await calls[1].json();
   assert.equal(forwarded.actor, "project-operator-01");
   assert.match(forwarded.requestId, /^[a-z0-9-]{16,64}$/i);
