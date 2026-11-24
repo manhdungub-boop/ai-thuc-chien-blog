@@ -84,7 +84,7 @@ function parseControlJson(text) {
   skipWhitespace();
   if (text[index++] !== "{") throw new Error("control_json_invalid");
   const result = {};
-  const allowedKeys = new Set(["reason", "actor", "requestId", "jti", "expiresAt", "expectedVersion"]);
+  const allowedKeys = new Set(["reason", "actor", "requestId", "jti", "expiresAt", "expectedVersion", "internalCleanup"]);
   skipWhitespace();
   if (text[index] === "}") {
     index++;
@@ -112,6 +112,14 @@ function parseControlJson(text) {
       const value = Number(match[0]);
       if (!Number.isSafeInteger(value) || value < 0) throw new Error("control_json_invalid");
       result[key] = value;
+    } else if (key === "internalCleanup") {
+      if (text.slice(index, index + 4) !== "true") throw new Error("control_json_invalid");
+      index += 4;
+      const delimiter = text[index];
+      if (delimiter !== "," && delimiter !== "}" && !/[\t\n\r ]/.test(delimiter ?? "")) {
+        throw new Error("control_json_invalid");
+      }
+      result[key] = true;
     } else {
       result[key] = readString();
     }
