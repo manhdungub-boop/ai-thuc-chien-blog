@@ -147,7 +147,9 @@ test("fault-test workflow cleanup interpolates its scoped credential and disable
   assert.ok(workflow.includes("--request POST"));
   assert.ok(workflow.includes('{"enabled":false,"previews_enabled":false}'));
   assert.ok(workflow.includes("--request DELETE"));
-  assert.match(workflow, /--request DELETE[\\s\\S]{0,400}"\\$api\\/secrets\\/AGENT_FAULT_TEST_TOKEN"/, "DELETE must target only the one-run secret, never the Worker script");
+  const deleteRequest = workflow.indexOf("--request DELETE");
+  const secretDeleteTarget = workflow.indexOf('"$api/secrets/AGENT_FAULT_TEST_TOKEN"', deleteRequest);
+  assert.ok(deleteRequest >= 0 && secretDeleteTarget > deleteRequest && secretDeleteTarget - deleteRequest < 400, "DELETE must target only the one-run secret, never the Worker script");
   assert.ok(workflow.includes("$api/secrets/AGENT_FAULT_TEST_TOKEN"));
   assert.ok(workflow.includes("$api/subdomain"));
   assert.ok(workflow.includes(".result.enabled == false"));
