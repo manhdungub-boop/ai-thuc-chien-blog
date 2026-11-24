@@ -302,7 +302,7 @@ export class TestAgentStateStore extends AgentStateStore {
           }));
           const rollback = await rollbackAt.json();
           if (rollback?.ok !== true || rollback?.rolledBack !== true || rollback?.acceptedToday !== 0) {
-            throw new Error("sqlite_transaction_rollback_probe_failed");
+            throw new Error("sqlite_transaction_rollback_probe_failed_" + JSON.stringify(rollback));
           }
 
           // 6. Recovery alarms stay disabled in this harness.
