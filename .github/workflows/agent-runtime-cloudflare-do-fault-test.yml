@@ -179,7 +179,7 @@ jobs:
         timeout-minutes: 3
         run: |
           set -euo pipefail
-          npx --yes wrangler@4.166.0 deploy --dry-run --config agents/runtime/wrangler.preview-recovery.jsonc
+          npx --yes wrangler@4.166.0 deploy --dry-run --config agents/runtime/wrangler.preview.jsonc
 
       - name: Deploy fail-closed Preview handler with forward-only migration history
         if: inputs.recover_preview == true
@@ -188,7 +188,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_WORKER_TOKEN }}
         run: |
           set -euo pipefail
-          npx --yes wrangler@4.166.0 deploy --config agents/runtime/wrangler.preview-recovery.jsonc --message "Restore fail-closed Agent Runtime Preview; retain fault-test-v1 migration history"
+          npx --yes wrangler@4.166.0 deploy --config agents/runtime/wrangler.preview.jsonc --message "Restore fail-closed Agent Runtime Preview; retain fault-test-v1 migration history"
 
       - name: Verify recovered Preview gates and temporary-secret cleanup
         if: inputs.recover_preview == true
@@ -209,7 +209,7 @@ jobs:
           const version = JSON.parse(fs.readFileSync(process.env.VERSION_FILE, 'utf8'));
           assert.equal(version.success, true);
           assert.equal(version.result?.migration_tag, 'fault-test-v1');
-          assert.ok(version.result?.modules?.some(m => m.name === 'worker-preview-recovery.js'));
+          assert.ok(version.result?.modules?.some(m => m.name === 'worker.js'));
           const bindings = version.result?.bindings ?? [];
           const value = name => bindings.find(b => b.name === name)?.text;
           assert.equal(value('AGENT_ENABLED'), 'false');
