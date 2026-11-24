@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import worker, { runWithLeaseHeartbeat, safeReviewResult } from "../src/worker.mjs";
+import { createPreviewReadOnlyReaders } from "../src/preview-read-only-sources.mjs";
 
 test("safe review results stay within the Durable Object 4 KiB persistence limit", () => {
   const valid = safeReviewResult({
@@ -17,6 +18,36 @@ test("safe review results stay within the Durable Object 4 KiB persistence limit
     }))
   });
   assert.deepEqual(oversized, { ok: false, errorCode: "read_only_review_failed" });
+});
+
+
+test("Preview repository reads enforce a fetch deadline and propagate lease cancellation", async () => {
+  const originalFetch = globalThis.fetch;
+  let observedSignal;
+  globalThis.fetch = async (_input, init = {}) => new Promise((_, reject) => {
+    observedSignal = init.signal;
+    const fail = () => reject(init.signal?.reason ?? new Error("aborted"));
+    if (init.signal?.aborted) fail();
+    else init.signal?.addEventListener("abort", fail, { once: true });
+  });
+  try {
+    const readers = createPreviewReadOnlyReaders();
+    await assert.rejects(
+      readers.readArticleHtml("articles/demo-article.html", { timeoutMs: 10 }),
+      /preview_source_timeout/
+    );
+    assert.equal(observedSignal?.aborted, true);
+
+    const parent = new AbortController();
+    const pending = readers.readArticleHtml("articles/demo-article.html", {
+      signal: parent.signal,
+      timeoutMs: 1_000,
+    });
+    parent.abort(new Error("lease_cancelled"));
+    await assert.rejects(pending, /task_execution_aborted/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("required ingress limiter covers every route and keys by Cloudflare client IP", async () => {
