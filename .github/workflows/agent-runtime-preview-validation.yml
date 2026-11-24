@@ -189,9 +189,9 @@ jobs:
           assert.deepEqual(faultTest.durable_objects?.bindings, [{ name: 'AGENT_STATE_STORE', class_name: 'TestAgentStateStore' }]);
           assert.deepEqual(faultTest.migrations, [{ tag: 'fault-test-v1', new_sqlite_classes: ['TestAgentStateStore'] }]);
           const faultTestWorkerSource = await readFile('agents/runtime/tests/state-store-test-worker.mjs', 'utf8');
-          assert.match(faultTestWorkerSource, /AGENT_ENABLED:\\s*"true"/);
-          assert.match(faultTestWorkerSource, /AGENT_PAUSED:\\s*"false"/);
-          assert.match(faultTestWorkerSource, /AGENT_STATE_STORE_TOKEN:\\s*env\\.AGENT_FAULT_TEST_TOKEN/);
+          assert.match(faultTestWorkerSource, /AGENT_ENABLED:\s*"true"/);
+          assert.match(faultTestWorkerSource, /AGENT_PAUSED:\s*"false"/);
+          assert.match(faultTestWorkerSource, /AGENT_STATE_STORE_TOKEN:\s*env\.AGENT_FAULT_TEST_TOKEN/);
           const workerSource = await readFile('agents/runtime/src/worker.mjs', 'utf8');
           assert.match(workerSource, /controller\?\.cron !== "\*\/30 \* \* \* \*"/);
           assert.match(workerSource, /AGENT_SCHEDULER_ENABLED !== "true"/);
