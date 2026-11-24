@@ -260,7 +260,7 @@ jobs:
           assert.ok(e2eWorkflow.includes('(.result | type)'), 'subscription API responses must be validated before classification');
           assert.ok(e2eWorkflow.includes('result_info.total_count'), 'incomplete subscription pages must stop the deployment');
           assert.ok(e2eWorkflow.includes('free-default'), 'an empty paid-subscription list must map to Cloudflare Workers Free, its documented default plan');
-          assert.match(e2eWorkflow, /timeout-minutes:\\s*20/, 'the E2E job must reserve a bounded total time budget');
+          assert.match(e2eWorkflow, /timeout-minutes:\s*20/, 'the E2E job must reserve a bounded total time budget');
           assert.ok(e2eWorkflow.includes('timeout-minutes: 2'), 'checkout and pre-deployment checks must have step deadlines');
           assert.ok(e2eWorkflow.includes('timeout-minutes: 3'), 'temporary deployment must have a step deadline');
           assert.ok(e2eWorkflow.includes('timeout-minutes: 5'), 'rollback must retain its own bounded restoration window');
