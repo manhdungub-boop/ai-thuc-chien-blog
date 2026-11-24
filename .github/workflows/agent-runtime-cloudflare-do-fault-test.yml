@@ -44,7 +44,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "manhdungub-boop/ai-thuc-chien-blog"
-          case "$GITHUB_EVENT_NAME" in push|workflow_dispatch) ;; *) echo "::error::Unexpected event"; exit 1 ;; esac
+          test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
           test "$GITHUB_REF" = "refs/heads/security/cloudflare-do-fault-suite-20261124"
           [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
@@ -221,7 +221,7 @@ jobs:
               echo "::error::Fault suite returned unexpected HTTP $status."
               exit 1
             fi
-            echo "Waiting for isolated Worker deployment ($attempt/12; HTTP $status)."
+            echo "Waiting for isolated Preview fault harness ($attempt/12; HTTP $status)."
             sleep 5
           done
           test "$status" = "200" || { cat "$response"; echo "::error::Fault suite did not return HTTP 200."; exit 1; }
