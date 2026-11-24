@@ -272,6 +272,7 @@ jobs:
           assert.ok(e2eWorkflow.includes('if: always()'), 'rollback must run even after an E2E failure');
           assert.ok(e2eWorkflow.includes('function classifyCloudflareWorkersPlan'), 'the Free-plan classifier must be present in the gated E2E job');
           assert.ok(e2eWorkflow.includes('info.total_count !== payload.result.length'), 'missing or truncated subscription metadata must fail closed');
+          assert.ok(e2eWorkflow.includes('info.next_page === false'), 'an explicit no-next-page marker may prove complete enumeration');
           assert.ok(e2eWorkflow.includes('missing total_count must fail closed'));
           assert.ok(e2eWorkflow.includes('any active paid subscription blocks the Free-only deployment gate'));
           assert.ok(e2eWorkflow.includes('free-default'), 'an empty, fully enumerated subscription list may map to the documented default Free plan');
@@ -399,9 +400,16 @@ jobs:
             if (!info || typeof info !== 'object' || Array.isArray(info) ||
                 !Number.isSafeInteger(info.page) || info.page !== 1 ||
                 !Number.isSafeInteger(info.per_page) || info.per_page < 1 ||
-                !Number.isSafeInteger(info.count) || info.count !== payload.result.length ||
-                !Number.isSafeInteger(info.total_count) || info.total_count !== payload.result.length ||
-                info.per_page < info.count) return 'incomplete';
+                info.per_page < payload.result.length) return 'incomplete';
+
+            const completeByTotalCount =
+              Number.isSafeInteger(info.count) && info.count === payload.result.length &&
+              Number.isSafeInteger(info.total_count) && info.total_count === payload.result.length;
+            const completeByNextPage =
+              info.next_page === false &&
+              (info.count === undefined || (Number.isSafeInteger(info.count) && info.count === payload.result.length)) &&
+              (info.total_count === undefined || (Number.isSafeInteger(info.total_count) && info.total_count === payload.result.length));
+            if (!completeByTotalCount && !completeByNextPage) return 'incomplete';
 
             if (payload.result.length === 0) return 'free-default';
 
@@ -442,8 +450,14 @@ jobs:
             result_info: completeInfo(1)
           }), 'non-free', 'any active paid subscription blocks the Free-only deployment gate');
           assert.equal(classifyCloudflareWorkersPlan({
+            success: true, result: [], result_info: { page: 1, per_page: 25, next_page: false }
+          }), 'free-default', 'explicit next_page=false proves complete enumeration when total_count is omitted');
+          assert.equal(classifyCloudflareWorkersPlan({
+            success: true, result: [], result_info: { page: 1, per_page: 25, next_page: true }
+          }), 'incomplete', 'a remaining page must fail closed');
+          assert.equal(classifyCloudflareWorkersPlan({
             success: true, result: [], result_info: { page: 1, per_page: 20, count: 0 }
-          }), 'incomplete', 'missing total_count must fail closed');
+          }), 'incomplete', 'missing completeness metadata must fail closed');
           assert.equal(classifyCloudflareWorkersPlan({
             success: true,
             result: [{ state: 'Paid', price: 0, rate_plan: { id: 'free', public_name: 'Free' } }],
