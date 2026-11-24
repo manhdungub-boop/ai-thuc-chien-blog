@@ -12,8 +12,6 @@ const faultTestConfigPath = fileURLToPath(new URL("../wrangler.fault-test.jsonc"
 const faultTestConfig = JSON.parse(readFileSync(faultTestConfigPath, "utf8"));
 const faultTestWorkflowPath = fileURLToPath(new URL("../../../.github/workflows/agent-runtime-cloudflare-do-fault-test.yml", import.meta.url));
 const faultTestWorkflowSource = readFileSync(faultTestWorkflowPath, "utf8");
-const faultTestCleanupConfigPath = fileURLToPath(new URL("../wrangler.fault-test.cleanup.jsonc", import.meta.url));
-const faultTestCleanupConfig = JSON.parse(readFileSync(faultTestCleanupConfigPath, "utf8"));
 
 test("dedicated Agent Runtime Preview config binds its isolated State Store and rate limiter and remains disabled", () => {
   assert.equal(config.name, "ai-thuc-chien-agent-runtime-preview");
