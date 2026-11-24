@@ -710,12 +710,11 @@ jobs:
             exit 1
           fi
           echo "Preview is restored and verified disabled/paused after bounded health polling."
-
-for path in /operator-console /operator-console.js /reviewer-console /reviewer-console.js; do
-  status="$(curl --silent --show-error --max-time 5 --output /dev/null --write-out "%{http_code}" "$AGENT_RUNTIME_PREVIEW_URL$path")"
-  if [[ "$status" != "404" ]]; then
-    echo "::error::Console asset $path returned HTTP $status while path-scoped Access is disabled; expected 404."
-    exit 1
-  fi
-done
-echo "All four human-facing console assets return 404 while Access is disabled."
+          for path in /operator-console /operator-console.js /reviewer-console /reviewer-console.js; do
+            status="$(curl --silent --show-error --max-time 5 --output /dev/null --write-out "%{http_code}" "$AGENT_RUNTIME_PREVIEW_URL$path")"
+            if [[ "$status" != "404" ]]; then
+              echo "::error::Console asset $path returned HTTP $status while path-scoped Access is disabled; expected 404."
+              exit 1
+            fi
+          done
+          echo "All four human-facing console assets return 404 while Access is disabled."
