@@ -359,7 +359,8 @@ jobs:
           const dollar = String.fromCharCode(36);
           const backslash = String.fromCharCode(92);
           assert.ok(cleanup.includes('if: always()'));
-          assert.ok(cleanup.includes('CLOUDFLARE_API_TOKEN: ' + dollar + '{{ secrets.CLOUDFLARE_AGENT_PREVIEW_WORKER_TOKEN }}'));
+          const workerSecretName = 'CLOUDFLARE_AGENT_PREVIEW_WORKER_TOKEN';
+          assert.ok(cleanup.includes('CLOUDFLARE_API_TOKEN: ' + dollar + '{{ ' + 'secrets.' + workerSecretName + ' }}'));
           assert.ok(cleanup.includes('if [[ -z "' + dollar + '{CLOUDFLARE_API_TOKEN:-}" ]]; then'));
           assert.equal(cleanup.includes(backslash + dollar + '{{'), false, 'GitHub secret interpolation must not be escaped');
           assert.equal(cleanup.includes(backslash + dollar + '{CLOUDFLARE_API_TOKEN'), false, 'shell credential expansion must not be escaped');
