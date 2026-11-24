@@ -281,17 +281,17 @@ jobs:
           NODE
           deployments="$RUNNER_TEMP/restored-deployments.json"
           status="$(curl --silent --show-error --max-time 15 --output "$deployments" --write-out "%{http_code}" \
-            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            --header "Authorization: Bearer $CLOUDFLARE_READ_API_TOKEN" \
             --header "Accept: application/json" "$base/deployments")"
           test "$status" = "200"
           settings="$RUNNER_TEMP/restored-settings.json"
           status="$(curl --silent --show-error --max-time 15 --output "$settings" --write-out "%{http_code}" \
-            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            --header "Authorization: Bearer $CLOUDFLARE_READ_API_TOKEN" \
             --header "Accept: application/json" "$base/settings")"
           test "$status" = "200"
           secrets="$RUNNER_TEMP/restored-secrets.json"
           status="$(curl --silent --show-error --max-time 15 --output "$secrets" --write-out "%{http_code}" \
-            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            --header "Authorization: Bearer $CLOUDFLARE_READ_API_TOKEN" \
             --header "Accept: application/json" "$base/secrets")"
           test "$status" = "200"
           DEPLOYMENTS_FILE="$deployments" SETTINGS_FILE="$settings" SECRETS_FILE="$secrets" ORIGINAL_VERSION_ID="$ORIGINAL_VERSION_ID" node --input-type=module <<'NODE'
