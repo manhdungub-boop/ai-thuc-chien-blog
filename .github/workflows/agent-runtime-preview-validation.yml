@@ -350,21 +350,30 @@ jobs:
           assert.match(workflow, /CLOUDFLARE_AGENT_PREVIEW_WORKER_TOKEN/);
           assert.match(workflow, /ai-thuc-chien-agent-runtime-fault-test\.manhdungub\.workers\.dev/);
           assert.match(workflow, /secret put AGENT_FAULT_TEST_TOKEN/);
-          assert.match(workflow, /wrangler@4\.166\.0 delete/);
+          assert.match(workflow, /wrangler@4\.166\.0 deploy/);
+          assert.doesNotMatch(workflow, /wrangler@4\.166\.0 delete/, 'the pre-created test Worker is retained only in dormant state');
 
-          const cleanupStart = workflow.indexOf('      - name: Delete and verify absence of the isolated test Worker');
+          const cleanupStart = workflow.indexOf('      - name: Remove one-run secret and disable public test routes');
           assert.notEqual(cleanupStart, -1, 'cleanup must be an explicit always-run step');
           const cleanup = workflow.slice(cleanupStart);
-          assert.match(cleanup, /before_status.*404/);
-          assert.match(cleanup, /after_status.*404/);
-          assert.match(cleanup, /attempt in 1 2 3/);
-          assert.match(cleanup, /::error::Isolated test Worker still exists/);          assert.doesNotMatch(workflow, /PREVIEW_WORKER_NAME|original_version_id|deployments\?force=true|wrangler@4\.166\.0 deploy --config agents\/runtime\/wrangler\.preview/);
+          assert.match(cleanup, /if:\s*always\(\)/);
+          assert.ok(cleanup.includes('CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_WORKER_TOKEN }}'));
+          assert.ok(cleanup.includes('if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then'));
+          assert.doesNotMatch(cleanup, /\\\$\{\{/);
+          assert.doesNotMatch(cleanup, /\\\$\{CLOUDFLARE_API_TOKEN/);
+          assert.match(cleanup, /--request DELETE/);
+          assert.match(cleanup, /AGENT_FAULT_TEST_TOKEN/);
+          assert.match(cleanup, /wrangler@4\.166\.0 deploy/);
+          assert.match(cleanup, /FAULT_TEST_CLEANUP_CONFIG/);
+          assert.match(cleanup, /previews_enabled, false/);
+          assert.match(cleanup, /enabled, false/);
+          assert.match(cleanup, /one-run AGENT_FAULT_TEST_TOKEN is absent/);          assert.doesNotMatch(workflow, /PREVIEW_WORKER_NAME|original_version_id|deployments\?force=true|wrangler@4\.166\.0 deploy --config agents\/runtime\/wrangler\.preview/);
           assert.doesNotMatch(workflow, /wrangler[^\n]*--env production|wrangler[^\n]*--env prod/);
           assert.equal('routes' in testConfig, false);
           assert.equal('d1_databases' in testConfig, false);
           assert.equal('queues' in testConfig, false);
           assert.equal('triggers' in testConfig, false);
-          console.log('PASS: fault suite deploys only to a separate, disabled, paused Worker with one SQLite test namespace and mandatory deletion; Preview and Production are not deployment targets.');
+          console.log('PASS: fault suite deploys only to a separate, disabled, paused Worker with one SQLite test namespace and mandatory one-run secret removal and public-URL disablement; Preview and Production are not deployment targets.');
           NODE
 
       - name: Verify OIDC operator workflow is manual and pause-only
