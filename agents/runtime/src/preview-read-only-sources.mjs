@@ -1,5 +1,13 @@
 const RAW_CONTENT_ORIGIN = "https://raw.githubusercontent.com/manhdungub-boop/ai-thuc-chien-blog/main/";
 const MAX_SOURCE_BYTES = 512 * 1024;
+const SOURCE_TIMEOUT_MS = 8_000;
+const MAX_SOURCE_TIMEOUT_MS = 30_000;
+
+function abortError(signal) {
+  return signal?.reason?.message === "preview_source_timeout"
+    ? new Error("preview_source_timeout")
+    : new Error("task_execution_aborted");
+}
 
 async function readBoundedResponse(response, limit, signal) {
   if (!response || !response.ok) throw new Error("preview_source_http_error_raw_" + (response?.status || "unknown"));
@@ -11,7 +19,7 @@ async function readBoundedResponse(response, limit, signal) {
   let total = 0;
   try {
     while (true) {
-      if (signal?.aborted) throw new Error("task_execution_aborted");
+      if (signal?.aborted) throw abortError(signal);
       const { done, value } = await reader.read();
       if (signal?.aborted) throw new Error("task_execution_aborted");
       if (done) break;
@@ -80,23 +88,34 @@ async function fetchRepositoryResponse(url, relativePath, signal) {
     if (signal?.aborted) throw new Error("task_execution_aborted");
     return response;
   } catch (error) {
-    if (signal?.aborted || error?.name === "AbortError") {
-      throw new Error("task_execution_aborted");
-    }
+    if (signal?.aborted) throw abortError(signal);
+    if (error?.name === "AbortError") throw new Error("task_execution_aborted");
     if (/^preview_source_(?:http_error|redirect_rejected)_raw_\d{3}$/.test(error?.message || "")) throw error;
     throw new Error("preview_source_fetch_failed");
   }
 }
 
-async function readRepositoryText(relativePath, { signal } = {}) {
+async function readRepositoryText(relativePath, { signal, timeoutMs = SOURCE_TIMEOUT_MS } = {}) {
   if (typeof relativePath !== "string" ||
       !/^(?:articles\/[a-z0-9][a-z0-9-]{0,150}\.html|data\/ai-tools\.json)$/.test(relativePath)) {
     throw new Error("preview_source_path_not_allowlisted");
   }
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > MAX_SOURCE_TIMEOUT_MS) {
+    throw new Error("preview_source_timeout_invalid");
+  }
   const url = RAW_CONTENT_ORIGIN + relativePath;
-  if (signal?.aborted) throw new Error("task_execution_aborted");
-  const response = await fetchRepositoryResponse(url, relativePath, signal);
-  return readBoundedResponse(response, MAX_SOURCE_BYTES, signal);
+  const controller = new AbortController();
+  const abortFromParent = () => controller.abort(signal?.reason ?? new Error("task_execution_aborted"));
+  if (signal?.aborted) abortFromParent();
+  else signal?.addEventListener("abort", abortFromParent, { once: true });
+  const timer = setTimeout(() => controller.abort(new Error("preview_source_timeout")), timeoutMs);
+  try {
+    const response = await fetchRepositoryResponse(url, relativePath, controller.signal);
+    return await readBoundedResponse(response, MAX_SOURCE_BYTES, controller.signal);
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", abortFromParent);
+  }
 }
 
 /**
@@ -131,6 +150,7 @@ export const PREVIEW_READ_ONLY_SOURCE_POLICY = Object.freeze({
   repository: "manhdungub/ai-thuc-chien-blog",
   ref: "main",
   maxSourceBytes: MAX_SOURCE_BYTES,
+  maxFetchDurationMs: SOURCE_TIMEOUT_MS,
   writable: false,
   callerControlledUrls: false,
   seoAuditEnabled: false,
