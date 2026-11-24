@@ -132,7 +132,7 @@ jobs:
         id: capture_original
         timeout-minutes: 2
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_WORKER_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}
         run: |
           set -euo pipefail
           test -n "${CLOUDFLARE_API_TOKEN:-}"
@@ -141,12 +141,12 @@ jobs:
           status="$(curl --silent --show-error --max-time 15 --output "$deployments" --write-out "%{http_code}" \
             --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             --header "Accept: application/json" "$base/deployments")"
-          test "$status" = "200"
+          if [[ "$status" != "200" ]]; then echo "::error::Preview deployments read returned HTTP $status"; cat "$deployments"; exit 1; fi
           settings="$RUNNER_TEMP/preview-settings.json"
           status="$(curl --silent --show-error --max-time 15 --output "$settings" --write-out "%{http_code}" \
             --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             --header "Accept: application/json" "$base/settings")"
-          test "$status" = "200"
+          if [[ "$status" != "200" ]]; then echo "::error::Preview settings read returned HTTP $status"; cat "$settings"; exit 1; fi
           DEPLOYMENTS_FILE="$deployments" SETTINGS_FILE="$settings" node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
           import { readFile, appendFile } from 'node:fs/promises';
@@ -246,6 +246,7 @@ jobs:
         timeout-minutes: 4
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_WORKER_TOKEN }}
+          CLOUDFLARE_READ_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}
           ORIGINAL_VERSION_ID: ${{ steps.capture_original.outputs.original_version_id }}
         run: |
           set -euo pipefail
