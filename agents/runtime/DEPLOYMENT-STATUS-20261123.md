@@ -8,21 +8,21 @@
 - [PR #327](https://github.com/manhdungub-boop/ai-thuc-chien-blog/pull/327) remains OPEN / DRAFT / UNMERGED.
 - Base branch: `main` at `6a5cfa2398ee72f12335942b1ceb0830e6b8add9`.
 - Integration branch: `integration/agent-runtime-v5-preview-20261120`.
-- Current integration head at this status capture: `473320bd20e4a1ed556b3cb6892a656e5c30134e`.
-- GitHub compares the PR as 475 commits ahead, 0 behind, 157 changed files (19,771 line changes). The size of this integration diff is a material review/release risk; successful CI is not by itself a reason to merge.
-- Child security PR [#368](https://github.com/manhdungub-boop/ai-thuc-chien-blog/pull/368) was merged into the integration branch through merge commit `473320bd20e4a1ed556b3cb6892a656e5c30134e`. Child commit `0846d66c97fcf7ae1d2a57e64dbb2de80b34331e` and the merge commit have the same Git tree `6143eaffb06176b8dc4ddfaf7499140b098e76da`; the source tree tested by child E2E is therefore the same tree now in PR #327.
+- Current integration head at this status capture: `5007afd2dc5e8b69eefb34038a953129f9635292`.
+- GitHub compares the PR as 478 commits ahead, 0 behind, 157 changed files (27,691 additions, 59 deletions at this capture). The size of this integration diff is a material review/release risk; successful CI is not by itself a reason to merge.
+- Child security PR [#368](https://github.com/manhdungub-boop/ai-thuc-chien-blog/pull/368) was merged into the integration branch through merge commit `473320bd20e4a1ed556b3cb6892a656e5c30134e`. Child commit `0846d66c97fcf7ae1d2a57e64dbb2de80b34331e` and the merge commit have the same Git tree `6143eaffb06176b8dc4ddfaf7499140b098e76da`; that runtime source tree passed the protected one-shot E2E. Test-only PR [#371](https://github.com/manhdungub-boop/ai-thuc-chien-blog/pull/371) was subsequently squash-merged into the integration branch; combined current head is `5007afd2dc5e8b69eefb34038a953129f9635292`.
 - Security-gate [Issue #298](https://github.com/manhdungub-boop/ai-thuc-chien-blog/issues/298) was closed as completed on 2026-11-24 after the replacement acceptance criteria were met.
 - The repository owner waived the independent third-party human security-review prerequisite. The `daingo11` review is AI-assisted at the owner's direction, not an independent audit.
 
 ## Exact-head review and CI evidence
 
-For PR #327 current head `473320bd20e4a1ed556b3cb6892a656e5c30134e`:
+For PR #327 current head at this capture `5007afd2dc5e8b69eefb34038a953129f9635292`:
 
-- CodeRabbit APPROVED and `daingo11` APPROVED on the exact current head (latest `daingo11` approval at 2026-11-24 07:36:07 UTC).
-- All 3 inline review threads on PR #327 are resolved.
-- 21/21 check runs completed: 20 success, 1 skipped. The skipped `one-shot-preview-e2e` did not run on the branch-push event; do not count it as an exact-head E2E execution.
-- The same Git tree passed the protected one-shot Preview E2E on child commit `0846d66c97fcf7ae1d2a57e64dbb2de80b34331e`, [run 45342369885](https://github.com/manhdungub-boop/ai-thuc-chien-blog/actions/runs/45342369885): OIDC admission, one allowlisted read-only `content.review`, pass result with zero findings, persisted audit verification, all four console assets redirecting to Cloudflare Access login, automatic Preview restore, and cleanup.
-- Exact-head CI includes successful validate/verify, community API, editorial smoke, Cloudflare Pages, Preview Worker build, CodeQL and dedicated JavaScript/TypeScript, Python and GitHub Actions analysis.
+- `daingo11` APPROVED the prior exact head `24b1be566bc706e6a690b743f8de5bae4f3fedf7`; this approval predates the test-only PR #371 merge and is not represented as an approval of the current combined head.
+- PR #371 received a separate AI-assisted APPROVE from the connected `daingo11` reviewer account for its exact test-only head `fad3ed3e88e7694c3d626d214c4091c38782db59`. The review explicitly states it is not an independent human security audit.
+- All 3 inline review threads on PR #327 were resolved before PR #371 was merged.
+- Nine observed workflows for current head completed with zero failed jobs: Agent Runtime Preview Shell Validation (`validate` success), Static CI Quality Gate, Staging Google OAuth integration, Editorial Release Readiness, AI Bank official-feed discovery, Verify Website Health, Content Quality Gate, Community API Bounded Body Security Tests, and CodeQL Offline Security Analysis. The `one-shot-preview-e2e` job was skipped by its explicit branch/event gate; do not count it as an exact-current-head E2E execution.
+- The protected one-shot Preview E2E passed on child commit `0846d66c97fcf7ae1d2a57e64dbb2de80b34331e`, [run 45342369885](https://github.com/manhdungub-boop/ai-thuc-chien-blog/actions/runs/45342369885): OIDC admission, one allowlisted read-only `content.review`, pass result with zero findings, persisted audit verification, all four console assets redirecting to Cloudflare Access login, automatic Preview restore, and cleanup. That evidence applies to the tested runtime source tree, not the later combined repository head.
 - The E2E workflow is intentionally restricted to a narrowly allowlisted PR synchronize event, repository, branch, actor, label, and protected Preview environment. The skipped parent check is expected for a merge commit pushed to the integration branch.
 
 ## Dedicated Preview Worker — Cloudflare read-only evidence
@@ -76,7 +76,7 @@ Read-only point-in-time telemetry observed on 2026-11-24 UTC:
 
 ## Test coverage versus remaining live Preview gates
 
-The repository contains automated unit/simulation coverage for OIDC replay-state handling, authentication boundaries, lease fencing, lease recovery, Pause/Emergency Stop decisions, rate-limit admission, quota evidence, and fail-closed runtime admission. Relevant tests include:
+The repository contains automated unit/simulation coverage for OIDC replay-state handling, authentication boundaries, lease fencing, lease recovery, Pause/Emergency Stop decisions, rate-limit admission (including the representative-route regression in PR #371), quota evidence, and fail-closed runtime admission. Relevant tests include:
 
 - `state-store-oidc-replay.test.mjs`
 - `github-oidc-worker.test.mjs`
@@ -97,9 +97,22 @@ Those tests are not substitutes for live fault-injection. Remaining live Preview
 
 The successful one-shot E2E already proves the allowlisted read-only `content.review` path, persisted audit result, console Access redirects, and automatic disabled/paused restore. Do not repeat it merely to duplicate evidence.
 
+### Additional ingress limiter regression coverage — PR #371
+
+- The test-only change extends ingress limiter rejection coverage from `/health` to `/internal/control`, `/internal/metrics`, and `/internal/oidc/pause`.
+- It asserts HTTP 429 / `rate_limited` for each denied representative route and verifies the limiter is invoked before route handling.
+- The merged test passed the parent Preview Shell Validation `validate` job. This is deterministic Worker-shell test evidence, not a live deployed rate-limit exhaustion test.
+
 ## Production exclusion and release rule
 
 - Cloudflare Production Worker `ai-thuc-chien-blog` last reported `modified_on=2026-11-23T05:13:33.486779Z`; its deployment history remains unchanged in this work.
 - The Cloudflare Workers Builds Production trigger is restricted to branch `main`; the integration-branch build used `npx wrangler preview`.
 - No Production Worker, D1, DNS, secrets, OAuth configuration, billing/payment settings, public content, Facebook publishing, or user/member data was changed.
 - Keep PR #327 Draft / open / unmerged. Do not merge to `main`, deploy Production, enable task execution, enable scheduling/recovery, enable reviewer sign-in, create/rotate secrets, run AI inference, or publish content/social posts without a separate explicit owner-approved release/activation decision.
+
+
+## Additional read-only live Preview probe (2026-11-24 08:32 UTC)
+
+- `GET /health` returned HTTP 200 and reported `enabled=false`, `paused=true`, `scheduler=manual_only_no_cron`, `task_execution_enabled=false`, `reviewer_auth_enabled=false`, and `publication_authorized=false`.
+- Unauthenticated `GET /internal/control` and `GET /internal/metrics` each returned HTTP 401 `operator_auth_required`.
+- These were read-only GET requests. No task was enqueued, no control state was changed, and no credentials were supplied. The unauthenticated POST negative-path probe was not completed because the connected execution service returned HTTP 403 before it could report a Worker response; it is not counted as a passing test.
