@@ -62,7 +62,7 @@
     "AGENT_RECOVERY_ALARM_ENABLED": "false",
     "AGENT_OIDC_ENABLED": "true",
     "AGENT_REVIEWER_AUTH_ENABLED": "false",
-    "AGENT_CONSOLE_ACCESS_PROTECTED": "false",
+    "AGENT_CONSOLE_ACCESS_PROTECTED": "true",
     "AGENT_RATE_LIMIT_REQUIRED": "true",
     "AGENT_OIDC_AUDIENCE": "ai-thuc-chien-agent-runtime-preview",
     "AGENT_OIDC_REPOSITORY": "manhdungub-boop/ai-thuc-chien-blog",
