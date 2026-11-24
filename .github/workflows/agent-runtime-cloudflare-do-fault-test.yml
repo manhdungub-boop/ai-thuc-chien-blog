@@ -178,7 +178,7 @@ jobs:
           assert.equal(byName.get('AGENT_STATE_STORE')?.type, 'durable_object_namespace');
           assert.equal(byName.get('AGENT_STATE_STORE_TOKEN')?.type, 'secret_text');
           assert.equal(byName.has('AGENT_FAULT_TEST_TOKEN'), false, 'test secret must not pre-exist');
-          await appendFile(process.env.GITHUB_OUTPUT, 'original_version_id=' + originalVersionId + '\\n');
+          await appendFile(process.env.GITHUB_OUTPUT, 'original_version_id=' + originalVersionId + '\n');
           console.log('Captured exact active Preview version; fail-closed flags verified.');
           NODE
 
