@@ -1,5 +1,6 @@
 import { AgentStateStore } from "../src/worker.mjs";
-export { AgentStateStore };
+// Preserve the pre-existing Durable Object class export until its namespace is migrated safely.
+export { AgentStateStore, AgentStateStore as WorkflowStatusDO };
 export { AgentAIBankCandidateStore, AgentDraftStore, AgentReviewerAuthStore } from "../src/worker.mjs";
 import { hasValidStateStoreBearer } from "../src/internal-auth.mjs";
 
