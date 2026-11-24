@@ -112,11 +112,13 @@ jobs:
         timeout-minutes: 4
         run: timeout --signal=TERM --kill-after=10s 180s node --test agents/runtime/tests/*.test.mjs
 
-      - name: Validate Preview types and Worker bundle without deployment
+      - name: Validate Preview and isolated fault-harness bundles without deployment
         working-directory: agents/runtime
         run: |
           npx --yes wrangler@4.166.0 types --config wrangler.preview.jsonc
           npx --yes wrangler@4.166.0 deploy --dry-run --config wrangler.preview.jsonc --outdir "$RUNNER_TEMP/agent-runtime-dry-run"
+          npx --yes wrangler@4.166.0 types --config wrangler.fault-test.jsonc
+          npx --yes wrangler@4.166.0 deploy --dry-run --config wrangler.fault-test.jsonc --outdir "$RUNNER_TEMP/agent-runtime-fault-test-dry-run"
 
       - name: Verify Preview config is isolated and scheduled dispatcher remains disabled
         run: |
