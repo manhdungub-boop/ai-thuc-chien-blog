@@ -8,7 +8,7 @@
 - [PR #327](https://github.com/manhdungub-boop/ai-thuc-chien-blog/pull/327) remains OPEN / DRAFT / UNMERGED.
 - Base branch: `main` at `6a5cfa2398ee72f12335942b1ceb0830e6b8add9`.
 - Integration branch: `integration/agent-runtime-v5-preview-20261120`.
-- Current integration head at this status capture: `5007afd2dc5e8b69eefb34038a953129f9635292`.
+- Current integration head at this status capture: `05b3218a4cc961e76d7136f37cea7e971faf1942` (includes PR #371 test-only change and the subsequent documentation-only evidence refresh).
 - GitHub compares the PR as 478 commits ahead, 0 behind, 157 changed files (27,691 additions, 59 deletions at this capture). The size of this integration diff is a material review/release risk; successful CI is not by itself a reason to merge.
 - Child security PR [#368](https://github.com/manhdungub-boop/ai-thuc-chien-blog/pull/368) was merged into the integration branch through merge commit `473320bd20e4a1ed556b3cb6892a656e5c30134e`. Child commit `0846d66c97fcf7ae1d2a57e64dbb2de80b34331e` and the merge commit have the same Git tree `6143eaffb06176b8dc4ddfaf7499140b098e76da`; that runtime source tree passed the protected one-shot E2E. Test-only PR [#371](https://github.com/manhdungub-boop/ai-thuc-chien-blog/pull/371) was subsequently squash-merged into the integration branch; combined current head is `5007afd2dc5e8b69eefb34038a953129f9635292`.
 - Security-gate [Issue #298](https://github.com/manhdungub-boop/ai-thuc-chien-blog/issues/298) was closed as completed on 2026-11-24 after the replacement acceptance criteria were met.
@@ -16,12 +16,12 @@
 
 ## Exact-head review and CI evidence
 
-For PR #327 current head at this capture `5007afd2dc5e8b69eefb34038a953129f9635292`:
+For PR #327 current head at this capture `05b3218a4cc961e76d7136f37cea7e971faf1942`:
 
-- `daingo11` APPROVED the prior exact head `24b1be566bc706e6a690b743f8de5bae4f3fedf7`; this approval predates the test-only PR #371 merge and is not represented as an approval of the current combined head.
-- PR #371 received a separate AI-assisted APPROVE from the connected `daingo11` reviewer account for its exact test-only head `fad3ed3e88e7694c3d626d214c4091c38782db59`. The review explicitly states it is not an independent human security audit.
+- `daingo11` APPROVED the exact current head `05b3218a4cc961e76d7136f37cea7e971faf1942` at 2026-11-24 08:40:31 UTC. The review is AI-assisted at the owner's direction, not an independent third-party security audit.
+- PR #371 received a separate AI-assisted APPROVE from the connected `daingo11` reviewer account for its exact test-only head `fad3ed3e88e7694c3d626d214c4091c38782db59` before it was merged.
 - All 3 inline review threads on PR #327 were resolved before PR #371 was merged.
-- Nine observed workflows for current head completed with zero failed jobs: Agent Runtime Preview Shell Validation (`validate` success), Static CI Quality Gate, Staging Google OAuth integration, Editorial Release Readiness, AI Bank official-feed discovery, Verify Website Health, Content Quality Gate, Community API Bounded Body Security Tests, and CodeQL Offline Security Analysis. The `one-shot-preview-e2e` job was skipped by its explicit branch/event gate; do not count it as an exact-current-head E2E execution.
+- Nine observed workflows for exact current head `05b3218a4cc961e76d7136f37cea7e971faf1942` completed with zero failed jobs: Agent Runtime Preview Shell Validation (`validate` success), Static CI Quality Gate, Staging Google OAuth integration, Editorial Release Readiness, AI Bank official-feed discovery, Verify Website Health, Content Quality Gate, Community API Bounded Body Security Tests, and CodeQL Offline Security Analysis. The `one-shot-preview-e2e` job was skipped by its explicit branch/event gate; do not count it as an exact-current-head E2E execution.
 - The protected one-shot Preview E2E passed on child commit `0846d66c97fcf7ae1d2a57e64dbb2de80b34331e`, [run 45342369885](https://github.com/manhdungub-boop/ai-thuc-chien-blog/actions/runs/45342369885): OIDC admission, one allowlisted read-only `content.review`, pass result with zero findings, persisted audit verification, all four console assets redirecting to Cloudflare Access login, automatic Preview restore, and cleanup. That evidence applies to the tested runtime source tree, not the later combined repository head.
 - The E2E workflow is intentionally restricted to a narrowly allowlisted PR synchronize event, repository, branch, actor, label, and protected Preview environment. The skipped parent check is expected for a merge commit pushed to the integration branch.
 
@@ -116,3 +116,12 @@ The successful one-shot E2E already proves the allowlisted read-only `content.re
 - `GET /health` returned HTTP 200 and reported `enabled=false`, `paused=true`, `scheduler=manual_only_no_cron`, `task_execution_enabled=false`, `reviewer_auth_enabled=false`, and `publication_authorized=false`.
 - Unauthenticated `GET /internal/control` and `GET /internal/metrics` each returned HTTP 401 `operator_auth_required`.
 - These were read-only GET requests. No task was enqueued, no control state was changed, and no credentials were supplied. The unauthenticated POST negative-path probe was not completed because the connected execution service returned HTTP 403 before it could report a Worker response; it is not counted as a passing test.
+
+## Additional Cloudflare API read-only reconciliation (2026-11-24 08:45 UTC)
+
+- Downloaded the deployed Preview Worker script through the Cloudflare API (GET only). The deployed script is non-empty (approximately 1.1 MB) and contains the Agent Runtime modules; this is not a Hello World shell.
+- The deployed Worker settings confirm `usage_model=standard`, `logpush=false`, and four SQLite-backed Durable Object bindings: `AgentStateStore`, `AgentReviewerAuthStore`, `AgentDraftStore`, and `AgentAIBankCandidateStore`. The binding names and namespace IDs match the inventory above.
+- The live plain-text gates remain `AGENT_ENABLED=false`, `AGENT_PAUSED=true`, `AGENT_SCHEDULER_ENABLED=false`, `AGENT_RECOVERY_ALARM_ENABLED=false`, `AGENT_REVIEWER_AUTH_ENABLED=false`, `AGENT_OIDC_ENABLED=true`, and `AGENT_RATE_LIMIT_REQUIRED=true`. The only observed secret binding is the internal `AGENT_STATE_STORE_TOKEN`; its value was not read. No operator bearer token is present in the returned binding inventory.
+- The separate script-settings endpoint returned `logpush=false` and `observability=null`. Null is recorded as the API response; it is not interpreted as proof that every observability subfeature is disabled. No logging/trace setting was changed.
+- This resolves the stale historical statements in older threat-model and budget-review sections that described the Worker/DO namespaces as not deployed. The live status section above is the authoritative current inventory; older point-in-time notes remain historical evidence only.
+- These were Cloudflare API GET requests only. No deployment, configuration, secret, namespace, billing, or Production change was made.
