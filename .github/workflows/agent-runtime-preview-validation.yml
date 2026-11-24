@@ -258,6 +258,8 @@ jobs:
           assert.ok(e2eWorkflow.includes("github.actor_id == '342528485'"), 'one-shot E2E must be restricted to repository owner actor');
           assert.ok(e2eWorkflow.includes("github.event.pull_request.head.ref == 'security/fence-leases-on-circuit-breaker-pause-20261123'"));
           assert.ok(e2eWorkflow.includes('id-token: write'));
+          assert.ok(e2eWorkflow.includes('Probe OIDC run gate readiness before requesting the token'));
+          assert.ok(e2eWorkflow.includes('github_oidc_token_required'));
           assert.ok(e2eWorkflow.includes("config.vars.AGENT_OIDC_RUN_ENABLED = 'true'"));
           assert.ok(e2eWorkflow.includes('config.vars.AGENT_OIDC_RUN_REF = process.env.GITHUB_REF'));
           assert.ok(e2eWorkflow.includes('config.vars.AGENT_OIDC_RUN_WORKFLOW_REF = process.env.GITHUB_WORKFLOW_REF'));
@@ -475,6 +477,38 @@ jobs:
             exit 1
           fi
 
+      - name: Probe OIDC run gate readiness before requesting the token
+        timeout-minutes: 1
+        env:
+          AGENT_RUNTIME_PREVIEW_URL: ${{ env.AGENT_RUNTIME_PREVIEW_URL }}
+        run: |
+          set -euo pipefail
+          probe_body='{"task":{"type":"content.review","idempotencyKey":"oidc-preview-e2e:readiness-probe","payload":{"articlePath":"articles/ai-agent-thuc-hanh-tu-thiet-ke-den-kiem-soat.html"}}}'
+          ready=false
+          for attempt in $(seq 1 8); do
+            status="$(curl --silent --show-error --max-time 8 --output "$RUNNER_TEMP/oidc-readiness.json" --write-out "%{http_code}" \
+              --request POST "$AGENT_RUNTIME_PREVIEW_URL/internal/oidc/run" \
+              --header "Content-Type: application/json" \
+              --header "Accept: application/json" \
+              --data "$probe_body")"
+            if [[ "$status" == "401" ]] && jq -e '.error == "github_oidc_token_required"' "$RUNNER_TEMP/oidc-readiness.json" >/dev/null; then
+              ready=true
+              break
+            fi
+            if [[ "$status" != "503" ]]; then
+              echo "::error::OIDC readiness probe returned an unexpected HTTP $status; refusing to request an operator token."
+              cat "$RUNNER_TEMP/oidc-readiness.json"
+              exit 1
+            fi
+            echo "OIDC run gate is not ready yet (attempt $attempt/8); no task was submitted."
+            sleep 2
+          done
+          if [[ "$ready" != "true" ]]; then
+            echo "::error::OIDC run gate did not become ready; refusing to request a token or run a task."
+            cat "$RUNNER_TEMP/oidc-readiness.json"
+            exit 1
+          fi
+          echo "OIDC run gate is ready; unauthenticated probe stopped at the expected token-required boundary."
       - name: Invoke exactly one allowlisted task with a short-lived GitHub OIDC token
         timeout-minutes: 1
         env:
