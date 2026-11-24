@@ -648,19 +648,56 @@ test("durable pause is atomic, survives restart, and resume never dispatches que
   }
 });
 
-test("control mutations enforce per-operator durable rate limits", async () => {
+test("trusted cleanup pause bypasses the operator rate limit while external mutations remain limited", async () => {
   await withRuntime({}, async ({ stub }) => {
+    const actor = "rate-limit-test";
     const requests = [];
-    for (let index = 0; index < 11; index += 1) {
+    for (let index = 0; index < 10; index += 1) {
       requests.push(call(stub, "/control/pause", {
-        actor: "rate-limit-test",
+        actor,
         requestId: crypto.randomUUID(),
         reason: "rate limit probe",
       }));
     }
     const results = await Promise.all(requests);
-    assert.equal(results.filter((result) => result.status === 200).length, 10);
-    assert.equal(results.filter((result) => result.status === 429).length, 1);
+    assert.ok(results.every((result) => result.status === 200));
+
+    const cleanup = await call(stub, "/control/pause", {
+      actor,
+      requestId: crypto.randomUUID(),
+      reason: "one-shot cleanup",
+      internalCleanup: true,
+    });
+    assert.equal(cleanup.status, 200);
+    assert.equal(cleanup.body.control.paused, true);
+
+    const limitedPause = await call(stub, "/control/pause", {
+      actor,
+      requestId: crypto.randomUUID(),
+      reason: "external pause must remain limited",
+    });
+    assert.equal(limitedPause.status, 429);
+    assert.equal(limitedPause.body.error, "runtime_control_rate_limited");
+
+    const current = await call(stub, "/control");
+    const limitedResume = await call(stub, "/control/resume", {
+      actor,
+      requestId: crypto.randomUUID(),
+      reason: "external resume must remain limited",
+      expectedVersion: current.body.control.version,
+    });
+    assert.equal(limitedResume.status, 429);
+    assert.equal(limitedResume.body.error, "runtime_control_rate_limited");
+
+    const invalidResume = await call(stub, "/control/resume", {
+      actor: "other-rate-limit-test",
+      requestId: crypto.randomUUID(),
+      reason: "cleanup flag is pause-only",
+      expectedVersion: current.body.control.version,
+      internalCleanup: true,
+    });
+    assert.equal(invalidResume.status, 400);
+    assert.equal(invalidResume.body.error, "runtime_control_request_invalid");
   });
 });
 
