@@ -4,7 +4,7 @@ import { AgentReviewerAuthStore } from "../src/google-reviewer-auth-store.mjs";
 
 const METHODS = {
   AGENT_AI_BANK_CANDIDATE_STORE: new Set(["upsertCandidates", "listCandidates", "getCandidate", "submitAuthorizedReviewEvidence", "listReviewEvidence", "getReviewPacket", "stats", "getDiscoveryCursor", "upsertCandidatesAndAdvanceCursor", "testFetch", "testInstallCandidateInsertFailureTrigger", "testDropCandidateInsertFailureTrigger", "testSetLegacyDiscoveryDigest", "testUppercaseAuditEventId"]),
-  AGENT_DRAFT_STORE: new Set(["createDraft", "reviseDraft", "reviseDraftForReviewer", "recordReviewerClaimDecisions", "storeEvidenceLedger", "recordEvidenceReview", "listPendingReviewsForReviewer", "listNeedsRevisionForReviewer", "getDraftForReviewer", "getDraft", "reviewDraft", "listPendingReviews", "listNeedsRevision", "listOwnerReleaseReviews", "stats"]),
+  AGENT_DRAFT_STORE: new Set(["createDraft", "createDraftFromAgent", "setRuntimePaused", "reviseDraft", "reviseDraftForReviewer", "recordReviewerClaimDecisions", "storeEvidenceLedger", "recordEvidenceReview", "listPendingReviewsForReviewer", "listNeedsRevisionForReviewer", "getDraftForReviewer", "getDraft", "reviewDraft", "listPendingReviews", "listNeedsRevision", "listOwnerReleaseReviews", "stats"]),
   AGENT_REVIEWER_AUTH_STORE: new Set(["consumeStartRateLimit", "createTransaction", "consumeTransaction"])
 };
 
