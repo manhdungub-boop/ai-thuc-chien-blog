@@ -322,11 +322,8 @@ export class TestAgentStateStore extends AgentStateStore {
           }
 
           // 6. Recovery alarms stay disabled in this harness.
-          const alarmResponse = await super.fetch(new Request("https://state-store.internal/__test/alarm-state", {
-            headers: { Authorization: "Bearer " + this.env.AGENT_STATE_STORE_TOKEN },
-          }));
-          const alarm = await alarmResponse.json();
-          if (alarm?.ok !== true || alarm.alarmAt !== null) throw new Error("unexpected_recovery_alarm_scheduled");
+          const alarmAt = await this.ctx.storage.getAlarm();
+          if (alarmAt !== null) throw new Error("unexpected_recovery_alarm_scheduled_" + String(alarmAt));
 
           report = {
             ok: true,
