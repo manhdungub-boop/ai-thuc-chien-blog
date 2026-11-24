@@ -309,7 +309,7 @@ jobs:
       contains(github.event.pull_request.labels.*.name, 'agent-runtime') &&
       github.repository == 'manhdungub-boop/ai-thuc-chien-blog' &&
       github.event.pull_request.head.repo.full_name == 'manhdungub-boop/ai-thuc-chien-blog' &&
-      github.event.pull_request.head.ref == 'security/fence-leases-on-circuit-breaker-pause-20261123' &&
+      (github.event.pull_request.head.ref == 'security/fence-leases-on-circuit-breaker-pause-20261123' || github.event.pull_request.head.ref == 'security/agent-runtime-oidc-replay-e2e-20261124') &&
       github.event.pull_request.base.ref == 'integration/agent-runtime-v5-preview-20261120' &&
       github.actor_id == '342528485'
     needs: validate
@@ -346,7 +346,7 @@ jobs:
           test "$GITHUB_EVENT_NAME" = "pull_request"
           test "$EVENT_ACTION" = "synchronize"
           node --input-type=module -e "import assert from 'node:assert/strict'; const labels = JSON.parse(process.env.EVENT_LABELS); assert.ok(labels.includes('agent-runtime'), 'required agent-runtime label must remain present')"
-          test "$EXPECTED_HEAD_REF" = "security/fence-leases-on-circuit-breaker-pause-20261123"
+          [[ "$EXPECTED_HEAD_REF" == "security/fence-leases-on-circuit-breaker-pause-20261123" || "$EXPECTED_HEAD_REF" == "security/agent-runtime-oidc-replay-e2e-20261124" ]]
           test "$GITHUB_ACTOR_ID" = "342528485"
           [[ "$GITHUB_REF" =~ ^refs/pull/[0-9]+/merge$ ]]
           test "$GITHUB_WORKFLOW_REF" = "$GITHUB_REPOSITORY/.github/workflows/agent-runtime-preview-validation.yml@$GITHUB_REF"
