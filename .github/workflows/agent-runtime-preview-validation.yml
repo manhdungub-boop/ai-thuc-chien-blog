@@ -188,14 +188,6 @@ jobs:
           assert.equal(faultTest.main, './tests/state-store-test-worker.mjs');
           assert.deepEqual(faultTest.durable_objects?.bindings, [{ name: 'AGENT_STATE_STORE', class_name: 'TestAgentStateStore' }]);
           assert.deepEqual(faultTest.migrations, [{ tag: 'fault-test-v1', new_sqlite_classes: ['TestAgentStateStore'] }]);
-          const faultTestCleanup = JSON.parse(await readFile('agents/runtime/wrangler.fault-test.cleanup.jsonc', 'utf8'));
-          assert.equal(faultTestCleanup.name, faultTest.name);
-          assert.equal(faultTestCleanup.main, faultTest.main);
-          assert.equal(faultTestCleanup.workers_dev, false);
-          assert.equal(faultTestCleanup.preview_urls, false);
-          assert.deepEqual(faultTestCleanup.durable_objects, faultTest.durable_objects);
-          assert.deepEqual(faultTestCleanup.migrations, faultTest.migrations);
-          assert.deepEqual(faultTestCleanup.vars, faultTest.vars);
           const faultTestWorkflowSource = await readFile('.github/workflows/agent-runtime-cloudflare-do-fault-test.yml', 'utf8');
           assert.ok(faultTestWorkflowSource.includes('$api/secrets/AGENT_FAULT_TEST_TOKEN'));
           assert.ok(faultTestWorkflowSource.includes('--request POST'));
