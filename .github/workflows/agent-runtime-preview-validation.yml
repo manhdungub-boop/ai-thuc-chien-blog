@@ -272,7 +272,9 @@ jobs:
           assert.ok(e2eWorkflow.includes('if: always()'), 'rollback must run even after an E2E failure');
           assert.ok(e2eWorkflow.includes('function classifyCloudflareWorkersPlan'), 'the Free-plan classifier must be present in the gated E2E job');
           assert.ok(e2eWorkflow.includes('info.total_count === payload.result.length'), 'total_count must equal the returned result length when used as completeness proof');
+          assert.ok(e2eWorkflow.includes('info.next_page === undefined'), 'total_count cannot override an explicit or malformed next_page marker');
           assert.ok(e2eWorkflow.includes('info.next_page === false'), 'an explicit no-next-page marker may prove complete enumeration');
+          assert.ok(e2eWorkflow.includes('explicit next_page=true must override matching totals'), 'contradictory pagination metadata must fail closed');
           assert.ok(e2eWorkflow.includes('missing completeness metadata must fail closed'));
           assert.ok(e2eWorkflow.includes('any active paid subscription blocks the Free-only deployment gate'));
           assert.ok(e2eWorkflow.includes('free-default'), 'an empty, fully enumerated subscription list may map to the documented default Free plan');
@@ -403,6 +405,7 @@ jobs:
                 info.per_page < payload.result.length) return 'incomplete';
 
             const completeByTotalCount =
+              info.next_page === undefined &&
               Number.isSafeInteger(info.count) && info.count === payload.result.length &&
               Number.isSafeInteger(info.total_count) && info.total_count === payload.result.length;
             const completeByNextPage =
@@ -455,6 +458,12 @@ jobs:
           assert.equal(classifyCloudflareWorkersPlan({
             success: true, result: [], result_info: { page: 1, per_page: 25, next_page: true }
           }), 'incomplete', 'a remaining page must fail closed');
+          assert.equal(classifyCloudflareWorkersPlan({
+            success: true, result: [], result_info: { page: 1, per_page: 25, count: 0, total_count: 0, next_page: true }
+          }), 'incomplete', 'explicit next_page=true must override matching totals');
+          assert.equal(classifyCloudflareWorkersPlan({
+            success: true, result: [], result_info: { page: 1, per_page: 25, count: 0, total_count: 0, next_page: 'false' }
+          }), 'incomplete', 'malformed next_page metadata must fail closed');
           assert.equal(classifyCloudflareWorkersPlan({
             success: true, result: [], result_info: { page: 1, per_page: 20, count: 0 }
           }), 'incomplete', 'missing completeness metadata must fail closed');
