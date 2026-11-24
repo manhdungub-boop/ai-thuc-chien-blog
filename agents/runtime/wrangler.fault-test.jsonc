@@ -21,8 +21,8 @@
     }
   ],
   "vars": {
-    "AGENT_ENABLED": "true",
-    "AGENT_PAUSED": "false",
+    "AGENT_ENABLED": "false",
+    "AGENT_PAUSED": "true",
     "AGENT_SCHEDULER_ENABLED": "false",
     "AGENT_RECOVERY_ALARM_ENABLED": "false",
     "AGENT_OIDC_ENABLED": "false",

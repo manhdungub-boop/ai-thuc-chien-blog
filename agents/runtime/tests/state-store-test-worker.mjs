@@ -1,4 +1,6 @@
 import { AgentStateStore } from "../src/worker.mjs";
+export { AgentStateStore };
+export { AgentAIBankCandidateStore, AgentDraftStore, AgentReviewerAuthStore } from "../src/worker.mjs";
 import { hasValidStateStoreBearer } from "../src/internal-auth.mjs";
 
 function jsonResponse(body, status = 200) {
@@ -18,6 +20,24 @@ function jsonResponse(body, status = 200) {
  * therefore cannot be enabled through a deployed Worker environment variable.
  */
 export class TestAgentStateStore extends AgentStateStore {
+  constructor(ctx, env = {}) {
+    // Use a dedicated one-run test secret; never overwrite the Preview runtime secret.
+    const faultSuiteMode = { active: false };
+    const testEnv = new Proxy({
+      ...env,
+      AGENT_STATE_STORE_TOKEN: env.AGENT_FAULT_TEST_TOKEN ?? env.AGENT_STATE_STORE_TOKEN,
+    }, {
+      get(target, property, receiver) {
+        // Enable transitions only while the token-gated fault suite is running.
+        if (faultSuiteMode.active && property === "AGENT_ENABLED") return "true";
+        if (faultSuiteMode.active && property === "AGENT_PAUSED") return "false";
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    super(ctx, testEnv);
+    this.faultSuiteMode = faultSuiteMode;
+  }
+
   requestTime(request) {
     const value = request.headers.get("x-test-now");
     if (value) {
@@ -125,6 +145,7 @@ export class TestAgentStateStore extends AgentStateStore {
           return jsonResponse({ ok: false, error: "fault_suite_request_invalid" }, 400);
         }
 
+        this.faultSuiteMode.active = true;
         const callStore = async (pathname, body, at) => {
           const headers = { Authorization: "Bearer " + this.env.AGENT_STATE_STORE_TOKEN };
           if (body !== undefined) headers["Content-Type"] = "application/json";
@@ -326,6 +347,7 @@ export class TestAgentStateStore extends AgentStateStore {
             this.sql.exec("DELETE FROM runtime_control_rate_limit WHERE actor LIKE 'fault-suite-%'");
             this.sql.exec("DELETE FROM runtime_control_audit WHERE actor LIKE 'fault-suite-%'");
           } catch {}
+          this.faultSuiteMode.active = false;
         }
         return jsonResponse(report ?? { ok: false, error: "fault_suite_failed" }, report?.ok ? 200 : 500);
       }
@@ -392,7 +414,7 @@ export default {
     if (url.pathname !== "/__test/fault-suite" || request.method !== "POST") {
       return new Response("not_found", { status: 404, headers: { "Cache-Control": "no-store" } });
     }
-    if (!await hasValidStateStoreBearer(request, env)) {
+    if (!await hasValidStateStoreBearer(request, { ...env, AGENT_STATE_STORE_TOKEN: env.AGENT_FAULT_TEST_TOKEN ?? env.AGENT_STATE_STORE_TOKEN })) {
       return jsonResponse({ ok: false, error: "state_store_auth_required" }, 401);
     }
     if (!env.AGENT_STATE_STORE || typeof env.AGENT_STATE_STORE.idFromName !== "function" ||
