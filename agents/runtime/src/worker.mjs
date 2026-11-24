@@ -17,7 +17,6 @@ export { AgentAIBankCandidateStore } from "./ai-bank-candidate-store.mjs";
 export { AgentDraftStore } from "./draft-artifact-store.mjs";
 export { AgentReviewerAuthStore } from "./google-reviewer-auth-store.mjs";
 
-
 const SECURITY_HEADERS = Object.freeze({
   "Cache-Control": "no-store",
   "Content-Type": "application/json; charset=utf-8",
