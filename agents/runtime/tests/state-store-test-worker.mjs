@@ -388,6 +388,9 @@ export class TestAgentStateStore extends AgentStateStore {
         return jsonResponse({ ok: true, schemaVersion: 1 });
       }
 
+      // Repeated Preview runs reuse the isolated Durable Object namespace.
+      // Clear this test-only sentinel first so a prior failed run cannot poison the next rollback assertion.
+      this.sql.exec("DELETE FROM daily_usage WHERE day_utc = '2099-12-31'");
       this.ctx.storage.transactionSync(() => {
         this.sql.exec("INSERT INTO daily_usage (day_utc, accepted_count) VALUES ('2099-12-31', 1)");
         throw new Error("intentional_rollback_probe");
