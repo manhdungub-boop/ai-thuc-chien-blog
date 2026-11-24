@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { AgentStateStore, AgentReviewerAuthStore, AgentDraftStore, AgentAIBankCandidateStore, TestAgentStateStore } from "../src/worker.mjs";
+import { AgentStateStore, AgentReviewerAuthStore, AgentDraftStore, AgentAIBankCandidateStore } from "../src/worker.mjs";
+import { TestAgentStateStore } from "./state-store-test-worker.mjs";
 
 const configPath = fileURLToPath(new URL("../wrangler.preview.jsonc", import.meta.url));
 const config = JSON.parse(readFileSync(configPath, "utf8"));
@@ -51,7 +52,6 @@ test("dedicated Agent Runtime Preview config binds its isolated State Store and 
     { tag: "v1", new_sqlite_classes: ["AgentStateStore"] },
     { tag: "v2", new_sqlite_classes: ["AgentReviewerAuthStore", "AgentDraftStore"] },
     { tag: "v3-ai-bank-candidate-store", new_sqlite_classes: ["AgentAIBankCandidateStore"] },
-    { tag: "fault-test-v1", new_sqlite_classes: ["TestAgentStateStore"] },
   ]);
   for (const forbidden of [
     "account_id", "routes", "route", "custom_domains", "d1_databases",
@@ -70,6 +70,10 @@ test("fault-test harness remains disabled, paused, and migration-compatible", ()
   assert.equal(faultTestConfig.migrations.at(-1)?.tag, "fault-test-v1");
   assert.equal(faultTestConfig.durable_objects.bindings.find(binding => binding.name === "AGENT_STATE_STORE")?.class_name, "TestAgentStateStore");
 });
+test("fault-test Worker exports its test-only Durable Object class outside the application entrypoint", () => {
+  assert.equal(typeof TestAgentStateStore, "function");
+});
+
 test("Preview config never enables autonomous execution by default", () => {
   assert.notEqual(config.vars.AGENT_ENABLED, "true");
   assert.notEqual(config.vars.AGENT_PAUSED, "false");
@@ -83,7 +87,6 @@ test("Worker entrypoint exports the Durable Object class named by the Preview co
   assert.equal(typeof AgentReviewerAuthStore, "function");
   assert.equal(typeof AgentDraftStore, "function");
   assert.equal(typeof AgentAIBankCandidateStore, "function");
-  assert.equal(typeof TestAgentStateStore, "function");
 });
 
 test("GitHub OIDC is enabled only for the pause-only Preview operator", () => {
