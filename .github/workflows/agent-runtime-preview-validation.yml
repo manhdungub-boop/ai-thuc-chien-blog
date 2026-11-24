@@ -607,8 +607,8 @@ jobs:
           fi
           echo "OIDC run gate remained at the expected token-required boundary across three consecutive probes."
           sleep 2
-      - name: Invoke exactly one allowlisted task with a short-lived GitHub OIDC token
-        timeout-minutes: 1
+      - name: Verify signed invalid OIDC claims, run one task, and reject token replay
+        timeout-minutes: 2
         env:
           OIDC_AUDIENCE: ai-thuc-chien-agent-runtime-preview
         run: |
@@ -617,49 +617,95 @@ jobs:
           const requestUrl = process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
           const requestToken = process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
           if (!requestUrl || !requestToken) throw new Error('GitHub OIDC request context unavailable');
-          const tokenUrl = new URL(requestUrl);
-          tokenUrl.searchParams.set('audience', process.env.OIDC_AUDIENCE);
-          const tokenResponse = await fetch(tokenUrl, {
-            method: 'GET',
-            headers: { Authorization: 'Bearer ' + requestToken, Accept: 'application/json' },
-            redirect: 'error',
-            cache: 'no-store',
-            signal: AbortSignal.timeout(10000),
-          });
-          if (!tokenResponse.ok) throw new Error('GitHub OIDC token request failed: HTTP ' + tokenResponse.status);
-          const payload = JSON.parse(await tokenResponse.text());
-          if (typeof payload.value !== 'string' || payload.value.length < 100 || payload.value.length > 16384) {
-            throw new Error('GitHub OIDC token response invalid');
+
+          async function getOidcToken(audience) {
+            const tokenUrl = new URL(requestUrl);
+            tokenUrl.searchParams.set('audience', audience);
+            const response = await fetch(tokenUrl, {
+              method: 'GET',
+              headers: { Authorization: 'Bearer ' + requestToken, Accept: 'application/json' },
+              redirect: 'error',
+              cache: 'no-store',
+              signal: AbortSignal.timeout(10000),
+            });
+            if (!response.ok) throw new Error('GitHub OIDC token request failed: HTTP ' + response.status);
+            const payload = JSON.parse(await response.text());
+            if (typeof payload.value !== 'string' || payload.value.length < 100 || payload.value.length > 16384) {
+              throw new Error('GitHub OIDC token response invalid');
+            }
+            return payload.value;
           }
-          const response = await fetch(process.env.AGENT_RUNTIME_PREVIEW_URL + '/internal/oidc/run', {
-            method: 'POST',
-            headers: {
-              Authorization: 'Bearer ' + payload.value,
-              'Content-Type': 'application/json',
-              Accept: 'application/json',
-            },
-            body: JSON.stringify({ task: {
-              type: 'content.review',
-              idempotencyKey: `oidc-preview-e2e:pr368-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}`,
-              payload: { articlePath: 'articles/ai-agent-thuc-hanh-tu-thiet-ke-den-kiem-soat.html' },
-            } }),
-            redirect: 'error',
-            cache: 'no-store',
-            signal: AbortSignal.timeout(25000),
-          });
-          const result = JSON.parse(await response.text());
+
+          async function invokeRun(token, idempotencyKey, timeoutMs) {
+            const response = await fetch(process.env.AGENT_RUNTIME_PREVIEW_URL + '/internal/oidc/run', {
+              method: 'POST',
+              headers: {
+                Authorization: 'Bearer ' + token,
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+              },
+              body: JSON.stringify({ task: {
+                type: 'content.review',
+                idempotencyKey,
+                payload: { articlePath: 'articles/ai-agent-thuc-hanh-tu-thiet-ke-den-kiem-soat.html' },
+              } }),
+              redirect: 'error',
+              cache: 'no-store',
+              signal: AbortSignal.timeout(timeoutMs),
+            });
+            const text = await response.text();
+            let result;
+            try { result = JSON.parse(text); }
+            catch { throw new Error('Preview OIDC endpoint returned non-JSON HTTP ' + response.status); }
+            return { response, result };
+          }
+
+          const runKey = process.env.GITHUB_RUN_ID + '-' + process.env.GITHUB_RUN_ATTEMPT;
+
+          // This is a real GitHub-signed token with an intentionally wrong audience.
+          // It must fail claim validation before the replay store or task queue is touched.
+          const invalidAudienceToken = await getOidcToken(process.env.OIDC_AUDIENCE + '-invalid-claim');
+          const invalidAudience = await invokeRun(
+            invalidAudienceToken,
+            'oidc-preview-e2e:invalid-audience-' + runKey,
+            10000,
+          );
+          if (invalidAudience.response.status !== 401 ||
+              invalidAudience.result?.error !== 'github_oidc_token_invalid') {
+            throw new Error('Signed wrong-audience OIDC token was not rejected as expected: ' +
+              JSON.stringify({ status: invalidAudience.response.status, error: invalidAudience.result?.error }));
+          }
+          console.log('Signed wrong-audience OIDC token rejected with HTTP 401 before task admission.');
+
+          // Use one valid token for exactly one allowlisted read-only review.
+          const token = await getOidcToken(process.env.OIDC_AUDIENCE);
+          const first = await invokeRun(token, 'oidc-preview-e2e:task-' + runKey, 25000);
+          const result = first.result;
           const item = result?.items?.[0];
-          if (!response.ok || result?.ok !== true || result?.summary?.total !== 1 ||
+          if (!first.response.ok || result?.ok !== true || result?.summary?.total !== 1 ||
               result?.summary?.succeeded !== 1 || item?.state !== 'succeeded' ||
-              item?.result?.taskType !== 'content.review' || result?.persistence?.verified !== true ||
+              item?.result?.taskType !== 'content.review' || item?.result?.status !== 'pass' ||
+              item?.result?.findingCount !== 0 || result?.persistence?.verified !== true ||
               result?.persistence?.state !== 'succeeded' ||
               !['task.queued', 'task.claimed', 'task.succeeded'].every(type =>
                 result.persistence.auditEvents?.[type]?.after >= result.persistence.auditEvents?.[type]?.before + 1)) {
             throw new Error('One-shot read-only task or durable audit verification failed: ' +
-              JSON.stringify({ httpStatus: response.status, error: result?.error, diagnosticCode: result?.diagnosticCode, state: item?.state }));
+              JSON.stringify({ httpStatus: first.response.status, error: result?.error,
+                diagnosticCode: result?.diagnosticCode, state: item?.state }));
           }
+
+          // Reuse the exact same signed JWT with a different idempotency key.
+          // A 409 replay response proves the JTI fence is checked before a second task can be admitted.
+          const replay = await invokeRun(token, 'oidc-preview-e2e:replay-' + runKey, 10000);
+          if (replay.response.status !== 409 || replay.result?.error !== 'github_oidc_token_replayed') {
+            throw new Error('Reused GitHub OIDC token was not rejected as replay: ' +
+              JSON.stringify({ status: replay.response.status, error: replay.result?.error }));
+          }
+
           console.log(JSON.stringify({
             ok: true,
+            invalidAudienceRejected: true,
+            replayRejected: true,
             taskId: item.taskId,
             state: item.state,
             taskType: item.result.taskType,
@@ -720,3 +766,27 @@ jobs:
             fi
           done
           echo "All four human-facing console assets redirect unauthenticated requests to the Cloudflare Access login."
+
+      - name: Verify live ingress rate limiting after Preview is disabled and paused
+        if: success()
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          limited=false
+          for attempt in $(seq 1 80); do
+            status="$(curl --silent --show-error --max-time 5 --output "$RUNNER_TEMP/preview-rate-limit.json" --write-out "%{http_code}" "$AGENT_RUNTIME_PREVIEW_URL/health")"
+            if [[ "$status" == "429" ]] && jq -e '.error == "rate_limited"' "$RUNNER_TEMP/preview-rate-limit.json" >/dev/null; then
+              echo "Live ingress limiter rejected request $attempt with HTTP 429 after Preview was restored disabled/paused."
+              limited=true
+              break
+            fi
+            if [[ "$status" != "200" ]]; then
+              echo "::error::Expected HTTP 200 or 429 from disabled Preview health probe, got $status."
+              cat "$RUNNER_TEMP/preview-rate-limit.json"
+              exit 1
+            fi
+          done
+          if [[ "$limited" != "true" ]]; then
+            echo "::error::Ingress limiter did not reject within 80 bounded health requests."
+            exit 1
+          fi
