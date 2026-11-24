@@ -4,9 +4,14 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { AgentStateStore, AgentReviewerAuthStore, AgentDraftStore, AgentAIBankCandidateStore } from "../src/worker.mjs";
+import { TestAgentStateStore } from "./state-store-test-worker.mjs";
 
 const configPath = fileURLToPath(new URL("../wrangler.preview.jsonc", import.meta.url));
 const config = JSON.parse(readFileSync(configPath, "utf8"));
+const faultTestConfigPath = fileURLToPath(new URL("../wrangler.fault-test.jsonc", import.meta.url));
+const faultTestConfig = JSON.parse(readFileSync(faultTestConfigPath, "utf8"));
+const faultTestWorkflowPath = fileURLToPath(new URL("../../../.github/workflows/agent-runtime-cloudflare-do-fault-test.yml", import.meta.url));
+const faultTestWorkflowSource = readFileSync(faultTestWorkflowPath, "utf8");
 
 test("dedicated Agent Runtime Preview config binds its isolated State Store and rate limiter and remains disabled", () => {
   assert.equal(config.name, "ai-thuc-chien-agent-runtime-preview");
@@ -59,6 +64,43 @@ test("dedicated Agent Runtime Preview config binds its isolated State Store and 
   }
 });
 
+
+test("fault-test cleanup removes the one-run secret and disables public routes without deleting the Worker", () => {
+  assert.ok(faultTestWorkflowSource.includes("$api/secrets/AGENT_FAULT_TEST_TOKEN"));
+  assert.ok(faultTestWorkflowSource.includes("--request POST"));
+  assert.ok(faultTestWorkflowSource.includes('{"enabled":false,"previews_enabled":false}'));
+  assert.ok(faultTestWorkflowSource.includes("--request DELETE"));
+  assert.ok(faultTestWorkflowSource.includes("$api/subdomain"));
+  assert.equal(faultTestWorkflowSource.includes("wrangler@4.166.0 delete"), false);
+});
+
+test("fault-test harness remains disabled, paused, and migration-compatible", () => {
+  assert.equal(faultTestConfig.vars.AGENT_ENABLED, "false");
+  assert.equal(faultTestConfig.vars.AGENT_PAUSED, "true");
+  assert.equal(faultTestConfig.vars.AGENT_SCHEDULER_ENABLED, "false");
+  assert.equal(faultTestConfig.vars.AGENT_RECOVERY_ALARM_ENABLED, "false");
+  assert.equal(faultTestConfig.migrations.at(-1)?.tag, "fault-test-v1");
+  assert.equal(faultTestConfig.durable_objects.bindings.find(binding => binding.name === "AGENT_STATE_STORE")?.class_name, "TestAgentStateStore");
+});
+const faultTestWorkerSource = readFileSync(fileURLToPath(new URL("./state-store-test-worker.mjs", import.meta.url)), "utf8");
+
+test("fault-test DO enables state transitions only inside the token-gated isolated class", () => {
+  assert.match(faultTestWorkerSource, /const faultSuiteMode = \{ active: false \}/);
+  assert.match(faultTestWorkerSource, /faultSuiteMode\.active && property === "AGENT_ENABLED"/);
+  assert.match(faultTestWorkerSource, /faultSuiteMode\.active && property === "AGENT_PAUSED"/);
+  assert.match(faultTestWorkerSource, /AGENT_STATE_STORE_TOKEN:\s*env\.AGENT_FAULT_TEST_TOKEN/);
+  const faultRouteIndex = faultTestWorkerSource.indexOf('if (url.pathname === "/__test/fault-suite")');
+  const enableIndex = faultTestWorkerSource.indexOf("this.faultSuiteMode.active = true");
+  const resetIndex = faultTestWorkerSource.indexOf("this.faultSuiteMode.active = false");
+  assert.ok(faultRouteIndex >= 0 && enableIndex > faultRouteIndex && resetIndex > enableIndex);
+  assert.equal(faultTestConfig.vars.AGENT_ENABLED, "false");
+  assert.equal(faultTestConfig.vars.AGENT_PAUSED, "true");
+});
+
+test("fault-test Worker exports its test-only Durable Object class outside the application entrypoint", () => {
+  assert.equal(typeof TestAgentStateStore, "function");
+});
+
 test("Preview config never enables autonomous execution by default", () => {
   assert.notEqual(config.vars.AGENT_ENABLED, "true");
   assert.notEqual(config.vars.AGENT_PAUSED, "false");
@@ -91,4 +133,27 @@ test("GitHub OIDC Pause workflow pins the bearer-token destination to the exact 
   assert.match(workflow, /target\.origin !== 'https:\/\/ai-thuc-chien-agent-runtime-preview\.manhdungub\.workers\.dev'/);
   assert.match(workflow, /target\.pathname !== '\/'/);
   assert.doesNotMatch(workflow, /target\.hostname/);
+});
+
+test("fault-test workflow cleanup interpolates its scoped credential and disables public URLs", () => {
+  const workflowPath = fileURLToPath(new URL("../../../.github/workflows/agent-runtime-cloudflare-do-fault-test.yml", import.meta.url));
+  const workflow = readFileSync(workflowPath, "utf8");
+  const dollar = String.fromCharCode(36);
+  const backslash = String.fromCharCode(92);
+  assert.ok(workflow.includes("CLOUDFLARE_API_TOKEN: " + dollar + "{{ secrets.CLOUDFLARE_AGENT_PREVIEW_WORKER_TOKEN }}"));
+  assert.ok(workflow.includes('if [[ -z "' + dollar + '{CLOUDFLARE_API_TOKEN:-}" ]]; then'));
+  assert.equal(workflow.includes(backslash + dollar + "{{ secrets.CLOUDFLARE_AGENT_PREVIEW_WORKER_TOKEN }}"), false);
+  assert.ok(workflow.includes("if: always()"));
+  assert.ok(workflow.includes("--request POST"));
+  assert.ok(workflow.includes('{"enabled":false,"previews_enabled":false}'));
+  assert.ok(workflow.includes("--request DELETE"));
+  const deleteRequest = workflow.indexOf("--request DELETE");
+  const secretDeleteTarget = workflow.indexOf('"$api/secrets/AGENT_FAULT_TEST_TOKEN"', deleteRequest);
+  assert.ok(deleteRequest >= 0 && secretDeleteTarget > deleteRequest && secretDeleteTarget - deleteRequest < 400, "DELETE must target only the one-run secret, never the Worker script");
+  assert.ok(workflow.includes("$api/secrets/AGENT_FAULT_TEST_TOKEN"));
+  assert.ok(workflow.includes("$api/subdomain"));
+  assert.ok(workflow.includes(".result.enabled == false"));
+  assert.ok(workflow.includes(".result.previews_enabled == false"));
+  assert.ok(workflow.includes("attempt in 1 2 3"));
+  assert.equal(workflow.includes("wrangler@4.166.0 delete"), false);
 });

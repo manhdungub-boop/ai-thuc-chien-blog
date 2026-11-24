@@ -112,11 +112,13 @@ jobs:
         timeout-minutes: 4
         run: timeout --signal=TERM --kill-after=10s 180s node --test agents/runtime/tests/*.test.mjs
 
-      - name: Validate Preview types and Worker bundle without deployment
+      - name: Validate Preview and isolated fault-harness bundles without deployment
         working-directory: agents/runtime
         run: |
           npx --yes wrangler@4.166.0 types --config wrangler.preview.jsonc
           npx --yes wrangler@4.166.0 deploy --dry-run --config wrangler.preview.jsonc --outdir "$RUNNER_TEMP/agent-runtime-dry-run"
+          npx --yes wrangler@4.166.0 types --config wrangler.fault-test.jsonc
+          npx --yes wrangler@4.166.0 deploy --dry-run --config wrangler.fault-test.jsonc --outdir "$RUNNER_TEMP/agent-runtime-fault-test-dry-run"
 
       - name: Verify Preview config is isolated and scheduled dispatcher remains disabled
         run: |
@@ -177,6 +179,32 @@ jobs:
           assert.equal('kv_namespaces' in preview, false);
           assert.equal('r2_buckets' in preview, false);
           assert.equal('vars' in preview && Object.keys(preview.vars).some(k => /TOKEN|SECRET|KEY/i.test(k)), false);
+          const faultTest = JSON.parse(await readFile('agents/runtime/wrangler.fault-test.jsonc', 'utf8'));
+          assert.equal(faultTest.vars.AGENT_ENABLED, 'false');
+          assert.equal(faultTest.vars.AGENT_PAUSED, 'true');
+          assert.equal(faultTest.vars.AGENT_SCHEDULER_ENABLED, 'false');
+          assert.equal(faultTest.vars.AGENT_RECOVERY_ALARM_ENABLED, 'false');
+          assert.equal(faultTest.name, 'ai-thuc-chien-agent-runtime-fault-test');
+          assert.equal(faultTest.main, './tests/state-store-test-worker.mjs');
+          assert.deepEqual(faultTest.durable_objects?.bindings, [{ name: 'AGENT_STATE_STORE', class_name: 'TestAgentStateStore' }]);
+          assert.deepEqual(faultTest.migrations, [{ tag: 'fault-test-v1', new_sqlite_classes: ['TestAgentStateStore'] }]);
+          const faultTestWorkflowSource = await readFile('.github/workflows/agent-runtime-cloudflare-do-fault-test.yml', 'utf8');
+          assert.ok(faultTestWorkflowSource.includes('$api/secrets/AGENT_FAULT_TEST_TOKEN'));
+          assert.ok(faultTestWorkflowSource.includes('--request POST'));
+          assert.ok(faultTestWorkflowSource.includes('{"enabled":false,"previews_enabled":false}'));
+          assert.ok(faultTestWorkflowSource.includes('--request DELETE'));
+          assert.ok(faultTestWorkflowSource.includes('$api/subdomain'));
+          const wranglerDeleteCommand = 'wrangler@4.166.0 ' + 'delete';
+          assert.equal(faultTestWorkflowSource.includes(wranglerDeleteCommand), false);
+          const faultTestWorkerSource = await readFile('agents/runtime/tests/state-store-test-worker.mjs', 'utf8');
+          assert.match(faultTestWorkerSource, /const faultSuiteMode = \{ active: false \}/);
+          assert.match(faultTestWorkerSource, /faultSuiteMode\.active && property === "AGENT_ENABLED"/);
+          assert.match(faultTestWorkerSource, /faultSuiteMode\.active && property === "AGENT_PAUSED"/);
+          assert.match(faultTestWorkerSource, /AGENT_STATE_STORE_TOKEN:\s*env\.AGENT_FAULT_TEST_TOKEN/);
+          const faultRouteIndex = faultTestWorkerSource.indexOf('if (url.pathname === "/__test/fault-suite")');
+          const enableIndex = faultTestWorkerSource.indexOf("this.faultSuiteMode.active = true");
+          const resetIndex = faultTestWorkerSource.indexOf("this.faultSuiteMode.active = false");
+          assert.ok(faultRouteIndex >= 0 && enableIndex > faultRouteIndex && resetIndex > enableIndex);
           const workerSource = await readFile('agents/runtime/src/worker.mjs', 'utf8');
           assert.match(workerSource, /controller\?\.cron !== "\*\/30 \* \* \* \*"/);
           assert.match(workerSource, /AGENT_SCHEDULER_ENABLED !== "true"/);
@@ -214,9 +242,10 @@ jobs:
           const assertValidationOnly = source => {
             const validateJobSource = getValidationJobSource(source);
             const deployLines = validateJobSource.split('\n').filter(line => /^\s*(?:run:\s*)?npx --yes wrangler@4\.166\.0 deploy\b/.test(line));
-            assert.equal(deployLines.length, 1, 'validation job must contain exactly one Wrangler command');
-            assert.match(deployLines[0], /--dry-run/, 'validation Wrangler command must be dry-run only');
-            assert.ok(deployLines[0].includes('--config wrangler.preview.jsonc'));
+            assert.equal(deployLines.length, 2, 'validation job must contain exactly two Wrangler deploy commands');
+            assert.ok(deployLines.every(line => /--dry-run/.test(line)), 'every validation Wrangler command must be dry-run only');
+            assert.ok(deployLines.some(line => line.includes('--config wrangler.preview.jsonc')));
+            assert.ok(deployLines.some(line => line.includes('--config wrangler.fault-test.jsonc')));
             assertNoSecretReferences(validateJobSource);
           };
           assertValidationOnly(workflow);
@@ -234,7 +263,7 @@ jobs:
           const injectedDeployWorkflow = injectValidationStep(workflow, injectedDeployStep);
           assert.notEqual(injectedDeployWorkflow, workflow, 'the deployment fixture must be inserted after the assertion step');
           assert.throws(() => assertValidationOnly(injectedDeployWorkflow),
-            /validation job must contain exactly one Wrangler command/,
+            /validation job must contain exactly two Wrangler deploy commands/,
             'validation-only guard must inspect steps after its own assertion'
           );
           const injectedUnnamedDeployStep = [
@@ -242,13 +271,13 @@ jobs:
             '          npx --yes wrangler@4.166.0 deploy --config wrangler.preview.jsonc'
           ].join('\n');
           assert.throws(() => assertValidationOnly(injectValidationStep(workflow, injectedUnnamedDeployStep)),
-            /validation job must contain exactly one Wrangler command/,
+            /validation job must contain exactly two Wrangler deploy commands/,
             'validation-only guard must inspect unnamed steps after its own assertion'
           );
           const injectedSecretStep = [
             '      - name: injected secret regression step',
             '        env:',
-            '          CLOUDFLARE_API_TOKEN: ' + '$' + '{{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}',
+            '          CLOUDFLARE_API_TOKEN: ' + '$' + '{{ ' + 'secrets.' + 'CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}',
             '        run: echo test'
           ].join('\n');
           assert.throws(() => assertValidationOnly(injectValidationStep(workflow, injectedSecretStep)),
@@ -297,24 +326,59 @@ jobs:
           const workflow = await readFile('.github/workflows/agent-runtime-cloudflare-do-fault-test.yml', 'utf8');
           assert.equal(testConfig.name, 'ai-thuc-chien-agent-runtime-fault-test');
           assert.equal(testConfig.main, './tests/state-store-test-worker.mjs');
+          assert.notEqual(preview.name, testConfig.name, 'fault Worker must be separate from Preview');
+          assert.notEqual(production.name, testConfig.name, 'fault Worker must be separate from Production');
           assert.equal(preview.main, './src/worker.mjs');
           assert.equal(production.main, './src/worker.mjs');
-          assert.equal(testConfig.vars.AGENT_SCHEDULER_ENABLED, 'false');
-          assert.equal(testConfig.vars.AGENT_RECOVERY_ALARM_ENABLED, 'false');
-          assert.equal(testConfig.vars.AGENT_OIDC_ENABLED, 'false');
-          assert.equal(testConfig.vars.AGENT_PAUSED, 'false', 'the isolated store starts fail-closed in durable control and is paused by the suite cleanup');
+          for (const key of ['AGENT_ENABLED','AGENT_SCHEDULER_ENABLED','AGENT_RECOVERY_ALARM_ENABLED','AGENT_OIDC_ENABLED','AGENT_REVIEWER_AUTH_ENABLED']) {
+            assert.equal(testConfig.vars[key], 'false', key + ' must remain disabled');
+          }
+          assert.equal(testConfig.vars.AGENT_PAUSED, 'true');
           assert.deepEqual(testConfig.durable_objects.bindings, [
             { name: 'AGENT_STATE_STORE', class_name: 'TestAgentStateStore' }
           ]);
+          assert.deepEqual(testConfig.migrations, [
+            { tag: 'fault-test-v1', new_sqlite_classes: ['TestAgentStateStore'] }
+          ]);
           assert.equal(harness.includes('export class TestAgentStateStore extends AgentStateStore'), true);
+          assert.equal(harness.includes('AGENT_FAULT_TEST_TOKEN'), true);
+          assert.equal(harness.includes('env.AGENT_FAULT_TEST_TOKEN ?? env.AGENT_STATE_STORE_TOKEN'), true);
           assert.equal(harness.includes('"/__test/fault-suite"'), true);
-          assert.equal(workflow.includes('workflow_dispatch:'), true);
+          assert.match(workflow, /workflow_dispatch:/);
           assert.doesNotMatch(workflow, /schedule:|pull_request:|push:/);
           assert.match(workflow, /environment:\s*agent-runtime-preview/);
           assert.match(workflow, /CLOUDFLARE_AGENT_PREVIEW_API_TOKEN/);
-          assert.match(workflow, /wrangler@4\.166\.0 delete/);
+          assert.match(workflow, /CLOUDFLARE_AGENT_PREVIEW_WORKER_TOKEN/);
+          assert.match(workflow, /ai-thuc-chien-agent-runtime-fault-test\.manhdungub\.workers\.dev/);
+          assert.match(workflow, /secret put AGENT_FAULT_TEST_TOKEN/);
+          assert.match(workflow, /wrangler@4\.166\.0 deploy/);
+          assert.doesNotMatch(workflow, /wrangler@4\.166\.0 delete/, 'the pre-created test Worker is retained only in dormant state');
+
+          const cleanupStart = workflow.indexOf('      - name: Remove one-run secret and disable public test routes');
+          assert.notEqual(cleanupStart, -1, 'cleanup must be an explicit always-run step');
+          const cleanup = workflow.slice(cleanupStart);
+          const dollar = String.fromCharCode(36);
+          const backslash = String.fromCharCode(92);
+          assert.ok(cleanup.includes('if: always()'));
+          const workerSecretName = 'CLOUDFLARE_AGENT_PREVIEW_WORKER_TOKEN';
+          assert.ok(cleanup.includes('CLOUDFLARE_API_TOKEN: ' + dollar + '{{ ' + 'secrets.' + workerSecretName + ' }}'));
+          assert.ok(cleanup.includes('if [[ -z "' + dollar + '{CLOUDFLARE_API_TOKEN:-}" ]]; then'));
+          assert.equal(cleanup.includes(backslash + dollar + '{{'), false, 'GitHub secret interpolation must not be escaped');
+          assert.equal(cleanup.includes(backslash + dollar + '{CLOUDFLARE_API_TOKEN'), false, 'shell credential expansion must not be escaped');
+          assert.ok(cleanup.includes('--request POST'));
+          assert.ok(cleanup.includes('--request DELETE'));
+          assert.ok(cleanup.includes('attempt in 1 2 3'));
+          assert.ok(cleanup.includes('$api/subdomain'));
+          assert.ok(cleanup.includes('.result.enabled == false'));
+          assert.ok(cleanup.includes('.result.previews_enabled == false'));
+          assert.ok(cleanup.includes('one-run AGENT_FAULT_TEST_TOKEN is absent'));
+          assert.doesNotMatch(workflow, /PREVIEW_WORKER_NAME|original_version_id|deployments\?force=true|wrangler@4\.166\.0 deploy --config agents\/runtime\/wrangler\.preview/);
           assert.doesNotMatch(workflow, /wrangler[^\n]*--env production|wrangler[^\n]*--env prod/);
-          console.log('PASS: Cloudflare fault harness is a separate test Worker/SQLite namespace, manual-only, no Production bindings, no cron, and has cleanup.');
+          assert.equal('routes' in testConfig, false);
+          assert.equal('d1_databases' in testConfig, false);
+          assert.equal('queues' in testConfig, false);
+          assert.equal('triggers' in testConfig, false);
+          console.log('PASS: fault suite deploys only to a separate, disabled, paused Worker with one SQLite test namespace and mandatory one-run secret removal and public-URL disablement; Preview and Production are not deployment targets.');
           NODE
 
       - name: Verify OIDC operator workflow is manual and pause-only

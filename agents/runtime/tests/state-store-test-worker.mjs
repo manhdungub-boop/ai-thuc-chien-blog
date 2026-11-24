@@ -1,4 +1,7 @@
 import { AgentStateStore } from "../src/worker.mjs";
+// Preserve the pre-existing Durable Object class export until its namespace is migrated safely.
+export { AgentStateStore, AgentStateStore as WorkflowStatusDO };
+export { AgentAIBankCandidateStore, AgentDraftStore, AgentReviewerAuthStore } from "../src/worker.mjs";
 import { hasValidStateStoreBearer } from "../src/internal-auth.mjs";
 
 function jsonResponse(body, status = 200) {
@@ -18,6 +21,24 @@ function jsonResponse(body, status = 200) {
  * therefore cannot be enabled through a deployed Worker environment variable.
  */
 export class TestAgentStateStore extends AgentStateStore {
+  constructor(ctx, env = {}) {
+    // Use a dedicated one-run test secret; never overwrite the Preview runtime secret.
+    const faultSuiteMode = { active: false };
+    const testEnv = new Proxy({
+      ...env,
+      AGENT_STATE_STORE_TOKEN: env.AGENT_FAULT_TEST_TOKEN ?? env.AGENT_STATE_STORE_TOKEN,
+    }, {
+      get(target, property, receiver) {
+        // Enable transitions only while the token-gated fault suite is running.
+        if (faultSuiteMode.active && property === "AGENT_ENABLED") return "true";
+        if (faultSuiteMode.active && property === "AGENT_PAUSED") return "false";
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    super(ctx, testEnv);
+    this.faultSuiteMode = faultSuiteMode;
+  }
+
   requestTime(request) {
     const value = request.headers.get("x-test-now");
     if (value) {
@@ -125,6 +146,7 @@ export class TestAgentStateStore extends AgentStateStore {
           return jsonResponse({ ok: false, error: "fault_suite_request_invalid" }, 400);
         }
 
+        this.faultSuiteMode.active = true;
         const callStore = async (pathname, body, at) => {
           const headers = { Authorization: "Bearer " + this.env.AGENT_STATE_STORE_TOKEN };
           if (body !== undefined) headers["Content-Type"] = "application/json";
@@ -274,21 +296,34 @@ export class TestAgentStateStore extends AgentStateStore {
           if (sentinelLateWrite.status !== 409) throw new Error("circuit_breaker_stale_lease_not_fenced");
 
           // 5. A forced SQLite transaction exception must leave no committed row.
-          const rollbackAt = await super.fetch(new Request("https://state-store.internal/__test/rollback", {
-            method: "POST",
-            headers: { Authorization: "Bearer " + this.env.AGENT_STATE_STORE_TOKEN },
-          }));
-          const rollback = await rollbackAt.json();
-          if (rollback?.ok !== true || rollback?.rolledBack !== true || rollback?.acceptedToday !== 0) {
-            throw new Error("sqlite_transaction_rollback_probe_failed");
+          const rollbackDay = "2099-12-31";
+          this.sql.exec("DELETE FROM daily_usage WHERE day_utc = ?", rollbackDay);
+          let rollbackThrew = false;
+          try {
+            this.ctx.storage.transactionSync(() => {
+              this.sql.exec(
+                "INSERT INTO daily_usage (day_utc, accepted_count) VALUES (?, 1)",
+                rollbackDay
+              );
+              throw new Error("intentional_rollback_probe");
+            });
+          } catch (error) {
+            rollbackThrew = error?.message === "intentional_rollback_probe";
+          }
+          const rollbackRow = this.sql.exec(
+            "SELECT accepted_count FROM daily_usage WHERE day_utc = ?",
+            rollbackDay
+          ).toArray()[0] ?? null;
+          if (!rollbackThrew || rollbackRow !== null) {
+            throw new Error("sqlite_transaction_rollback_probe_failed_" + JSON.stringify({
+              rollbackThrew,
+              rollbackRow,
+            }));
           }
 
           // 6. Recovery alarms stay disabled in this harness.
-          const alarmResponse = await super.fetch(new Request("https://state-store.internal/__test/alarm-state", {
-            headers: { Authorization: "Bearer " + this.env.AGENT_STATE_STORE_TOKEN },
-          }));
-          const alarm = await alarmResponse.json();
-          if (alarm?.ok !== true || alarm.alarmAt !== null) throw new Error("unexpected_recovery_alarm_scheduled");
+          const alarmAt = await this.ctx.storage.getAlarm();
+          if (alarmAt !== null) throw new Error("unexpected_recovery_alarm_scheduled_" + String(alarmAt));
 
           report = {
             ok: true,
@@ -326,6 +361,7 @@ export class TestAgentStateStore extends AgentStateStore {
             this.sql.exec("DELETE FROM runtime_control_rate_limit WHERE actor LIKE 'fault-suite-%'");
             this.sql.exec("DELETE FROM runtime_control_audit WHERE actor LIKE 'fault-suite-%'");
           } catch {}
+          this.faultSuiteMode.active = false;
         }
         return jsonResponse(report ?? { ok: false, error: "fault_suite_failed" }, report?.ok ? 200 : 500);
       }
@@ -365,11 +401,14 @@ export class TestAgentStateStore extends AgentStateStore {
         return jsonResponse({ ok: true, schemaVersion: 1 });
       }
 
+      // Repeated Preview runs reuse the isolated Durable Object namespace.
+      // Clear this test-only sentinel first so a prior failed run cannot poison the next rollback assertion.
+      this.sql.exec("DELETE FROM daily_usage WHERE day_utc = '2099-12-31'");
       this.ctx.storage.transactionSync(() => {
         this.sql.exec("INSERT INTO daily_usage (day_utc, accepted_count) VALUES ('2099-12-31', 1)");
         throw new Error("intentional_rollback_probe");
       });
-    } catch {
+    } catch (error) {
       if (url.pathname === "/__test/rollback") {
         const usage = this.sql.exec(
           "SELECT accepted_count FROM daily_usage WHERE day_utc = '2099-12-31'"
@@ -380,7 +419,10 @@ export class TestAgentStateStore extends AgentStateStore {
           acceptedToday: usage?.accepted_count ?? 0,
         });
       }
-      return jsonResponse({ ok: false, error: "test_fixture_operation_failed" }, 500);
+      const diagnostic = String(error?.message ?? error ?? "unknown")
+        .replace(/[^a-zA-Z0-9_.:-]/g, "_")
+        .slice(0, 180);
+      return jsonResponse({ ok: false, error: "test_fixture_operation_failed", diagnostic }, 500);
     }
     return jsonResponse({ ok: false, error: "rollback_probe_did_not_throw" }, 500);
   }
@@ -392,7 +434,7 @@ export default {
     if (url.pathname !== "/__test/fault-suite" || request.method !== "POST") {
       return new Response("not_found", { status: 404, headers: { "Cache-Control": "no-store" } });
     }
-    if (!await hasValidStateStoreBearer(request, env)) {
+    if (!await hasValidStateStoreBearer(request, { ...env, AGENT_STATE_STORE_TOKEN: env.AGENT_FAULT_TEST_TOKEN ?? env.AGENT_STATE_STORE_TOKEN })) {
       return jsonResponse({ ok: false, error: "state_store_auth_required" }, 401);
     }
     if (!env.AGENT_STATE_STORE || typeof env.AGENT_STATE_STORE.idFromName !== "function" ||
