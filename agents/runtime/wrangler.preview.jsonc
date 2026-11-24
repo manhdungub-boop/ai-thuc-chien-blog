@@ -1,6 +1,6 @@
 {
   "name": "ai-thuc-chien-agent-runtime-preview",
-  "main": "./src/worker.mjs",
+  "main": "./src/worker-preview-recovery.mjs",
   "compatibility_date": "2026-11-19",
   "workers_dev": true,
   "preview_urls": false,
@@ -52,6 +52,12 @@
       "tag": "v3-ai-bank-candidate-store",
       "new_sqlite_classes": [
         "AgentAIBankCandidateStore"
+      ]
+    },
+    {
+      "tag": "fault-test-v1",
+      "new_sqlite_classes": [
+        "TestAgentStateStore"
       ]
     }
   ],
