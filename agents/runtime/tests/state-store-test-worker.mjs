@@ -29,7 +29,7 @@ export class TestAgentStateStore extends AgentStateStore {
 
   async fetch(request) {
     const url = new URL(request.url);
-    if (!["/__test/rollback", "/__test/downgrade-v1", "/__test/prune", "/__test/seed-prune-fixture", "/__test/prune-counts", "/__test/downgrade-v6-budget-only", "/__test/downgrade-v6-result-only", "/__test/schema-state", "/__test/alarm-state", "/__test/expire-and-fire", "/__test/fire-alarm"].includes(url.pathname)) {
+    if (!["/__test/rollback", "/__test/downgrade-v1", "/__test/prune", "/__test/seed-prune-fixture", "/__test/prune-counts", "/__test/downgrade-v6-budget-only", "/__test/downgrade-v6-result-only", "/__test/schema-state", "/__test/alarm-state", "/__test/expire-and-fire", "/__test/fire-alarm", "/__test/fault-suite"].includes(url.pathname)) {
       return super.fetch(request);
     }
     if (url.pathname === "/__test/alarm-state" || url.pathname === "/__test/schema-state" || url.pathname === "/__test/prune-counts" ? request.method !== "GET" : request.method !== "POST") {
@@ -119,6 +119,217 @@ export class TestAgentStateStore extends AgentStateStore {
         })) counts[name] = this.sql.exec(sql).one().count;
         return jsonResponse({ ok: true, counts });
       }
+      if (url.pathname === "/__test/fault-suite") {
+        const input = await request.json();
+        if (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).length !== 0) {
+          return jsonResponse({ ok: false, error: "fault_suite_request_invalid" }, 400);
+        }
+
+        const callStore = async (pathname, body, at) => {
+          const headers = { Authorization: "Bearer " + this.env.AGENT_STATE_STORE_TOKEN };
+          if (body !== undefined) headers["Content-Type"] = "application/json";
+          if (at !== undefined) headers["x-test-now"] = new Date(at).toISOString();
+          const response = await super.fetch(new Request("https://state-store.internal" + pathname, {
+            method: body === undefined ? "GET" : "POST",
+            headers,
+            ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+          }));
+          let result;
+          try { result = await response.json(); } catch { result = null; }
+          return { status: response.status, body: result };
+        };
+        const expectStatus = (result, expected, label) => {
+          if (result.status !== expected) throw new Error(label + "_unexpected_status_" + result.status);
+          return result.body;
+        };
+        const resumeStore = async (actor, at) => {
+          const observed = expectStatus(await callStore("/control", undefined, at), 200, "control_read");
+          if (!observed.control.paused) return observed.control;
+          const resumed = expectStatus(await callStore("/control/resume", {
+            actor, requestId: crypto.randomUUID(), reason: "isolated Cloudflare fault suite", expectedVersion: observed.control.version,
+          }, at), 200, "control_resume");
+          if (resumed.control?.paused !== false) throw new Error("control_resume_not_persisted");
+          return resumed.control;
+        };
+        const makeTask = () => ({
+          task: {
+            type: "seo.audit",
+            idempotencyKey: "cloudflare-fault-suite:" + crypto.randomUUID(),
+            payload: { path: "/guides" },
+          },
+        });
+        const reserveAndClaim = async (at) => {
+          const created = expectStatus(await callStore("/reserve", makeTask(), at), 201, "task_reserve");
+          const taskId = created.task?.taskId;
+          if (typeof taskId !== "string") throw new Error("task_reservation_missing_id");
+          taskIds.push(taskId);
+          const claimed = expectStatus(await callStore("/claim", { taskId }, at), 200, "task_claim");
+          if (!claimed.lease || !Number.isSafeInteger(claimed.lease.generation)) throw new Error("task_lease_missing");
+          return { taskId, lease: claimed.lease };
+        };
+        const recover = async (taskId, at, actor) => expectStatus(await callStore("/recover", {
+          taskId, actor, requestId: crypto.randomUUID(),
+        }, at), 200, "lease_recovery");
+        const taskIds = [];
+        let report;
+        try {
+          // 1. Emergency pause must atomically cancel a running lease and fence late writes.
+          await resumeStore("fault-suite-pause", Date.now());
+          const pausedWork = await reserveAndClaim(Date.now());
+          const pause = expectStatus(await callStore("/control/pause", {
+            actor: "fault-suite-pause", requestId: crypto.randomUUID(), reason: "fault injection: pause in flight",
+          }, Date.now()), 200, "emergency_pause");
+          if (pause.control?.paused !== true) throw new Error("emergency_pause_not_persisted");
+          const cancelled = expectStatus(await callStore("/task?id=" + encodeURIComponent(pausedWork.taskId), undefined), 200, "paused_task_read");
+          if (cancelled.task?.state !== "cancelled" || cancelled.task?.errorCode !== "operator_paused") {
+            throw new Error("in_flight_task_not_cancelled");
+          }
+          const lateHeartbeat = await callStore("/heartbeat", {
+            taskId: pausedWork.taskId, leaseOwner: pausedWork.lease.owner, leaseGeneration: pausedWork.lease.generation,
+          }, Date.now());
+          if (lateHeartbeat.status !== 409) throw new Error("late_heartbeat_not_fenced");
+          const lateCompletion = await callStore("/complete", {
+            taskId: pausedWork.taskId, leaseOwner: pausedWork.lease.owner,
+            leaseGeneration: pausedWork.lease.generation, status: "succeeded",
+          }, Date.now());
+          if (lateCompletion.status !== 409) throw new Error("late_completion_not_fenced");
+
+          // 2. Expiry recovery must requeue; a new generation wins over the stale owner.
+          const base = Date.now() + 1000;
+          await resumeStore("fault-suite-recovery", base);
+          const recoveredWork = await reserveAndClaim(base);
+          const expiry = base + 5 * 60 * 1000;
+          const recovered = recover(recoveredWork.taskId, expiry, "fault-suite-recover-1");
+          const recoveredResult = await recovered;
+          if (recoveredResult.outcome !== "requeued" || recoveredResult.task?.state !== "queued") {
+            throw new Error("expired_lease_not_requeued");
+          }
+          const retryAt = expiry + 30_000;
+          const nextClaim = expectStatus(await callStore("/claim", { taskId: recoveredWork.taskId }, retryAt), 200, "retry_claim");
+          if (nextClaim.lease?.generation !== recoveredWork.lease.generation + 1 ||
+              nextClaim.lease?.owner === recoveredWork.lease.owner) throw new Error("lease_generation_did_not_advance");
+          const staleHeartbeat = await callStore("/heartbeat", {
+            taskId: recoveredWork.taskId, leaseOwner: recoveredWork.lease.owner, leaseGeneration: recoveredWork.lease.generation,
+          }, retryAt + 1);
+          if (staleHeartbeat.status !== 409) throw new Error("stale_generation_heartbeat_accepted");
+          const staleCompletion = await callStore("/complete", {
+            taskId: recoveredWork.taskId, leaseOwner: recoveredWork.lease.owner,
+            leaseGeneration: recoveredWork.lease.generation, status: "succeeded",
+          }, retryAt + 1);
+          if (staleCompletion.status !== 409) throw new Error("stale_generation_completion_accepted");
+          expectStatus(await callStore("/complete", {
+            taskId: recoveredWork.taskId, leaseOwner: nextClaim.lease.owner,
+            leaseGeneration: nextClaim.lease.generation, status: "succeeded",
+          }, retryAt + 1), 200, "current_generation_completion");
+
+          // 3. Provider-facing request budget must fail closed at its hard daily cap.
+          const day = new Date().toISOString().slice(0, 10);
+          let budget;
+          for (let index = 0; index < 8; index += 1) {
+            const consumed = expectStatus(await callStore("/external-budget/consume", {
+              day, scope: "content_research",
+            }), 200, "external_budget_consume");
+            budget = consumed.budget;
+            if (budget?.allowed !== true) throw new Error("external_budget_blocked_before_cap");
+          }
+          const exhausted = expectStatus(await callStore("/external-budget/consume", {
+            day, scope: "content_research",
+          }), 200, "external_budget_exhaustion");
+          if (exhausted.budget?.allowed !== false || exhausted.budget?.remaining !== 0 || exhausted.budget?.used !== 8) {
+            throw new Error("external_budget_did_not_fail_closed");
+          }
+
+          // 4. Five terminal lease failures in one window must open the circuit breaker.
+          const breakerBase = Date.now() + 60_000;
+          const failAtExpiry = breakerBase + 17 * 60 * 1000 + 30_000;
+          let fifthTask;
+          for (let index = 1; index <= 5; index += 1) {
+            const work = await reserveAndClaim(breakerBase);
+            await recover(work.taskId, breakerBase + 5 * 60 * 1000, "fault-suite-recover-" + index + "-a");
+            const second = expectStatus(await callStore("/claim", { taskId: work.taskId }, breakerBase + 5 * 60 * 1000 + 30_000), 200, "breaker_second_claim");
+            await recover(work.taskId, breakerBase + 10 * 60 * 1000 + 30_000, "fault-suite-recover-" + index + "-b");
+            const third = expectStatus(await callStore("/claim", { taskId: work.taskId }, breakerBase + 12 * 60 * 1000 + 30_000), 200, "breaker_third_claim");
+            if (index < 5) {
+              const failed = await recover(work.taskId, failAtExpiry, "fault-suite-recover-" + index + "-c");
+              if (failed.outcome !== "failed" || failed.task?.state !== "failed") throw new Error("breaker_fixture_failure_not_terminal");
+            } else {
+              fifthTask = { taskId: work.taskId, lease: third.lease };
+            }
+          }
+          // A live sentinel lease must be cancelled when the fifth failure opens the breaker.
+          const sentinel = await reserveAndClaim(breakerBase + 12 * 60 * 1000 + 30_000);
+          const fifthFailure = await recover(fifthTask.taskId, failAtExpiry, "fault-suite-recover-5-c");
+          if (fifthFailure.outcome !== "failed") throw new Error("fifth_failure_not_terminal");
+          const breakerControl = expectStatus(await callStore("/control"), 200, "breaker_control_read");
+          if (breakerControl.control?.paused !== true || breakerControl.control?.failureCountLast10m !== 5) {
+            throw new Error("circuit_breaker_did_not_open");
+          }
+          const sentinelTask = expectStatus(await callStore("/task?id=" + encodeURIComponent(sentinel.taskId)), 200, "sentinel_read");
+          if (sentinelTask.task?.state !== "cancelled" || sentinelTask.task?.errorCode !== "circuit_breaker_paused") {
+            throw new Error("circuit_breaker_did_not_cancel_running_lease");
+          }
+          const sentinelLateWrite = await callStore("/heartbeat", {
+            taskId: sentinel.taskId, leaseOwner: sentinel.lease.owner, leaseGeneration: sentinel.lease.generation,
+          }, failAtExpiry + 1);
+          if (sentinelLateWrite.status !== 409) throw new Error("circuit_breaker_stale_lease_not_fenced");
+
+          // 5. A forced SQLite transaction exception must leave no committed row.
+          const rollbackAt = await super.fetch(new Request("https://state-store.internal/__test/rollback", {
+            method: "POST",
+            headers: { Authorization: "Bearer " + this.env.AGENT_STATE_STORE_TOKEN },
+          }));
+          const rollback = await rollbackAt.json();
+          if (rollback?.ok !== true || rollback?.rolledBack !== true || rollback?.acceptedToday !== 0) {
+            throw new Error("sqlite_transaction_rollback_probe_failed");
+          }
+
+          // 6. Recovery alarms stay disabled in this harness.
+          const alarmResponse = await super.fetch(new Request("https://state-store.internal/__test/alarm-state", {
+            headers: { Authorization: "Bearer " + this.env.AGENT_STATE_STORE_TOKEN },
+          }));
+          const alarm = await alarmResponse.json();
+          if (alarm?.ok !== true || alarm.alarmAt !== null) throw new Error("unexpected_recovery_alarm_scheduled");
+
+          report = {
+            ok: true,
+            pauseInFlightCancelled: true,
+            staleOwnerAndGenerationRejected: true,
+            leaseExpiryRequeued: true,
+            currentGenerationCompleted: true,
+            externalRequestBudgetLimit: 8,
+            externalRequestBudgetExhausted: true,
+            circuitBreakerOpenedAtFailures: 5,
+            circuitBreakerCancelledRunningLease: true,
+            sqliteTransactionRollback: true,
+            recoveryAlarmDisabled: true,
+            isolatedNamespace: true,
+            taskCount: taskIds.length,
+          };
+        } finally {
+          // Fail closed even if an assertion above throws; the isolated store must end paused.
+          try {
+            const control = await callStore("/control");
+            if (control.status === 200 && control.body?.control?.paused === false) {
+              await callStore("/control/pause", {
+                actor: "fault-suite-cleanup", requestId: crypto.randomUUID(), reason: "fault suite cleanup",
+              });
+            }
+          } catch {}
+          try {
+            const ids = this.sql.exec(
+              "SELECT task_id FROM tasks WHERE idempotency_key LIKE 'cloudflare-fault-suite:%'"
+            ).toArray();
+            for (const row of ids) this.sql.exec("DELETE FROM audit_events WHERE task_id = ?", row.task_id);
+            this.sql.exec("DELETE FROM tasks WHERE idempotency_key LIKE 'cloudflare-fault-suite:%'");
+            this.sql.exec("DELETE FROM daily_usage WHERE day_utc = ?", new Date().toISOString().slice(0, 10));
+            this.sql.exec("DELETE FROM external_request_budgets WHERE budget_day = ? AND scope = 'content_research'", new Date().toISOString().slice(0, 10));
+            this.sql.exec("DELETE FROM runtime_control_rate_limit WHERE actor LIKE 'fault-suite-%'");
+            this.sql.exec("DELETE FROM runtime_control_audit WHERE actor LIKE 'fault-suite-%'");
+          } catch {}
+        }
+        return jsonResponse(report ?? { ok: false, error: "fault_suite_failed" }, report?.ok ? 200 : 500);
+      }
+
       if (url.pathname === "/__test/alarm-state" && request.method === "GET") {
         return jsonResponse({ ok: true, alarmAt: await this.ctx.storage.getAlarm() });
       }
@@ -175,4 +386,27 @@ export class TestAgentStateStore extends AgentStateStore {
   }
 }
 
-export default worker;
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    if (url.pathname !== "/__test/fault-suite" || request.method !== "POST") {
+      return new Response("not_found", { status: 404, headers: { "Cache-Control": "no-store" } });
+    }
+    if (!await hasValidStateStoreBearer(request, env)) {
+      return jsonResponse({ ok: false, error: "state_store_auth_required" }, 401);
+    }
+    if (!env.AGENT_STATE_STORE || typeof env.AGENT_STATE_STORE.idFromName !== "function" ||
+        typeof env.AGENT_STATE_STORE.get !== "function") {
+      return jsonResponse({ ok: false, error: "state_store_binding_unavailable" }, 503);
+    }
+    const stub = env.AGENT_STATE_STORE.get(env.AGENT_STATE_STORE.idFromName("agent-runtime-global"));
+    const body = await request.arrayBuffer();
+    if (body.byteLength > 1024) return jsonResponse({ ok: false, error: "request_body_too_large" }, 413);
+    return stub.fetch(new Request("https://state-store.internal/__test/fault-suite", {
+      method: "POST",
+      headers: request.headers,
+      body,
+    }));
+  },
+  };
+
