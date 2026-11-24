@@ -7,6 +7,8 @@ import { AgentStateStore, AgentReviewerAuthStore, AgentDraftStore, AgentAIBankCa
 
 const configPath = fileURLToPath(new URL("../wrangler.preview.jsonc", import.meta.url));
 const config = JSON.parse(readFileSync(configPath, "utf8"));
+const faultTestConfigPath = fileURLToPath(new URL("../wrangler.fault-test.jsonc", import.meta.url));
+const faultTestConfig = JSON.parse(readFileSync(faultTestConfigPath, "utf8"));
 
 test("dedicated Agent Runtime Preview config binds its isolated State Store and rate limiter and remains disabled", () => {
   assert.equal(config.name, "ai-thuc-chien-agent-runtime-preview");
@@ -60,6 +62,14 @@ test("dedicated Agent Runtime Preview config binds its isolated State Store and 
   }
 });
 
+test("fault-test harness remains disabled, paused, and migration-compatible", () => {
+  assert.equal(faultTestConfig.vars.AGENT_ENABLED, "false");
+  assert.equal(faultTestConfig.vars.AGENT_PAUSED, "true");
+  assert.equal(faultTestConfig.vars.AGENT_SCHEDULER_ENABLED, "false");
+  assert.equal(faultTestConfig.vars.AGENT_RECOVERY_ALARM_ENABLED, "false");
+  assert.equal(faultTestConfig.migrations.at(-1)?.tag, "fault-test-v1");
+  assert.equal(faultTestConfig.durable_objects.bindings.find(binding => binding.name === "AGENT_STATE_STORE")?.class_name, "TestAgentStateStore");
+});
 test("Preview config never enables autonomous execution by default", () => {
   assert.notEqual(config.vars.AGENT_ENABLED, "true");
   assert.notEqual(config.vars.AGENT_PAUSED, "false");
