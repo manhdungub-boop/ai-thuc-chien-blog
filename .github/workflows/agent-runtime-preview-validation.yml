@@ -305,26 +305,22 @@ jobs:
           const production = JSON.parse(await readFile('agents/runtime/wrangler.jsonc', 'utf8'));
           const harness = await readFile('agents/runtime/tests/state-store-test-worker.mjs', 'utf8');
           const workflow = await readFile('.github/workflows/agent-runtime-cloudflare-do-fault-test.yml', 'utf8');
-          assert.equal(testConfig.name, 'ai-thuc-chien-agent-runtime-preview');
+          assert.equal(testConfig.name, 'ai-thuc-chien-agent-runtime-fault-test');
           assert.equal(testConfig.main, './tests/state-store-test-worker.mjs');
-          assert.equal(preview.name, testConfig.name);
+          assert.notEqual(preview.name, testConfig.name, 'fault Worker must be separate from Preview');
+          assert.notEqual(production.name, testConfig.name, 'fault Worker must be separate from Production');
           assert.equal(preview.main, './src/worker.mjs');
           assert.equal(production.main, './src/worker.mjs');
-          assert.equal(testConfig.vars.AGENT_SCHEDULER_ENABLED, 'false');
-          assert.equal(testConfig.vars.AGENT_RECOVERY_ALARM_ENABLED, 'false');
-          assert.equal(testConfig.vars.AGENT_OIDC_ENABLED, 'false');
-          assert.equal(testConfig.vars.AGENT_ENABLED, 'false');
+          for (const key of ['AGENT_ENABLED','AGENT_SCHEDULER_ENABLED','AGENT_RECOVERY_ALARM_ENABLED','AGENT_OIDC_ENABLED','AGENT_REVIEWER_AUTH_ENABLED']) {
+            assert.equal(testConfig.vars[key], 'false', key + ' must remain disabled');
+          }
           assert.equal(testConfig.vars.AGENT_PAUSED, 'true');
           assert.deepEqual(testConfig.durable_objects.bindings, [
-            { name: 'AGENT_STATE_STORE', class_name: 'TestAgentStateStore' },
-            { name: 'AGENT_STATE_STORE_ORIGINAL', class_name: 'AgentStateStore' },
-            { name: 'AGENT_REVIEWER_AUTH_STORE', class_name: 'AgentReviewerAuthStore' },
-            { name: 'AGENT_DRAFT_STORE', class_name: 'AgentDraftStore' },
-            { name: 'AGENT_AI_BANK_CANDIDATE_STORE', class_name: 'AgentAIBankCandidateStore' }
+            { name: 'AGENT_STATE_STORE', class_name: 'TestAgentStateStore' }
           ]);
-          assert.deepEqual(testConfig.migrations.at(-1), {
-            tag: 'fault-test-v1', new_sqlite_classes: ['TestAgentStateStore']
-          });
+          assert.deepEqual(testConfig.migrations, [
+            { tag: 'fault-test-v1', new_sqlite_classes: ['TestAgentStateStore'] }
+          ]);
           assert.equal(harness.includes('export class TestAgentStateStore extends AgentStateStore'), true);
           assert.equal(harness.includes('AGENT_FAULT_TEST_TOKEN'), true);
           assert.equal(harness.includes('env.AGENT_FAULT_TEST_TOKEN ?? env.AGENT_STATE_STORE_TOKEN'), true);
@@ -334,16 +330,16 @@ jobs:
           assert.match(workflow, /environment:\s*agent-runtime-preview/);
           assert.match(workflow, /CLOUDFLARE_AGENT_PREVIEW_API_TOKEN/);
           assert.match(workflow, /CLOUDFLARE_AGENT_PREVIEW_WORKER_TOKEN/);
-          assert.match(workflow, /original_version_id/);
-          assert.match(workflow, /deployments\?force=true/);
-          assert.match(workflow, /secrets\/AGENT_FAULT_TEST_TOKEN/);
-          assert.doesNotMatch(workflow, /wrangler@4\.166\.0 delete/);
+          assert.match(workflow, /ai-thuc-chien-agent-runtime-fault-test\.workers\.dev/);
+          assert.match(workflow, /secret put AGENT_FAULT_TEST_TOKEN/);
+          assert.match(workflow, /wrangler@4\.166\.0 delete/);
+          assert.doesNotMatch(workflow, /PREVIEW_WORKER_NAME|original_version_id|deployments\?force=true|wrangler@4\.166\.0 deploy --config agents\/runtime\/wrangler\.preview/);
           assert.doesNotMatch(workflow, /wrangler[^\n]*--env production|wrangler[^\n]*--env prod/);
           assert.equal('routes' in testConfig, false);
           assert.equal('d1_databases' in testConfig, false);
           assert.equal('queues' in testConfig, false);
           assert.equal('triggers' in testConfig, false);
-          console.log('PASS: fault suite uses a dedicated SQLite class on the existing Preview Worker, preserves original DO bindings, uses a per-Worker token, and restores the exact prior version; no Production bindings or broad Worker Admin.');
+          console.log('PASS: fault suite deploys only to a separate, disabled, paused Worker with one SQLite test namespace and mandatory deletion; Preview and Production are not deployment targets.');
           NODE
 
       - name: Verify OIDC operator workflow is manual and pause-only
