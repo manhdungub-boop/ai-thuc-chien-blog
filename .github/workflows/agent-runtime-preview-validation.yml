@@ -217,8 +217,8 @@ jobs:
           };
           assertValidationOnly(workflow);
           const injectValidationStep = (source, step) => source.replace(
-            '      - name: Verify OIDC operator workflow is manual and pause-only',
-            step + '\\n      - name: Verify OIDC operator workflow is manual and pause-only'
+            '\n      - name: Verify OIDC operator workflow is manual and pause-only',
+            '\n' + step + '\n      - name: Verify OIDC operator workflow is manual and pause-only'
           );
           const injectedDeployStep = [
             '      - name: injected deployment regression step',
