@@ -637,6 +637,7 @@ const worker = {
               actor,
               requestId: requestId(),
               reason: "one-shot OIDC Preview E2E complete",
+              internalCleanup: true,
             });
             const control = await readStateStore(env, "/control");
             pauseVerified = control?.control?.paused === true;
