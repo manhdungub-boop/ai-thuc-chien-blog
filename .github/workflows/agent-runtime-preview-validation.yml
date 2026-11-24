@@ -313,7 +313,8 @@ jobs:
           assert.equal(testConfig.vars.AGENT_SCHEDULER_ENABLED, 'false');
           assert.equal(testConfig.vars.AGENT_RECOVERY_ALARM_ENABLED, 'false');
           assert.equal(testConfig.vars.AGENT_OIDC_ENABLED, 'false');
-          assert.equal(testConfig.vars.AGENT_PAUSED, 'false');
+          assert.equal(testConfig.vars.AGENT_ENABLED, 'false');
+          assert.equal(testConfig.vars.AGENT_PAUSED, 'true');
           assert.deepEqual(testConfig.durable_objects.bindings, [
             { name: 'AGENT_STATE_STORE', class_name: 'TestAgentStateStore' },
             { name: 'AGENT_STATE_STORE_ORIGINAL', class_name: 'AgentStateStore' },
