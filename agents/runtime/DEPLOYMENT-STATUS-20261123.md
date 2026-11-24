@@ -29,7 +29,7 @@ For PR #327 current head `473320bd20e4a1ed556b3cb6892a656e5c30134e`:
 
 - Worker: `ai-thuc-chien-agent-runtime-preview`.
 - Latest observed deployment: version `d9ccc9c1-f894-4248-9ff2-1eebd3a89076`, deployment `0c6fb457-d981-412d-88ec-0af21bf4cb63`, created 2026-11-24 06:43:36 UTC; 100% of this dedicated Worker's traffic.
-- The deployment followed the protected one-shot E2E and restored the Worker to the disabled/paused configuration. The deployed source tree is the same Git tree as the current PR head; the deployment's commit SHA is not asserted to equal the later merge commit SHA.
+- The deployment followed the protected one-shot E2E and restored the Worker to the disabled/paused configuration. The deployed Agent Runtime source files match the runtime source tree tested on child commit `0846d66c97fcf7ae1d2a57e64dbb2de80b34331e`. The full repository tree differs from the current PR head after this documentation-only refresh; the deployment's commit SHA is not asserted to equal the current PR head.
 - Four SQLite-backed Durable Object namespaces are bound:
   - `AgentStateStore`: `d69e58a5f50841eaa5e2205775495c1e`
   - `AgentReviewerAuthStore`: `c237a7503cdf4f1794da1088e3abfc3c`
