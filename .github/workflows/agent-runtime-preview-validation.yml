@@ -219,10 +219,12 @@ jobs:
             assertNoSecretReferences(validateJobSource);
           };
           assertValidationOnly(workflow);
-          const injectValidationStep = (source, step) => source.replace(
-            '\n      - name: Verify OIDC operator workflow is manual and pause-only',
-            '\n' + step + '\n      - name: Verify OIDC operator workflow is manual and pause-only'
-          );
+          const injectValidationStep = (source, step) => {
+            const marker = '\n      - name: Verify OIDC operator workflow is manual and pause-only';
+            const markerIndex = source.lastIndexOf(marker);
+            assert.ok(markerIndex > 0, 'the actual following workflow step must exist');
+            return source.slice(0, markerIndex) + '\n' + step + source.slice(markerIndex);
+          };
           const injectedDeployStep = [
             '      - name: injected deployment regression step',
             '        run: npx --yes wrangler@4.166.0 deploy --config wrangler.preview.jsonc'
