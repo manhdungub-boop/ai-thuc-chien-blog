@@ -149,6 +149,32 @@ describe("read-only AI research discovery", () => {
     expect(result.sources_failed.every(item => item.error === "invalid_feed_document")).toBe(true);
   });
 
+  it("rejects malformed UTF-8 feed bytes instead of silently replacing them", async () => {
+    const result = await discoverResearchSignals({
+      now: NOW,
+      fetchImpl: async url => {
+        const source = RESEARCH_FEED_SOURCES.find(item => item.feed === url);
+        if (source.name !== "OpenAI News") return new Response(feedFor(source), { status: 200 });
+        const prefix = new TextEncoder().encode("<rss><channel><item><title>");
+        const suffix = new TextEncoder().encode(
+          "</title><link>https://openai.com/index/invalid-utf8</link>" +
+          "<pubDate>2026-11-18T10:00:00.000Z</pubDate></item></channel></rss>"
+        );
+        const bytes = new Uint8Array(prefix.length + 2 + suffix.length);
+        bytes.set(prefix);
+        bytes[prefix.length] = 0xc3;
+        bytes[prefix.length + 1] = 0x28;
+        bytes.set(suffix, prefix.length + 2);
+        return new Response(bytes, { status: 200, headers: { "content-type": "application/rss+xml" } });
+      }
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.sources_succeeded).toBe(3);
+    expect(result.sources_failed).toEqual([{ source: "OpenAI News", error: "invalid_utf8_feed" }]);
+    expect(result.latest_signals.every(item => !item.url.endsWith("/invalid-utf8"))).toBe(true);
+  });
+
   it("filters future-dated feed entries before ranking the bounded result set", async () => {
     const result = await discoverResearchSignals({
       now: NOW,
