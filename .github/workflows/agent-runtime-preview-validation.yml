@@ -716,6 +716,124 @@ jobs:
           }));
           NODE
 
+      - name: Deploy a bounded low-threshold rate-limit probe configuration
+        timeout-minutes: 3
+        working-directory: agents/runtime
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}
+          GENERATED_CONFIG: .wrangler.ratelimit-probe.generated.jsonc
+        run: |
+          set -euo pipefail
+          if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+            echo "::error::Cannot run the bounded rate-limit probe without the Preview deployment credential."
+            exit 1
+          fi
+          generated_config="$GENERATED_CONFIG"
+          trap 'rm -f "$generated_config"' EXIT
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFile, writeFile } from 'node:fs/promises';
+          const config = JSON.parse(await readFile('wrangler.preview.jsonc', 'utf8'));
+          assert.equal(config.name, 'ai-thuc-chien-agent-runtime-preview');
+          assert.equal(config.vars.AGENT_ENABLED, 'false');
+          assert.equal(config.vars.AGENT_PAUSED, 'true');
+          assert.equal(config.vars.AGENT_SCHEDULER_ENABLED, 'false');
+          assert.equal(config.vars.AGENT_RECOVERY_ALARM_ENABLED, 'false');
+          assert.equal(config.vars.AGENT_REVIEWER_AUTH_ENABLED, 'false');
+          assert.equal(config.vars.AGENT_RATE_LIMIT_REQUIRED, 'true');
+          assert.equal(config.ratelimits?.length, 1);
+          assert.equal(config.ratelimits[0].name, 'AGENT_INGRESS_RATE_LIMITER');
+          assert.equal(config.ratelimits[0].simple.limit, 60);
+          assert.equal(config.ratelimits[0].simple.period, 60);
+          config.ratelimits[0].simple.limit = 1;
+          assert.equal(config.ratelimits[0].simple.limit, 1);
+          assert.equal(config.ratelimits[0].simple.period, 60);
+          assert.equal((config.triggers?.crons ?? []).length, 0);
+          assert.equal('d1_databases' in config, false);
+          assert.equal('routes' in config, false);
+          await writeFile(process.env.GENERATED_CONFIG, JSON.stringify(config, null, 2) + '\n', { mode: 0o600 });
+          NODE
+          timeout --signal=TERM --kill-after=10s 120s npx --yes wrangler@4.166.0 deploy --config "$generated_config" \
+            --message "Temporary disabled Preview rate-limit probe; restore follows"
+
+      - name: Verify live ingress rate limiting on one persistent Cloudflare connection
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import https from 'node:https';
+
+          const target = new URL(process.env.AGENT_RUNTIME_PREVIEW_URL + '/health');
+          const agent = new https.Agent({ keepAlive: true, maxSockets: 1, maxFreeSockets: 1 });
+          const colos = new Set();
+          let rejected = null;
+          let firstStatus = null;
+
+          function requestHealth() {
+            return new Promise((resolve, reject) => {
+              const request = https.request(target, {
+                method: 'GET',
+                agent,
+                headers: { Accept: 'application/json', Connection: 'keep-alive' },
+              }, (response) => {
+                let body = '';
+                response.setEncoding('utf8');
+                response.on('data', (chunk) => { body += chunk; });
+                response.on('end', () => {
+                  let json = null;
+                  try { json = JSON.parse(body); } catch {}
+                  const ray = response.headers['cf-ray'];
+                  const colo = typeof ray === 'string' ? ray.split('-').at(-1) : null;
+                  resolve({ status: response.statusCode, json, colo, ray });
+                });
+              });
+              request.on('error', reject);
+              request.end();
+            });
+          }
+
+          try {
+            for (let attempt = 1; attempt <= 20; attempt += 1) {
+              const result = await requestHealth();
+              if (result.colo) colos.add(result.colo);
+              if (firstStatus === null) firstStatus = result.status;
+
+              if (result.status === 429 && result.json?.error === 'rate_limited') {
+                rejected = { attempt, colo: result.colo, ray: result.ray };
+                break;
+              }
+              if (result.status !== 200) {
+                throw new Error('Expected HTTP 200 or 429 from disabled Preview health endpoint; got ' +
+                  JSON.stringify({ status: result.status, error: result.json?.error, ray: result.ray }));
+              }
+              assert.equal(result.json?.ok, true);
+              assert.equal(result.json?.enabled, false);
+              assert.equal(result.json?.paused, true);
+              await new Promise((resolve) => setTimeout(resolve, 50));
+            }
+          } finally {
+            agent.destroy();
+          }
+
+          if (colos.size !== 1) {
+            throw new Error('Rate-limit probe crossed Cloudflare locations or could not identify one; result is inconclusive: ' +
+              JSON.stringify([...colos]));
+          }
+          if (!rejected) {
+            throw new Error('Temporary limit=1 binding did not return HTTP 429 within 20 requests in one Cloudflare location.');
+          }
+          console.log(JSON.stringify({
+            ok: true,
+            firstStatus,
+            rejectedAtRequest: rejected.attempt,
+            colo: [...colos][0],
+            rateLimited: true,
+            previewDisabled: true,
+            previewPaused: true,
+          }));
+          NODE
+
       - name: Always restore Preview to disabled and paused configuration
         timeout-minutes: 5
         if: always() && steps.deploy_e2e.outcome != 'skipped'
@@ -767,26 +885,3 @@ jobs:
           done
           echo "All four human-facing console assets redirect unauthenticated requests to the Cloudflare Access login."
 
-      - name: Verify live ingress rate limiting after Preview is disabled and paused
-        if: success()
-        timeout-minutes: 2
-        run: |
-          set -euo pipefail
-          limited=false
-          for attempt in $(seq 1 80); do
-            status="$(curl --silent --show-error --max-time 5 --output "$RUNNER_TEMP/preview-rate-limit.json" --write-out "%{http_code}" "$AGENT_RUNTIME_PREVIEW_URL/health")"
-            if [[ "$status" == "429" ]] && jq -e '.error == "rate_limited"' "$RUNNER_TEMP/preview-rate-limit.json" >/dev/null; then
-              echo "Live ingress limiter rejected request $attempt with HTTP 429 after Preview was restored disabled/paused."
-              limited=true
-              break
-            fi
-            if [[ "$status" != "200" ]]; then
-              echo "::error::Expected HTTP 200 or 429 from disabled Preview health probe, got $status."
-              cat "$RUNNER_TEMP/preview-rate-limit.json"
-              exit 1
-            fi
-          done
-          if [[ "$limited" != "true" ]]; then
-            echo "::error::Ingress limiter did not reject within 80 bounded health requests."
-            exit 1
-          fi
