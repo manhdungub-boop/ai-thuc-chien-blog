@@ -326,8 +326,9 @@ function isFeedDocument(xml) {
     if (document.startsWith("</", index)) {
       const end = document.indexOf(">", index + 2);
       if (end === -1) return false;
-      const closing = document.slice(index + 2, end).trim();
-      if (!/^[A-Za-z_:][A-Za-z0-9_.:-]*$/.test(closing) || stack.pop() !== closing) return false;
+      const closing = document.slice(index + 2, end);
+      const closingMatch = closing.match(/^([A-Za-z_:][A-Za-z0-9_.:-]*)[ \t\r\n]*$/);
+      if (!closingMatch || stack.pop() !== closingMatch[1]) return false;
       index = end + 1;
       continue;
     }
