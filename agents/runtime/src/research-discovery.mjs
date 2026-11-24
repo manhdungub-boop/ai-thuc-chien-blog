@@ -26,9 +26,87 @@ function cleanText(value, max = 500) {
   return decodeHtmlEntities(value.replace(/<!\[CDATA\[|\]\]>/g, " ").replace(/<[^>]*>/g, " "))
     .replace(/\s+/g, " ").trim().slice(0, max);
 }
-function elementText(xml, name) {
-  const match = xml.match(new RegExp("<" + name + "(?:\\s[^>]*)?>([\\s\\S]*?)</" + name + ">", "i"));
-  return match ? match[1] : "";
+function directChildElements(xml) {
+  const elements = [];
+  const stack = [];
+  let index = 0;
+
+  const findTagEnd = start => {
+    let quote = null;
+    for (let cursor = start; cursor < xml.length; cursor++) {
+      const character = xml[cursor];
+      if (quote) {
+        if (character === quote) quote = null;
+      } else if (character === '"' || character === "'") {
+        quote = character;
+      } else if (character === ">") {
+        return cursor;
+      }
+    }
+    return -1;
+  };
+
+  while (index < xml.length) {
+    const open = xml.indexOf("<", index);
+    if (open === -1) break;
+    if (xml.startsWith("</", open)) {
+      const end = xml.indexOf(">", open + 2);
+      if (end === -1) return null;
+      const closingName = xml.slice(open + 2, end).trim();
+      const frame = stack.pop();
+      if (!frame || frame.name !== closingName) return null;
+      if (stack.length === 0) {
+        elements.push({ ...frame, content: xml.slice(frame.contentStart, open) });
+      }
+      index = end + 1;
+      continue;
+    }
+    if (xml.startsWith("<!--", open)) {
+      const end = xml.indexOf("-->", open + 4);
+      if (end === -1) return null;
+      index = end + 3;
+      continue;
+    }
+    if (xml.startsWith("<![CDATA[", open)) {
+      const end = xml.indexOf("]]>", open + 9);
+      if (end === -1) return null;
+      index = end + 3;
+      continue;
+    }
+    if (xml.startsWith("<?", open)) {
+      const end = xml.indexOf("?>", open + 2);
+      if (end === -1) return null;
+      index = end + 2;
+      continue;
+    }
+    if (xml.startsWith("<!", open)) return null;
+
+    const end = findTagEnd(open + 1);
+    if (end === -1) return null;
+    let tagBody = xml.slice(open + 1, end);
+    const selfClosing = /\/\s*$/.test(tagBody);
+    if (selfClosing) tagBody = tagBody.replace(/\/\s*$/, "");
+    const match = tagBody.match(/^([A-Za-z_:][A-Za-z0-9_.:-]*)([\s\S]*)$/);
+    if (!match) return null;
+    const frame = {
+      name: match[1],
+      attributes: match[2],
+      contentStart: end + 1
+    };
+    if (selfClosing) {
+      if (stack.length === 0) elements.push({ ...frame, content: "" });
+    } else {
+      stack.push(frame);
+    }
+    index = end + 1;
+  }
+
+  return stack.length === 0 ? elements : null;
+}
+
+function directChildAttribute(element, name) {
+  const match = element.attributes.match(new RegExp("(?:^|\\s)" + name + "\\s*=\\s*(?:\\"([^\\"]*)\\"|'([^']*)')", "i"));
+  return match ? (match[1] ?? match[2] ?? "") : "";
 }
 
 function maskNonElementMarkup(xml) {
@@ -193,10 +271,20 @@ function parseItems(xml, source, cutoff, now) {
     const restoreCdata = value => value.replace(/\u0000CDATA_(\d+)\u0000/g, (token, index) =>
       cdataPayloads[Number(index)] ?? token
     );
-    const title = cleanText(restoreCdata(elementText(body, "title")), 120);
-    const summary = cleanText(restoreCdata(elementText(body, "description") || elementText(body, "summary") || elementText(body, "content:encoded")), 160);
-    const rawLink = body.match(/<link\b[^>]*href="([^"]+)"/i)?.[1] || cleanText(restoreCdata(elementText(body, "link")), 300);
-    const rawDate = restoreCdata(elementText(body, "published") || elementText(body, "updated") || elementText(body, "pubDate") || elementText(body, "dc:date"));
+    const directChildren = directChildElements(body);
+    if (!directChildren) return null;
+    const childContent = name => directChildren.find(element => element.name.toLowerCase() === name)?.content ?? "";
+    const title = cleanText(restoreCdata(childContent("title")), 120);
+    const summary = cleanText(restoreCdata(childContent("description") || childContent("summary") || childContent("content:encoded")), 160);
+    const atomLink = directChildren.find(element => {
+      if (element.name.toLowerCase() !== "link") return false;
+      const relation = directChildAttribute(element, "rel").toLowerCase();
+      return !relation || relation === "alternate";
+    });
+    const rawLink = atomLink
+      ? cleanText(restoreCdata(directChildAttribute(atomLink, "href") || atomLink.content), 300)
+      : cleanText(restoreCdata(childContent("link")), 300);
+    const rawDate = restoreCdata(childContent("published") || childContent("updated") || childContent("pubDate") || childContent("dc:date"));
     const date = new Date(cleanText(rawDate, 100));
     if (!title || !rawLink || rawLink.length > 300 || !Number.isFinite(date.getTime()) ||
         date.getTime() < cutoff || date.getTime() > now + MAX_FUTURE_CLOCK_SKEW_MS) return null;
