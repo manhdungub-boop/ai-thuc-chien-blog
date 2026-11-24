@@ -31,6 +31,19 @@ describe("AgentDraftStore Durable Object", () => {
     await runtime?.mf.dispose();
   });
 
+  it("fences agent draft commits in the same Durable Object transaction as Pause", async () => {
+    const draft = validDraft();
+    expect(await store.createDraftFromAgent("agent-paused-0001", draft, [], 0))
+      .toEqual({ accepted: false, reason: "runtime_paused" });
+    expect(await store.setRuntimePaused(false, 1)).toMatchObject({ updated: true, paused: false, version: 1 });
+    expect((await store.createDraftFromAgent("agent-paused-0001", draft, [], 1)).accepted).toBe(true);
+    expect(await store.setRuntimePaused(true, 2)).toMatchObject({ updated: true, paused: true, version: 2 });
+    expect(await store.createDraftFromAgent("agent-late-0001", draft, [], 1))
+      .toEqual({ accepted: false, reason: "runtime_paused" });
+    expect(await store.setRuntimePaused(false, 1)).toMatchObject({ updated: false, reason: "runtime_control_version_stale" });
+    expect(await store.getDraft("agent-late-0001")).toBeNull();
+  });
+
   it("stores an eligible article only in the human-review queue", async () => {
     const result = await store.createDraft("draft-review-0001", validDraft());
     expect(result.accepted).toBe(true);

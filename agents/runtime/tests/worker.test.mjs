@@ -289,10 +289,23 @@ const OPERATOR_TOKEN = "worker-bridge-operator-token-034252848589abcdef";
 const STATE_TOKEN = "worker-bridge-state-store-token-034252848589abcdef";
 function bridgeEnv({ responseBody = { ok: true, dayUtc: "2026-11-19", acceptedToday: 2, inFlight: 1 }, response = null, responseStatus = 200 } = {}) {
   const calls = [];
+  let draftControl = { paused: true, version: 0 };
+  const draftStub = {
+    async setRuntimePaused(paused, version) {
+      if (version < draftControl.version) return { updated: false, reason: "runtime_control_version_stale" };
+      if (version === draftControl.version && paused !== draftControl.paused) return { updated: false, reason: "runtime_control_version_conflict" };
+      draftControl = { paused, version };
+      return { updated: true, paused, version };
+    },
+  };
   const stub = {
     async fetch(internalRequest) {
       calls.push(internalRequest);
       const url = new URL(internalRequest.url);
+      if (typeof response === "function") return response(internalRequest);
+      if (url.pathname === "/control" && internalRequest.method === "GET") {
+        return Response.json({ ok: true, control: { paused: true, version: 4 } });
+      }
       if (url.pathname === "/external-budget") {
         const scope = url.searchParams.get("scope");
         const limit = scope === "ai_bank_discovery" ? 10 : scope === "content_research" ? 8 : 0;
@@ -302,7 +315,6 @@ function bridgeEnv({ responseBody = { ok: true, dayUtc: "2026-11-19", acceptedTo
           budget: { ok: true, day, scope, used: 0, limit, remaining: limit },
         });
       }
-      if (typeof response === "function") return response(internalRequest);
       return response ?? Response.json(responseBody, { status: responseStatus });
     },
   };
@@ -320,8 +332,18 @@ function bridgeEnv({ responseBody = { ok: true, dayUtc: "2026-11-19", acceptedTo
         return stub;
       },
     },
+    AGENT_DRAFT_STORE: {
+      idFromName(name) {
+        assert.equal(name, "agent-authoring-global");
+        return "fixed-draft-object-id";
+      },
+      get(id) {
+        assert.equal(id, "fixed-draft-object-id");
+        return draftStub;
+      },
+    },
   };
-  return { env, calls };
+  return { env, calls, get draftControl() { return { ...draftControl }; } };
 }
 
 test("read-only usage bridge requires operator auth and the internal binding", async () => {
@@ -484,8 +506,19 @@ test("control status bridge requires operator bearer and strips query parameters
   assert.equal(query.status, 400);
 });
 
-test("control mutation bridge uses configured actor and dedicated internal credential", async () => {
-  const { env, calls } = bridgeEnv({ responseBody: { ok: true, changed: true, control: { paused: true, changedAt: 456, version: 5 } } });
+test("control mutation bridge pre-fences the draft store before acknowledging Pause", async () => {
+  const { env, calls, draftControl: getDraftControl } = bridgeEnv({
+    response: async (internalRequest) => {
+      const url = new URL(internalRequest.url);
+      if (url.pathname === "/control" && internalRequest.method === "GET") {
+        return Response.json({ ok: true, control: { paused: false, version: 4 } });
+      }
+      if (url.pathname === "/control/pause" && internalRequest.method === "POST") {
+        return Response.json({ ok: true, changed: true, control: { paused: true, version: 5 } });
+      }
+      throw new Error("unexpected State Store request");
+    },
+  });
   const incoming = new Request("https://agent-runtime-preview.example.workers.dev/internal/control/pause", {
     method: "POST",
     headers: {
@@ -499,12 +532,15 @@ test("control mutation bridge uses configured actor and dedicated internal crede
   const body = await response.json();
   assert.equal(response.status, 200);
   assert.equal(body.changed, true);
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].url, "https://state-store.internal/control/pause");
-  assert.equal(calls[0].method, "POST");
-  assert.equal(calls[0].headers.get("authorization"), "Bearer " + STATE_TOKEN);
-  assert.equal(calls[0].headers.get("cookie"), null);
-  const forwarded = await calls[0].json();
+  assert.equal(calls.length, 2);
+  assert.equal(new URL(calls[0].url).pathname, "/control");
+  assert.equal(calls[0].method, "GET");
+  assert.equal(new URL(calls[1].url).pathname, "/control/pause");
+  assert.equal(calls[1].method, "POST");
+  assert.equal(calls[1].headers.get("authorization"), "Bearer " + STATE_TOKEN);
+  assert.equal(calls[1].headers.get("cookie"), null);
+  assert.deepEqual(getDraftControl, { paused: true, version: 5 });
+  const forwarded = await calls[1].json();
   assert.equal(forwarded.actor, "project-operator-01");
   assert.match(forwarded.requestId, /^[a-z0-9-]{16,64}$/i);
   assert.equal(forwarded.reason, "planned maintenance");

@@ -13,6 +13,17 @@ const html = "<html><body><nav>Menu</nav><main><h1>Research</h1><article><p>" +
   "<script>secret()</script></p></article></main><footer>Footer</footer></body></html>";
 
 describe("bounded research evidence retrieval", () => {
+  it("cancels evidence retrieval when the parent authoring signal is already aborted", async () => {
+    const controller = new AbortController(); controller.abort();
+    const result = await retrieveResearchEvidence([signal], {
+      signal: controller.signal,
+      fetchImpl: async (_url, options) => { if (options.signal.aborted) throw new Error("aborted"); return new Response(html); }
+    });
+    expect(result.status).toBe("cancelled");
+    expect(result.retrieved).toBe(0);
+    expect(result.evidence).toEqual([]);
+  });
+
   it("fetches only allowlisted source pages and returns a provenance-bound excerpt", async () => {
     const requests = [];
     const result = await retrieveResearchEvidence([signal], {

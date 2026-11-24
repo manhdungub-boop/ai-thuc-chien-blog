@@ -466,10 +466,14 @@ function isFeedDocument(xml) {
   return rootName !== null && supportedRoot && stack.length === 0;
 }
 
-async function fetchFeed(source, fetchImpl, cutoff, now) {
+async function fetchFeed(source, fetchImpl, cutoff, now, parentSignal) {
   const controller = new AbortController();
+  const abortParent = () => controller.abort(parentSignal?.reason);
+  if (parentSignal?.aborted) abortParent();
+  else parentSignal?.addEventListener("abort", abortParent, { once: true });
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
+    if (controller.signal.aborted) throw new Error("research_cancelled");
     const response = await fetchImpl(source.feed, {
       method: "GET",
       headers: { accept: "application/rss+xml, application/atom+xml, application/xml, text/xml", "user-agent": "DUNG-AI-Research-Discovery/1.0" },
@@ -503,14 +507,24 @@ async function fetchFeed(source, fetchImpl, cutoff, now) {
     if (!isFeedDocument(xml)) throw new Error("invalid_feed_document");
     return { source, records: parseItems(xml, source, cutoff, now), error: null };
   } catch (error) {
-    return { source, records: [], error: String(error?.message || error).replace(/[^a-zA-Z0-9_.:-]/g, "_").slice(0, 80) };
-  } finally { clearTimeout(timer); }
+    return { source, records: [], error: parentSignal?.aborted ? "cancelled" : String(error?.message || error).replace(/[^a-zA-Z0-9_.:-]/g, "_").slice(0, 80) };
+  } finally {
+    clearTimeout(timer);
+    parentSignal?.removeEventListener("abort", abortParent);
+  }
 }
 
-export async function discoverResearchSignals({ fetchImpl = fetch, now = Date.now(), lookbackDays = 14 } = {}) {
+export async function discoverResearchSignals({ fetchImpl = fetch, now = Date.now(), lookbackDays = 14, signal } = {}) {
   const days = Math.min(60, Math.max(1, Number(lookbackDays) || 14));
   const cutoff = now - days * 86_400_000;
-  const results = await Promise.all(RESEARCH_FEED_SOURCES.map(source => fetchFeed(source, fetchImpl, cutoff, now)));
+  const results = await Promise.all(RESEARCH_FEED_SOURCES.map(source => fetchFeed(source, fetchImpl, cutoff, now, signal)));
+  if (signal?.aborted) return {
+    ok: false, status: "cancelled", topic: "AI agents, automation, and open-source AI tools",
+    generated_at: new Date(now).toISOString(), lookback_days: days,
+    sources_checked: results.length, sources_succeeded: 0, sources_failed: [],
+    signal_count: 0, latest_signals: [],
+    safety: { read_only: true, catalog_modified: false, content_created: false, public_content_modified: false, deployment_performed: false }
+  };
   const seen = new Set();
   const records = results.flatMap(result => result.records).filter(record => {
     if (seen.has(record.url)) return false;

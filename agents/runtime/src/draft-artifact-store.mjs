@@ -193,9 +193,40 @@ export class AgentDraftStore {
     if (!columns.some(column => column.name === "evidence_readiness_json")) this.ctx.storage.sql.exec("ALTER TABLE draft_artifacts ADD COLUMN evidence_readiness_json TEXT");
     if (!columns.some(column => column.name === "research_evidence_json")) this.ctx.storage.sql.exec("ALTER TABLE draft_artifacts ADD COLUMN research_evidence_json TEXT");
     this.ctx.storage.sql.exec("CREATE INDEX IF NOT EXISTS draft_artifacts_status_updated ON draft_artifacts(status, updated_at)");
+    this.ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS runtime_authoring_control (singleton_id INTEGER PRIMARY KEY CHECK(singleton_id = 1), paused INTEGER NOT NULL CHECK(paused IN (0,1)), version INTEGER NOT NULL CHECK(version >= 0))");
+    this.ctx.storage.sql.exec("INSERT OR IGNORE INTO runtime_authoring_control (singleton_id, paused, version) VALUES (1, 1, 0)");
   }
 
-  async createDraft(id, draft, retrievedEvidence = []) {
+  async setRuntimePaused(paused, version) {
+    if (typeof paused !== "boolean" || !Number.isSafeInteger(version) || version < 0) return { updated: false, reason: "runtime_control_input_invalid" };
+    return this.ctx.storage.transactionSync(() => {
+      const current = this.ctx.storage.sql.exec("SELECT paused, version FROM runtime_authoring_control WHERE singleton_id = 1").toArray()[0];
+      if (!current) return { updated: false, reason: "runtime_control_unavailable" };
+      if (version < current.version) return { updated: false, reason: "runtime_control_version_stale" };
+      if (version === current.version) {
+        if (current.paused !== (paused ? 1 : 0)) return { updated: false, reason: "runtime_control_version_conflict" };
+        return { updated: true, duplicate: true, paused, version };
+      }
+      const updated = this.ctx.storage.sql.exec("UPDATE runtime_authoring_control SET paused = ?, version = ? WHERE singleton_id = 1 AND version = ? RETURNING paused, version", paused ? 1 : 0, version, current.version).toArray();
+      if (updated.length !== 1 || updated[0].paused !== (paused ? 1 : 0) || updated[0].version !== version) return { updated: false, reason: "runtime_control_version_conflict" };
+      return { updated: true, paused, version };
+    });
+  }
+
+  async createDraft(id, draft, retrievedEvidence = []) { return this.createDraftInternal(id, draft, retrievedEvidence); }
+
+  async createDraftFromAgent(id, draft, retrievedEvidence = [], expectedControlVersion) {
+    if (!Number.isSafeInteger(expectedControlVersion) || expectedControlVersion < 0) return { accepted: false, reason: "runtime_control_version_invalid" };
+    return this.ctx.storage.transactionSync(() => {
+      const control = this.ctx.storage.sql.exec("SELECT paused, version FROM runtime_authoring_control WHERE singleton_id = 1").toArray()[0];
+      if (!control) return { accepted: false, reason: "runtime_control_unavailable" };
+      if (control.paused === 1) return { accepted: false, reason: "runtime_paused" };
+      if (control.version !== expectedControlVersion) return { accepted: false, reason: "runtime_control_version_conflict" };
+      return this.createDraftInternal(id, draft, retrievedEvidence);
+    });
+  }
+
+  createDraftInternal(id, draft, retrievedEvidence = []) {
     if (typeof id !== "string" || !ID_PATTERN.test(id)) return { accepted: false, reason: "invalid_artifact_id" };
     const validated = validateDraft(draft);
     if (!validated.ok) return { accepted: false, reason: validated.reason };
