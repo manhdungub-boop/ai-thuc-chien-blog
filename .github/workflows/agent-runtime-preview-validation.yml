@@ -260,6 +260,10 @@ jobs:
           assert.ok(e2eWorkflow.includes('(.result | type)'), 'subscription API responses must be validated before classification');
           assert.ok(e2eWorkflow.includes('result_info.total_count'), 'incomplete subscription pages must stop the deployment');
           assert.ok(e2eWorkflow.includes('free-default'), 'an empty paid-subscription list must map to Cloudflare Workers Free, its documented default plan');
+          assert.match(e2eWorkflow, /timeout-minutes:\\s*20/, 'the E2E job must reserve a bounded total time budget');
+          assert.ok(e2eWorkflow.includes('timeout-minutes: 2'), 'checkout and pre-deployment checks must have step deadlines');
+          assert.ok(e2eWorkflow.includes('timeout-minutes: 3'), 'temporary deployment must have a step deadline');
+          assert.ok(e2eWorkflow.includes('timeout-minutes: 5'), 'rollback must retain its own bounded restoration window');
           console.log('PASS: validation remains credential-free; the separately gated owner-only job uses OIDC, Preview-only deployment, and automatic rollback.');
           NODE
 
@@ -296,7 +300,7 @@ jobs:
     needs: validate
     runs-on: ubuntu-latest
     environment: agent-runtime-preview
-    timeout-minutes: 15
+    timeout-minutes: 20
     concurrency:
       group: agent-runtime-preview-deploy
       cancel-in-progress: false
@@ -308,12 +312,14 @@ jobs:
       AGENT_RUNTIME_PREVIEW_URL: "https://ai-thuc-chien-agent-runtime-preview.manhdungub.workers.dev"
     steps:
       - name: Check out the exact authorized PR commit
+        timeout-minutes: 2
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
 
       - name: Verify exact branch, actor, and commit pin
+        timeout-minutes: 2
         env:
           EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
           EXPECTED_HEAD_REF: ${{ github.event.pull_request.head.ref }}
@@ -357,6 +363,7 @@ jobs:
           NODE
 
       - name: Verify Workers Free plan before deployment
+        timeout-minutes: 2
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}
         run: |
@@ -399,6 +406,7 @@ jobs:
           esac
 
       - name: Deploy the one-shot read-only E2E configuration to dedicated Preview
+        timeout-minutes: 3
         id: deploy_e2e
         working-directory: agents/runtime
         env:
