@@ -70,6 +70,16 @@ test("fault-test harness remains disabled, paused, and migration-compatible", ()
   assert.equal(faultTestConfig.migrations.at(-1)?.tag, "fault-test-v1");
   assert.equal(faultTestConfig.durable_objects.bindings.find(binding => binding.name === "AGENT_STATE_STORE")?.class_name, "TestAgentStateStore");
 });
+const faultTestWorkerSource = readFileSync(fileURLToPath(new URL("./state-store-test-worker.mjs", import.meta.url)), "utf8");
+
+test("fault-test DO enables state transitions only inside the token-gated isolated class", () => {
+  assert.match(faultTestWorkerSource, /AGENT_ENABLED:\s*"true"/);
+  assert.match(faultTestWorkerSource, /AGENT_PAUSED:\s*"false"/);
+  assert.match(faultTestWorkerSource, /AGENT_STATE_STORE_TOKEN:\s*env\.AGENT_FAULT_TEST_TOKEN/);
+  assert.equal(faultTestConfig.vars.AGENT_ENABLED, "false");
+  assert.equal(faultTestConfig.vars.AGENT_PAUSED, "true");
+});
+
 test("fault-test Worker exports its test-only Durable Object class outside the application entrypoint", () => {
   assert.equal(typeof TestAgentStateStore, "function");
 });
