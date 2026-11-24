@@ -363,10 +363,12 @@ jobs:
           assert.doesNotMatch(cleanup, /\\\$\{CLOUDFLARE_API_TOKEN/);
           assert.match(cleanup, /--request DELETE/);
           assert.match(cleanup, /AGENT_FAULT_TEST_TOKEN/);
-          assert.match(cleanup, /wrangler@4\.166\.0 deploy/);
-          assert.match(cleanup, /FAULT_TEST_CLEANUP_CONFIG/);
-          assert.match(cleanup, /previews_enabled, false/);
-          assert.match(cleanup, /enabled, false/);
+          assert.match(cleanup, /--request POST/);
+          assert.match(cleanup, /--request DELETE/);
+          assert.match(cleanup, /attempt in 1 2 3/);
+          assert.match(cleanup, /api\\/subdomain/);
+          assert.match(cleanup, /result\\.enabled == false/);
+          assert.match(cleanup, /result\\.previews_enabled == false/);
           assert.match(cleanup, /one-run AGENT_FAULT_TEST_TOKEN is absent/);          assert.doesNotMatch(workflow, /PREVIEW_WORKER_NAME|original_version_id|deployments\?force=true|wrangler@4\.166\.0 deploy --config agents\/runtime\/wrangler\.preview/);
           assert.doesNotMatch(workflow, /wrangler[^\n]*--env production|wrangler[^\n]*--env prod/);
           assert.equal('routes' in testConfig, false);
