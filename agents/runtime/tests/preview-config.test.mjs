@@ -73,9 +73,14 @@ test("fault-test harness remains disabled, paused, and migration-compatible", ()
 const faultTestWorkerSource = readFileSync(fileURLToPath(new URL("./state-store-test-worker.mjs", import.meta.url)), "utf8");
 
 test("fault-test DO enables state transitions only inside the token-gated isolated class", () => {
-  assert.match(faultTestWorkerSource, /AGENT_ENABLED:\s*"true"/);
-  assert.match(faultTestWorkerSource, /AGENT_PAUSED:\s*"false"/);
+  assert.match(faultTestWorkerSource, /const faultSuiteMode = \{ active: false \}/);
+  assert.match(faultTestWorkerSource, /faultSuiteMode\.active && property === "AGENT_ENABLED"/);
+  assert.match(faultTestWorkerSource, /faultSuiteMode\.active && property === "AGENT_PAUSED"/);
   assert.match(faultTestWorkerSource, /AGENT_STATE_STORE_TOKEN:\s*env\.AGENT_FAULT_TEST_TOKEN/);
+  const faultRouteIndex = faultTestWorkerSource.indexOf('if (url.pathname === "/__test/fault-suite")');
+  const enableIndex = faultTestWorkerSource.indexOf("this.faultSuiteMode.active = true");
+  const resetIndex = faultTestWorkerSource.indexOf("this.faultSuiteMode.active = false");
+  assert.ok(faultRouteIndex >= 0 && enableIndex > faultRouteIndex && resetIndex > enableIndex);
   assert.equal(faultTestConfig.vars.AGENT_ENABLED, "false");
   assert.equal(faultTestConfig.vars.AGENT_PAUSED, "true");
 });
