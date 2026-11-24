@@ -131,3 +131,11 @@ The successful one-shot E2E already proves the allowlisted read-only `content.re
 
 - This document's latest reconciliation commit is `23c54de0c5a853a87722c7afade364e5a6ca016d` and changes this status document only.
 - The exact-head review and workflow evidence above is explicitly tied to the prior SHA where stated; new documentation commits must be rechecked and reviewed on their own exact HEAD before they are represented as current-head approval.
+
+
+## Controlled one-shot Preview E2E revalidation (2026-11-24)
+
+- Purpose: re-run the repository's pre-existing owner-only, GitHub OIDC-gated, one-shot read-only E2E against the dedicated Preview Worker after confirming its deployed runtime inventory.
+- Scope is limited to one allowlisted `content.review` task, durable audit verification, unauthenticated console Access redirects, and automatic restoration to disabled/paused state. No production route, D1, content write, social post, scheduler, recurring trigger, or AI publication is permitted.
+- This is a test-trigger documentation change only. The workflow must independently prove Workers Free from a complete subscription listing before any temporary Preview deployment; if the plan check, OIDC gate, task result, or restoration check fails, the run must fail closed and its final evidence must be recorded as incomplete.
+- Current status: prepared; waiting for the protected workflow's exact synchronize-event gate. No runtime configuration or deployed Worker has been changed by this documentation commit.
