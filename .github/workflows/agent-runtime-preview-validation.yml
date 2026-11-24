@@ -171,8 +171,7 @@ jobs:
           assert.deepEqual(preview.migrations, [
             { tag: 'v1', new_sqlite_classes: ['AgentStateStore'] },
             { tag: 'v2', new_sqlite_classes: ['AgentReviewerAuthStore', 'AgentDraftStore'] },
-            { tag: 'v3-ai-bank-candidate-store', new_sqlite_classes: ['AgentAIBankCandidateStore'] },
-            { tag: 'fault-test-v1', new_sqlite_classes: ['TestAgentStateStore'] }
+            { tag: 'v3-ai-bank-candidate-store', new_sqlite_classes: ['AgentAIBankCandidateStore'] }
           ]);
           assert.equal('routes' in preview, false);
           assert.equal('d1_databases' in preview, false);
@@ -185,8 +184,11 @@ jobs:
           assert.equal(faultTest.vars.AGENT_PAUSED, 'true');
           assert.equal(faultTest.vars.AGENT_SCHEDULER_ENABLED, 'false');
           assert.equal(faultTest.vars.AGENT_RECOVERY_ALARM_ENABLED, 'false');
+          assert.equal(faultTest.name, 'ai-thuc-chien-agent-runtime-fault-test');
+          assert.equal(faultTest.main, './tests/state-store-test-worker.mjs');
+          assert.deepEqual(faultTest.durable_objects?.bindings, [{ name: 'AGENT_STATE_STORE', class_name: 'TestAgentStateStore' }]);
+          assert.deepEqual(faultTest.migrations, [{ tag: 'fault-test-v1', new_sqlite_classes: ['TestAgentStateStore'] }]);
           const workerSource = await readFile('agents/runtime/src/worker.mjs', 'utf8');
-          assert.match(workerSource, /export class TestAgentStateStore extends AgentStateStore/);
           assert.match(workerSource, /controller\?\.cron !== "\*\/30 \* \* \* \*"/);
           assert.match(workerSource, /AGENT_SCHEDULER_ENABLED !== "true"/);
           assert.match(workerSource, /AGENT_RECOVERY_ALARM_ENABLED !== "true"/);
