@@ -1,6 +1,13 @@
 name: Agent Runtime Cloudflare DO Fault Test
 
 on:
+  push:
+    branches:
+      - security/cloudflare-do-fault-suite-20261124
+    paths:
+      - ".github/workflows/agent-runtime-cloudflare-do-fault-test.yml"
+      - "agents/runtime/tests/state-store-test-worker.mjs"
+      - "agents/runtime/wrangler.fault-test.jsonc"
   workflow_dispatch:
     inputs:
       expected_sha:
@@ -20,7 +27,8 @@ jobs:
     if: >-
       github.repository == 'manhdungub-boop/ai-thuc-chien-blog' &&
       github.ref == 'refs/heads/security/cloudflare-do-fault-suite-20261124' &&
-      github.event.inputs.expected_sha == github.sha
+      ((github.event_name == 'push' && github.sha == github.event.after) ||
+       (github.event_name == 'workflow_dispatch' && github.event.inputs.expected_sha == github.sha))
     runs-on: ubuntu-latest
     environment: agent-runtime-preview
     timeout-minutes: 20
@@ -34,16 +42,16 @@ jobs:
       - name: Check out the exact reviewed commit
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          ref: ${{ inputs.expected_sha }}
+          ref: ${{ github.sha }}
           persist-credentials: false
 
       - name: Verify exact branch and commit pin
         env:
-          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          EXPECTED_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "manhdungub-boop/ai-thuc-chien-blog"
-          test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
+          case "$GITHUB_EVENT_NAME" in push|workflow_dispatch) ;; *) echo "::error::Unexpected event"; exit 1 ;; esac
           test "$GITHUB_REF" = "refs/heads/security/cloudflare-do-fault-suite-20261124"
           [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
