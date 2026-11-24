@@ -209,26 +209,44 @@ jobs:
 
           # Disable public URLs first. If this succeeds, a later secret-delete failure still leaves the test Worker unreachable.
           disable_response="$RUNNER_TEMP/fault-worker-disable.json"
-          disable_status="$(curl --silent --show-error --max-time 15 --output "$disable_response" --write-out "%{http_code}" \
-            --request POST --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            --header "Content-Type: application/json" --header "Accept: application/json" \
-            --data '{"enabled":false,"previews_enabled":false}' "$api/subdomain")"
-          if [[ "$disable_status" == "200" ]] && jq -e '.success == true and .result.enabled == false and .result.previews_enabled == false' "$disable_response" >/dev/null; then
+          disable_ok=0
+          for attempt in 1 2 3; do
+            disable_status="$(curl --silent --show-error --max-time 15 --output "$disable_response" --write-out "%{http_code}" \
+              --request POST --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              --header "Content-Type: application/json" --header "Accept: application/json" \
+              --data '{"enabled":false,"previews_enabled":false}' "$api/subdomain")"
+            if [[ "$disable_status" == "200" ]] && jq -e '.success == true and .result.enabled == false and .result.previews_enabled == false' "$disable_response" >/dev/null; then
+              disable_ok=1
+              break
+            fi
+            echo "Retrying disable of workers.dev and Preview URLs ($attempt/3; HTTP $disable_status)."
+            sleep 3
+          done
+          if [[ "$disable_ok" == "1" ]]; then
             echo "PASS: workers.dev and Preview URLs disabled."
           else
-            echo "::error::Could not disable public test Worker URLs (HTTP $disable_status)."
+            echo "::error::Could not disable public test Worker URLs after three attempts (HTTP $disable_status)."
             cleanup_failed=1
           fi
 
           # Remove the ephemeral bearer. A 404 is acceptable only if the later list confirms absence.
           delete_response="$RUNNER_TEMP/fault-secret-delete.json"
-          delete_status="$(curl --silent --show-error --max-time 15 --output "$delete_response" --write-out "%{http_code}" \
-            --request DELETE --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            --header "Accept: application/json" "$api/secrets/AGENT_FAULT_TEST_TOKEN")"
-          if [[ "$delete_status" == "200" || "$delete_status" == "404" ]]; then
+          delete_ok=0
+          for attempt in 1 2 3; do
+            delete_status="$(curl --silent --show-error --max-time 15 --output "$delete_response" --write-out "%{http_code}" \
+              --request DELETE --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              --header "Accept: application/json" "$api/secrets/AGENT_FAULT_TEST_TOKEN")"
+            if [[ "$delete_status" == "200" || "$delete_status" == "404" ]]; then
+              delete_ok=1
+              break
+            fi
+            echo "Retrying deletion of the one-run secret ($attempt/3; HTTP $delete_status)."
+            sleep 3
+          done
+          if [[ "$delete_ok" == "1" ]]; then
             echo "Secret deletion request completed or secret was already absent (HTTP $delete_status)."
           else
-            echo "::error::Could not delete the one-run secret (HTTP $delete_status)."
+            echo "::error::Could not delete the one-run secret after three attempts (HTTP $delete_status)."
             cleanup_failed=1
           fi
 
