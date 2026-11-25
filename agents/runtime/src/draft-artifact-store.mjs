@@ -188,7 +188,29 @@ export class AgentDraftStore {
       "ledger_json TEXT, review_record_json TEXT, evidence_readiness_json TEXT, research_evidence_json TEXT)"
     );
     const columns = this.ctx.storage.sql.exec("PRAGMA table_info(draft_artifacts)").toArray();
-    if (!columns.some(column => column.name === "content_version")) this.ctx.storage.sql.exec("ALTER TABLE draft_artifacts ADD COLUMN content_version INTEGER NOT NULL DEFAULT 1");
+    if (!columns.some(column => column.name === "content_version")) {
+      this.ctx.storage.sql.exec("ALTER TABLE draft_artifacts ADD COLUMN content_version INTEGER NOT NULL DEFAULT 1");
+      const legacyRows = this.ctx.storage.sql.exec(
+        "SELECT id, version, ledger_json FROM draft_artifacts"
+      ).toArray();
+      for (const row of legacyRows) {
+        let contentVersion = row.version;
+        if (typeof row.ledger_json === "string") {
+          try {
+            const legacyLedger = JSON.parse(row.ledger_json);
+            if (Number.isSafeInteger(legacyLedger.draft_version) && legacyLedger.draft_version > 0) {
+              contentVersion = legacyLedger.draft_version;
+            }
+          } catch {
+            // Invalid legacy ledgers remain fail-closed during review validation.
+          }
+        }
+        this.ctx.storage.sql.exec(
+          "UPDATE draft_artifacts SET content_version = ? WHERE id = ?",
+          contentVersion, row.id
+        );
+      }
+    }
     if (!columns.some(column => column.name === "ledger_json")) this.ctx.storage.sql.exec("ALTER TABLE draft_artifacts ADD COLUMN ledger_json TEXT");
     if (!columns.some(column => column.name === "review_record_json")) this.ctx.storage.sql.exec("ALTER TABLE draft_artifacts ADD COLUMN review_record_json TEXT");
     if (!columns.some(column => column.name === "evidence_readiness_json")) this.ctx.storage.sql.exec("ALTER TABLE draft_artifacts ADD COLUMN evidence_readiness_json TEXT");
