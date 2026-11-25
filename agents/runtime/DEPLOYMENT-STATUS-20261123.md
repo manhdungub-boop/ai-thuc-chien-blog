@@ -159,3 +159,5 @@ The successful one-shot E2E already proves the allowlisted read-only `content.re
 
 - Rebased this test-only child branch onto fully validated integration HEAD `ea8beb709c041a9602909fb342301842cf222423`. That HEAD restores the deployed Preview migration sequence `v1 -> v2 -> v3-ai-bank-candidate-store -> fault-test-v1` and uses `src/worker-preview-recovery.mjs` to continue exporting the existing test-only class without creating or deleting any Durable Object namespace.
 - Exact integration-head checks are green: Agent Runtime Preview Shell Validation 599/599, Static CI, CodeQL, staging OAuth, AI Bank discovery, Content Quality, Editorial Readiness, Community API security, website health, and read-only Preview preflight.
+
+- Replacement child PR #383 is open and labelled `agent-runtime`; only the exact merge ref `refs/pull/383/merge` was added temporarily to the dedicated Preview environment's deployment branch policy. The original allowed branches and required reviewer remain unchanged; remove policy ID `68230726` after the run.
