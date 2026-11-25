@@ -60,14 +60,14 @@ assert.equal(
   1,
   "Staging email checkout must define exactly one ref."
 );
-assert.ok(stagingCheckoutLines.includes("        ref: main"),
+assert.ok(stagingCheckoutLines.includes("          ref: main"),
   "Staging email E2E must check out exactly main, not a similarly named ref.");
 assert.equal(
   stagingCheckoutLines.filter(line => /^        persist-credentials:/.test(line)).length,
   1,
   "Staging email checkout must define exactly one credential-persistence setting."
 );
-assert.ok(stagingCheckoutLines.includes("        persist-credentials: false"),
+assert.ok(stagingCheckoutLines.includes("          persist-credentials: false"),
   "Staging email E2E must not persist the GitHub checkout token.");
 
 const productionSmokeGuard = "if: github.event_name == 'schedule' || (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')";
