@@ -313,10 +313,23 @@ async function performIndependentOidcPause(request, env) {
       throw error;
     }
   } catch (error) {
-    const diagnosticCode = typeof error?.message === "string" &&
-      /^[a-z0-9_]{1,64}$/.test(error.message) ? error.message : undefined;
-    return json({ ok: false, error: "control_unavailable",
-      ...(diagnosticCode ? { diagnosticCode } : {}) }, 503);
+    const rawMessage = typeof error?.message === "string" ? error.message : "";
+    const diagnosticCode = /^[a-z0-9_]{1,64}$/.test(rawMessage)
+      ? rawMessage : "unclassified_control_error";
+    const diagnosticMessage = rawMessage
+      .replace(/Bearer\\s+\\S+/gi, "Bearer [redacted]")
+      .replace(/cfat_[A-Za-z0-9_-]+/g, "[redacted]")
+      .replace(/https?:\\/\\/\\S+/g, "[url]")
+      .replace(/[A-Fa-f0-9]{32,}/g, "[redacted]")
+      .replace(/[^A-Za-z0-9_. -]/g, " ")
+      .trim().slice(0, 160);
+    return json({
+      ok: false,
+      error: "control_unavailable",
+      diagnosticCode,
+      diagnosticName: typeof error?.name === "string" ? error.name.slice(0, 32) : "Error",
+      diagnosticMessage,
+    }, 503);
   }
 }
 
