@@ -7,6 +7,10 @@ const sources = [
   { vendor: "ComfyUI", product: "ComfyUI", repo: "Comfy-Org/ComfyUI" }
 ];
 
+function releaseIdentity(sourceUrl, publishedAt) {
+  return JSON.stringify([sourceUrl, publishedAt]);
+}
+
 function candidate(source = sources[0], release = "v1.2.3", publishedAt = "2026-11-19T08:00:00.000Z") {
   return {
     candidate_id: "github:" + source.repo,
@@ -64,8 +68,10 @@ async function writerSessionToken(now) {
 }
 async function submitEvidence(store, candidateId, evidence, now = Date.now(), reviewedReleaseUrl) {
   const current = await store.getCandidate(candidateId);
-  const releaseIdentity = reviewedReleaseUrl ?? current?.candidate?.latest_release?.source_url;
-  return store.submitAuthorizedReviewEvidence(candidateId, evidence, await writerSessionToken(now), crypto.randomUUID(), releaseIdentity, writerAuthEnv, now);
+  const releaseIdentityValue = reviewedReleaseUrl ?? (current?.candidate?.latest_release
+    ? releaseIdentity(current.candidate.latest_release.source_url, current.candidate.latest_release.published_at)
+    : undefined);
+  return store.submitAuthorizedReviewEvidence(candidateId, evidence, await writerSessionToken(now), crypto.randomUUID(), releaseIdentityValue, writerAuthEnv, now);
 }
 
 describe("AgentAIBankCandidateStore Durable Object", () => {
@@ -420,7 +426,7 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     expect(packet.checks_missing_evidence).toBe(6);
     const history = await store.listReviewEvidence("github:ollama/ollama");
     expect(history).toHaveLength(1);
-    expect(history[0].candidate_release_url).toBe("https://github.com/ollama/ollama/releases/tag/v1.2.3");
+     expect(history[0].candidate_release_identity).toBe(releaseIdentity("https://github.com/ollama/ollama/releases/tag/v1.2.3", "2026-11-19T08:00:00.000Z"));
     expect(packet.verification_status).toBe("not_verified");
   });
 
@@ -443,22 +449,22 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
 
     const staleSubmission = await submitEvidence(store,
       "github:ollama/ollama", evidence, Date.parse("2026-11-19T11:10:00.000Z"),
-      "https://github.com/ollama/ollama/releases/tag/v1.2.3"
+      releaseIdentity("https://github.com/ollama/ollama/releases/tag/v1.2.3", "2026-11-19T08:00:00.000Z")
     );
     expect(staleSubmission).toEqual({ accepted: false, reason: "stale_candidate_release" });
 
     const second = await submitEvidence(store,
       "github:ollama/ollama", evidence, Date.parse("2026-11-19T11:10:01.000Z"),
-      "https://github.com/ollama/ollama/releases/tag/v1.2.4"
+      releaseIdentity("https://github.com/ollama/ollama/releases/tag/v1.2.4", "2026-11-19T11:00:00.000Z")
     );
     expect(second).toMatchObject({ accepted: true, evidence_id: first.evidence_id });
     const packet = await store.getReviewPacket("github:ollama/ollama");
     expect(packet.total_evidence).toBe(1);
     const history = await store.listReviewEvidence("github:ollama/ollama");
     expect(history).toHaveLength(2);
-    expect(new Set(history.map(item => item.candidate_release_url))).toEqual(new Set([
-      "https://github.com/ollama/ollama/releases/tag/v1.2.3",
-      "https://github.com/ollama/ollama/releases/tag/v1.2.4"
+    expect(new Set(history.map(item => item.candidate_release_identity))).toEqual(new Set([
+      releaseIdentity("https://github.com/ollama/ollama/releases/tag/v1.2.3", "2026-11-19T08:00:00.000Z"),
+      releaseIdentity("https://github.com/ollama/ollama/releases/tag/v1.2.4", "2026-11-19T11:00:00.000Z")
     ]));
     expect(await submitEvidence(store, 
       "github:ollama/ollama", evidence, Date.parse("2026-11-19T11:11:00.000Z")
@@ -517,7 +523,7 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     const eventId = crypto.randomUUID().toUpperCase();
     const canonicalEventId = eventId.toLowerCase();
     const evidence = { check_type: "license_scope", source_title: "Official license", source_url: "https://ollama.com/license", excerpt: "Pending human review." };
-    const reviewedReleaseUrl = "https://github.com/ollama/ollama/releases/tag/v1.2.3";
+    const reviewedReleaseUrl = releaseIdentity("https://github.com/ollama/ollama/releases/tag/v1.2.3", "2026-11-19T08:00:00.000Z");
     const first = await store.submitAuthorizedReviewEvidence("github:ollama/ollama", evidence, token, eventId, reviewedReleaseUrl, writerAuthEnv, now);
     expect(first).toMatchObject({ accepted: true, replay_protected: true, audit_event_id: canonicalEventId, verification_authorized: false, catalog_write_authorized: false, public_publication_authorized: false });
     await store.testUppercaseAuditEventId(canonicalEventId);
