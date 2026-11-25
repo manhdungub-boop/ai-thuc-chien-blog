@@ -34,6 +34,24 @@ function proseCitationText(markdown) {
   return removeMarkdownLinks(removeInlineCode(markdown));
 }
 
+function splitAssertionBlock(block) {
+  const assertions = [];
+  let start = 0;
+  const boundaries = /[.!?。！？](?:\s*\[\d+\])*(?=\s+)|(?:\[\d+\]\s*)+(?=\s+)/gu;
+  for (const match of block.matchAll(boundaries)) {
+    const end = match.index + match[0].length;
+    const separator = block.slice(end).match(/^\s+/u)?.[0] || "";
+    const nextStart = end + separator.length;
+    if (!separator || nextStart >= block.length) continue;
+    const assertion = block.slice(start, end).trim();
+    if (assertion) assertions.push(assertion);
+    start = nextStart;
+  }
+  const remainder = block.slice(start).trim();
+  if (remainder) assertions.push(remainder);
+  return assertions;
+}
+
 function splitProseAssertions(markdown) {
   const prose = removeFencedCode(markdown);
   return prose.split(/\n{2,}/).flatMap(paragraph => {
@@ -51,9 +69,7 @@ function splitProseAssertions(markdown) {
       current += (current ? " " : "") + trimmed;
     }
     if (current) blocks.push(current);
-    return blocks.flatMap(block =>
-      block.split(/(?<=[.!?。！？])\s+(?!\[\d+\])/u)
-    );
+    return blocks.flatMap(splitAssertionBlock);
   });
 }
 
