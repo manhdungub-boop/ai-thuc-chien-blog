@@ -36,6 +36,7 @@ jobs:
   staging-email-e2e:
     name: Isolated staging email E2E
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    environment: staging-e2e
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
