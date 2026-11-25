@@ -147,6 +147,48 @@ describe("article evidence readiness", () => {
     });
   });
 
+  it("preserves Markdown link labels when matching reviewed prose claims", async () => {
+    const reviewRecord = await makeReview();
+    const draft = makeDraft();
+    draft.body_markdown = draft.body_markdown.replace(
+      ledger.claims[0].claim,
+      "The system supports [bounded research discovery](https://example.com/research)."
+    );
+    const result = await assessArticleEvidenceReadiness({
+      draft,
+      ledger,
+      reviewRecord,
+      authenticatedReviewer: { authenticated: true, reviewer_ref: reviewRecord.reviewer_ref },
+      now
+    });
+    expect(result.issues ?? []).not.toContainEqual({
+      code: "reviewed_claim_missing_from_article_body",
+      claim_id: "claim-1"
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it("joins soft-wrapped claim lines within a paragraph without crossing block boundaries", async () => {
+    const reviewRecord = await makeReview();
+    const draft = makeDraft();
+    draft.body_markdown = draft.body_markdown.replace(
+      ledger.claims[0].claim,
+      "The system supports\\nbounded research discovery."
+    );
+    const result = await assessArticleEvidenceReadiness({
+      draft,
+      ledger,
+      reviewRecord,
+      authenticatedReviewer: { authenticated: true, reviewer_ref: reviewRecord.reviewer_ref },
+      now
+    });
+    expect(result.issues ?? []).not.toContainEqual({
+      code: "reviewed_claim_missing_from_article_body",
+      claim_id: "claim-1"
+    });
+    expect(result.ok).toBe(true);
+  });
+
   it("does not let citations in an unrelated paragraph satisfy a reviewed claim", async () => {
     const reviewRecord = await makeReview();
     const draft = makeDraft();
