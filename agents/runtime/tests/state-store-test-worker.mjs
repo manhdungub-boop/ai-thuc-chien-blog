@@ -341,27 +341,43 @@ export class TestAgentStateStore extends AgentStateStore {
             taskCount: taskIds.length,
           };
         } finally {
-          // Fail closed even if an assertion above throws; the isolated store must end paused.
+          const cleanupFailures = [];
+          // Pause is mandatory even after an earlier scenario failure. Never report
+          // success unless the durable control state confirms the isolated store is closed.
           try {
-            const control = await callStore("/control");
-            if (control.status === 200 && control.body?.control?.paused === false) {
-              await callStore("/control/pause", {
-                actor: "fault-suite-cleanup", requestId: crypto.randomUUID(), reason: "fault suite cleanup",
-              });
+            const pause = await callStore("/control/pause", {
+              actor: "fault-suite-cleanup", requestId: crypto.randomUUID(), reason: "fault suite cleanup",
+            });
+            if (pause.status !== 200 || pause.body?.control?.paused !== true) {
+              cleanupFailures.push("pause_not_confirmed");
             }
-          } catch {}
+          } catch {
+            cleanupFailures.push("pause_request_failed");
+          }
           try {
-            const ids = this.sql.exec(
-              "SELECT task_id FROM tasks WHERE idempotency_key LIKE 'cloudflare-fault-suite:%'"
-            ).toArray();
-            for (const row of ids) this.sql.exec("DELETE FROM audit_events WHERE task_id = ?", row.task_id);
-            this.sql.exec("DELETE FROM tasks WHERE idempotency_key LIKE 'cloudflare-fault-suite:%'");
-            this.sql.exec("DELETE FROM daily_usage WHERE day_utc = ?", new Date().toISOString().slice(0, 10));
-            this.sql.exec("DELETE FROM external_request_budgets WHERE budget_day = ? AND scope = 'content_research'", new Date().toISOString().slice(0, 10));
-            this.sql.exec("DELETE FROM runtime_control_rate_limit WHERE actor LIKE 'fault-suite-%'");
-            this.sql.exec("DELETE FROM runtime_control_audit WHERE actor LIKE 'fault-suite-%'");
-          } catch {}
+            this.ctx.storage.transactionSync(() => {
+              const ids = this.sql.exec(
+                "SELECT task_id FROM tasks WHERE idempotency_key LIKE 'cloudflare-fault-suite:%'"
+              ).toArray();
+              for (const row of ids) this.sql.exec("DELETE FROM audit_events WHERE task_id = ?", row.task_id);
+              this.sql.exec("DELETE FROM tasks WHERE idempotency_key LIKE 'cloudflare-fault-suite:%'");
+              this.sql.exec("DELETE FROM daily_usage WHERE day_utc = ?", new Date().toISOString().slice(0, 10));
+              this.sql.exec("DELETE FROM external_request_budgets WHERE budget_day = ? AND scope = 'content_research'", new Date().toISOString().slice(0, 10));
+              this.sql.exec("DELETE FROM runtime_control_rate_limit WHERE actor LIKE 'fault-suite-%'");
+              this.sql.exec("DELETE FROM runtime_control_audit WHERE actor LIKE 'fault-suite-%'");
+            });
+          } catch {
+            cleanupFailures.push("fixture_cleanup_failed");
+          }
           this.faultSuiteMode.active = false;
+          if (cleanupFailures.length) {
+            report = {
+              ok: false,
+              error: "fault_suite_cleanup_failed",
+              cleanupFailures,
+              scenarios: report?.scenarios ?? null,
+            };
+          }
         }
         return jsonResponse(report ?? { ok: false, error: "fault_suite_failed" }, report?.ok ? 200 : 500);
       }
