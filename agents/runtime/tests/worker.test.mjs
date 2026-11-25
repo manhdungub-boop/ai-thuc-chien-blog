@@ -557,6 +557,37 @@ test("control mutation bridge pre-fences the draft store before acknowledging Pa
   assert.equal(JSON.stringify(forwarded).includes(STATE_TOKEN), false);
 });
 
+test("emergency Pause reaches the State Store even when the Draft Store binding is unavailable", async () => {
+  let pauseReached = false;
+  const runtime = bridgeEnv({
+    response: async (internalRequest) => {
+      const url = new URL(internalRequest.url);
+      if (url.pathname === "/control" && internalRequest.method === "GET") {
+        return Response.json({ ok: true, control: { paused: false, version: 4 } });
+      }
+      if (url.pathname === "/control/pause" && internalRequest.method === "POST") {
+        pauseReached = true;
+        return Response.json({ ok: true, changed: true, control: { paused: true, version: 5 } });
+      }
+      throw new Error("unexpected State Store request");
+    },
+  });
+  delete runtime.env.AGENT_DRAFT_STORE;
+  const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/control/pause", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + OPERATOR_TOKEN, "Content-Type": "application/json" },
+    body: JSON.stringify({ reason: "emergency pause fallback test" }),
+  }), runtime.env);
+  const body = await response.json();
+  assert.equal(pauseReached, true, "State Store Pause must run even when Draft Store pre-fencing fails");
+  assert.equal(response.status, 503, "incomplete authoring synchronization must be reported separately");
+  assert.equal(body.ok, false);
+  assert.equal(body.error, "draft_store_pause_sync_failed");
+  assert.equal(body.control.paused, true, "the durable admission latch must still be closed");
+  assert.equal(body.draft_store_sync.ok, false);
+  assert.equal(body.draft_store_sync.pre_fence_succeeded, false);
+});
+
 test("operator resume bridge sends the observed control version and preserves stale-version conflicts", async () => {
   const { env, calls } = bridgeEnv({
     response: async (internalRequest) => {
