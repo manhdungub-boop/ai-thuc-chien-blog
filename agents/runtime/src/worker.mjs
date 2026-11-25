@@ -604,15 +604,6 @@ const worker = {
         return json({ ok: false, error: "github_oidc_token_invalid" }, 401);
       }
 
-      // Capture aggregate audit counters before the single task so persistence
-      // can be checked without exposing the State Store binding publicly.
-      let beforeMetrics;
-      try {
-        beforeMetrics = await readStateStore(env, "/metrics");
-      } catch {
-        return json({ ok: false, error: "oidc_run_audit_unavailable" }, 503);
-      }
-
       // Resume the Durable Object's independent admission latch only after exact
       // GitHub OIDC authorization. This route is task- and workflow-allowlisted,
       // and the latch is paused again in finally before any result is returned.
@@ -672,20 +663,17 @@ const worker = {
             } else {
               try {
                 const persisted = await readStateStore(env, "/task?id=" + encodeURIComponent(item.taskId));
-                const afterMetrics = await readStateStore(env, "/metrics");
+                const taskAudit = await readStateStore(env, "/task-audit?taskId=" + encodeURIComponent(item.taskId));
                 const eventTypes = ["task.queued", "task.claimed", "task.succeeded"];
-                const count = (metrics, eventType) => {
-                  const entry = Array.isArray(metrics?.auditLast24h)
-                    ? metrics.auditLast24h.find((event) => event?.eventType === eventType)
-                    : null;
-                  return Number.isSafeInteger(entry?.count) && entry.count >= 0 ? entry.count : 0;
-                };
-                const auditEvents = Object.fromEntries(eventTypes.map((eventType) => [
+                const observedTypes = Array.isArray(taskAudit?.events)
+                  ? taskAudit.events.filter(event => event && typeof event.eventType === "string").map(event => event.eventType)
+                  : [];
+                const auditEvents = Object.fromEntries(eventTypes.map(eventType => [
                   eventType,
-                  { before: count(beforeMetrics, eventType), after: count(afterMetrics, eventType) },
+                  { taskId: item.taskId, count: observedTypes.filter(type => type === eventType).length },
                 ]));
-                const auditVerified = eventTypes.every((eventType) =>
-                  auditEvents[eventType].after >= auditEvents[eventType].before + 1);
+                const auditVerified = taskAudit?.taskId === item.taskId &&
+                  eventTypes.every(eventType => auditEvents[eventType].count >= 1);
                 if (persisted?.task?.taskId !== item.taskId || persisted.task.state !== "succeeded" ||
                     persisted.task.type !== "content.review" || !persisted.task.result ||
                     persisted.task.result.taskType !== "content.review" || !auditVerified) {
