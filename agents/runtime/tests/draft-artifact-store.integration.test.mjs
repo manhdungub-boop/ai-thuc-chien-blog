@@ -31,6 +31,22 @@ describe("AgentDraftStore Durable Object", () => {
     await runtime?.mf.dispose();
   });
 
+  it("migrates legacy draft rows before backfilling content versions when evidence columns are absent", async () => {
+    const migrated = await store.testRunLegacySchemaMigration();
+    expect(migrated.columns).toEqual(expect.arrayContaining([
+      "ledger_json", "review_record_json", "evidence_readiness_json",
+      "research_evidence_json", "content_version"
+    ]));
+    expect(migrated.row).toMatchObject({
+      version: 7,
+      content_version: 7,
+      ledger_json: null,
+      review_record_json: null,
+      evidence_readiness_json: null,
+      research_evidence_json: null
+    });
+  });
+
   it("fences agent draft commits in the same Durable Object transaction as Pause", async () => {
     const draft = validDraft();
     expect(await store.createDraftFromAgent("agent-paused-0001", draft, [], 0))
