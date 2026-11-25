@@ -393,20 +393,40 @@ jobs:
           fi
 
           script="$PAUSE_E2E_WORKER_NAME"
+          worker_api="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/workers/$script"
+          worker_response="$RUNNER_TEMP/pause-e2e-worker-resource.json"
+          worker_status="$(curl --silent --show-error --max-time 15 --output "$worker_response" --write-out "%{http_code}" \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" --header "Accept: application/json" "$worker_api" || true)"
+
+          if [[ "$worker_status" == "404" ]] && jq -e '.success == false and any(.errors[]?; .code == 10007)' "$worker_response" >/dev/null; then
+            rm -f "$GENERATED_CONFIG" .wrangler.pause-e2e.generated.jsonc
+            echo "PASS: no isolated Worker resource exists; no script, secret, or public route can exist."
+            exit 0
+          fi
+          if [[ "$worker_status" != "200" ]] || ! jq -e '.success == true' "$worker_response" >/dev/null; then
+            echo "::error::Could not determine whether the isolated Worker resource exists (HTTP $worker_status); cleanup is not confirmed."
+            exit 1
+          fi
+
           api="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$script"
-          script_response="$RUNNER_TEMP/pause-e2e-worker-exists.json"
+          script_response="$RUNNER_TEMP/pause-e2e-worker-script.json"
           script_status="$(curl --silent --show-error --max-time 15 --output "$script_response" --write-out "%{http_code}" \
             --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" --header "Accept: application/json" "$api" || true)"
 
-          # A failed Wrangler upload can leave no Worker at all. Confirm that exact
-          # absence before skipping cleanup; never infer absence from a generic error.
+          # The resource is pre-provisioned without code so a per-Worker Editor
+          # token can deploy it. If no script was uploaded, verify the resource
+          # remains undeployed and both public URL switches remain disabled.
           if [[ "$script_status" == "404" ]] && jq -e '.success == false and any(.errors[]?; .code == 10007)' "$script_response" >/dev/null; then
-            rm -f "$GENERATED_CONFIG" .wrangler.pause-e2e.generated.jsonc
-            echo "PASS: Cloudflare confirms the isolated Worker was never created; no Worker secret or public route can exist."
-            exit 0
+            if jq -e '.success == true and .result.deployed_on == null and .result.subdomain.enabled == false and .result.subdomain.previews_enabled == false' "$worker_response" >/dev/null; then
+              rm -f "$GENERATED_CONFIG" .wrangler.pause-e2e.generated.jsonc
+              echo "PASS: dedicated Worker resource is pre-provisioned but has no deployed script; workers.dev and Preview URLs remain disabled, and no script secret exists."
+              exit 0
+            fi
+            echo "::error::Worker script is absent but the pre-provisioned resource is not confirmed undeployed and private."
+            exit 1
           fi
           if [[ "$script_status" != "200" ]] || ! jq -e '.success == true' "$script_response" >/dev/null; then
-            echo "::error::Could not determine whether the isolated Worker exists (HTTP $script_status); cleanup is not confirmed."
+            echo "::error::Could not determine whether the isolated Worker script exists (HTTP $script_status); cleanup is not confirmed."
             exit 1
           fi
 
