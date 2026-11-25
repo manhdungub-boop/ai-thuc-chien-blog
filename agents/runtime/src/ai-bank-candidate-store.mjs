@@ -499,7 +499,7 @@ export class AgentAIBankCandidateStore {
       throw new TypeError("invalid_evidence_list_limit");
     }
     return this.ctx.storage.sql.exec(
-      "SELECT e.evidence_id, e.candidate_id, e.check_type, e.source_title, e.source_url, e.excerpt, e.source_status, e.review_status, e.submitted_at, r.candidate_release_url, r.associated_at FROM ai_bank_review_evidence e JOIN ai_bank_review_evidence_releases r ON r.evidence_id = e.evidence_id WHERE e.candidate_id = ? ORDER BY r.associated_at ASC, e.evidence_id ASC LIMIT ?",
+      "SELECT e.evidence_id, e.candidate_id, e.check_type, e.source_title, e.source_url, e.excerpt, e.source_status, e.review_status, e.submitted_at, r.candidate_release_url AS candidate_release_identity, r.associated_at FROM ai_bank_review_evidence e JOIN ai_bank_review_evidence_releases r ON r.evidence_id = e.evidence_id WHERE e.candidate_id = ? ORDER BY r.associated_at ASC, e.evidence_id ASC LIMIT ?",
       candidateId, limit
     ).toArray().map(row => ({ ...row }));
   }
