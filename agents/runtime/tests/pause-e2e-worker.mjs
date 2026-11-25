@@ -312,8 +312,11 @@ async function performIndependentOidcPause(request, env) {
       } catch {}
       throw error;
     }
-  } catch {
-    return json({ ok: false, error: "control_unavailable" }, 503);
+  } catch (error) {
+    const diagnosticCode = typeof error?.message === "string" &&
+      /^[a-z0-9_]{1,64}$/.test(error.message) ? error.message : undefined;
+    return json({ ok: false, error: "control_unavailable",
+      ...(diagnosticCode ? { diagnosticCode } : {}) }, 503);
   }
 }
 
