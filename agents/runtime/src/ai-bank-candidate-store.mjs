@@ -7,6 +7,7 @@ const MAX_CANDIDATE_BYTES = 8192;
 const MAX_EVIDENCE_PER_CHECK = 5;
 const MAX_AUDIT_EVENTS_PER_UTC_DAY = 100;
 const MAX_AUDIT_EVENTS_TOTAL = 10000;
+const MAX_DISCOVERY_SCANS = 10000;
 const MAX_EVIDENCE_TITLE_CHARS = 180;
 const MAX_EVIDENCE_EXCERPT_CHARS = 1000;
 const REQUIRED_CHECKS = [
@@ -172,6 +173,13 @@ export class AgentAIBankCandidateStore {
       "cursor TEXT NOT NULL, scan_id TEXT NOT NULL, updated_at TEXT NOT NULL, " +
       "batch_sha256 TEXT NOT NULL DEFAULT '')"
     );
+    this.ctx.storage.sql.exec(
+      "CREATE TABLE IF NOT EXISTS ai_bank_discovery_scans (" +
+      "scan_id TEXT PRIMARY KEY, cursor TEXT NOT NULL, batch_sha256 TEXT NOT NULL, committed_at TEXT NOT NULL)"
+    );
+    this.ctx.storage.sql.exec(
+      "CREATE INDEX IF NOT EXISTS ai_bank_discovery_scans_committed ON ai_bank_discovery_scans(committed_at)"
+    );
     const cursorColumns = this.ctx.storage.sql.exec(
       "PRAGMA table_info(ai_bank_discovery_cursor)"
     ).toArray();
@@ -289,10 +297,24 @@ export class AgentAIBankCandidateStore {
       const current = this.ctx.storage.sql.exec(
         "SELECT cursor, scan_id, updated_at, batch_sha256 FROM ai_bank_discovery_cursor WHERE singleton_id = 1"
       ).toArray()[0];
+      const priorScan = this.ctx.storage.sql.exec(
+        "SELECT cursor, batch_sha256 FROM ai_bank_discovery_scans WHERE scan_id = ?",
+        scanId
+      ).toArray()[0];
+      if (priorScan) {
+        if (priorScan.cursor !== nextCursor || priorScan.batch_sha256 !== batchSha256) {
+          return { accepted: false, reason: "discovery_scan_id_reused", cursor_advanced: false };
+        }
+        const total = this.ctx.storage.sql.exec(
+          "SELECT COUNT(*) AS count FROM ai_bank_candidates"
+        ).one().count;
+        return { accepted: true, duplicate: true, inserted: 0, updated: 0, unchanged: 0,
+          total, cursor: current?.cursor ?? priorScan.cursor, scan_id: scanId, cursor_advanced: false,
+          catalog_write_authorized: false };
+      }
       if (current?.scan_id === scanId) {
         // A legacy cursor has no immutable batch digest. Candidate rows are
-        // mutable (last_seen_at and metadata can change), so they cannot safely
-        // reconstruct the originally committed batch identity. Fail closed.
+        // mutable (last_seen_at and metadata can change), so fail closed.
         const sameBatch = current.cursor === nextCursor &&
           current.batch_sha256 !== "" && current.batch_sha256 === batchSha256;
         if (!sameBatch) {
@@ -308,9 +330,19 @@ export class AgentAIBankCandidateStore {
       if (current && cursorMs <= Date.parse(current.cursor)) {
         return { accepted: false, reason: "discovery_cursor_not_monotonic", cursor_advanced: false };
       }
+      const scanCount = this.ctx.storage.sql.exec(
+        "SELECT COUNT(*) AS count FROM ai_bank_discovery_scans"
+      ).one().count;
+      if (scanCount >= MAX_DISCOVERY_SCANS) {
+        return { accepted: false, reason: "discovery_scan_history_capacity_reached", cursor_advanced: false };
+      }
 
       const result = writeValidatedCandidateBatch(this.ctx, batch.validated, now);
       const timestamp = new Date(now).toISOString();
+      this.ctx.storage.sql.exec(
+        "INSERT INTO ai_bank_discovery_scans (scan_id, cursor, batch_sha256, committed_at) VALUES (?, ?, ?, ?)",
+        scanId, nextCursor, batchSha256, timestamp
+      );
       this.ctx.storage.sql.exec(
         "INSERT INTO ai_bank_discovery_cursor (singleton_id, cursor, scan_id, updated_at, batch_sha256) VALUES (1, ?, ?, ?, ?) " +
         "ON CONFLICT(singleton_id) DO UPDATE SET cursor = excluded.cursor, scan_id = excluded.scan_id, updated_at = excluded.updated_at, batch_sha256 = excluded.batch_sha256",
