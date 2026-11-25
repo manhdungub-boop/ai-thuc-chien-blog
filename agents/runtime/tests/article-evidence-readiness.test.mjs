@@ -222,7 +222,7 @@ describe("article evidence readiness", () => {
       const reviewRecord = await makeReview();
       const draft = makeDraft();
       draft.body_markdown = draft.body_markdown.replace(
-        originalClaim + " [1] [2] [3]. ",
+        ledger.claims[0].claim + " [1] [2] [3]. ",
         "The system supports bounded research discovery [1] [2] under strict limits. "
       );
       const result = await assessArticleEvidenceReadiness({
