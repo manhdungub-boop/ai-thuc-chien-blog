@@ -55,7 +55,7 @@ export function inspectReviewerAuthPreviewConfig(env = {}, previewConfig = {}) {
     previewVars.AGENT_SCHEDULER_ENABLED === "false" &&
     previewVars.AGENT_RECOVERY_ALARM_ENABLED === "false";
   const previewConfigIsolated = previewConfig.name === PREVIEW_NAME &&
-    previewConfig.main === "./src/worker.mjs" &&
+    previewConfig.main === "./src/worker-preview-recovery.mjs" &&
     previewConfig.workers_dev === true &&
     previewConfig.preview_urls === false &&
     hasNoProductionBindings(previewConfig);
