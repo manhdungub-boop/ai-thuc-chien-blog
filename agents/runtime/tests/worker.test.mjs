@@ -295,9 +295,9 @@ test("run requires operator authentication if both safety flags are opened", asy
 
 const OPERATOR_TOKEN = "worker-bridge-operator-token-034252848589abcdef";
 const STATE_TOKEN = "worker-bridge-state-store-token-034252848589abcdef";
-function bridgeEnv({ responseBody = { ok: true, dayUtc: "2026-11-19", acceptedToday: 2, inFlight: 1 }, response = null, responseStatus = 200 } = {}) {
+function bridgeEnv({ responseBody = { ok: true, dayUtc: "2026-11-19", acceptedToday: 2, inFlight: 1 }, response = null, responseStatus = 200, initialDraftControl = { paused: true, version: 0 } } = {}) {
   const calls = [];
-  let draftControl = { paused: true, version: 0 };
+  let draftControl = { ...initialDraftControl };
   const draftStub = {
     async setRuntimePaused(paused, version) {
       if (version < draftControl.version) return { updated: false, reason: "runtime_control_version_stale" };
@@ -555,6 +555,32 @@ test("control mutation bridge pre-fences the draft store before acknowledging Pa
   assert.equal(forwarded.reason, "planned maintenance");
   assert.equal(JSON.stringify(forwarded).includes(OPERATOR_TOKEN), false);
   assert.equal(JSON.stringify(forwarded).includes(STATE_TOKEN), false);
+});
+
+test("Pause accepts a higher-version Draft Store only when it is already paused", async () => {
+  const runtime = bridgeEnv({
+    initialDraftControl: { paused: true, version: 9 },
+    response: async (internalRequest) => {
+      const url = new URL(internalRequest.url);
+      if (url.pathname === "/control" && internalRequest.method === "GET") {
+        return Response.json({ ok: true, control: { paused: false, version: 4 } });
+      }
+      if (url.pathname === "/control/pause" && internalRequest.method === "POST") {
+        return Response.json({ ok: true, changed: true, control: { paused: true, version: 5 } });
+      }
+      throw new Error("unexpected State Store request");
+    },
+  });
+  const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/control/pause", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + OPERATOR_TOKEN, "Content-Type": "application/json" },
+    body: JSON.stringify({ reason: "reconcile already-paused authoring store" }),
+  }), runtime.env);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.draft_store_sync.ok, true);
+  assert.equal(body.draft_store_sync.stale_version_already_paused, true);
+  assert.deepEqual(runtime.draftControl, { paused: true, version: 9 });
 });
 
 test("emergency Pause reaches the State Store even when the Draft Store binding is unavailable", async () => {
