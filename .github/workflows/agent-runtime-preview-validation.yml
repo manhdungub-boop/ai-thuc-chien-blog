@@ -789,7 +789,9 @@ jobs:
               item?.result?.findingCount !== 0 || result?.persistence?.verified !== true ||
               result?.persistence?.state !== 'succeeded' ||
               !['task.queued', 'task.claimed', 'task.succeeded'].every(type =>
-                result.persistence.auditEvents?.[type]?.after >= result.persistence.auditEvents?.[type]?.before + 1)) {
+                result.persistence.auditEvents?.[type]?.taskId === item.taskId &&
+                Number.isSafeInteger(result.persistence.auditEvents?.[type]?.count) &&
+                result.persistence.auditEvents[type].count >= 1)) {
             throw new Error('One-shot read-only task or durable audit verification failed: ' +
               JSON.stringify({ httpStatus: first.response.status, error: result?.error,
                 diagnosticCode: result?.diagnosticCode, state: item?.state }));
