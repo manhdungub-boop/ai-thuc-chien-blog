@@ -1,0 +1,380 @@
+name: Agent Runtime Adapter Pause E2E (Isolated Worker)
+
+on:
+  pull_request:
+    types: [synchronize]
+    branches:
+      - integration/agent-runtime-v5-preview-20261120
+    paths:
+      - "agents/runtime/**"
+      - ".github/workflows/agent-runtime-adapter-pause-e2e.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-runtime-adapter-pause-e2e
+  cancel-in-progress: false
+
+jobs:
+  isolated-adapter-pause-e2e:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.action == 'synchronize' &&
+      github.repository == 'manhdungub-boop/ai-thuc-chien-blog' &&
+      github.event.pull_request.head.repo.full_name == 'manhdungub-boop/ai-thuc-chien-blog' &&
+      github.event.pull_request.head.ref == 'security/agent-runtime-adapter-pause-e2e-20261125' &&
+      github.event.pull_request.base.ref == 'integration/agent-runtime-v5-preview-20261120' &&
+      github.actor_id == '342528485' &&
+      contains(github.event.pull_request.labels.*.name, 'agent-runtime')
+    runs-on: ubuntu-latest
+    environment: agent-runtime-preview
+    timeout-minutes: 20
+    concurrency:
+      group: agent-runtime-adapter-pause-e2e-live-worker
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      CLOUDFLARE_ACCOUNT_ID: "92cf091bbac8b4879ec65feb30b4715b"
+      PAUSE_E2E_WORKER_URL: "https://ai-thuc-chien-agent-runtime-pause-e2e.manhdungub.workers.dev"
+      PAUSE_E2E_WORKER_NAME: "ai-thuc-chien-agent-runtime-pause-e2e"
+    steps:
+      - name: Check out the exact authorized PR commit
+        timeout-minutes: 2
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Verify exact branch, actor, event, and label
+        timeout-minutes: 2
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+          EXPECTED_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          EVENT_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "manhdungub-boop/ai-thuc-chien-blog"
+          test "$GITHUB_EVENT_NAME" = "pull_request"
+          test "$GITHUB_EVENT_ACTION" = "synchronize"
+          test "$EXPECTED_HEAD_REF" = "security/agent-runtime-adapter-pause-e2e-20261125"
+          test "$GITHUB_ACTOR_ID" = "342528485"
+          test "$GITHUB_REF" = "refs/pull/${{ github.event.pull_request.number }}/merge"
+          test "$GITHUB_WORKFLOW_REF" = "$GITHUB_REPOSITORY/.github/workflows/agent-runtime-adapter-pause-e2e.yml@$GITHUB_REF"
+          node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+          const labels = JSON.parse(process.env.EVENT_LABELS);
+          assert.ok(labels.includes("agent-runtime"), "required label is missing");
+          NODE
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+
+      - name: Set up pinned Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 22
+
+      - name: Validate isolated Worker configuration and local contracts
+        working-directory: agents/runtime
+        run: |
+          set -euo pipefail
+          node --check tests/pause-e2e-worker.mjs
+          node --test tests/pause-e2e-config.test.mjs
+
+      - name: Verify Workers Free plan before deployment
+        timeout-minutes: 2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+            echo "::error::Preview Cloudflare credential unavailable; no deployment attempted."
+            exit 1
+          fi
+          response="$RUNNER_TEMP/pause-e2e-subscriptions.json"
+          status="$(curl --silent --show-error --max-time 15 --output "$response" --write-out "%{http_code}" \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            --header "Accept: application/json" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/subscriptions")"
+          test "$status" = "200"
+          PLAN_RESPONSE="$response" node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+          import { readFile } from "node:fs/promises";
+          const payload = JSON.parse(await readFile(process.env.PLAN_RESPONSE, "utf8"));
+          assert.equal(payload?.success, true);
+          assert.ok(Array.isArray(payload.result));
+          const info = payload.result_info;
+          assert.ok(info && info.page === 1 && Number.isSafeInteger(info.per_page));
+          const complete = info.next_page === false ||
+            (info.next_page === undefined &&
+             Number.isSafeInteger(info.count) && info.count === payload.result.length &&
+             Number.isSafeInteger(info.total_count) && info.total_count === payload.result.length);
+          assert.equal(complete, true, "subscription listing must be complete");
+          const inactive = new Set(["Cancelled", "Failed", "Expired"]);
+          for (const subscription of payload.result) {
+            if (inactive.has(subscription?.state)) continue;
+            assert.equal(subscription?.price, 0, "active non-zero subscription blocks deployment");
+            const label = [subscription?.rate_plan?.id, subscription?.rate_plan?.public_name,
+              subscription?.rate_plan?.name].filter(v => typeof v === "string").join(" ").toLowerCase();
+            assert.match(label, /(^|[^a-z0-9])free([^a-z0-9]|$)/,
+              "every active subscription must be explicitly Free");
+          }
+          console.log(JSON.stringify({ workersPlan: payload.result.length === 0 ? "free-default" : "free" }));
+          NODE
+
+      - name: Generate isolated Worker config and deploy only the test script
+        timeout-minutes: 4
+        working-directory: agents/runtime
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}
+          GENERATED_CONFIG: .wrangler.pause-e2e.generated.jsonc
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+          import { readFile, writeFile } from "node:fs/promises";
+          const config = JSON.parse(await readFile("wrangler.pause-e2e.jsonc", "utf8"));
+          assert.equal(config.name, process.env.PAUSE_E2E_WORKER_NAME);
+          assert.equal(config.vars.AGENT_ENABLED, "false");
+          assert.equal(config.vars.AGENT_PAUSED, "true");
+          assert.equal(config.vars.AGENT_OIDC_RUN_ENABLED, "false");
+          assert.equal(config.vars.AGENT_PAUSE_E2E_GATE_ENABLED, "true");
+          config.vars.AGENT_ENABLED = "true";
+          config.vars.AGENT_PAUSED = "false";
+          config.vars.AGENT_OIDC_RUN_ENABLED = "true";
+          config.vars.AGENT_OIDC_RUN_REF = process.env.GITHUB_REF;
+          config.vars.AGENT_OIDC_RUN_WORKFLOW_REF = process.env.GITHUB_WORKFLOW_REF;
+          config.vars.AGENT_OIDC_RUN_ACTOR_ID = process.env.GITHUB_ACTOR_ID;
+          assert.equal(config.vars.AGENT_SCHEDULER_ENABLED, "false");
+          assert.equal(config.vars.AGENT_RECOVERY_ALARM_ENABLED, "false");
+          assert.equal(config.vars.AGENT_REVIEWER_AUTH_ENABLED, "false");
+          assert.equal((config.triggers?.crons ?? []).length, 0);
+          assert.equal("d1_databases" in config, false);
+          assert.equal("routes" in config, false);
+          await writeFile(process.env.GENERATED_CONFIG, JSON.stringify(config, null, 2) + "\n", { mode: 0o600 });
+          NODE
+          timeout --signal=TERM --kill-after=10s 180s npx --yes wrangler@4.166.0 deploy --config "$GENERATED_CONFIG" \
+            --message "Isolated Adapter Pause E2E test Worker; no Production bindings"
+
+      - name: Install one-run internal State Store credential
+        timeout-minutes: 2
+        working-directory: agents/runtime
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}
+          GENERATED_CONFIG: .wrangler.pause-e2e.generated.jsonc
+        run: |
+          set -euo pipefail
+          token="$(openssl rand -hex 32)"
+          echo "::add-mask::$token"
+          printf 'AGENT_STATE_STORE_TOKEN=%s\n' "$token" >> "$GITHUB_ENV"
+          printf '%s' "$token" | timeout --signal=TERM --kill-after=10s 60s npx --yes wrangler@4.166.0 secret put AGENT_STATE_STORE_TOKEN --config "$GENERATED_CONFIG"
+
+      - name: Wait for the isolated test Worker to become healthy
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          ready=false
+          for attempt in $(seq 1 12); do
+            if curl --fail --silent --show-error --max-time 5 "$PAUSE_E2E_WORKER_URL/health" -o "$RUNNER_TEMP/pause-e2e-health.json" 2>/dev/null &&
+              node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+          import { readFile } from "node:fs/promises";
+          const health = JSON.parse(await readFile(process.env.RUNNER_TEMP + "/pause-e2e-health.json", "utf8"));
+          assert.equal(health.ok, true);
+          assert.equal(health.enabled, true);
+          assert.equal(health.paused, false);
+          assert.equal(health.scheduler, "manual_only_no_cron");
+          assert.equal(health.reviewer_auth_enabled, false);
+          assert.equal(health.publication_authorized, false);
+          NODE
+            then ready=true; break; fi
+            sleep 2
+          done
+          test "$ready" = "true"
+
+      - name: Start the real leased Adapter request and wait for independent Pause
+        timeout-minutes: 8
+        env:
+          OIDC_AUDIENCE: ai-thuc-chien-agent-runtime-preview
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+
+          const base = process.env.PAUSE_E2E_WORKER_URL;
+          const stateToken = process.env.AGENT_STATE_STORE_TOKEN;
+          const requestUrl = process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
+          const requestToken = process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
+          if (!base || !stateToken || !requestUrl || !requestToken) {
+            throw new Error("Pause E2E runtime context is unavailable");
+          }
+
+          const key = "oidc-preview-e2e:pause-" + process.env.GITHUB_RUN_ID + "-" + process.env.GITHUB_RUN_ATTEMPT;
+          const tokenUrl = new URL(requestUrl);
+          tokenUrl.searchParams.set("audience", process.env.OIDC_AUDIENCE);
+          const tokenResponse = await fetch(tokenUrl, {
+            headers: { Authorization: "Bearer " + requestToken, Accept: "application/json" },
+            redirect: "error",
+            cache: "no-store",
+            signal: AbortSignal.timeout(10000),
+          });
+          if (!tokenResponse.ok) throw new Error("GitHub OIDC token request failed: HTTP " + tokenResponse.status);
+          const tokenPayload = await tokenResponse.json();
+          if (typeof tokenPayload.value !== "string" || tokenPayload.value.length < 100 ||
+              tokenPayload.value.length > 16384) throw new Error("GitHub OIDC token response invalid");
+
+          const runPromise = (async () => {
+            const response = await fetch(base + "/internal/oidc/run", {
+              method: "POST",
+              headers: {
+                Authorization: "Bearer " + tokenPayload.value,
+                "Content-Type": "application/json",
+                Accept: "application/json",
+              },
+              body: JSON.stringify({ task: {
+                type: "content.review",
+                idempotencyKey: key,
+                payload: { articlePath: "articles/ai-agent-thuc-hanh-tu-thiet-ke-den-kiem-soat.html" },
+              } }),
+              redirect: "error",
+              cache: "no-store",
+              signal: AbortSignal.timeout(180000),
+            });
+            let body;
+            try { body = await response.json(); } catch { body = null; }
+            return { status: response.status, body };
+          })();
+
+          async function readStatus() {
+            const response = await fetch(base + "/__e2e/status?key=" + encodeURIComponent(key), {
+              headers: { Authorization: "Bearer " + stateToken, Accept: "application/json" },
+              cache: "no-store",
+              signal: AbortSignal.timeout(10000),
+            });
+            if (!response.ok) throw new Error("Test-only status probe failed: HTTP " + response.status);
+            return response.json();
+          }
+
+          let live = null;
+          for (let attempt = 1; attempt <= 45; attempt += 1) {
+            live = await readStatus();
+            if (live.task?.state === "running" && live.task?.leaseOwner &&
+                live.gateState === "entered") break;
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+          assert.equal(live?.task?.state, "running", "task must be durably running before Pause");
+          assert.equal(typeof live?.task?.leaseOwner, "string", "a live lease owner must exist");
+          assert.equal(live?.gateState, "entered", "the real read-only Adapter must be blocked in the controlled fetch");
+          console.log("PAUSE_E2E_IN_FLIGHT_READY " + JSON.stringify({
+            taskId: live.task.taskId,
+            leaseGeneration: live.task.leaseGeneration,
+            gateState: live.gateState,
+          }));
+
+          // This request remains in-flight until the independent operator workflow
+          // sends its separately authenticated workflow_dispatch Pause.
+          const runResult = await runPromise;
+          assert.equal(runResult.status, 503, "the in-flight task must not report success after Pause");
+          assert.equal(runResult.body?.ok, false);
+
+          let final = null;
+          for (let attempt = 1; attempt <= 45; attempt += 1) {
+            final = await readStatus();
+            if (final.task?.state === "cancelled" && final.gateState === "aborted" &&
+                final.control?.paused === true) break;
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+          assert.equal(final?.task?.state, "cancelled");
+          assert.equal(final?.task?.errorCode, "operator_paused");
+          assert.equal(final?.task?.leaseOwner, null, "Pause must clear the lease owner");
+          assert.equal(final?.task?.leaseExpiresAt, null, "Pause must clear lease expiry");
+          assert.equal(final?.gateState, "aborted", "the real Adapter fetch must observe AbortSignal");
+          assert.equal(final?.control?.paused, true);
+          assert.ok(final?.cancellationAuditCount >= 1, "task.cancelled audit event must be persisted");
+          assert.ok(final?.pauseAudit?.some(event =>
+            event.action === "pause" &&
+            event.actor === "github-actions:342528485" &&
+            event.reason === "Adapter pause E2E: independent workflow_dispatch"),
+            "the independent operator workflow Pause must be recorded");
+          console.log("PASS: independent OIDC Pause cancelled the in-flight real Adapter read, aborted its signal, fenced and cleared the lease, and persisted the cancellation audit.");
+          NODE
+
+      - name: Always disable the isolated Worker and remove its one-run secret
+        if: always()
+        timeout-minutes: 5
+        working-directory: agents/runtime
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}
+          GENERATED_CONFIG: .wrangler.pause-e2e.cleanup.jsonc
+        run: |
+          set -u
+          if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+            echo "::error::Cloudflare credential unavailable; isolated Worker cleanup could not be confirmed."
+            exit 1
+          fi
+          cleanup_failed=0
+          node --input-type=module <<'NODE' || cleanup_failed=1
+          import { readFile, writeFile } from "node:fs/promises";
+          const config = JSON.parse(await readFile("wrangler.pause-e2e.jsonc", "utf8"));
+          config.vars.AGENT_ENABLED = "false";
+          config.vars.AGENT_PAUSED = "true";
+          config.vars.AGENT_OIDC_ENABLED = "false";
+          config.vars.AGENT_OIDC_RUN_ENABLED = "false";
+          config.vars.AGENT_PAUSE_E2E_GATE_ENABLED = "false";
+          config.vars.AGENT_SCHEDULER_ENABLED = "false";
+          config.vars.AGENT_RECOVERY_ALARM_ENABLED = "false";
+          await writeFile(process.env.GENERATED_CONFIG, JSON.stringify(config, null, 2) + "\n", { mode: 0o600 });
+          NODE
+          if [[ -f "$GENERATED_CONFIG" ]]; then
+            timeout --signal=TERM --kill-after=10s 120s npx --yes wrangler@4.166.0 deploy --config "$GENERATED_CONFIG" \
+              --message "Disable and pause isolated Adapter Pause E2E Worker" || cleanup_failed=1
+          else
+            cleanup_failed=1
+          fi
+
+          script="$PAUSE_E2E_WORKER_NAME"
+          api="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$script"
+          disable_response="$RUNNER_TEMP/pause-e2e-worker-disable.json"
+          disable_status="$(curl --silent --show-error --max-time 15 --output "$disable_response" --write-out "%{http_code}" \
+            --request PUT --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            --header "Content-Type: application/json" --header "Accept: application/json" \
+            --data '{"enabled":false,"previews_enabled":false}' "$api/subdomain" || true)"
+          if [[ "$disable_status" != "200" ]] ||
+             ! jq -e '.success == true and .result.enabled == false and .result.previews_enabled == false' "$disable_response" >/dev/null; then
+            echo "::error::Could not confirm workers.dev and Preview URLs disabled (HTTP $disable_status)."
+            cleanup_failed=1
+          fi
+
+          delete_response="$RUNNER_TEMP/pause-e2e-secret-delete.json"
+          delete_status="$(curl --silent --show-error --max-time 15 --output "$delete_response" --write-out "%{http_code}" \
+            --request DELETE --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            --header "Accept: application/json" "$api/secrets/AGENT_STATE_STORE_TOKEN" || true)"
+          if [[ "$delete_status" != "200" && "$delete_status" != "404" ]]; then
+            echo "::error::Could not remove the one-run internal credential (HTTP $delete_status)."
+            cleanup_failed=1
+          fi
+
+          secrets_response="$RUNNER_TEMP/pause-e2e-secrets.json"
+          secrets_status="$(curl --silent --show-error --max-time 15 --output "$secrets_response" --write-out "%{http_code}" \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" --header "Accept: application/json" "$api/secrets" || true)"
+          if [[ "$secrets_status" != "200" ]] ||
+             jq -e '.success == true and ([.result[]?.name] | index("AGENT_STATE_STORE_TOKEN") == null)' "$secrets_response" >/dev/null; then
+            if [[ "$secrets_status" == "200" ]]; then
+              echo "PASS: one-run internal credential is absent."
+            else
+              echo "::error::Could not verify the one-run credential was removed (HTTP $secrets_status)."
+              cleanup_failed=1
+            fi
+          else
+            echo "::error::The one-run internal credential still exists."
+            cleanup_failed=1
+          fi
+
+          rm -f "$GENERATED_CONFIG"
+          if [[ "$cleanup_failed" != "0" ]]; then
+            echo "::error::Isolated Worker cleanup is incomplete; manual review is required."
+            exit 1
+          fi
+          echo "PASS: isolated Worker is disabled and paused, both public URL switches are off, and the one-run internal credential is absent."
