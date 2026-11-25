@@ -161,7 +161,6 @@ describe("article evidence readiness", () => {
       authenticatedReviewer: { authenticated: true, reviewer_ref: reviewRecord.reviewer_ref },
       now
     });
-    console.log("DEBUG", JSON.stringify({ status: result.status, issues: result.issues }));
     expect(result.ok).toBe(true);
   });
 
