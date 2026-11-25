@@ -795,7 +795,7 @@ jobs:
                 result.persistence.auditEvents[type].count >= 1)) {
             throw new Error('One-shot read-only task or durable audit verification failed: ' +
               JSON.stringify({ httpStatus: first.response.status, error: result?.error,
-                diagnosticCode: result?.diagnosticCode, state: item?.state }));
+                diagnosticCode: result?.diagnosticCode, state: item?.state, draftStoreSync: result?.draft_store_sync }));
           }
 
           // Reuse the exact same signed JWT with a different idempotency key.
