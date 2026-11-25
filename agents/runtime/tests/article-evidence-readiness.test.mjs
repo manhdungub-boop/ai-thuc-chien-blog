@@ -173,7 +173,7 @@ describe("article evidence readiness", () => {
     const draft = makeDraft();
     draft.body_markdown = draft.body_markdown.replace(
       ledger.claims[0].claim,
-      "The system supports\\nbounded research discovery."
+      "The system supports\nbounded research discovery."
     );
     const result = await assessArticleEvidenceReadiness({
       draft,
