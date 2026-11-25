@@ -11,7 +11,7 @@ const env = {
   GOOGLE_REVIEWER_CLIENT_SECRET: "test-google-client-secret-value-abcdefghijklmnopqrstuvwxyz0123456789",
   GOOGLE_REVIEWER_REDIRECT_URI: origin + "/auth/google/callback",
   GOOGLE_REVIEWER_ALLOWED_EMAILS: "reviewer@gmail.com",
-  GOOGLE_REVIEWER_EVIDENCE_WRITER_EMAILS: "reviewer@gmail.com",
+  GOOGLE_REVIEWER_EVIDENCE_WRITER_EMAILS: "writer@gmail.com",
   GOOGLE_REVIEWER_STATE_SECRET: "state-secret-for-tests-only-abcdefghijklmnopqrstuvwxyz0123456789",
   GOOGLE_REVIEWER_SESSION_SECRET: "session-secret-for-tests-only-zyxwvutsrqponmlkjihgfedcba9876543210"
 };
@@ -40,7 +40,7 @@ describe("AI Bank evidence writer authorization", () => {
     expect(await authorizeAIBankEvidenceWriter(await sessionToken(), env, eventId, now)).toEqual({ authorized: false, reason: "evidence_writer_not_allowlisted" });
   });
   it("authorizes only a valid Google session with a separately allowlisted email", async () => {
-    const result = await authorizeAIBankEvidenceWriter(await sessionToken(), { ...env, GOOGLE_REVIEWER_EVIDENCE_WRITER_EMAILS: "REVIEWER@example.com" }, eventId, now);
+    const result = await authorizeAIBankEvidenceWriter(await sessionToken(), { ...env, GOOGLE_REVIEWER_EVIDENCE_WRITER_EMAILS: "REVIEWER@gmail.com" }, eventId, now);
     expect(result).toMatchObject({ authorized: true, actor: { provider: "google", subject: "google-subject-writer-123", email: "reviewer@gmail.com", reviewer_ref: "google:google-subject-writer-123" }, audit_event_id: eventId, authorized_at: "2026-11-19T12:00:00.000Z", verification_authorized: false, catalog_write_authorized: false, public_publication_authorized: false });
   });
   it("rejects expired, forged, disabled and malformed event sessions", async () => {
