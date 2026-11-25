@@ -9,7 +9,7 @@ const env = {
   GOOGLE_REVIEWER_CLIENT_ID: "preview-test-client-id-abcdefghijklmnopqrstuvwxyz.apps.googleusercontent.com",
   GOOGLE_REVIEWER_CLIENT_SECRET: "test-google-client-secret-value-abcdefghijklmnopqrstuvwxyz0123456789",
   GOOGLE_REVIEWER_REDIRECT_URI: origin + "/auth/google/callback",
-  GOOGLE_REVIEWER_ALLOWED_EMAILS: "reviewer@example.com",
+  GOOGLE_REVIEWER_ALLOWED_EMAILS: "reviewer@gmail.com",
   GOOGLE_REVIEWER_STATE_SECRET: "state-secret-for-tests-only-abcdefghijklmnopqrstuvwxyz0123456789",
   GOOGLE_REVIEWER_SESSION_SECRET: "session-secret-for-tests-only-zyxwvutsrqponmlkjihgfedcba9876543210",
   AGENT_REVIEWER_AUTH_STORE: {
@@ -37,6 +37,16 @@ describe("Google reviewer OAuth session flow", () => {
     expect(disabled.status).toBe(503);
     expect(incomplete.status).toBe(503);
     expect(await disabled.json()).toMatchObject({ error: "reviewer_auth_not_configured" });
+  });
+
+  it("rejects third-party email allowlists because Google cannot guarantee continued ownership", async () => {
+    const response = await handleGoogleReviewerAuth(
+      new Request(origin + "/auth/google/start"),
+      { ...env, GOOGLE_REVIEWER_ALLOWED_EMAILS: "reviewer@example.org" },
+      { now }
+    );
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ error: "reviewer_auth_not_configured" });
   });
 
   it("starts a server-bound authorization-code flow with nonce and S256 PKCE", async () => {
@@ -208,7 +218,7 @@ describe("Google reviewer OAuth session flow", () => {
       iss: "https://accounts.google.com",
       aud: env.GOOGLE_REVIEWER_CLIENT_ID,
       sub: "google-subject-e2e-123",
-      email: "reviewer@example.com",
+      email: "reviewer@gmail.com",
       email_verified: true,
       nonce: authorization.searchParams.get("nonce"),
       iat: Math.floor(now / 1000) - 10,
@@ -271,7 +281,7 @@ describe("Google reviewer OAuth session flow", () => {
       reviewer: {
         provider: "google",
         subject: "google-subject-e2e-123",
-        email: "reviewer@example.com",
+        email: "reviewer@gmail.com",
         reviewer_ref: "google:google-subject-e2e-123"
       }
     });
@@ -286,7 +296,7 @@ describe("Google reviewer OAuth session flow", () => {
     expect(me.status).toBe(200);
     expect(await me.json()).toMatchObject({
       authenticated: true,
-      reviewer: { email: "reviewer@example.com" },
+      reviewer: { email: "reviewer@gmail.com" },
       publication_authorized: false
     });
   });
@@ -361,7 +371,7 @@ describe("Google reviewer OAuth session flow", () => {
     const base = {
       provider: "google",
       sub: "google-subject-immutable-123",
-      email: "reviewer@example.com",
+      email: "reviewer@gmail.com",
       reviewer_ref: "google:google-subject-immutable-123",
       iat: Math.floor(now / 1000) - 10,
       exp: Math.floor(now / 1000) + 600
