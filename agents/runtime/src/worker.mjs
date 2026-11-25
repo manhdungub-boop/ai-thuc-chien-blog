@@ -755,11 +755,7 @@ const worker = {
         return json({ ok: true, changed: result.changed, control: result.control });
       } catch (error) {
         if (error?.status === 429) return json({ ok: false, error: "rate_limited" }, 429);
-        const diagnosticCode = env.AGENT_PAUSE_E2E_GATE_ENABLED === "true" &&
-          typeof error?.message === "string" && /^[a-z0-9_]{1,64}$/.test(error.message)
-          ? error.message : undefined;
-        return json({ ok: false, error: "control_unavailable",
-          ...(diagnosticCode ? { diagnosticCode } : {}) }, 503);
+        return json({ ok: false, error: "control_unavailable" }, 503);
       }
     }
     if (url.pathname === "/internal/oidc/ai-bank-cursor") {
