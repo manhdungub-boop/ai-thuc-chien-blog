@@ -390,40 +390,69 @@ jobs:
 
           script="$PAUSE_E2E_WORKER_NAME"
           api="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$script"
+          script_response="$RUNNER_TEMP/pause-e2e-worker-exists.json"
+          script_status="$(curl --silent --show-error --max-time 15 --output "$script_response" --write-out "%{http_code}" \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" --header "Accept: application/json" "$api" || true)"
+
+          # A failed Wrangler upload can leave no Worker at all. Confirm that exact
+          # absence before skipping cleanup; never infer absence from a generic error.
+          if [[ "$script_status" == "404" ]] && jq -e '.success == false and any(.errors[]?; .code == 10007)' "$script_response" >/dev/null; then
+            rm -f "$GENERATED_CONFIG" .wrangler.pause-e2e.generated.jsonc
+            echo "PASS: Cloudflare confirms the isolated Worker was never created; no Worker secret or public route can exist."
+            exit 0
+          fi
+          if [[ "$script_status" != "200" ]] || ! jq -e '.success == true' "$script_response" >/dev/null; then
+            echo "::error::Could not determine whether the isolated Worker exists (HTTP $script_status); cleanup is not confirmed."
+            exit 1
+          fi
+
+          if [[ -f "$GENERATED_CONFIG" ]]; then
+            timeout --signal=TERM --kill-after=10s 120s npx --yes wrangler@4.166.0 deploy --config "$GENERATED_CONFIG" \
+              --message "Disable and pause isolated Adapter Pause E2E Worker" || cleanup_failed=1
+          else
+            cleanup_failed=1
+          fi
+
+          # Cloudflare's documented subdomain operation is POST, not PUT.
           disable_response="$RUNNER_TEMP/pause-e2e-worker-disable.json"
           disable_status="$(curl --silent --show-error --max-time 15 --output "$disable_response" --write-out "%{http_code}" \
-            --request PUT --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            --request POST --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             --header "Content-Type: application/json" --header "Accept: application/json" \
             --data '{"enabled":false,"previews_enabled":false}' "$api/subdomain" || true)"
-          if [[ "$disable_status" != "200" ]] ||
+          if [[ "$disable_status" != "200" ]] || \
              ! jq -e '.success == true and .result.enabled == false and .result.previews_enabled == false' "$disable_response" >/dev/null; then
             echo "::error::Could not confirm workers.dev and Preview URLs disabled (HTTP $disable_status)."
             cleanup_failed=1
           fi
 
-          delete_response="$RUNNER_TEMP/pause-e2e-secret-delete.json"
-          delete_status="$(curl --silent --show-error --max-time 15 --output "$delete_response" --write-out "%{http_code}" \
-            --request DELETE --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            --header "Accept: application/json" "$api/secrets/AGENT_STATE_STORE_TOKEN" || true)"
-          if [[ "$delete_status" != "200" && "$delete_status" != "404" ]]; then
-            echo "::error::Could not remove the one-run internal credential (HTTP $delete_status)."
-            cleanup_failed=1
-          fi
-
-          secrets_response="$RUNNER_TEMP/pause-e2e-secrets.json"
+          secrets_response="$RUNNER_TEMP/pause-e2e-secrets-before.json"
           secrets_status="$(curl --silent --show-error --max-time 15 --output "$secrets_response" --write-out "%{http_code}" \
             --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" --header "Accept: application/json" "$api/secrets" || true)"
-          if [[ "$secrets_status" != "200" ]] ||
-             jq -e '.success == true and ([.result[]?.name] | index("AGENT_STATE_STORE_TOKEN") == null)' "$secrets_response" >/dev/null; then
-            if [[ "$secrets_status" == "200" ]]; then
-              echo "PASS: one-run internal credential is absent."
-            else
-              echo "::error::Could not verify the one-run credential was removed (HTTP $secrets_status)."
+          if [[ "$secrets_status" != "200" ]] || ! jq -e '.success == true and (.result | type == "array")' "$secrets_response" >/dev/null; then
+            echo "::error::Could not inspect isolated Worker secrets (HTTP $secrets_status)."
+            cleanup_failed=1
+          elif jq -e '.result | any(.[]?; .name == "AGENT_STATE_STORE_TOKEN")' "$secrets_response" >/dev/null; then
+            delete_response="$RUNNER_TEMP/pause-e2e-secret-delete.json"
+            delete_status="$(curl --silent --show-error --max-time 15 --output "$delete_response" --write-out "%{http_code}" \
+              --request DELETE --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              --header "Accept: application/json" "$api/secrets/AGENT_STATE_STORE_TOKEN" || true)"
+            if [[ "$delete_status" != "200" ]] || ! jq -e '.success == true' "$delete_response" >/dev/null; then
+              echo "::error::Could not remove the one-run internal credential (HTTP $delete_status)."
               cleanup_failed=1
             fi
           else
-            echo "::error::The one-run internal credential still exists."
-            cleanup_failed=1
+            echo "PASS: one-run internal credential was never installed or is already absent."
+          fi
+
+          if [[ "$cleanup_failed" == "0" ]]; then
+            secrets_after="$RUNNER_TEMP/pause-e2e-secrets-after.json"
+            secrets_after_status="$(curl --silent --show-error --max-time 15 --output "$secrets_after" --write-out "%{http_code}" \
+              --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" --header "Accept: application/json" "$api/secrets" || true)"
+            if [[ "$secrets_after_status" != "200" ]] || \
+               ! jq -e '.success == true and ([.result[]?.name] | index("AGENT_STATE_STORE_TOKEN") == null)' "$secrets_after" >/dev/null; then
+              echo "::error::Could not verify the one-run credential is absent after cleanup (HTTP $secrets_after_status)."
+              cleanup_failed=1
+            fi
           fi
 
           rm -f "$GENERATED_CONFIG" .wrangler.pause-e2e.generated.jsonc
