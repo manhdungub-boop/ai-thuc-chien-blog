@@ -33,10 +33,12 @@ describe("AgentDraftStore Durable Object", () => {
 
   it("migrates legacy draft rows before backfilling content versions when evidence columns are absent", async () => {
     const migrated = await store.testRunLegacySchemaMigration();
-    expect(migrated.columns).toEqual(expect.arrayContaining([
+    for (const column of [
       "ledger_json", "review_record_json", "evidence_readiness_json",
       "research_evidence_json", "content_version"
-    ]));
+    ]) {
+      expect(migrated.columns.includes(column)).toBe(true);
+    }
     expect(migrated.row).toMatchObject({
       version: 7,
       content_version: 7,
