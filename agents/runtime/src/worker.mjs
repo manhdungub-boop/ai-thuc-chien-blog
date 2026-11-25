@@ -553,7 +553,11 @@ const worker = {
       if (!authorized.ok) {
         if (authorized.error === "oidc_token_replayed") return json({ ok: false, error: "github_oidc_token_replayed" }, 409);
         if (authorized.error?.includes("unavailable") || authorized.error === "oidc_replay_response_invalid") {
-          return json({ ok: false, error: "github_oidc_verification_unavailable" }, 503);
+          const diagnosticCode = env.AGENT_PAUSE_E2E_GATE_ENABLED === "true" &&
+            typeof authorized.error === "string" && /^oidc_[a-z_]+$/.test(authorized.error)
+            ? authorized.error : undefined;
+          return json({ ok: false, error: "github_oidc_verification_unavailable",
+            ...(diagnosticCode ? { diagnosticCode } : {}) }, 503);
         }
         return json({ ok: false, error: "github_oidc_token_invalid" }, 401);
       }
