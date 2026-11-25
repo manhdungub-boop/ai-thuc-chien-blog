@@ -234,10 +234,24 @@ export class AgentDraftStore {
       const current = this.ctx.storage.sql.exec("SELECT paused, version FROM runtime_authoring_control WHERE singleton_id = 1").toArray()[0];
       if (!current) return { updated: false, reason: "runtime_control_unavailable" };
       if (version < current.version) {
-        // A stale Pause is safe only when this store is already paused. Never
-        // let a stale Resume reopen authoring behind the authoritative State Store.
+        // Emergency Pause is monotonic and must close the local authoring latch
+        // even when this store's version is ahead of the authoritative State Store.
+        // Advance this store's own version rather than lowering it. A stale Resume
+        // remains rejected, so version skew can never reopen authoring.
         if (paused && current.paused === 1) {
           return { updated: true, duplicate: true, stale_version: true, paused: true, version: current.version };
+        }
+        if (paused && current.paused === 0) {
+          const nextVersion = current.version + 1;
+          if (!Number.isSafeInteger(nextVersion)) return { updated: false, reason: "runtime_control_version_exhausted" };
+          const fenced = this.ctx.storage.sql.exec(
+            "UPDATE runtime_authoring_control SET paused = 1, version = ? WHERE singleton_id = 1 AND version = ? RETURNING paused, version",
+            nextVersion, current.version
+          ).toArray();
+          if (fenced.length !== 1 || fenced[0].paused !== 1 || fenced[0].version !== nextVersion) {
+            return { updated: false, reason: "runtime_control_version_conflict" };
+          }
+          return { updated: true, stale_version: true, paused: true, version: nextVersion };
         }
         return { updated: false, reason: "runtime_control_version_stale", current_version: current.version };
       }
