@@ -43,6 +43,8 @@ test("Pause E2E gate intercepts only the allowlisted public article fetch and pr
   assert.match(source, /raw\.githubusercontent\.com\/manhdungub-boop\/ai-thuc-chien-blog\/main\/articles\/ai-agent-thuc-hanh-tu-thiet-ke-den-kiem-soat\.html/);
   assert.match(source, /runtimeEnv\?\.AGENT_PAUSE_E2E_GATE_ENABLED === "true"/);
   assert.match(source, /delay === 8_000/);
+  assert.match(source, /adjustedDelay.*45_000/s);
+  assert.match(source, /GATE_TIMEOUT_MS = 120_000/);
   assert.match(source, /signal\.addEventListener\("abort"/);
   assert.match(source, /worker\.fetch\(request, env, ctx\)/);
   assert.match(source, /authorizeGitHubActionsOperator/);
@@ -66,6 +68,7 @@ test("Run and Pause workflows use distinct owner-gated OIDC identities and alway
   }
   assert.match(runWorkflow, /actions: read/);
   assert.match(runWorkflow, /if: always\(\)/);
+  assert.match(runWorkflow, /PAUSE_E2E_DEPLOY_ATTEMPTED/);
   assert.match(runWorkflow, /workers\/scripts/);
   assert.match(runWorkflow, /previews_enabled/);
   assert.match(runWorkflow, /AGENT_STATE_STORE_TOKEN/);
