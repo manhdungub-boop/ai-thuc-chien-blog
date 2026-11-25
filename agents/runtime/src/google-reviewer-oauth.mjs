@@ -140,7 +140,7 @@ export async function handleGoogleReviewerAuth(request, env, { fetchImpl = fetch
       return json({ error: "login_return_path_rejected" }, 400);
     }
     const clientIp = request.headers.get("cf-connecting-ip") || "";
-    if (!clientIp || clientIp.length > 45 || /[\\s,]/.test(clientIp)) return json({ error: "client_ip_unavailable" }, 503);
+    if (!clientIp || clientIp.length > 45 || /[\s,]/.test(clientIp)) return json({ error: "client_ip_unavailable" }, 503);
     const clientRateLimitKey = await digest("google-reviewer-login-start:" + clientIp);
     const rateLimit = await store.consumeStartRateLimit(clientRateLimitKey, nowSeconds);
     if (!rateLimit.allowed) return json({ error: "login_start_rate_limited" }, 429, { "retry-after": String(rateLimit.retry_after_seconds) });
