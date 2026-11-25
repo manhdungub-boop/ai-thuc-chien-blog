@@ -155,6 +155,7 @@ describe("AgentDraftStore Durable Object", () => {
     const result = await store.storeEvidenceLedger("draft-ledger-0001", created.artifact.version);
     expect(result.stored).toBe(true);
     expect(result.artifact.version).toBe(2);
+    expect(result.artifact.content_version).toBe(1);
     expect(result.artifact.evidence_review).toMatchObject({
       ledger: {
         status: "all_claims_traceable_pending_human_review",
@@ -250,6 +251,7 @@ describe("AgentDraftStore Durable Object", () => {
     const revised = await store.reviseDraft("draft-ledger-0003", stored.artifact.version, revisedDraft);
     expect(revised.updated).toBe(true);
     expect(revised.artifact.version).toBe(3);
+    expect(revised.artifact.content_version).toBe(2);
     expect(revised.artifact.evidence_review).toBeNull();
   });
 
