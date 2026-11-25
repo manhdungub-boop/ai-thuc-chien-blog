@@ -41,12 +41,13 @@ jobs:
       - name: Verify independent OIDC workflow identity
         env:
           EXPECTED_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          EVENT_ACTION: ${{ github.event.action }}
           EVENT_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "manhdungub-boop/ai-thuc-chien-blog"
           test "$GITHUB_EVENT_NAME" = "pull_request"
-          test "$GITHUB_EVENT_ACTION" = "synchronize"
+          test "$EVENT_ACTION" = "synchronize"
           test "$EXPECTED_HEAD_REF" = "security/agent-runtime-adapter-pause-e2e-20261125"
           test "$GITHUB_ACTOR_ID" = "342528485"
           test "$GITHUB_WORKFLOW_REF" = "$GITHUB_REPOSITORY/.github/workflows/agent-runtime-adapter-pause-operator.yml@$GITHUB_REF"
