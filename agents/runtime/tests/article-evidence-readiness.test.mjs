@@ -195,6 +195,7 @@ describe("article evidence readiness", () => {
       authenticatedReviewer: { authenticated: true, reviewer_ref: reviewRecord.reviewer_ref },
       now
     });
+    console.log("DEBUG citation-no-period", JSON.stringify({ status: result.status, issues: result.issues }));
     expect(result.ok).toBe(true);
   });
 
@@ -252,6 +253,7 @@ describe("article evidence readiness", () => {
       authenticatedReviewer: { authenticated: true, reviewer_ref: reviewRecord.reviewer_ref },
       now
     });
+    console.log("DEBUG citation-closing-period", JSON.stringify({ status: result.status, issues: result.issues }));
     expect(result.ok).toBe(true);
   });
 
