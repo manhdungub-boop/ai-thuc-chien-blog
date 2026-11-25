@@ -417,6 +417,7 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     }, Date.parse("2026-11-19T08:10:00.000Z"));
 
     const newer = candidate(sources[0], "v1.2.4", "2026-11-19T11:00:00.000Z");
+    newer.latest_release.source_url = latestUrl;
     newer.discovered_at = "2026-11-19T11:05:00.000Z";
     await store.upsertCandidates([newer], Date.parse("2026-11-19T11:06:00.000Z"));
 
@@ -426,12 +427,15 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     expect(packet.checks_missing_evidence).toBe(6);
     const history = await store.listReviewEvidence("github:ollama/ollama");
     expect(history).toHaveLength(1);
-     expect(history[0].candidate_release_identity).toBe(releaseIdentity("https://github.com/ollama/ollama/releases/tag/v1.2.3", "2026-11-19T08:00:00.000Z"));
+     expect(history[0].candidate_release_identity).toBe(releaseIdentity(latestUrl, "2026-11-19T08:00:00.000Z"));
     expect(packet.verification_status).toBe("not_verified");
   });
 
-  it("reuses the same source as pending evidence for a newer release without losing its history", async () => {
-    await store.upsertCandidates([candidate()], Date.parse("2026-11-19T08:06:00.000Z"));
+  it("distinguishes mutable latest-release URLs by immutable publication version", async () => {
+    const latestUrl = "https://github.com/ollama/ollama/releases/latest";
+    const older = candidate();
+    older.latest_release.source_url = latestUrl;
+    await store.upsertCandidates([older], Date.parse("2026-11-19T08:06:00.000Z"));
     const evidence = {
       check_type: "license_scope",
       source_title: "Official license",
@@ -455,7 +459,7 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
 
     const second = await submitEvidence(store,
       "github:ollama/ollama", evidence, Date.parse("2026-11-19T11:10:01.000Z"),
-      releaseIdentity("https://github.com/ollama/ollama/releases/tag/v1.2.4", "2026-11-19T11:00:00.000Z")
+      releaseIdentity(latestUrl, "2026-11-19T11:00:00.000Z")
     );
     expect(second).toMatchObject({ accepted: true, evidence_id: first.evidence_id });
     const packet = await store.getReviewPacket("github:ollama/ollama");
