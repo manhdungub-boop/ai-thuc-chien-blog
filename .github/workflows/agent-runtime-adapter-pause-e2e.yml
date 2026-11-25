@@ -261,14 +261,19 @@ jobs:
             return { status: response.status, body };
           })();
 
+          let lastStatusProbe = null;
           async function readStatus() {
             const response = await fetch(base + "/__e2e/status?key=" + encodeURIComponent(key), {
               headers: { Accept: "application/json" },
               cache: "no-store",
               signal: AbortSignal.timeout(10000),
             });
+            const raw = await response.text();
+            let body = null;
+            try { body = JSON.parse(raw); } catch { body = { raw: raw.slice(0, 1000) }; }
+            lastStatusProbe = { status: response.status, body };
             if (!response.ok) throw new Error("Test-only status probe failed: HTTP " + response.status);
-            return response.json();
+            return body;
           }
 
           let live = null;
@@ -280,9 +285,15 @@ jobs:
             } catch {}
             await new Promise(resolve => setTimeout(resolve, 1000));
           }
-          assert.equal(live?.task?.state, "running", "task must be durably running before Pause");
-          assert.equal(live?.task?.leaseOwned, true, "a live lease owner must exist");
-          assert.equal(live?.gateState, "entered", "the real read-only Adapter must be blocked in the controlled fetch");
+          if (!(live?.task?.state === "running" && live?.task?.leaseOwned === true &&
+                live?.gateState === "entered")) {
+            const earlyRun = await Promise.race([
+              runPromise.then(value => ({ settled: true, value }), error => ({ settled: true, error: String(error) })),
+              new Promise(resolve => setTimeout(() => resolve({ settled: false }), 5000)),
+            ]);
+            throw new Error("Adapter did not reach a durable in-flight lease; diagnostic=" +
+              JSON.stringify({ lastStatusProbe, earlyRun }));
+          }
           console.log("PAUSE_E2E_IN_FLIGHT_READY " + JSON.stringify({
             state: live.task.state,
             leaseGeneration: live.task.leaseGeneration,
