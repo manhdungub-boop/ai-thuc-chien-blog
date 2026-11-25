@@ -378,7 +378,7 @@ export class AgentAIBankCandidateStore {
     return row ? safeCandidate(row) : null;
   }
 
-  async submitAuthorizedReviewEvidence(candidateId, evidence, sessionToken, eventId, reviewedReleaseUrl, authConfig, now = Date.now()) {
+  async submitAuthorizedReviewEvidence(candidateId, evidence, sessionToken, eventId, reviewedReleaseIdentity, authConfig, now = Date.now()) {
     const authorization = await authorizeAIBankEvidenceWriter(sessionToken, authConfig, eventId, now);
     if (!authorization.authorized) {
       return { accepted: false, reason: authorization.reason || "evidence_writer_not_authorized" };
@@ -391,7 +391,7 @@ export class AgentAIBankCandidateStore {
     }
     const fingerprintPayload = JSON.stringify({
       candidate_id: candidateId,
-      reviewed_release_url: reviewedReleaseUrl,
+      reviewed_release_url: reviewedReleaseIdentity,
       check_type: evidence.check_type,
       source_title: typeof evidence.source_title === "string" ? evidence.source_title.trim() : null,
       source_url: evidence.source_url,
@@ -426,7 +426,7 @@ export class AgentAIBankCandidateStore {
       if (dailyAuditCount >= MAX_AUDIT_EVENTS_PER_UTC_DAY) {
         return { accepted: false, reason: "evidence_audit_daily_limit_reached" };
       }
-      const result = this.#submitReviewEvidence(candidateId, evidence, reviewedReleaseUrl, now);
+      const result = this.#submitReviewEvidence(candidateId, evidence, reviewedReleaseIdentity, now);
       if (!result.accepted) return result;
       this.ctx.storage.sql.exec(
         "INSERT INTO ai_bank_evidence_audit_events (event_id, actor_subject, actor_email, request_sha256, evidence_id, recorded_at) VALUES (?, ?, ?, ?, ?, ?)",
@@ -442,17 +442,17 @@ export class AgentAIBankCandidateStore {
     });
   }
 
-  #submitReviewEvidence(candidateId, evidence, reviewedReleaseUrl, now = Date.now()) {
+  #submitReviewEvidence(candidateId, evidence, reviewedReleaseIdentity, now = Date.now()) {
     const candidateRow = this.ctx.storage.sql.exec(
       "SELECT * FROM ai_bank_candidates WHERE candidate_id = ?", candidateId
     ).toArray()[0];
     const candidate = candidateRow ? safeCandidate(candidateRow) : null;
     if (!candidate) return { accepted: false, reason: "candidate_not_found" };
-    if (typeof reviewedReleaseUrl !== "string" || !reviewedReleaseUrl.trim() || reviewedReleaseUrl.length > 1000) {
+    if (typeof reviewedReleaseIdentity !== "string" || !reviewedReleaseIdentity.trim() || reviewedReleaseIdentity.length > 1000) {
       return { accepted: false, reason: "reviewed_release_identity_required" };
     }
     const releaseUrl = candidateReleaseIdentity(candidate.candidate);
-    if (reviewedReleaseUrl !== releaseUrl) return { accepted: false, reason: "stale_candidate_release" };
+    if (reviewedReleaseIdentity !== releaseUrl) return { accepted: false, reason: "stale_candidate_release" };
     if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) {
       return { accepted: false, reason: "invalid_evidence" };
     }
