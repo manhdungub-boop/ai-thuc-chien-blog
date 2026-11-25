@@ -126,7 +126,20 @@ export class PauseE2EAgentStateStore extends AgentStateStore {
     if (url.pathname === "/__e2e/gate-state") {
       if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
       if (!await hasValidStateStoreBearer(request, this.env)) {
-        return json({ ok: false, error: "state_store_auth_required" }, 401);
+        const configuredToken = this.env.AGENT_STATE_STORE_TOKEN;
+        const authorization = request.headers.get("Authorization") || "";
+        const bearer = /^Bearer ([A-Za-z0-9._~+/-]+=*)$/.exec(authorization);
+        return json({
+          ok: false,
+          error: "state_store_auth_required",
+          diagnostic: {
+            configuredPresent: typeof configuredToken === "string",
+            configuredLength: typeof configuredToken === "string" ? configuredToken.length : 0,
+            authorizationPresent: authorization.length > 0,
+            bearerValid: Boolean(bearer && bearer[1].length >= 32 && bearer[1].length <= 512),
+            tokenMatches: Boolean(bearer && typeof configuredToken === "string" && bearer[1] === configuredToken),
+          },
+        }, 401);
       }
       await this.ready;
       let body;
