@@ -20,6 +20,18 @@ function removeFencedCode(markdown) {
   return kept.join("\n");
 }
 
+function removeInlineCode(markdown) {
+  return markdown.replace(/`+[^\`]*?`+/g, " ");
+}
+
+function removeMarkdownLinks(markdown) {
+  return markdown.replace(/!?\[[^\]]*\]\([^)]*\)/g, " ");
+}
+
+function proseCitationText(markdown) {
+  return removeMarkdownLinks(removeInlineCode(markdown));
+}
+
 function normalizeClaimText(value) {
   return String(value ?? "")
     .replace(/`+([^`]*?)`+/g, " ")
@@ -167,13 +179,15 @@ export async function assessArticleEvidenceReadiness({
 
   const body = typeof draft.body_markdown === "string" ? draft.body_markdown : "";
   const proseBody = removeFencedCode(body);
-  const paragraphs = proseBody.split(/\n\s*\n/);
+  const claimSentences = proseBody.split(/(?<=[.!?。！？])\s+|\n+/u);
   for (const item of draft.claims) {
     const normalizedClaim = normalizeClaimText(item.claim);
-    const claimParagraph = normalizedClaim
-      ? paragraphs.find(paragraph => normalizeClaimText(paragraph).includes(normalizedClaim))
+    const claimSentence = normalizedClaim
+      ? claimSentences.find(sentence => normalizeClaimText(
+          proseCitationText(sentence).replace(/\[\d+\]/g, " ")
+        ) === normalizedClaim)
       : null;
-    if (!claimParagraph) {
+    if (!claimSentence) {
       claimIssues.push({
         code: "reviewed_claim_missing_from_article_body",
         claim_id: item.claim_id
@@ -206,7 +220,7 @@ export async function assessArticleEvidenceReadiness({
       continue;
     }
     for (const citationIndex of expectedCitationIndices) {
-      if (!claimParagraph.includes(`[${citationIndex}]`)) {
+      if (!proseCitationText(claimSentence).includes(`[${citationIndex}]`)) {
         claimIssues.push({
           code: "claim_inline_citation_missing_from_body",
           claim_id: item.claim_id,
