@@ -27,7 +27,7 @@ describe("reviewer and operator HTTP routes", () => {
     expect(response.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
     const html = await response.text();
     expect(html).toContain("operator-console.js");
-    expect(html).toContain("/auth/google/start?return_to=%2Foperator-console");
+    expect(html).toContain("/auth/google/start?return_to=%2F");
   });
 
   it("renders operator admission from the authenticated control response and ignores stale refreshes", () => {
