@@ -99,6 +99,54 @@ describe("article evidence readiness", () => {
     expect(missingMarkerResult.issues[0].code).toBe("claim_inline_citation_missing_from_body");
   });
 
+  it("rejects a negated sentence that merely contains the reviewed claim wording", async () => {
+    const reviewRecord = await makeReview();
+    const draft = makeDraft();
+    draft.body_markdown = draft.body_markdown.replace(
+      ledger.claims[0].claim,
+      "It is false that " + ledger.claims[0].claim
+    );
+    const result = await assessArticleEvidenceReadiness({
+      draft,
+      ledger,
+      reviewRecord,
+      authenticatedReviewer: { authenticated: true, reviewer_ref: reviewRecord.reviewer_ref },
+      now
+    });
+    expect(result.status).toBe("article_claim_evidence_not_ready");
+    expect(result.issues).toContainEqual({
+      code: "reviewed_claim_missing_from_article_body",
+      claim_id: "claim-1"
+    });
+  });
+
+  it("does not accept inline-code citation markers as prose citations", async () => {
+    const reviewRecord = await makeReview();
+    const draft = makeDraft();
+    draft.body_markdown = draft.body_markdown.replace(
+      " [1] [2] [3]. ",
+      " `[1]` `[2]` `[3]`. "
+    );
+    const result = await assessArticleEvidenceReadiness({
+      draft,
+      ledger,
+      reviewRecord,
+      authenticatedReviewer: { authenticated: true, reviewer_ref: reviewRecord.reviewer_ref },
+      now
+    });
+    expect(result.status).toBe("article_claim_evidence_not_ready");
+    expect(result.issues).toContainEqual({
+      code: "claim_inline_citation_missing_from_body",
+      claim_id: "claim-1",
+      citation_index: 1
+    });
+    expect(result.issues).toContainEqual({
+      code: "claim_inline_citation_missing_from_body",
+      claim_id: "claim-1",
+      citation_index: 2
+    });
+  });
+
   it("does not let citations in an unrelated paragraph satisfy a reviewed claim", async () => {
     const reviewRecord = await makeReview();
     const draft = makeDraft();
