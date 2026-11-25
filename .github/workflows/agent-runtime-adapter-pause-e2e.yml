@@ -416,16 +416,18 @@ jobs:
           # The resource is pre-provisioned without code so a per-Worker Editor
           # token can deploy it. If no script was uploaded, verify the resource
           # remains undeployed and both public URL switches remain disabled.
-          if [[ "$script_status" == "404" ]] && jq -e '.success == false and any(.errors[]?; .code == 10007)' "$script_response" >/dev/null; then
+          if [[ "$script_status" == "404" ]] && jq -e '.success == false and any(.errors[]?; .code == 10222)' "$script_response" >/dev/null; then
             if jq -e '.success == true and .result.deployed_on == null and .result.subdomain.enabled == false and .result.subdomain.previews_enabled == false' "$worker_response" >/dev/null; then
               rm -f "$GENERATED_CONFIG" .wrangler.pause-e2e.generated.jsonc
               echo "PASS: dedicated Worker resource is pre-provisioned but has no deployed script; workers.dev and Preview URLs remain disabled, and no script secret exists."
               exit 0
             fi
-            echo "::error::Worker script is absent but the pre-provisioned resource is not confirmed undeployed and private."
+            echo "::error::Worker has no deployed script but the pre-provisioned resource is not confirmed private."
             exit 1
           fi
-          if [[ "$script_status" != "200" ]] || ! jq -e '.success == true' "$script_response" >/dev/null; then
+          # A successful Worker script download is raw JavaScript/multipart, not
+          # a JSON API envelope. Validate its HTTP status only; never jq-parse it.
+          if [[ "$script_status" != "200" ]]; then
             echo "::error::Could not determine whether the isolated Worker script exists (HTTP $script_status); cleanup is not confirmed."
             exit 1
           fi
