@@ -620,6 +620,7 @@ const worker = {
       const requestId = () => crypto.randomUUID();
       let response = null;
       let pauseVerified = true;
+      let draftStoreSync = { ok: true, pre_fence_succeeded: true };
       let resumeWasRequested = false;
       let resumeRejectedConflict = false;
       try {
@@ -723,12 +724,13 @@ const worker = {
         // competing Pause has invalidated this request's observed version.
         if (resumeWasRequested && !resumeRejectedConflict) {
           try {
-            await pauseRuntimeControl(env, {
+            const pauseResult = await pauseRuntimeControl(env, {
               actor,
               requestId: requestId(),
               reason: "one-shot OIDC Preview E2E complete",
               internalCleanup: true,
             });
+            draftStoreSync = pauseResult.draftStoreSync;
             const control = await readStateStore(env, "/control");
             pauseVerified = control?.control?.paused === true;
           } catch {
@@ -736,7 +738,8 @@ const worker = {
           }
         }
       }
-      if (!pauseVerified) return json({ ok: false, error: "oidc_run_pause_verification_failed" }, 503);
+      if (!pauseVerified) return json({ ok: false, error: "oidc_run_pause_verification_failed", draft_store_sync: draftStoreSync }, 503);
+      if (!draftStoreSync?.ok) return json({ ok: false, error: "draft_store_pause_sync_failed", draft_store_sync: draftStoreSync }, 503);
       return response ?? json({ ok: false, error: "oidc_run_result_unavailable" }, 503);
     }
     if (url.pathname === "/internal/oidc/pause") {
@@ -794,7 +797,12 @@ const worker = {
           requestId: crypto.randomUUID(),
           ...(body.reason === undefined ? {} : { reason: body.reason }),
         });
-        return json({ ok: true, changed: result.changed, control: result.control });
+        return json({
+          ok: result.draftStoreSync?.ok === true,
+          changed: result.changed,
+          control: result.control,
+          draft_store_sync: result.draftStoreSync
+        }, result.draftStoreSync?.ok === true ? 200 : 503);
       } catch (error) {
         if (error?.status === 429) return json({ ok: false, error: "rate_limited" }, 429);
         return json({ ok: false, error: "control_unavailable" }, 503);
@@ -1274,7 +1282,12 @@ const worker = {
           ? await pauseRuntimeControl(env, { actor, requestId: crypto.randomUUID(), ...(body.reason === undefined ? {} : { reason: body.reason }) })
           : await writeStateStore(env, "/control/resume", { actor, requestId: crypto.randomUUID(), ...(body.reason === undefined ? {} : { reason: body.reason }), expectedVersion });
         if (action === "resume") await syncDraftStoreControl(env, result.control);
-        return json({ ok: true, changed: result.changed, control: result.control });
+        return json({
+          ok: action === "pause" ? result.draftStoreSync?.ok === true : true,
+          changed: result.changed,
+          control: result.control,
+          ...(action === "pause" ? { draft_store_sync: result.draftStoreSync } : {})
+        }, action === "pause" && result.draftStoreSync?.ok !== true ? 503 : 200);
       } catch (error) {
         if (error?.status === 409) {
           return json({ ok: false, error: "runtime_control_version_conflict" }, 409);
