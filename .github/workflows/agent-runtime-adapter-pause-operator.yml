@@ -1,0 +1,164 @@
+name: Agent Runtime Adapter Pause Operator (Isolated Test Only)
+
+on:
+  pull_request:
+    types: [synchronize]
+    branches:
+      - integration/agent-runtime-v5-preview-20261120
+    paths:
+      - "agents/runtime/**"
+      - ".github/workflows/agent-runtime-adapter-pause-e2e.yml"
+      - ".github/workflows/agent-runtime-adapter-pause-operator.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-runtime-adapter-pause-operator
+  cancel-in-progress: false
+
+jobs:
+  independent-oidc-pause:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.action == 'synchronize' &&
+      github.repository == 'manhdungub-boop/ai-thuc-chien-blog' &&
+      github.event.pull_request.head.repo.full_name == 'manhdungub-boop/ai-thuc-chien-blog' &&
+      github.event.pull_request.head.ref == 'security/agent-runtime-adapter-pause-e2e-20261125' &&
+      github.event.pull_request.base.ref == 'integration/agent-runtime-v5-preview-20261120' &&
+      github.actor_id == '342528485' &&
+      contains(github.event.pull_request.labels.*.name, 'agent-runtime')
+    runs-on: ubuntu-latest
+    environment: agent-runtime-preview
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PAUSE_E2E_WORKER_URL: "https://ai-thuc-chien-agent-runtime-pause-e2e.manhdungub.workers.dev"
+      PAUSE_E2E_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Verify independent OIDC workflow identity
+        env:
+          EXPECTED_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          EVENT_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "manhdungub-boop/ai-thuc-chien-blog"
+          test "$GITHUB_EVENT_NAME" = "pull_request"
+          test "$GITHUB_EVENT_ACTION" = "synchronize"
+          test "$EXPECTED_HEAD_REF" = "security/agent-runtime-adapter-pause-e2e-20261125"
+          test "$GITHUB_ACTOR_ID" = "342528485"
+          test "$GITHUB_WORKFLOW_REF" = "$GITHUB_REPOSITORY/.github/workflows/agent-runtime-adapter-pause-operator.yml@$GITHUB_REF"
+          node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+          const labels = JSON.parse(process.env.EVENT_LABELS);
+          assert.ok(labels.includes("agent-runtime"));
+          NODE
+
+      - name: Wait until the separate Adapter run is durably in-flight
+        timeout-minutes: 4
+        run: |
+          set -euo pipefail
+          key="oidc-preview-e2e:pause-$PAUSE_E2E_HEAD_SHA"
+          ready=false
+          for attempt in $(seq 1 180); do
+            if curl --fail --silent --show-error --max-time 5 \
+              "$PAUSE_E2E_WORKER_URL/__e2e/status?key=$key" \
+              --header "Accept: application/json" -o "$RUNNER_TEMP/pause-e2e-status.json" 2>/dev/null &&
+              node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+          import { readFile } from "node:fs/promises";
+          const status = JSON.parse(await readFile(process.env.RUNNER_TEMP + "/pause-e2e-status.json", "utf8"));
+          assert.equal(status.ok, true);
+          assert.equal(status.task?.state, "running");
+          assert.equal(status.task?.leaseOwned, true);
+          assert.equal(status.gateState, "entered");
+          NODE
+            then ready=true; break; fi
+            sleep 1
+          done
+          if [[ "$ready" != "true" ]]; then
+            echo "::error::No in-flight Adapter gate was observed; refusing to send Pause."
+            exit 1
+          fi
+          echo "PAUSE_E2E_IN_FLIGHT_READY: separate OIDC Pause identity is now authorized to interrupt the running Adapter."
+
+      - name: Obtain independent GitHub OIDC token and persist Pause
+        timeout-minutes: 2
+        env:
+          OIDC_AUDIENCE: ai-thuc-chien-agent-runtime-preview
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          const requestUrl = process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
+          const requestToken = process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
+          if (!requestUrl || !requestToken) throw new Error("Independent Pause OIDC context unavailable");
+          const tokenUrl = new URL(requestUrl);
+          tokenUrl.searchParams.set("audience", process.env.OIDC_AUDIENCE);
+          const tokenResponse = await fetch(tokenUrl, {
+            headers: { Authorization: "Bearer " + requestToken, Accept: "application/json" },
+            redirect: "error",
+            cache: "no-store",
+            signal: AbortSignal.timeout(10000),
+          });
+          if (!tokenResponse.ok) throw new Error("GitHub OIDC token request failed: HTTP " + tokenResponse.status);
+          const payload = await tokenResponse.json();
+          if (typeof payload.value !== "string" || payload.value.length < 100 || payload.value.length > 16384) {
+            throw new Error("Independent Pause OIDC token invalid");
+          }
+          const response = await fetch(process.env.PAUSE_E2E_WORKER_URL + "/__e2e/pause", {
+            method: "POST",
+            headers: {
+              Authorization: "Bearer " + payload.value,
+              "Content-Type": "application/json",
+              Accept: "application/json",
+            },
+            body: "{}",
+            redirect: "error",
+            cache: "no-store",
+            signal: AbortSignal.timeout(15000),
+          });
+          let result;
+          try { result = await response.json(); } catch { result = null; }
+          if (!response.ok || result?.ok !== true || result?.control?.paused !== true) {
+            throw new Error("Independent OIDC Pause failed: HTTP " + response.status + " " + JSON.stringify(result));
+          }
+          console.log("PASS: independent workflow OIDC identity persisted Pause at control version " + result.control.version);
+          NODE
+
+      - name: Verify cancellation, lease fencing, audit, and Adapter abort
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          key="oidc-preview-e2e:pause-$PAUSE_E2E_HEAD_SHA"
+          verified=false
+          for attempt in $(seq 1 45); do
+            if curl --fail --silent --show-error --max-time 5 \
+              "$PAUSE_E2E_WORKER_URL/__e2e/status?key=$key" \
+              --header "Accept: application/json" -o "$RUNNER_TEMP/pause-e2e-final.json" 2>/dev/null &&
+              node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+          import { readFile } from "node:fs/promises";
+          const status = JSON.parse(await readFile(process.env.RUNNER_TEMP + "/pause-e2e-final.json", "utf8"));
+          assert.equal(status.task?.state, "cancelled");
+          assert.equal(status.task?.errorCode, "operator_paused");
+          assert.equal(status.task?.leaseOwned, false);
+          assert.equal(status.task?.leaseExpiresAt, null);
+          assert.equal(status.gateState, "aborted");
+          assert.equal(status.control?.paused, true);
+          assert.ok(status.cancellationAuditCount >= 1);
+          assert.ok(status.pauseAudit?.some(event =>
+            event.action === "pause" &&
+            event.actor === "github-actions:342528485" &&
+            event.reason === "Adapter pause E2E: independent OIDC workflow"));
+          NODE
+            then verified=true; break; fi
+            sleep 1
+          done
+          if [[ "$verified" != "true" ]]; then
+            echo "::error::Pause did not produce all expected cancellation, lease, audit, and abort postconditions."
+            cat "$RUNNER_TEMP/pause-e2e-final.json" 2>/dev/null || true
+            exit 1
+          fi
+          echo "PASS: independent OIDC Pause cancelled the running Adapter task, aborted its fetch signal, cleared the lease, and persisted audit evidence."

@@ -17,9 +17,10 @@ test("Pause E2E Worker is isolated, disabled by default, and has no Production b
   assert.equal(config.preview_urls, false);
   assert.deepEqual(config.durable_objects.bindings, [
     { name: "AGENT_STATE_STORE", class_name: "PauseE2EAgentStateStore" },
+    { name: "AGENT_DRAFT_STORE", class_name: "AgentDraftStore" },
   ]);
   assert.deepEqual(config.migrations, [
-    { tag: "pause-e2e-v1", new_sqlite_classes: ["PauseE2EAgentStateStore"] },
+    { tag: "pause-e2e-v1", new_sqlite_classes: ["PauseE2EAgentStateStore", "AgentDraftStore"] },
   ]);
   assert.equal(config.vars.AGENT_ENABLED, "false");
   assert.equal(config.vars.AGENT_PAUSED, "true");
@@ -37,32 +38,37 @@ test("Pause E2E Worker is isolated, disabled by default, and has no Production b
   assert.equal("AGENT_PAUSE_E2E_GATE_ENABLED" in production.vars, false);
 });
 
-test("Pause E2E gate intercepts only the allowlisted public article fetch and uses the real Worker", async () => {
+test("Pause E2E gate intercepts only the allowlisted public article fetch and preserves OIDC verification", async () => {
   const source = await read("./pause-e2e-worker.mjs");
   assert.match(source, /raw\.githubusercontent\.com\/manhdungub-boop\/ai-thuc-chien-blog\/main\/articles\/ai-agent-thuc-hanh-tu-thiet-ke-den-kiem-soat\.html/);
   assert.match(source, /runtimeEnv\?\.AGENT_PAUSE_E2E_GATE_ENABLED === "true"/);
   assert.match(source, /signal\.addEventListener\("abort"/);
   assert.match(source, /worker\.fetch\(request, env, ctx\)/);
-  assert.match(source, /hasValidStateStoreBearer/);
-  assert.match(source, /lease_owner/);
+  assert.match(source, /authorizeGitHubActionsOperator/);
+  assert.match(source, /eventName: "pull_request"/);
+  assert.match(source, /setRuntimePaused\(true, version \+ 1\)/);
   assert.match(source, /task\.cancelled/);
-  assert.match(source, /operator_paused/);
 });
 
-test("Live Pause workflow is owner-gated, Preview-environment-only, and always cleans up", async () => {
-  const workflow = await read("../../.github/workflows/agent-runtime-adapter-pause-e2e.yml");
-  assert.match(workflow, /pull_request:/);
-  assert.match(workflow, /types: \[synchronize\]/);
-  assert.match(workflow, /github\.event\.action == 'synchronize'/);
-  assert.match(workflow, /security\/agent-runtime-adapter-pause-e2e-20261125/);
-  assert.match(workflow, /github\.actor_id == '342528485'/);
-  assert.match(workflow, /environment: agent-runtime-preview/);
-  assert.match(workflow, /id-token: write/);
-  assert.doesNotMatch(workflow, /pull_request_target:|schedule:|push:|actions: write|contents: write/i);
-  assert.match(workflow, /wrangler@4\.166\.0 deploy --config/);
-  assert.match(workflow, /if: always\(\)/);
-  assert.match(workflow, /workers\/scripts/);
-  assert.match(workflow, /previews_enabled/);
-  assert.match(workflow, /AGENT_STATE_STORE_TOKEN/);
-  assert.match(workflow, /PAUSE_E2E_IN_FLIGHT_READY/);
+test("Run and Pause workflows use distinct owner-gated OIDC identities and always clean up", async () => {
+  const runWorkflow = await read("../../../.github/workflows/agent-runtime-adapter-pause-e2e.yml");
+  const pauseWorkflow = await read("../../../.github/workflows/agent-runtime-adapter-pause-operator.yml");
+  for (const workflow of [runWorkflow, pauseWorkflow]) {
+    assert.match(workflow, /pull_request:/);
+    assert.match(workflow, /types: \[synchronize\]/);
+    assert.match(workflow, /github\.event\.action == 'synchronize'/);
+    assert.match(workflow, /security\/agent-runtime-adapter-pause-e2e-20261125/);
+    assert.match(workflow, /github\.actor_id == '342528485'/);
+    assert.match(workflow, /environment: agent-runtime-preview/);
+    assert.match(workflow, /id-token: write/);
+    assert.doesNotMatch(workflow, /pull_request_target:|schedule:|push:|actions: write|contents: write/i);
+  }
+  assert.match(runWorkflow, /actions: read/);
+  assert.match(runWorkflow, /if: always\(\)/);
+  assert.match(runWorkflow, /workers\/scripts/);
+  assert.match(runWorkflow, /previews_enabled/);
+  assert.match(runWorkflow, /AGENT_STATE_STORE_TOKEN/);
+  assert.match(runWorkflow, /PAUSE_E2E_IN_FLIGHT_READY/);
+  assert.match(pauseWorkflow, /__e2e\/pause/);
+  assert.match(pauseWorkflow, /PAUSE_E2E_IN_FLIGHT_READY/);
 });

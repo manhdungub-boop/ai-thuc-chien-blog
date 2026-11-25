@@ -1,9 +1,11 @@
-import worker, { AgentStateStore } from "../src/worker.mjs";
+import worker, { AgentStateStore, AgentDraftStore } from "../src/worker.mjs";
 import { hasValidStateStoreBearer } from "../src/internal-auth.mjs";
+import { authorizeGitHubActionsOperator } from "../src/github-oidc-authorize.mjs";
 
 const TARGET_ARTICLE_URL =
   "https://raw.githubusercontent.com/manhdungub-boop/ai-thuc-chien-blog/main/articles/ai-agent-thuc-hanh-tu-thiet-ke-den-kiem-soat.html";
 const GATE_TIMEOUT_MS = 120_000;
+const PAUSE_REASON = "Adapter pause E2E: independent OIDC workflow";
 let runtimeEnv;
 
 function json(body, status = 200) {
@@ -17,26 +19,32 @@ function json(body, status = 200) {
   });
 }
 
-async function recordGateState(state) {
-  const namespace = runtimeEnv?.AGENT_STATE_STORE;
-  const token = runtimeEnv?.AGENT_STATE_STORE_TOKEN;
+async function stateStoreRequest(env, pathname, body) {
+  const namespace = env.AGENT_STATE_STORE;
+  const token = env.AGENT_STATE_STORE_TOKEN;
   if (!namespace || typeof namespace.idFromName !== "function" ||
       typeof namespace.get !== "function" || typeof token !== "string") {
-    throw new Error("pause_e2e_gate_state_store_unavailable");
+    throw new Error("pause_e2e_state_store_unavailable");
   }
   const stub = namespace.get(namespace.idFromName("agent-runtime-global"));
-  const response = await stub.fetch(new Request(
-    "https://state-store.internal/__e2e/gate-state",
-    {
-      method: "POST",
-      headers: {
-        Authorization: "Bearer " + token,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ state }),
+  const response = await stub.fetch(new Request("https://state-store.internal" + pathname, {
+    method: body === undefined ? "GET" : "POST",
+    headers: {
+      Authorization: "Bearer " + token,
+      ...(body === undefined ? {} : { "Content-Type": "application/json" }),
     },
-  ));
-  if (!response.ok) throw new Error("pause_e2e_gate_state_write_failed");
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  }));
+  let result;
+  try { result = await response.json(); } catch { result = null; }
+  if (!response.ok || result?.ok !== true) {
+    throw Object.assign(new Error("pause_e2e_state_store_request_failed"), { status: response.status });
+  }
+  return result;
+}
+
+async function recordGateState(state) {
+  await stateStoreRequest(runtimeEnv, "/__e2e/gate-state", { state });
 }
 
 function waitForAbort(signal) {
@@ -63,10 +71,9 @@ function waitForAbort(signal) {
   });
 }
 
-// This test-only entrypoint intercepts exactly one public, read-only GitHub
-// article fetch. The production Worker entrypoint never imports this module.
-// The real Preview reader receives the original AbortSignal and must unwind
-// when the independent OIDC Pause causes the lease heartbeat to be fenced.
+// Test-only interception of exactly one public, read-only GitHub article fetch.
+// The production Worker entrypoint never imports this module. The real Preview
+// reader receives the original AbortSignal and must unwind after independent Pause.
 const originalFetch = globalThis.fetch.bind(globalThis);
 globalThis.fetch = async (input, init = {}) => {
   let target;
@@ -92,9 +99,7 @@ globalThis.fetch = async (input, init = {}) => {
         ? signal.reason
         : new Error("task_execution_aborted");
     } catch (error) {
-      if (!signal?.aborted) {
-        await recordGateState("timeout");
-      }
+      if (!signal?.aborted) await recordGateState("timeout");
       throw error;
     }
   }
@@ -130,7 +135,7 @@ export class PauseE2EAgentStateStore extends AgentStateStore {
       }
       await this.ready;
       const key = url.searchParams.get("key") || "";
-      if (!/^oidc-preview-e2e:pause-[0-9]+-[0-9]+$/.test(key)) {
+      if (!/^oidc-preview-e2e:pause-[a-f0-9]{40}$/.test(key)) {
         return json({ ok: false, error: "task_key_invalid" }, 400);
       }
       const row = this.sql.exec(
@@ -153,10 +158,9 @@ export class PauseE2EAgentStateStore extends AgentStateStore {
       return json({
         ok: true,
         task: {
-          taskId: row.task_id,
           state: row.state,
           errorCode: row.error_code,
-          leaseOwner: row.lease_owner,
+          leaseOwned: typeof row.lease_owner === "string" && row.lease_owner.length > 0,
           leaseExpiresAt: row.lease_expires_at,
           leaseGeneration: row.lease_generation,
         },
@@ -174,6 +178,102 @@ export class PauseE2EAgentStateStore extends AgentStateStore {
   }
 }
 
+async function performIndependentOidcPause(request, env) {
+  if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
+  if (env.AGENT_PAUSE_E2E_GATE_ENABLED !== "true" || env.AGENT_OIDC_ENABLED !== "true") {
+    return json({ ok: false, error: "pause_e2e_disabled" }, 503);
+  }
+  if ([...new URL(request.url).searchParams.keys()].length > 0) {
+    return json({ ok: false, error: "request_invalid" }, 400);
+  }
+  let body;
+  try { body = await request.json(); } catch { body = null; }
+  if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).length !== 0) {
+    return json({ ok: false, error: "pause_e2e_request_invalid" }, 400);
+  }
+
+  const authorization = request.headers.get("authorization") || "";
+  const tokenMatch = /^Bearer ([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/.exec(authorization);
+  if (!tokenMatch || tokenMatch[1].length > 16384) {
+    return json({ ok: false, error: "github_oidc_token_required" }, 401);
+  }
+
+  const expected = {
+    audience: env.AGENT_OIDC_AUDIENCE,
+    repository: env.AGENT_OIDC_REPOSITORY,
+    repositoryOwner: env.AGENT_OIDC_REPOSITORY_OWNER,
+    repositoryId: env.AGENT_OIDC_REPOSITORY_ID,
+    repositoryOwnerId: env.AGENT_OIDC_REPOSITORY_OWNER_ID,
+    ref: env.AGENT_OIDC_PAUSE_REF,
+    workflowRef: env.AGENT_OIDC_PAUSE_WORKFLOW_REF,
+    actorId: env.AGENT_OIDC_PAUSE_ACTOR_ID,
+    eventName: "pull_request",
+    environment: "agent-runtime-preview",
+  };
+  if (!Object.entries(expected).every(([key, value]) =>
+    typeof value === "string" && value.length > 0 &&
+    value.length <= (key === "workflowRef" ? 512 : 256)) ||
+      !/^\d{1,20}$/.test(expected.actorId) ||
+      !/^\d{1,20}$/.test(expected.repositoryId) ||
+      !/^\d{1,20}$/.test(expected.repositoryOwnerId)) {
+    return json({ ok: false, error: "github_oidc_pause_policy_unconfigured" }, 503);
+  }
+
+  const authorized = await authorizeGitHubActionsOperator(tokenMatch[1], { env, expected });
+  if (!authorized.ok) {
+    if (authorized.error === "oidc_token_replayed") {
+      return json({ ok: false, error: "github_oidc_token_replayed" }, 409);
+    }
+    if (authorized.error?.includes("unavailable") || authorized.error === "oidc_replay_response_invalid") {
+      return json({ ok: false, error: "github_oidc_verification_unavailable" }, 503);
+    }
+    return json({ ok: false, error: "github_oidc_token_invalid" }, 401);
+  }
+
+  const actor = "github-actions:" + authorized.identity.actorId;
+  try {
+    const observed = await stateStoreRequest(env, "/control");
+    const version = observed?.control?.version;
+    if (!Number.isSafeInteger(version) || version < 0 || !Number.isSafeInteger(version + 1)) {
+      throw new Error("runtime_control_snapshot_invalid");
+    }
+
+    const draftNamespace = env.AGENT_DRAFT_STORE;
+    if (!draftNamespace || typeof draftNamespace.idFromName !== "function" ||
+        typeof draftNamespace.get !== "function") throw new Error("draft_store_unavailable");
+    const draftStore = draftNamespace.get(draftNamespace.idFromName("agent-authoring-global"));
+    if (!draftStore || typeof draftStore.setRuntimePaused !== "function") {
+      throw new Error("draft_store_control_unavailable");
+    }
+    const fenced = await draftStore.setRuntimePaused(true, version + 1);
+    if (fenced?.updated !== true || fenced.paused !== true || fenced.version !== version + 1) {
+      return json({ ok: false, error: "draft_store_pause_fence_failed" }, 409);
+    }
+
+    try {
+      const result = await stateStoreRequest(env, "/control/pause", {
+        actor,
+        requestId: crypto.randomUUID(),
+        reason: PAUSE_REASON,
+      });
+      const synced = await draftStore.setRuntimePaused(result.control.paused, result.control.version);
+      if (synced?.updated !== true || synced.paused !== result.control.paused ||
+          synced.version !== result.control.version) {
+        throw new Error("draft_store_control_sync_failed");
+      }
+      return json({ ok: true, changed: result.changed, control: result.control });
+    } catch (error) {
+      try {
+        const current = await stateStoreRequest(env, "/control");
+        await draftStore.setRuntimePaused(current.control.paused, current.control.version);
+      } catch {}
+      throw error;
+    }
+  } catch {
+    return json({ ok: false, error: "control_unavailable" }, 503);
+  }
+}
+
 const pauseE2eWorker = {
   async fetch(request, env, ctx) {
     runtimeEnv = env;
@@ -184,10 +284,10 @@ const pauseE2eWorker = {
         return json({ ok: false, error: "not_found" }, 404);
       }
       if (request.method !== "GET") return json({ ok: false, error: "method_not_allowed" }, 405);
-      if (!await hasValidStateStoreBearer(request, env)) {
-        return json({ ok: false, error: "state_store_auth_required" }, 401);
-      }
       const key = url.searchParams.get("key") || "";
+      if (!/^oidc-preview-e2e:pause-[a-f0-9]{40}$/.test(key)) {
+        return json({ ok: false, error: "task_key_invalid" }, 400);
+      }
       const namespace = env.AGENT_STATE_STORE;
       if (!namespace || typeof namespace.idFromName !== "function" ||
           typeof namespace.get !== "function") {
@@ -198,6 +298,10 @@ const pauseE2eWorker = {
         "https://state-store.internal/__e2e/task-status?key=" + encodeURIComponent(key),
         { headers: { Authorization: "Bearer " + env.AGENT_STATE_STORE_TOKEN } },
       ));
+    }
+
+    if (url.pathname === "/__e2e/pause") {
+      return performIndependentOidcPause(request, env);
     }
 
     return worker.fetch(request, env, ctx);

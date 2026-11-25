@@ -19,6 +19,10 @@
       {
         "name": "AGENT_STATE_STORE",
         "class_name": "PauseE2EAgentStateStore"
+      },
+      {
+        "name": "AGENT_DRAFT_STORE",
+        "class_name": "AgentDraftStore"
       }
     ]
   },
@@ -26,7 +30,8 @@
     {
       "tag": "pause-e2e-v1",
       "new_sqlite_classes": [
-        "PauseE2EAgentStateStore"
+        "PauseE2EAgentStateStore",
+        "AgentDraftStore"
       ]
     }
   ],
@@ -46,11 +51,11 @@
     "AGENT_OIDC_REPOSITORY_OWNER": "manhdungub-boop",
     "AGENT_OIDC_REPOSITORY_ID": "1423636651",
     "AGENT_OIDC_REPOSITORY_OWNER_ID": "342528485",
-    "AGENT_OIDC_REF": "refs/heads/main",
-    "AGENT_OIDC_WORKFLOW_REF": "manhdungub-boop/ai-thuc-chien-blog/.github/workflows/agent-runtime-operator.yml@refs/heads/main",
-    "AGENT_OIDC_ACTOR_ID": "342528485",
     "AGENT_OIDC_RUN_REF": "disabled",
     "AGENT_OIDC_RUN_WORKFLOW_REF": "disabled",
-    "AGENT_OIDC_RUN_ACTOR_ID": "disabled"
+    "AGENT_OIDC_RUN_ACTOR_ID": "disabled",
+    "AGENT_OIDC_PAUSE_REF": "disabled",
+    "AGENT_OIDC_PAUSE_WORKFLOW_REF": "disabled",
+    "AGENT_OIDC_PAUSE_ACTOR_ID": "disabled"
   }
 }

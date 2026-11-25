@@ -8,6 +8,7 @@ on:
     paths:
       - "agents/runtime/**"
       - ".github/workflows/agent-runtime-adapter-pause-e2e.yml"
+      - ".github/workflows/agent-runtime-adapter-pause-operator.yml"
 
 permissions:
   contents: read
@@ -34,12 +35,15 @@ jobs:
       group: agent-runtime-adapter-pause-e2e-live-worker
       cancel-in-progress: false
     permissions:
+      actions: read
       contents: read
       id-token: write
     env:
       CLOUDFLARE_ACCOUNT_ID: "92cf091bbac8b4879ec65feb30b4715b"
       PAUSE_E2E_WORKER_URL: "https://ai-thuc-chien-agent-runtime-pause-e2e.manhdungub.workers.dev"
       PAUSE_E2E_WORKER_NAME: "ai-thuc-chien-agent-runtime-pause-e2e"
+      PAUSE_E2E_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      PAUSE_E2E_UPDATED_AT: ${{ github.event.pull_request.updated_at }}
     steps:
       - name: Check out the exact authorized PR commit
         timeout-minutes: 2
@@ -147,6 +151,10 @@ jobs:
           config.vars.AGENT_OIDC_RUN_REF = process.env.GITHUB_REF;
           config.vars.AGENT_OIDC_RUN_WORKFLOW_REF = process.env.GITHUB_WORKFLOW_REF;
           config.vars.AGENT_OIDC_RUN_ACTOR_ID = process.env.GITHUB_ACTOR_ID;
+          config.vars.AGENT_OIDC_PAUSE_REF = process.env.GITHUB_REF;
+          config.vars.AGENT_OIDC_PAUSE_WORKFLOW_REF =
+            process.env.GITHUB_REPOSITORY + "/.github/workflows/agent-runtime-adapter-pause-operator.yml@" + process.env.GITHUB_REF;
+          config.vars.AGENT_OIDC_PAUSE_ACTOR_ID = process.env.GITHUB_ACTOR_ID;
           assert.equal(config.vars.AGENT_SCHEDULER_ENABLED, "false");
           assert.equal(config.vars.AGENT_RECOVERY_ALARM_ENABLED, "false");
           assert.equal(config.vars.AGENT_REVIEWER_AUTH_ENABLED, "false");
@@ -207,11 +215,11 @@ jobs:
           const stateToken = process.env.AGENT_STATE_STORE_TOKEN;
           const requestUrl = process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
           const requestToken = process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
+          const key = "oidc-preview-e2e:pause-" + process.env.PAUSE_E2E_HEAD_SHA;
           if (!base || !stateToken || !requestUrl || !requestToken) {
             throw new Error("Pause E2E runtime context is unavailable");
           }
 
-          const key = "oidc-preview-e2e:pause-" + process.env.GITHUB_RUN_ID + "-" + process.env.GITHUB_RUN_ATTEMPT;
           const tokenUrl = new URL(requestUrl);
           tokenUrl.searchParams.set("audience", process.env.OIDC_AUDIENCE);
           const tokenResponse = await fetch(tokenUrl, {
@@ -249,7 +257,7 @@ jobs:
 
           async function readStatus() {
             const response = await fetch(base + "/__e2e/status?key=" + encodeURIComponent(key), {
-              headers: { Authorization: "Bearer " + stateToken, Accept: "application/json" },
+              headers: { Accept: "application/json" },
               cache: "no-store",
               signal: AbortSignal.timeout(10000),
             });
@@ -258,23 +266,23 @@ jobs:
           }
 
           let live = null;
-          for (let attempt = 1; attempt <= 45; attempt += 1) {
-            live = await readStatus();
-            if (live.task?.state === "running" && live.task?.leaseOwner &&
-                live.gateState === "entered") break;
+          for (let attempt = 1; attempt <= 60; attempt += 1) {
+            try {
+              live = await readStatus();
+              if (live.task?.state === "running" && live.task?.leaseOwned === true &&
+                  live.gateState === "entered") break;
+            } catch {}
             await new Promise(resolve => setTimeout(resolve, 1000));
           }
           assert.equal(live?.task?.state, "running", "task must be durably running before Pause");
-          assert.equal(typeof live?.task?.leaseOwner, "string", "a live lease owner must exist");
+          assert.equal(live?.task?.leaseOwned, true, "a live lease owner must exist");
           assert.equal(live?.gateState, "entered", "the real read-only Adapter must be blocked in the controlled fetch");
           console.log("PAUSE_E2E_IN_FLIGHT_READY " + JSON.stringify({
-            taskId: live.task.taskId,
+            state: live.task.state,
             leaseGeneration: live.task.leaseGeneration,
             gateState: live.gateState,
           }));
 
-          // This request remains in-flight until the independent operator workflow
-          // sends its separately authenticated workflow_dispatch Pause.
           const runResult = await runPromise;
           assert.equal(runResult.status, 503, "the in-flight task must not report success after Pause");
           assert.equal(runResult.body?.ok, false);
@@ -288,7 +296,7 @@ jobs:
           }
           assert.equal(final?.task?.state, "cancelled");
           assert.equal(final?.task?.errorCode, "operator_paused");
-          assert.equal(final?.task?.leaseOwner, null, "Pause must clear the lease owner");
+          assert.equal(final?.task?.leaseOwned, false, "Pause must clear the lease owner");
           assert.equal(final?.task?.leaseExpiresAt, null, "Pause must clear lease expiry");
           assert.equal(final?.gateState, "aborted", "the real Adapter fetch must observe AbortSignal");
           assert.equal(final?.control?.paused, true);
@@ -296,9 +304,48 @@ jobs:
           assert.ok(final?.pauseAudit?.some(event =>
             event.action === "pause" &&
             event.actor === "github-actions:342528485" &&
-            event.reason === "Adapter pause E2E: independent workflow_dispatch"),
-            "the independent operator workflow Pause must be recorded");
+            event.reason === "Adapter pause E2E: independent OIDC workflow"),
+            "the independent Pause workflow must be recorded");
           console.log("PASS: independent OIDC Pause cancelled the in-flight real Adapter read, aborted its signal, fenced and cleared the lease, and persisted the cancellation audit.");
+          NODE
+
+      - name: Verify independent Pause workflow completed successfully
+        timeout-minutes: 4
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          const endpoint = "https://api.github.com/repos/manhdungub-boop/ai-thuc-chien-blog/actions/workflows/agent-runtime-adapter-pause-operator.yml/runs?event=pull_request&branch=security/agent-runtime-adapter-pause-e2e-20261125&per_page=20";
+          const startedAt = Date.parse(process.env.PAUSE_E2E_UPDATED_AT);
+          let matched = null;
+          for (let attempt = 1; attempt <= 60; attempt += 1) {
+            const response = await fetch(endpoint, {
+              headers: {
+                Authorization: "Bearer " + process.env.GH_TOKEN,
+                Accept: "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+              },
+              cache: "no-store",
+            });
+            if (!response.ok) throw new Error("Could not inspect independent Pause workflow runs: HTTP " + response.status);
+            const payload = await response.json();
+            const candidates = (payload.workflow_runs || []).filter(run =>
+              run.event === "pull_request" &&
+              run.head_branch === "security/agent-runtime-adapter-pause-e2e-20261125" &&
+              run.actor?.login === "manhdungub-boop" &&
+              Date.parse(run.created_at) >= startedAt);
+            if (candidates.length > 1) throw new Error("Ambiguous independent Pause workflow runs; fail closed.");
+            if (candidates.length === 1) {
+              matched = candidates[0];
+              if (matched.status === "completed") break;
+            }
+            await new Promise(resolve => setTimeout(resolve, 3000));
+          }
+          if (!matched || matched.status !== "completed" || matched.conclusion !== "success") {
+            throw new Error("Independent Pause workflow did not complete successfully.");
+          }
+          console.log("PASS: distinct Pause workflow completed successfully: " + matched.html_url);
           NODE
 
       - name: Always disable the isolated Worker and remove its one-run secret
