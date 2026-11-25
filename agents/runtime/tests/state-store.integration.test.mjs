@@ -999,8 +999,8 @@ test("persisted v1 State Store migrates transactionally to v6 without losing tas
 });
 
 
-test("bounded queue claim atomically selects the oldest due task and stops when empty or paused", async () => {
-  await withRuntime({}, async ({ stub }) => {
+test("bounded queue claim atomically selects the oldest due task and reconciles alarms on empty ticks", async () => {
+  await withRuntime({ recoveryAlarmEnabled: "true" }, async ({ stub }) => {
     const first = await call(stub, "/reserve", task("dispatch-first"), { "x-test-now": "2026-11-19T10:00:00.000Z" });
     const second = await call(stub, "/reserve", task("dispatch-second"), { "x-test-now": "2026-11-19T10:00:01.000Z" });
     assert.equal(first.status, 201);
@@ -1016,10 +1016,18 @@ test("bounded queue claim atomically selects the oldest due task and stops when 
     assert.equal(claimedSecond.status, 200);
     assert.equal(claimedSecond.body.task.taskId, second.body.task.taskId);
 
+    const deletedAlarm = await call(stub, "/__test/delete-alarm", {});
+    assert.equal(deletedAlarm.status, 200);
+    assert.equal(deletedAlarm.body.alarmAt, null, "simulate a failed alarm write after claims were accepted");
+
     const empty = await call(stub, "/claim-next", {}, { "x-test-now": "2026-11-19T10:00:02.000Z" });
     assert.equal(empty.status, 200);
     assert.equal(empty.body.task, null);
     assert.equal(empty.body.lease, null);
+    const reconciledAlarm = await call(stub, "/__test/alarm-state", undefined);
+    assert.equal(reconciledAlarm.status, 200);
+    assert.equal(reconciledAlarm.body.alarmAt, Date.parse("2026-11-19T10:05:02.000Z"),
+      "an empty dispatch tick must re-arm recovery for outstanding running leases");
 
     const paused = await call(stub, "/control/pause", {
       actor: "queue-dispatch-test",
@@ -1030,6 +1038,8 @@ test("bounded queue claim atomically selects the oldest due task and stops when 
     const blocked = await call(stub, "/claim-next", {}, { "x-test-now": "2026-11-19T10:00:03.000Z" });
     assert.equal(blocked.status, 503);
     assert.equal(blocked.body.error, "agent_disabled_or_paused");
+    const clearedAlarm = await call(stub, "/__test/alarm-state", undefined);
+    assert.equal(clearedAlarm.body.alarmAt, null, "Pause must still clear the recovery alarm");
   });
 });
 
