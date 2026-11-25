@@ -447,7 +447,6 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     }, Date.parse("2026-11-19T08:10:00.000Z"));
 
     const newer = candidate(sources[0], "v1.2.4", "2026-11-19T11:00:00.000Z");
-    newer.latest_release.source_url = latestUrl;
     newer.discovered_at = "2026-11-19T11:05:00.000Z";
     await store.upsertCandidates([newer], Date.parse("2026-11-19T11:06:00.000Z"));
 
@@ -457,7 +456,7 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     expect(packet.checks_missing_evidence).toBe(6);
     const history = await store.listReviewEvidence("github:ollama/ollama");
     expect(history).toHaveLength(1);
-     expect(history[0].candidate_release_identity).toBe(releaseIdentity(latestUrl, "2026-11-19T08:00:00.000Z"));
+     expect(history[0].candidate_release_identity).toBe(releaseIdentity("https://github.com/ollama/ollama/releases/tag/v1.2.3", "2026-11-19T08:00:00.000Z"));
     expect(packet.verification_status).toBe("not_verified");
   });
 
@@ -478,12 +477,13 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     expect(first.accepted).toBe(true);
 
     const newer = candidate(sources[0], "v1.2.4", "2026-11-19T11:00:00.000Z");
+    newer.latest_release.source_url = latestUrl;
     newer.discovered_at = "2026-11-19T11:05:00.000Z";
     await store.upsertCandidates([newer], Date.parse("2026-11-19T11:06:00.000Z"));
 
     const staleSubmission = await submitEvidence(store,
       "github:ollama/ollama", evidence, Date.parse("2026-11-19T11:10:00.000Z"),
-      releaseIdentity("https://github.com/ollama/ollama/releases/tag/v1.2.3", "2026-11-19T08:00:00.000Z")
+      releaseIdentity(latestUrl, "2026-11-19T08:00:00.000Z")
     );
     expect(staleSubmission).toEqual({ accepted: false, reason: "stale_candidate_release" });
 
@@ -497,8 +497,8 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     const history = await store.listReviewEvidence("github:ollama/ollama");
     expect(history).toHaveLength(2);
     expect(new Set(history.map(item => item.candidate_release_identity))).toEqual(new Set([
-      releaseIdentity("https://github.com/ollama/ollama/releases/tag/v1.2.3", "2026-11-19T08:00:00.000Z"),
-      releaseIdentity("https://github.com/ollama/ollama/releases/tag/v1.2.4", "2026-11-19T11:00:00.000Z")
+      releaseIdentity(latestUrl, "2026-11-19T08:00:00.000Z"),
+      releaseIdentity(latestUrl, "2026-11-19T11:00:00.000Z")
     ]));
     expect(await submitEvidence(store, 
       "github:ollama/ollama", evidence, Date.parse("2026-11-19T11:11:00.000Z")
