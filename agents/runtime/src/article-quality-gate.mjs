@@ -106,7 +106,8 @@ export function reviewArticleDraft(draft) {
 
   if (validSources.length < MIN_SOURCES) add("source_count", "At least three distinct, valid HTTPS sources are required.");
 
-  const citationNumbers = [...proseBody.matchAll(/\[(\d{1,2})\]/g)].map(match => Number(match[1]));
+  const citationProse = proseBody.replace(/`+[^`]*?`+/g, " ").replace(/!?\[[^\]]*\]\([^)]*\)/g, " ");
+  const citationNumbers = [...citationProse.matchAll(/\[(\d{1,2})\]/g)].map(match => Number(match[1]));
   if (!citationNumbers.length) {
     add("missing_inline_citations", "Add inline numeric citations such as [1] that correspond to the source list.");
   } else if (citationNumbers.some(number => number < 1 || number > sources.length || !validSourceIndexes.has(number - 1))) {
