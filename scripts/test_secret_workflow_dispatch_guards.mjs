@@ -22,6 +22,53 @@ const workerOnly = await read("deploy-production-worker-only.yml");
 const googlePreview = await read("deploy-google-login-preview.yml");
 const previewD1 = await read("migrate-preview-d1.yml");
 const configureBuilds = await read("configure-cloudflare-worker-builds.yml");
+const stagingEmail = await read("staging-email-e2e.yml");
+const stagingEmailLines = stagingEmail.split("\n");
+const stagingJobStart = stagingEmailLines.indexOf("  staging-email-e2e:");
+assert.notEqual(stagingJobStart, -1, "Staging email E2E job must exist.");
+assert.equal(
+  stagingEmailLines.filter(line => /^    environment:/.test(line)).length,
+  1,
+  "Staging email E2E must use exactly one protected environment."
+);
+assert.ok(stagingEmailLines.includes("    environment: staging-e2e"),
+  "Staging email E2E must use the protected staging-e2e environment.");
+const nextJobStart = stagingEmailLines.findIndex((line, index) =>
+  index > stagingJobStart && /^  [A-Za-z0-9_-]+:\s*$/.test(line));
+const stagingJobLines = stagingEmailLines.slice(
+  stagingJobStart,
+  nextJobStart === -1 ? stagingEmailLines.length : nextJobStart
+);
+const expectedStagingJobCondition =
+  "    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'";
+assert.deepEqual(
+  stagingJobLines.filter(line => /^    if:/.test(line)),
+  [expectedStagingJobCondition],
+  "Staging email E2E must have exactly one trusted-main workflow_dispatch condition."
+);
+
+const stagingCheckoutStart = stagingJobLines.indexOf("      - name: Check out the exact trusted dispatch commit");
+assert.notEqual(stagingCheckoutStart, -1, "Staging email E2E must check out the trusted source.");
+const nextStepStart = stagingJobLines.findIndex((line, index) =>
+  index > stagingCheckoutStart && /^      - name:/.test(line));
+const stagingCheckoutLines = stagingJobLines.slice(
+  stagingCheckoutStart,
+  nextStepStart === -1 ? stagingJobLines.length : nextStepStart
+);
+assert.equal(
+  stagingCheckoutLines.filter(line => /^          ref:/.test(line)).length,
+  1,
+  "Staging email checkout must define exactly one ref."
+);
+assert.ok(stagingCheckoutLines.includes("          ref: ${{ github.sha }}"),
+  "Staging email E2E must check out the immutable dispatch commit, not a moving branch ref.");
+assert.equal(
+  stagingCheckoutLines.filter(line => /^          persist-credentials:/.test(line)).length,
+  1,
+  "Staging email checkout must define exactly one credential-persistence setting."
+);
+assert.ok(stagingCheckoutLines.includes("          persist-credentials: false"),
+  "Staging email E2E must not persist the GitHub checkout token.");
 
 const productionSmokeGuard = "if: github.event_name == 'schedule' || (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')";
 assert.ok(health.includes(productionSmokeGuard), "Live Production smoke tests must run only on schedule or trusted main.");
@@ -86,7 +133,8 @@ const checkoutWorkflows = [
   ["deploy-cloudflare-workers.yml", workers],
   ["deploy-google-login-preview.yml", googlePreview],
   ["migrate-preview-d1.yml", previewD1],
-  ["configure-cloudflare-worker-builds.yml", configureBuilds]
+  ["configure-cloudflare-worker-builds.yml", configureBuilds],
+  ["staging-email-e2e.yml", stagingEmail]
 ];
 for (const [name, workflow] of checkoutWorkflows) {
   const lines = workflow.split("\n");
@@ -98,9 +146,10 @@ for (const [name, workflow] of checkoutWorkflows) {
     assert.match(block, /persist-credentials:\s*false/, name + " must not persist the GitHub checkout token.");
   }
 }
-console.log("PASS: all six Cloudflare workflows with checkout disable persisted GitHub credentials.");
+console.log("PASS: all secret-bearing workflows with checkout disable persisted GitHub credentials.");
 assert.doesNotMatch(configureBuilds, /secrets\.|api\.cloudflare\.com|wrangler (?:deploy|preview)/);
 console.log("PASS: all Cloudflare secret-bearing diagnostics require trusted-main dispatch and explicit confirmation.");
 console.log("PASS: legacy trigger repair is disabled; Workers Builds updater is offline-only.");
 console.log("PASS: Production deploys require explicit confirmation from main; D1 migration is locked to the Preview UUID.");
 console.log("PASS: Worker-only Production deployment is disabled; Preview deploys require trusted-main manual confirmation.");
+console.log("PASS: staging email E2E runs trusted main only and cannot execute branch-controlled code with staging secrets.");
