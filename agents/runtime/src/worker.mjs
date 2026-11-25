@@ -25,6 +25,7 @@ const SECURITY_HEADERS = Object.freeze({
   "Referrer-Policy": "no-referrer",
 });
 const MAX_INTERNAL_RESPONSE_BYTES = 16 * 1024;
+const PUBLIC_HOMEPAGE_URL = "https://ai-thuc-chien-blog.manhdungub.workers.dev/";
 const LEASE_HEARTBEAT_INTERVAL_MS = 10_000;
 const INTERNAL_SCHEDULED_DISPATCH = Symbol("internal-scheduled-dispatch");
 const INTERNAL_OIDC_RUN = Symbol("internal-oidc-run");
@@ -369,6 +370,50 @@ async function readStateStore(env, pathname) {
   return body;
 }
 
+async function getDraftStoreStub(env) {
+  const namespace = env.AGENT_DRAFT_STORE;
+  if (!namespace || typeof namespace.idFromName !== "function" || typeof namespace.get !== "function") throw new Error("draft_store_unavailable");
+  const stub = namespace.get(namespace.idFromName("agent-authoring-global"));
+  if (!stub || typeof stub.setRuntimePaused !== "function") throw new Error("draft_store_control_unavailable");
+  return stub;
+}
+async function syncDraftStoreControl(env, control) {
+  if (!control || typeof control.paused !== "boolean" || !Number.isSafeInteger(control.version) || control.version < 0) throw new Error("runtime_control_snapshot_invalid");
+  const result = await (await getDraftStoreStub(env)).setRuntimePaused(control.paused, control.version);
+  if (result?.updated !== true || result.paused !== control.paused || result.version !== control.version) throw Object.assign(new Error("draft_store_control_sync_failed"), { status: 503 });
+  return result;
+}
+async function pauseRuntimeControl(env, body) {
+  const observed = await readStateStore(env, "/control");
+  const version = observed?.control?.version;
+  if (!Number.isSafeInteger(version) || version < 0 || !Number.isSafeInteger(version + 1)) throw Object.assign(new Error("runtime_control_snapshot_invalid"), { status: 503 });
+  const draftStore = await getDraftStoreStub(env);
+  const fenced = await draftStore.setRuntimePaused(true, version + 1);
+  if (fenced?.updated !== true || fenced.paused !== true || fenced.version !== version + 1) throw Object.assign(new Error("draft_store_pause_fence_failed"), { status: 409 });
+  try {
+    const result = await writeStateStore(env, "/control/pause", body);
+    await syncDraftStoreControl(env, result.control);
+    return result;
+  } catch (error) {
+    try { const current = await readStateStore(env, "/control"); await syncDraftStoreControl(env, current.control); }
+    catch { /* Keep the draft Durable Object paused if reconciliation is uncertain. */ }
+    throw error;
+  }
+}
+function startAuthoringControlWatch(env, expectedVersion) {
+  const controller = new AbortController();
+  let stopped = false, timer = null;
+  const poll = async () => {
+    if (stopped || controller.signal.aborted) return;
+    try {
+      const control = (await readStateStore(env, "/control"))?.control;
+      if (!control || control.paused !== false || control.version !== expectedVersion) { controller.abort(new Error("authoring_control_changed")); return; }
+    } catch { controller.abort(new Error("authoring_control_unavailable")); return; }
+    if (!stopped && !controller.signal.aborted) timer = setTimeout(poll, 1000);
+  };
+  timer = setTimeout(poll, 1000);
+  return { signal: controller.signal, stop() { stopped = true; if (timer !== null) clearTimeout(timer); } };
+}
 
 const AUTHORING_IDEMPOTENCY_KEY = /^[A-Za-z0-9][A-Za-z0-9._:-]{15,127}$/;
 const CONTENT_RESEARCH_DAILY_LIMIT = 8;
@@ -442,6 +487,14 @@ const worker = {
     const reviewerResponse = await handleReviewerHttpRequest(request, env);
     if (reviewerResponse) return reviewerResponse;
     const url = new URL(request.url);
+    if (url.pathname === "/" && request.method === "GET") {
+      return new Response(null, { status: 302, headers: {
+        location: PUBLIC_HOMEPAGE_URL,
+        "cache-control": "no-store",
+        "referrer-policy": "no-referrer",
+        "x-content-type-options": "nosniff",
+      } });
+    }
     if (url.pathname === "/health") {
       if (request.method !== "GET") return json({ ok: false, error: "method_not_allowed" }, 405);
       return json({
@@ -633,7 +686,7 @@ const worker = {
         // competing Pause has invalidated this request's observed version.
         if (resumeWasRequested && !resumeRejectedConflict) {
           try {
-            await writeStateStore(env, "/control/pause", {
+            await pauseRuntimeControl(env, {
               actor,
               requestId: requestId(),
               reason: "one-shot OIDC Preview E2E complete",
@@ -699,7 +752,7 @@ const worker = {
 
       const actor = "github-actions:" + authorized.identity.actorId;
       try {
-        const result = await writeStateStore(env, "/control/pause", {
+        const result = await pauseRuntimeControl(env, {
           actor,
           requestId: crypto.randomUUID(),
           ...(body.reason === undefined ? {} : { reason: body.reason }),
@@ -1180,12 +1233,10 @@ const worker = {
         }
       }
       try {
-        const result = await writeStateStore(env, "/control/" + action, {
-          actor,
-          requestId: crypto.randomUUID(),
-          ...(body.reason === undefined ? {} : { reason: body.reason }),
-          ...(action === "resume" ? { expectedVersion } : {}),
-        });
+        const result = action === "pause"
+          ? await pauseRuntimeControl(env, { actor, requestId: crypto.randomUUID(), ...(body.reason === undefined ? {} : { reason: body.reason }) })
+          : await writeStateStore(env, "/control/resume", { actor, requestId: crypto.randomUUID(), ...(body.reason === undefined ? {} : { reason: body.reason }), expectedVersion });
+        if (action === "resume") await syncDraftStoreControl(env, result.control);
         return json({ ok: true, changed: result.changed, control: result.control });
       } catch (error) {
         if (error?.status === 409) {
