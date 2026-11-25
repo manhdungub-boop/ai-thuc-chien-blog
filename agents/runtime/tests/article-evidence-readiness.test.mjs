@@ -215,6 +215,46 @@ describe("article evidence readiness", () => {
     expect(result.ok).toBe(true);
   });
 
+  it("keeps in-sentence citation groups attached to the complete reviewed assertion", async () => {
+    const originalClaim = ledger.claims[0].claim;
+    ledger.claims[0].claim = "The system supports bounded research discovery under strict limits.";
+    try {
+      const reviewRecord = await makeReview();
+      const draft = makeDraft();
+      draft.body_markdown = draft.body_markdown.replace(
+        originalClaim + " [1] [2] [3]. ",
+        "The system supports bounded research discovery [1] [2] under strict limits. "
+      );
+      const result = await assessArticleEvidenceReadiness({
+        draft,
+        ledger,
+        reviewRecord,
+        authenticatedReviewer: { authenticated: true, reviewer_ref: reviewRecord.reviewer_ref },
+        now
+      });
+      expect(result.ok).toBe(true);
+    } finally {
+      ledger.claims[0].claim = originalClaim;
+    }
+  });
+
+  it("retains the complete citation group when a closing period follows it", async () => {
+    const reviewRecord = await makeReview();
+    const draft = makeDraft();
+    draft.body_markdown = draft.body_markdown.replace(
+      ledger.claims[0].claim + " [1] [2] [3]. ",
+      ledger.claims[0].claim + ". [1] [2]. Further explanation follows. "
+    );
+    const result = await assessArticleEvidenceReadiness({
+      draft,
+      ledger,
+      reviewRecord,
+      authenticatedReviewer: { authenticated: true, reviewer_ref: reviewRecord.reviewer_ref },
+      now
+    });
+    expect(result.ok).toBe(true);
+  });
+
   it("does not let citations in an unrelated paragraph satisfy a reviewed claim", async () => {
     const reviewRecord = await makeReview();
     const draft = makeDraft();
