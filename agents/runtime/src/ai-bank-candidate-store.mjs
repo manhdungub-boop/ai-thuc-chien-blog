@@ -79,6 +79,13 @@ function validateCandidate(candidate) {
   return { ok: true, json, releaseAt };
 }
 
+function candidateReleaseIdentity(candidate) {
+  return JSON.stringify([
+    candidate.latest_release.source_url,
+    candidate.latest_release.published_at
+  ]);
+}
+
 function safeCandidate(row) {
   return {
     candidate: JSON.parse(row.candidate_json),
@@ -407,7 +414,7 @@ export class AgentAIBankCandidateStore {
     if (typeof reviewedReleaseUrl !== "string" || !reviewedReleaseUrl.trim() || reviewedReleaseUrl.length > 1000) {
       return { accepted: false, reason: "reviewed_release_identity_required" };
     }
-    const releaseUrl = candidate.candidate.latest_release.source_url;
+    const releaseUrl = candidateReleaseIdentity(candidate.candidate);
     if (reviewedReleaseUrl !== releaseUrl) return { accepted: false, reason: "stale_candidate_release" };
     if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) {
       return { accepted: false, reason: "invalid_evidence" };
@@ -502,7 +509,7 @@ export class AgentAIBankCandidateStore {
     if (!stored) return null;
     const rows = this.ctx.storage.sql.exec(
       "SELECT e.check_type, COUNT(*) AS evidence_count FROM ai_bank_review_evidence e JOIN ai_bank_review_evidence_releases r ON r.evidence_id = e.evidence_id WHERE e.candidate_id = ? AND r.candidate_release_url = ? GROUP BY e.check_type",
-      candidateId, stored.candidate.latest_release.source_url
+      candidateId, candidateReleaseIdentity(stored.candidate)
     ).toArray();
     const counts = new Map(rows.map(row => [row.check_type, row.evidence_count]));
     const checklist = REQUIRED_CHECKS.map(checkType => ({
@@ -516,7 +523,7 @@ export class AgentAIBankCandidateStore {
       "FROM ai_bank_review_evidence e JOIN ai_bank_review_evidence_releases r ON r.evidence_id = e.evidence_id " +
       "WHERE e.candidate_id = ? AND r.candidate_release_url = ? " +
       "ORDER BY e.check_type ASC, e.submitted_at ASC, e.evidence_id ASC LIMIT 30",
-      candidateId, stored.candidate.latest_release.source_url
+      candidateId, candidateReleaseIdentity(stored.candidate)
     ).toArray().map(row => ({
       ...row,
       verified: false,
