@@ -74,7 +74,7 @@ function config(env) {
       !env.GOOGLE_REVIEWER_REDIRECT_URI.startsWith("https://") ||
       env.GOOGLE_REVIEWER_REDIRECT_URI.length > 512 ||
       env.GOOGLE_REVIEWER_CLIENT_ID.length > 512 ||
-      allowedEmails.length !== 1 || !/^[^@\s]+@gmail\.[^@\s]+$/.test(allowedEmails[0]) || allowedEmails[0].length > 254 || env.GOOGLE_REVIEWER_STATE_SECRET === env.GOOGLE_REVIEWER_SESSION_SECRET) return null;
+      allowedEmails.length !== 1 || !/^[^@\s]+@gmail\.com$/.test(allowedEmails[0]) || allowedEmails[0].length > 254 || env.GOOGLE_REVIEWER_STATE_SECRET === env.GOOGLE_REVIEWER_SESSION_SECRET) return null;
   try {
     const uri = new URL(env.GOOGLE_REVIEWER_REDIRECT_URI);
     if (uri.protocol !== "https:" || uri.hostname !== "ai-thuc-chien-agent-runtime-preview.manhdungub.workers.dev" || uri.pathname !== "/auth/google/callback" || uri.search || uri.hash || uri.username || uri.password) return null;
