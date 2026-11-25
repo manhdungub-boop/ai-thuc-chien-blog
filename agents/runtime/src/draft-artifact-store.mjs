@@ -187,9 +187,21 @@ export class AgentDraftStore {
       "version INTEGER NOT NULL, content_version INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, " +
       "ledger_json TEXT, review_record_json TEXT, evidence_readiness_json TEXT, research_evidence_json TEXT)"
     );
-    const columns = this.ctx.storage.sql.exec("PRAGMA table_info(draft_artifacts)").toArray();
-    if (!columns.some(column => column.name === "content_version")) {
+    const columns = new Set(this.ctx.storage.sql.exec("PRAGMA table_info(draft_artifacts)").toArray().map(column => column.name));
+    for (const [name, definition] of [
+      ["ledger_json", "TEXT"],
+      ["review_record_json", "TEXT"],
+      ["evidence_readiness_json", "TEXT"],
+      ["research_evidence_json", "TEXT"]
+    ]) {
+      if (!columns.has(name)) {
+        this.ctx.storage.sql.exec("ALTER TABLE draft_artifacts ADD COLUMN " + name + " " + definition);
+        columns.add(name);
+      }
+    }
+    if (!columns.has("content_version")) {
       this.ctx.storage.sql.exec("ALTER TABLE draft_artifacts ADD COLUMN content_version INTEGER NOT NULL DEFAULT 1");
+      columns.add("content_version");
       const legacyRows = this.ctx.storage.sql.exec(
         "SELECT id, version, ledger_json FROM draft_artifacts"
       ).toArray();
@@ -211,10 +223,6 @@ export class AgentDraftStore {
         );
       }
     }
-    if (!columns.some(column => column.name === "ledger_json")) this.ctx.storage.sql.exec("ALTER TABLE draft_artifacts ADD COLUMN ledger_json TEXT");
-    if (!columns.some(column => column.name === "review_record_json")) this.ctx.storage.sql.exec("ALTER TABLE draft_artifacts ADD COLUMN review_record_json TEXT");
-    if (!columns.some(column => column.name === "evidence_readiness_json")) this.ctx.storage.sql.exec("ALTER TABLE draft_artifacts ADD COLUMN evidence_readiness_json TEXT");
-    if (!columns.some(column => column.name === "research_evidence_json")) this.ctx.storage.sql.exec("ALTER TABLE draft_artifacts ADD COLUMN research_evidence_json TEXT");
     this.ctx.storage.sql.exec("CREATE INDEX IF NOT EXISTS draft_artifacts_status_updated ON draft_artifacts(status, updated_at)");
     this.ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS runtime_authoring_control (singleton_id INTEGER PRIMARY KEY CHECK(singleton_id = 1), paused INTEGER NOT NULL CHECK(paused IN (0,1)), version INTEGER NOT NULL CHECK(version >= 0))");
     this.ctx.storage.sql.exec("INSERT OR IGNORE INTO runtime_authoring_control (singleton_id, paused, version) VALUES (1, 1, 0)");
