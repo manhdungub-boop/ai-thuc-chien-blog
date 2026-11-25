@@ -233,7 +233,14 @@ export class AgentDraftStore {
     return this.ctx.storage.transactionSync(() => {
       const current = this.ctx.storage.sql.exec("SELECT paused, version FROM runtime_authoring_control WHERE singleton_id = 1").toArray()[0];
       if (!current) return { updated: false, reason: "runtime_control_unavailable" };
-      if (version < current.version) return { updated: false, reason: "runtime_control_version_stale" };
+      if (version < current.version) {
+        // A stale Pause is safe only when this store is already paused. Never
+        // let a stale Resume reopen authoring behind the authoritative State Store.
+        if (paused && current.paused === 1) {
+          return { updated: true, duplicate: true, stale_version: true, paused: true, version: current.version };
+        }
+        return { updated: false, reason: "runtime_control_version_stale", current_version: current.version };
+      }
       if (version === current.version) {
         if (current.paused !== (paused ? 1 : 0)) return { updated: false, reason: "runtime_control_version_conflict" };
         return { updated: true, duplicate: true, paused, version };
