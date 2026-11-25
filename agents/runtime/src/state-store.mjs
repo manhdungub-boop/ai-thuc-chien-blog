@@ -923,7 +923,7 @@ if (url.pathname === "/task" && request.method === "GET") {
           },
         };
       });
-      if (result.status === 200 && result.body.task) await this.scheduleRecoveryAlarm(now);
+      if (result.status === 200) await this.scheduleRecoveryAlarm(now);
       return result;
     } catch {
       return { status: 503, body: { ok: false, error: "state_store_unavailable" } };
