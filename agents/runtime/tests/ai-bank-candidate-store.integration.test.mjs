@@ -238,6 +238,36 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     expect(await store.getDiscoveryCursor()).toMatchObject({ cursor: firstCursor, scan_id: "run-100-attempt-1" });
   });
 
+  it("binds every discovery scan ID to its original batch after later scans commit", async () => {
+    const firstCursor = "2026-11-19T08:06:00.000Z";
+    const secondCursor = "2026-11-19T08:07:00.000Z";
+    await store.upsertCandidatesAndAdvanceCursor(
+      [candidate()], firstCursor, "scan-lifetime-a", Date.parse("2026-11-19T08:08:00.000Z")
+    );
+    await store.upsertCandidatesAndAdvanceCursor(
+      [candidate(sources[1])], secondCursor, "scan-lifetime-b", Date.parse("2026-11-19T08:09:00.000Z")
+    );
+
+    const exactReplay = await store.upsertCandidatesAndAdvanceCursor(
+      [candidate()], firstCursor, "scan-lifetime-a", Date.parse("2026-11-19T08:10:00.000Z")
+    );
+    expect(exactReplay).toMatchObject({
+      accepted: true, duplicate: true, scan_id: "scan-lifetime-a", cursor_advanced: false,
+      cursor: secondCursor
+    });
+
+    const changedReplay = await store.upsertCandidatesAndAdvanceCursor(
+      [candidate(sources[1])], "2026-11-19T08:11:00.000Z", "scan-lifetime-a",
+      Date.parse("2026-11-19T08:12:00.000Z")
+    );
+    expect(changedReplay).toMatchObject({
+      accepted: false, reason: "discovery_scan_id_reused", cursor_advanced: false
+    });
+    expect(await store.getDiscoveryCursor()).toMatchObject({
+      cursor: secondCursor, scan_id: "scan-lifetime-b"
+    });
+  });
+
   it("does not advance the discovery cursor when any candidate write fails", async () => {
     await store.testInstallCandidateInsertFailureTrigger();
     await expect(Promise.resolve().then(() => store.upsertCandidatesAndAdvanceCursor(
