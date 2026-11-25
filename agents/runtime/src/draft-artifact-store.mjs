@@ -155,7 +155,7 @@ function canonicalJson(value) {
 
 function safeArtifact(row) {
   return {
-    id: row.id, artifact_type: "article", status: row.status, version: row.version,
+    id: row.id, artifact_type: "article", status: row.status, version: row.version, content_version: row.content_version ?? 1,
     draft: JSON.parse(row.draft_json), quality_review: JSON.parse(row.quality_review_json),
     research_evidence: row.research_evidence_json ? JSON.parse(row.research_evidence_json) : [],
     evidence_review: parseEvidenceReview(row),
@@ -184,10 +184,11 @@ export class AgentDraftStore {
       "CREATE TABLE IF NOT EXISTS draft_artifacts (" +
       "id TEXT PRIMARY KEY, draft_json TEXT NOT NULL, quality_review_json TEXT NOT NULL, " +
       "status TEXT NOT NULL CHECK(status IN ('pending_human_review','needs_revision')), " +
-      "version INTEGER NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, " +
+      "version INTEGER NOT NULL, content_version INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, " +
       "ledger_json TEXT, review_record_json TEXT, evidence_readiness_json TEXT, research_evidence_json TEXT)"
     );
     const columns = this.ctx.storage.sql.exec("PRAGMA table_info(draft_artifacts)").toArray();
+    if (!columns.some(column => column.name === "content_version")) this.ctx.storage.sql.exec("ALTER TABLE draft_artifacts ADD COLUMN content_version INTEGER NOT NULL DEFAULT 1");
     if (!columns.some(column => column.name === "ledger_json")) this.ctx.storage.sql.exec("ALTER TABLE draft_artifacts ADD COLUMN ledger_json TEXT");
     if (!columns.some(column => column.name === "review_record_json")) this.ctx.storage.sql.exec("ALTER TABLE draft_artifacts ADD COLUMN review_record_json TEXT");
     if (!columns.some(column => column.name === "evidence_readiness_json")) this.ctx.storage.sql.exec("ALTER TABLE draft_artifacts ADD COLUMN evidence_readiness_json TEXT");
@@ -262,7 +263,7 @@ export class AgentDraftStore {
     const status = review.ok ? "pending_human_review" : "needs_revision";
     const now = new Date().toISOString();
     const updated = this.ctx.storage.sql.exec(
-      "UPDATE draft_artifacts SET draft_json = ?, quality_review_json = ?, status = ?, version = version + 1, updated_at = ?, ledger_json = NULL, review_record_json = NULL, evidence_readiness_json = NULL " +
+      "UPDATE draft_artifacts SET draft_json = ?, quality_review_json = ?, status = ?, version = version + 1, content_version = content_version + 1, updated_at = ?, ledger_json = NULL, review_record_json = NULL, evidence_readiness_json = NULL " +
       "WHERE id = ? AND version = ? RETURNING *",
       validated.json, JSON.stringify(review), status, now, id, expectedVersion
     ).toArray();
@@ -330,7 +331,7 @@ export class AgentDraftStore {
       : retrievedEvidence;
     const built = buildHumanClaimReviewLedger(claims, evidenceSnapshot);
     if (!built.ok) return { stored: false, reason: built.reason, ledger_status: built.status };
-    const ledger = { ...built, draft_version: current.version };
+    const ledger = { ...built, draft_version: current.content_version ?? 1 };
     const ledgerJson = JSON.stringify(ledger);
     if (new TextEncoder().encode(ledgerJson).byteLength > MAX_EVIDENCE_REVIEW_BYTES) {
       return { stored: false, reason: "evidence_review_too_large" };
@@ -379,7 +380,7 @@ export class AgentDraftStore {
     let storedLedger;
     try { storedLedger = JSON.parse(current.ledger_json); }
     catch { return { recorded: false, reason: "stored_evidence_ledger_invalid" }; }
-    if (storedLedger.draft_version !== current.version - 1 ||
+    if (storedLedger.draft_version !== (current.content_version ?? 1) ||
         canonicalJson(ledger) !== canonicalJson(storedLedger)) {
       return { recorded: false, reason: "evidence_ledger_version_or_snapshot_mismatch" };
     }
