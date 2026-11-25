@@ -45,8 +45,8 @@ const writerAuthEnv = {
   GOOGLE_REVIEWER_CLIENT_ID: "preview-test-client-id-abcdefghijklmnopqrstuvwxyz0123456789.apps.googleusercontent.com",
   GOOGLE_REVIEWER_CLIENT_SECRET: "test-google-client-secret-value-abcdefghijklmnopqrstuvwxyz0123456789",
   GOOGLE_REVIEWER_REDIRECT_URI: "https://ai-thuc-chien-agent-runtime-preview.manhdungub.workers.dev/auth/google/callback",
-  GOOGLE_REVIEWER_ALLOWED_EMAILS: "writer@example.com",
-  GOOGLE_REVIEWER_EVIDENCE_WRITER_EMAILS: "writer@example.com",
+  GOOGLE_REVIEWER_ALLOWED_EMAILS: "writer@gmail.com",
+  GOOGLE_REVIEWER_EVIDENCE_WRITER_EMAILS: "writer@gmail.com",
   GOOGLE_REVIEWER_STATE_SECRET: "state-secret-for-tests-only-abcdefghijklmnopqrstuvwxyz0123456789",
   GOOGLE_REVIEWER_SESSION_SECRET: "session-secret-for-tests-only-zyxwvutsrqponmlkjihgfedcba9876543210"
 };
@@ -56,7 +56,7 @@ function base64Url(bytes) {
   return btoa(binary).replace(/=/g, "").replaceAll("+", "-").replaceAll("/", "_");
 }
 async function writerSessionToken(now) {
-  const payload = { provider: "google", sub: "google-writer-test-subject", email: "writer@example.com", reviewer_ref: "google:google-writer-test-subject", iat: Math.floor(now / 1000) - 10, exp: Math.floor(now / 1000) + 600 };
+  const payload = { provider: "google", sub: "google-writer-test-subject", email: "writer@gmail.com", reviewer_ref: "google:google-writer-test-subject", iat: Math.floor(now / 1000) - 10, exp: Math.floor(now / 1000) + 600 };
   const encoded = base64Url(new TextEncoder().encode(JSON.stringify(payload)));
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(writerAuthEnv.GOOGLE_REVIEWER_SESSION_SECRET), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(encoded));
