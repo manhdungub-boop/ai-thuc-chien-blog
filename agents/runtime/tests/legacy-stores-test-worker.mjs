@@ -55,6 +55,9 @@ class TestAgentAIBankCandidateStore extends withRpcFetch(AgentAIBankCandidateSto
   }
 
   testSetLegacyDiscoveryDigest() {
+    this.ctx.storage.sql.exec(
+      "DELETE FROM ai_bank_discovery_scans WHERE scan_id = (SELECT scan_id FROM ai_bank_discovery_cursor WHERE singleton_id = 1)"
+    );
     this.ctx.storage.sql.exec("UPDATE ai_bank_discovery_cursor SET batch_sha256 = '' WHERE singleton_id = 1");
     return true;
   }
