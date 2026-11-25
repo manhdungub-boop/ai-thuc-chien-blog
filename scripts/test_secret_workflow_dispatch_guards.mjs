@@ -26,6 +26,13 @@ const stagingEmail = await read("staging-email-e2e.yml");
 const stagingEmailLines = stagingEmail.split("\n");
 const stagingJobStart = stagingEmailLines.indexOf("  staging-email-e2e:");
 assert.notEqual(stagingJobStart, -1, "Staging email E2E job must exist.");
+assert.equal(
+  stagingEmailLines.filter(line => /^    environment:/.test(line)).length,
+  1,
+  "Staging email E2E must use exactly one protected environment."
+);
+assert.ok(stagingEmailLines.includes("    environment: staging-e2e"),
+  "Staging email E2E must use the protected staging-e2e environment.");
 const nextJobStart = stagingEmailLines.findIndex((line, index) =>
   index > stagingJobStart && /^  [A-Za-z0-9_-]+:\s*$/.test(line));
 const stagingJobLines = stagingEmailLines.slice(
