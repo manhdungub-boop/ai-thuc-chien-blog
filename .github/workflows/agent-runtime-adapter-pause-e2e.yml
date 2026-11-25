@@ -172,8 +172,8 @@ jobs:
           timeout --signal=TERM --kill-after=10s 180s npx --yes wrangler@4.166.0 deploy --config "$GENERATED_CONFIG" \
             --message "Isolated Adapter Pause E2E test Worker; no Production bindings"
 
-      - name: Install one-run internal State Store credential
-        timeout-minutes: 2
+      - name: Inject one-run State Store credential into isolated Worker and DO environment
+        timeout-minutes: 3
         working-directory: agents/runtime
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PAUSE_E2E_WORKER_TOKEN }}
@@ -183,7 +183,20 @@ jobs:
           token="$(openssl rand -hex 32)"
           echo "::add-mask::$token"
           printf 'AGENT_STATE_STORE_TOKEN=%s\n' "$token" >> "$GITHUB_ENV"
-          printf '%s' "$token" | timeout --signal=TERM --kill-after=10s 60s npx --yes wrangler@4.166.0 secret put AGENT_STATE_STORE_TOKEN --config "$GENERATED_CONFIG"
+          node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+          import { readFile, writeFile } from "node:fs/promises";
+          const path = process.env.GENERATED_CONFIG;
+          const config = JSON.parse(await readFile(path, "utf8"));
+          assert.equal(typeof process.env.AGENT_STATE_STORE_TOKEN, "string");
+          assert.match(process.env.AGENT_STATE_STORE_TOKEN, /^[a-f0-9]{64}$/);
+          config.vars.AGENT_STATE_STORE_TOKEN = process.env.AGENT_STATE_STORE_TOKEN;
+          await writeFile(path, JSON.stringify(config, null, 2) + "\n", { mode: 0o600 });
+          NODE
+          # The ephemeral Worker and its Durable Object receive the same one-run
+          # binding in one deployment; cleanup redeploys the original config without it.
+          timeout --signal=TERM --kill-after=10s 120s npx --yes wrangler@4.166.0 deploy --config "$GENERATED_CONFIG" \
+            --message "Attach one-run internal State Store credential to isolated E2E Worker"
 
       - name: Wait for the isolated test Worker to become healthy
         timeout-minutes: 2
