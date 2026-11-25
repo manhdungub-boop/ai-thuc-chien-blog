@@ -1,4 +1,5 @@
 import worker, { AgentStateStore, AgentDraftStore } from "../src/worker.mjs";
+export { AgentDraftStore };
 import { hasValidStateStoreBearer } from "../src/internal-auth.mjs";
 import { authorizeGitHubActionsOperator } from "../src/github-oidc-authorize.mjs";
 
