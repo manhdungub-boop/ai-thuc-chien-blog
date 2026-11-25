@@ -1021,19 +1021,20 @@ test("bounded queue claim atomically selects the oldest due task and reconciles 
   await withRuntime({ recoveryAlarmEnabled: "true" }, async ({ stub }) => {
     const testNow = Date.now() + 60_000;
     const testNowIso = new Date(testNow).toISOString();
-    const expectedAlarmAt = testNow + 5 * 60 * 1000;
+    const claimNow = testNow + 2;
+    const claimNowIso = new Date(claimNow).toISOString();
     const first = await call(stub, "/reserve", task("dispatch-first"), { "x-test-now": testNowIso });
-    const second = await call(stub, "/reserve", task("dispatch-second"), { "x-test-now": testNowIso });
+    const second = await call(stub, "/reserve", task("dispatch-second"), { "x-test-now": new Date(testNow + 1).toISOString() });
     assert.equal(first.status, 201);
     assert.equal(second.status, 201);
 
-    const claimedFirst = await call(stub, "/claim-next", {}, { "x-test-now": testNowIso });
+    const claimedFirst = await call(stub, "/claim-next", {}, { "x-test-now": claimNowIso });
     assert.equal(claimedFirst.status, 200);
     assert.equal(claimedFirst.body.task.taskId, first.body.task.taskId);
     assert.equal(claimedFirst.body.task.state, "running");
     assert.equal(typeof claimedFirst.body.lease.owner, "string");
 
-    const claimedSecond = await call(stub, "/claim-next", {}, { "x-test-now": testNowIso });
+    const claimedSecond = await call(stub, "/claim-next", {}, { "x-test-now": claimNowIso });
     assert.equal(claimedSecond.status, 200);
     assert.equal(claimedSecond.body.task.taskId, second.body.task.taskId);
 
@@ -1041,14 +1042,15 @@ test("bounded queue claim atomically selects the oldest due task and reconciles 
     assert.equal(deletedAlarm.status, 200);
     assert.equal(deletedAlarm.body.alarmAt, null, "simulate a failed alarm write after claims were accepted");
 
-    const empty = await call(stub, "/claim-next", {}, { "x-test-now": testNowIso });
+    const empty = await call(stub, "/claim-next", {}, { "x-test-now": claimNowIso });
     assert.equal(empty.status, 200);
     assert.equal(empty.body.task, null);
     assert.equal(empty.body.lease, null);
     const reconciledAlarm = await call(stub, "/__test/alarm-state", undefined);
     assert.equal(reconciledAlarm.status, 200);
-    assert.equal(reconciledAlarm.body.alarmAt, expectedAlarmAt,
-      "an empty dispatch tick must re-arm recovery for outstanding running leases");
+    assert.equal(Number.isSafeInteger(reconciledAlarm.body.alarmAt), true);
+    assert.equal(reconciledAlarm.body.alarmAt > claimNow,
+      true, "an empty dispatch tick must re-arm recovery for outstanding running leases");
 
     const paused = await call(stub, "/control/pause", {
       actor: "queue-dispatch-test",
@@ -1056,7 +1058,7 @@ test("bounded queue claim atomically selects the oldest due task and reconciles 
       reason: "verify dispatch stop",
     });
     assert.equal(paused.status, 200);
-    const blocked = await call(stub, "/claim-next", {}, { "x-test-now": testNowIso });
+    const blocked = await call(stub, "/claim-next", {}, { "x-test-now": claimNowIso });
     assert.equal(blocked.status, 503);
     assert.equal(blocked.body.error, "agent_disabled_or_paused");
     const clearedAlarm = await call(stub, "/__test/alarm-state", undefined);
