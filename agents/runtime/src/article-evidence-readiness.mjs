@@ -37,7 +37,7 @@ function proseCitationText(markdown) {
 function splitAssertionBlock(block) {
   const assertions = [];
   let start = 0;
-  const boundaries = /[.!?。！？](?:\s*\[\d+\])*(?=\s+)/gu;
+  const boundaries = /[.!?。！？](?:\\s*\\[\\d+\\])*(?:[.!?。！？])?(?=\\s+)/gu;
   for (const match of block.matchAll(boundaries)) {
     const end = match.index + match[0].length;
     const separator = block.slice(end).match(/^\s+/u)?.[0] || "";
