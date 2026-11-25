@@ -23,10 +23,45 @@ const googlePreview = await read("deploy-google-login-preview.yml");
 const previewD1 = await read("migrate-preview-d1.yml");
 const configureBuilds = await read("configure-cloudflare-worker-builds.yml");
 const stagingEmail = await read("staging-email-e2e.yml");
-assert.ok(stagingEmail.includes("if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'"),
-  "Staging email E2E must only run from trusted main because it receives staging credentials.");
-assert.ok(stagingEmail.includes("ref: main") && stagingEmail.includes("persist-credentials: false"),
-  "Staging email E2E must check out trusted main without persisting the GitHub token.");
+const stagingEmailLines = stagingEmail.split("\n");
+const stagingJobStart = stagingEmailLines.indexOf("  staging-email-e2e:");
+assert.notEqual(stagingJobStart, -1, "Staging email E2E job must exist.");
+const nextJobStart = stagingEmailLines.findIndex((line, index) =>
+  index > stagingJobStart && /^  [A-Za-z0-9_-]+:\s*$/.test(line));
+const stagingJobLines = stagingEmailLines.slice(
+  stagingJobStart,
+  nextJobStart === -1 ? stagingEmailLines.length : nextJobStart
+);
+const expectedStagingJobCondition =
+  "    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'";
+assert.deepEqual(
+  stagingJobLines.filter(line => /^    if:/.test(line)),
+  [expectedStagingJobCondition],
+  "Staging email E2E must have exactly one trusted-main workflow_dispatch condition."
+);
+
+const stagingCheckoutStart = stagingJobLines.indexOf("      - name: Check out trusted main source only");
+assert.notEqual(stagingCheckoutStart, -1, "Staging email E2E must check out the trusted source.");
+const nextStepStart = stagingJobLines.findIndex((line, index) =>
+  index > stagingCheckoutStart && /^      - name:/.test(line));
+const stagingCheckoutLines = stagingJobLines.slice(
+  stagingCheckoutStart,
+  nextStepStart === -1 ? stagingJobLines.length : nextStepStart
+);
+assert.equal(
+  stagingCheckoutLines.filter(line => /^        ref:/.test(line)).length,
+  1,
+  "Staging email checkout must define exactly one ref."
+);
+assert.ok(stagingCheckoutLines.includes("        ref: main"),
+  "Staging email E2E must check out exactly main, not a similarly named ref.");
+assert.equal(
+  stagingCheckoutLines.filter(line => /^        persist-credentials:/.test(line)).length,
+  1,
+  "Staging email checkout must define exactly one credential-persistence setting."
+);
+assert.ok(stagingCheckoutLines.includes("        persist-credentials: false"),
+  "Staging email E2E must not persist the GitHub checkout token.");
 
 const productionSmokeGuard = "if: github.event_name == 'schedule' || (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')";
 assert.ok(health.includes(productionSmokeGuard), "Live Production smoke tests must run only on schedule or trusted main.");
