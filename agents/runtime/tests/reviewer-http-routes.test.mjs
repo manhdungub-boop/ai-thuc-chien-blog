@@ -460,7 +460,7 @@ describe("authenticated read-only AI Bank reviewer routes", () => {
       headers: { origin: base, "content-type": "application/json", cookie: "__Host-ai_reviewer_session=" + token },
       body: JSON.stringify({
         audit_event_id: "a4e6d1c2-3b7f-4a91-8c22-1234567890ae",
-        reviewed_release_identity: "https://github.com/ollama/ollama/releases/tag/v1.2.3",
+        reviewed_release_identity: JSON.stringify(["https://github.com/ollama/ollama/releases/tag/v1.2.3", "2026-11-19T08:00:00.000Z"]),
         evidence: { check_type: "pricing_and_free_limits", source_title: "Pricing", source_url: "https://ollama.com/pricing", excerpt: "Pending review." }
       })
     }), env);
@@ -496,7 +496,7 @@ describe("authenticated read-only AI Bank reviewer routes", () => {
     const invalid = await handleReviewerHttpRequest(new Request(base + "/api/reviewer/ai-bank/candidates/ollama/ollama/evidence", { method: "POST", headers: { origin: base, "content-type": "application/json", cookie: "__Host-ai_reviewer_session=" + token }, body: JSON.stringify({ audit_event_id: "bad", evidence: {}, extra: true }) }), env);
     expect(invalid.status).toBe(400);
     expect(calls).toBe(0);
-    const denied = await handleReviewerHttpRequest(new Request(base + "/api/reviewer/ai-bank/candidates/ollama/ollama/evidence", { method: "POST", headers: { origin: base, "content-type": "application/json", cookie: "__Host-ai_reviewer_session=" + token }, body: JSON.stringify({ audit_event_id: "a4e6d1c2-3b7f-4a91-8c22-1234567890ab", reviewed_release_identity: "https://github.com/ollama/ollama/releases/tag/v1.2.3", evidence: { check_type: "pricing_and_free_limits", source_title: "Pricing", source_url: "https://ollama.com/pricing", excerpt: "Pending review." } }) }), env);
+    const denied = await handleReviewerHttpRequest(new Request(base + "/api/reviewer/ai-bank/candidates/ollama/ollama/evidence", { method: "POST", headers: { origin: base, "content-type": "application/json", cookie: "__Host-ai_reviewer_session=" + token }, body: JSON.stringify({ audit_event_id: "a4e6d1c2-3b7f-4a91-8c22-1234567890ab", reviewed_release_identity: JSON.stringify(["https://github.com/ollama/ollama/releases/tag/v1.2.3", "2026-11-19T08:00:00.000Z"]), evidence: { check_type: "pricing_and_free_limits", source_title: "Pricing", source_url: "https://ollama.com/pricing", excerpt: "Pending review." } }) }), env);
     expect(denied.status).toBe(503);
     expect(await denied.json()).toMatchObject({ error: "evidence_writer_not_configured", evidence_recorded: false });
     expect(calls).toBe(1);
@@ -506,7 +506,7 @@ describe("authenticated read-only AI Bank reviewer routes", () => {
 
     const staleStub = { async submitAuthorizedReviewEvidence() { return { accepted: false, reason: "stale_candidate_release" }; } };
     const staleEnv = { ...reviewerAuthEnv, GOOGLE_REVIEWER_EVIDENCE_WRITER_EMAILS: "reviewer@gmail.com", AGENT_AI_BANK_CANDIDATE_STORE: aiBankStoreNamespace(staleStub) };
-    const stale = await handleReviewerHttpRequest(new Request(base + "/api/reviewer/ai-bank/candidates/ollama/ollama/evidence", { method: "POST", headers: { origin: base, "content-type": "application/json", cookie: "__Host-ai_reviewer_session=" + token }, body: JSON.stringify({ audit_event_id: "a4e6d1c2-3b7f-4a91-8c22-1234567890ad", reviewed_release_identity: "https://github.com/ollama/ollama/releases/tag/v1.2.3", evidence: { check_type: "pricing_and_free_limits", source_title: "Pricing", source_url: "https://ollama.com/pricing", excerpt: "Pending review." } }) }), staleEnv);
+    const stale = await handleReviewerHttpRequest(new Request(base + "/api/reviewer/ai-bank/candidates/ollama/ollama/evidence", { method: "POST", headers: { origin: base, "content-type": "application/json", cookie: "__Host-ai_reviewer_session=" + token }, body: JSON.stringify({ audit_event_id: "a4e6d1c2-3b7f-4a91-8c22-1234567890ad", reviewed_release_identity: JSON.stringify(["https://github.com/ollama/ollama/releases/tag/v1.2.3", "2026-11-19T08:00:00.000Z"]), evidence: { check_type: "pricing_and_free_limits", source_title: "Pricing", source_url: "https://ollama.com/pricing", excerpt: "Pending review." } }) }), staleEnv);
     expect(stale.status).toBe(409);
     expect(await stale.json()).toMatchObject({ error: "stale_candidate_release", evidence_recorded: false });
   });
