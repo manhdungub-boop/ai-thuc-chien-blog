@@ -22,6 +22,11 @@ const workerOnly = await read("deploy-production-worker-only.yml");
 const googlePreview = await read("deploy-google-login-preview.yml");
 const previewD1 = await read("migrate-preview-d1.yml");
 const configureBuilds = await read("configure-cloudflare-worker-builds.yml");
+const stagingEmail = await read("staging-email-e2e.yml");
+assert.ok(stagingEmail.includes("if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'"),
+  "Staging email E2E must only run from trusted main because it receives staging credentials.");
+assert.ok(stagingEmail.includes("ref: main") && stagingEmail.includes("persist-credentials: false"),
+  "Staging email E2E must check out trusted main without persisting the GitHub token.");
 
 const productionSmokeGuard = "if: github.event_name == 'schedule' || (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')";
 assert.ok(health.includes(productionSmokeGuard), "Live Production smoke tests must run only on schedule or trusted main.");
@@ -86,7 +91,8 @@ const checkoutWorkflows = [
   ["deploy-cloudflare-workers.yml", workers],
   ["deploy-google-login-preview.yml", googlePreview],
   ["migrate-preview-d1.yml", previewD1],
-  ["configure-cloudflare-worker-builds.yml", configureBuilds]
+  ["configure-cloudflare-worker-builds.yml", configureBuilds],
+  ["staging-email-e2e.yml", stagingEmail]
 ];
 for (const [name, workflow] of checkoutWorkflows) {
   const lines = workflow.split("\n");
@@ -98,9 +104,10 @@ for (const [name, workflow] of checkoutWorkflows) {
     assert.match(block, /persist-credentials:\s*false/, name + " must not persist the GitHub checkout token.");
   }
 }
-console.log("PASS: all six Cloudflare workflows with checkout disable persisted GitHub credentials.");
+console.log("PASS: all secret-bearing workflows with checkout disable persisted GitHub credentials.");
 assert.doesNotMatch(configureBuilds, /secrets\.|api\.cloudflare\.com|wrangler (?:deploy|preview)/);
 console.log("PASS: all Cloudflare secret-bearing diagnostics require trusted-main dispatch and explicit confirmation.");
 console.log("PASS: legacy trigger repair is disabled; Workers Builds updater is offline-only.");
 console.log("PASS: Production deploys require explicit confirmation from main; D1 migration is locked to the Preview UUID.");
 console.log("PASS: Worker-only Production deployment is disabled; Preview deploys require trusted-main manual confirmation.");
+console.log("PASS: staging email E2E runs trusted main only and cannot execute branch-controlled code with staging secrets.");
