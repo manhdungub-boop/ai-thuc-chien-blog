@@ -189,6 +189,11 @@ export class AgentAIBankCandidateStore {
       );
     }
     this.ctx.storage.sql.exec(
+      "INSERT OR IGNORE INTO ai_bank_discovery_scans (scan_id, cursor, batch_sha256, committed_at) " +
+      "SELECT scan_id, cursor, batch_sha256, updated_at FROM ai_bank_discovery_cursor " +
+      "WHERE batch_sha256 <> ''"
+    );
+    this.ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS ai_bank_review_evidence (" +
       "evidence_id TEXT PRIMARY KEY, candidate_id TEXT NOT NULL, check_type TEXT NOT NULL, " +
       "source_title TEXT NOT NULL, source_url TEXT NOT NULL, excerpt TEXT NOT NULL, " +
