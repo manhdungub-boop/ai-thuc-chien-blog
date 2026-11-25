@@ -237,6 +237,14 @@ test("health is read-only and reports the default closed state", async () => {
   assert.equal(response.headers.get("x-content-type-options"), "nosniff");
 });
 
+test("Preview root redirects to the official AI Thuc Chien homepage", async () => {
+  const response = await worker.fetch(request("/"), {});
+  assert.equal(response.status, 302);
+  assert.equal(response.headers.get("location"), "https://ai-thuc-chien-blog.manhdungub.workers.dev/");
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.equal(response.headers.get("referrer-policy"), "no-referrer");
+});
+
 test("run is rejected while disabled", async () => {
   const response = await worker.fetch(request("/run", "POST"), {
     AGENT_ENABLED: "false",
