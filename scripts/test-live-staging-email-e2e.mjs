@@ -109,9 +109,9 @@ if (action === "register") {
     email,
     password,
   });
-  assert.equal(result.response.status, 202, "Registration did not return pending-verification HTTP 202; " + safeRegistrationFailure(result) + ".");
-  assert.ok(result.payload && result.payload.pendingVerification === true,
-    "Registration did not report pendingVerification=true.");
+  assert.equal(result.response.status, 201, "Registration did not return created HTTP 201; " + safeRegistrationFailure(result) + ".");
+  assert.ok(result.payload && result.payload.verificationRequired === true,
+    "Registration did not report verificationRequired=true.");
   assert.equal(result.response.headers.get("set-cookie"), null,
     "Pending registration must not create a login session.");
   console.log("PASS: a disposable staging registration was accepted and the confirmation email was requested.");
@@ -126,10 +126,10 @@ if (action === "register") {
   console.log("PASS: the live email-confirmation token was accepted once and login works after confirmation.");
 } else if (action === "request-reset") {
   const email = testEmailForCurrentPipeline();
-  const result = await post("/api/community/request-password-reset", { email });
+  const result = await post("/api/community/password-reset/request", { email });
   assertJsonSuccess(result, 200, "Password-reset request");
   assert.ok(typeof result.payload.message === "string" &&
-    result.payload.message.includes("Nếu email thuộc tài khoản"),
+    result.payload.message.includes("Nếu email này có tài khoản hợp lệ"),
     "Password-reset request must return the generic public response.");
   console.log("PASS: the password-reset request returned its generic response and was submitted to the staging relay.");
 } else if (action === "finish-reset") {
@@ -141,7 +141,7 @@ if (action === "register") {
   validatePassword(newPassword, "STAGING_E2E_NEW_PASSWORD");
   assert.notEqual(newPassword, oldPassword, "The replacement password must differ from the old password.");
   validateToken(token, "STAGING_E2E_RESET_TOKEN");
-  assertJsonSuccess(await post("/api/community/reset-password", { token, password: newPassword }), 200, "Password reset");
+  assertJsonSuccess(await post("/api/community/password-reset/complete", { token, password: newPassword }), 200, "Password reset");
   const oldLogin = await post("/api/community/login", { email, password: oldPassword });
   assert.equal(oldLogin.response.status, 401, "The previous password must be rejected with HTTP 401 after reset.");
   assertLoginSuccess(await post("/api/community/login", { email, password: newPassword }), 200, "Login with replacement password");
