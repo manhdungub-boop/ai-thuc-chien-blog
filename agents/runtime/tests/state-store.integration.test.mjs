@@ -158,18 +158,26 @@ test("task audit lookup retains terminal lifecycle events after many heartbeats"
 
 test("metrics distinguish qualifying breaker failures from budget failures and pause actor from reason text", async () => {
   await withRuntime({}, async ({ stub }) => {
-    const created = await call(stub, "/reserve", task("metrics-budget-failure"));
-    assert.equal(created.status, 201);
-    const claimed = await call(stub, "/claim", { taskId: created.body.task.taskId });
-    assert.equal(claimed.status, 200);
-    const completed = await call(stub, "/complete", {
-      taskId: created.body.task.taskId,
-      leaseOwner: claimed.body.lease.owner,
-      leaseGeneration: claimed.body.lease.generation,
-      status: "failed",
-      errorCode: "daily_external_request_budget_exhausted",
-    });
-    assert.equal(completed.status, 200);
+    for (const [index, errorCode] of [
+      "daily_external_request_budget_exhausted",
+      "research_budget_exhausted",
+      "daily_quota_exhausted",
+      "concurrency_limit_reached",
+      "runtime_capacity_limited",
+    ].entries()) {
+      const created = await call(stub, "/reserve", task("metrics-budget-failure-" + index));
+      assert.equal(created.status, 201);
+      const claimed = await call(stub, "/claim", { taskId: created.body.task.taskId });
+      assert.equal(claimed.status, 200);
+      const completed = await call(stub, "/complete", {
+        taskId: created.body.task.taskId,
+        leaseOwner: claimed.body.lease.owner,
+        leaseGeneration: claimed.body.lease.generation,
+        status: "failed",
+        errorCode,
+      });
+      assert.equal(completed.status, 200);
+    }
 
     const paused = await call(stub, "/control/pause", {
       actor: "integration-test",
@@ -397,6 +405,64 @@ test("lease recovery alarm is disabled by default and recovers only expired leas
     const stored = await call(stub, "/task?id=" + encodeURIComponent(taskId));
     assert.equal(stored.body.task.state, "queued");
     assert.equal(stored.body.task.attemptCount, 1);
+  });
+});
+
+test("terminal failures reached by operator recovery count toward the circuit breaker", async () => {
+  await withRuntime({ concurrent: 10 }, async ({ stub }) => {
+    const inFlight = await call(stub, "/reserve", task("manual-recovery-breaker-in-flight"));
+    assert.equal(inFlight.status, 201);
+    const inFlightClaim = await call(stub, "/claim", { taskId: inFlight.body.task.taskId });
+    assert.equal(inFlightClaim.status, 200);
+    const inFlightLease = inFlightClaim.body.lease;
+
+    const base = Date.parse("2026-11-19T10:00:00.000Z");
+    for (let index = 1; index <= 5; index += 1) {
+      const actor = "manual-recovery-breaker-" + index;
+      const created = await call(stub, "/reserve", task("manual-recovery-breaker-" + index));
+      assert.equal(created.status, 201);
+      const taskId = created.body.task.taskId;
+      const recoverAt = async (timestamp) => call(stub, "/recover", {
+        taskId, actor, requestId: crypto.randomUUID(),
+      }, { "x-test-now": new Date(timestamp).toISOString() });
+
+      const firstClaim = await call(stub, "/claim", { taskId }, {
+        "x-test-now": new Date(base).toISOString(),
+      });
+      assert.equal(firstClaim.status, 200);
+      assert.equal((await recoverAt(base + 5 * 60_000)).body.outcome, "requeued");
+
+      const secondClaim = await call(stub, "/claim", { taskId }, {
+        "x-test-now": new Date(base + 5.5 * 60_000).toISOString(),
+      });
+      assert.equal(secondClaim.status, 200);
+      assert.equal((await recoverAt(base + 10.5 * 60_000)).body.outcome, "requeued");
+
+      const thirdClaim = await call(stub, "/claim", { taskId }, {
+        "x-test-now": new Date(base + 12.5 * 60_000).toISOString(),
+      });
+      assert.equal(thirdClaim.status, 200);
+      const terminal = await recoverAt(base + 17.5 * 60_000);
+      assert.equal(terminal.body.outcome, "failed");
+      const control = await call(stub, "/control");
+      assert.equal(control.body.control.failureCountLast10m, index);
+      assert.equal(control.body.control.paused, index === 5);
+    }
+
+    const metrics = await call(stub, "/metrics");
+    assert.equal(metrics.body.circuitBreaker.autoPaused, true);
+    assert.equal(metrics.body.circuitBreaker.failureCountLast10m, 5);
+    assert.equal(metrics.body.circuitBreaker.state, "open");
+    const fenced = await call(stub, "/task?id=" + encodeURIComponent(inFlight.body.task.taskId));
+    assert.equal(fenced.body.task.state, "cancelled");
+    assert.equal(fenced.body.task.errorCode, "circuit_breaker_paused");
+    const lateCompletion = await call(stub, "/complete", {
+      taskId: inFlight.body.task.taskId,
+      leaseOwner: inFlightLease.owner,
+      leaseGeneration: inFlightLease.generation,
+      status: "succeeded",
+    });
+    assert.equal(lateCompletion.status, 409);
   });
 });
 
@@ -1687,6 +1753,61 @@ test("outbound request budgets enforce daily per-scope caps and reset on the nex
     });
     assert.equal(nextDay.body.budget.allowed, true);
     assert.equal(nextDay.body.budget.used, 1);
+  });
+});
+
+test("batch external quota reservations are atomic and cannot partially consume the remaining budget", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const day = "2026-11-21";
+    const headers = { "x-test-now": "2026-11-21T12:00:00.000Z" };
+    const initial = await call(stub, "/external-budget/consume", {
+      day, scope: "content_research", count: 7,
+    }, headers);
+    assert.equal(initial.status, 200);
+    assert.equal(initial.body.budget.allowed, true);
+    assert.equal(initial.body.budget.used, 7);
+    assert.equal(initial.body.budget.remaining, 1);
+
+    const rejectedBatch = await call(stub, "/external-budget/consume", {
+      day, scope: "content_research", count: 2,
+    }, headers);
+    assert.equal(rejectedBatch.status, 200);
+    assert.equal(rejectedBatch.body.budget.allowed, false);
+    assert.equal(rejectedBatch.body.budget.used, 7);
+    assert.equal(rejectedBatch.body.budget.remaining, 1);
+
+    const acceptedLastUnit = await call(stub, "/external-budget/consume", {
+      day, scope: "content_research", count: 1,
+    }, headers);
+    assert.equal(acceptedLastUnit.body.budget.allowed, true);
+    assert.equal(acceptedLastUnit.body.budget.used, 8);
+    assert.equal(acceptedLastUnit.body.budget.remaining, 0);
+
+    const invalidCount = await call(stub, "/external-budget/consume", {
+      day, scope: "content_research", count: 9,
+    }, headers);
+    assert.equal(invalidCount.status, 400);
+    assert.equal(invalidCount.body.error, "external_request_budget_input_invalid");
+  });
+});
+
+test("concurrent batch reservations cannot oversubscribe an external daily quota", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const day = "2026-11-21";
+    const headers = { "x-test-now": "2026-11-21T12:00:00.000Z" };
+    const seed = await call(stub, "/external-budget/consume", {
+      day, scope: "content_research", count: 6,
+    }, headers);
+    assert.equal(seed.body.budget.used, 6);
+
+    const results = await Promise.all([1, 2].map(() => call(stub, "/external-budget/consume", {
+      day, scope: "content_research", count: 2,
+    }, headers)));
+    assert.equal(results.filter((item) => item.body.budget.allowed).length, 1);
+    assert.equal(results.filter((item) => !item.body.budget.allowed).length, 1);
+    const snapshot = await call(stub, "/external-budget?day=" + day + "&scope=content_research");
+    assert.equal(snapshot.body.budget.used, 8);
+    assert.equal(snapshot.body.budget.remaining, 0);
   });
 });
 
