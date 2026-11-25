@@ -380,7 +380,20 @@ async function getDraftStoreStub(env) {
 async function syncDraftStoreControl(env, control) {
   if (!control || typeof control.paused !== "boolean" || !Number.isSafeInteger(control.version) || control.version < 0) throw new Error("runtime_control_snapshot_invalid");
   const result = await (await getDraftStoreStub(env)).setRuntimePaused(control.paused, control.version);
-  if (result?.updated !== true || result.paused !== control.paused || result.version !== control.version) throw Object.assign(new Error("draft_store_control_sync_failed"), { status: 503 });
+  const versionMatches = result?.version === control.version ||
+    (control.paused === true && Number.isSafeInteger(result?.version) && result.version > control.version);
+  if (result?.updated !== true || result.paused !== control.paused || !versionMatches) {
+    throw Object.assign(new Error("draft_store_control_sync_failed"), {
+      status: 503,
+      detail: {
+        reason: result?.reason || "draft_store_control_result_mismatch",
+        requested_version: control.version,
+        observed_version: Number.isSafeInteger(result?.version) ? result.version : null,
+        requested_paused: control.paused,
+        observed_paused: typeof result?.paused === "boolean" ? result.paused : null
+      }
+    });
+  }
   return result;
 }
 async function pauseRuntimeControl(env, body) {
@@ -395,7 +408,8 @@ async function pauseRuntimeControl(env, body) {
   try {
     const draftStore = await getDraftStoreStub(env);
     const fenced = await draftStore.setRuntimePaused(true, version + 1);
-    if (fenced?.updated !== true || fenced.paused !== true || fenced.version !== version + 1) {
+    if (fenced?.updated !== true || fenced.paused !== true ||
+        !Number.isSafeInteger(fenced.version) || fenced.version < version + 1) {
       throw new Error("draft_store_pause_fence_failed");
     }
     preFenceSucceeded = true;
@@ -425,15 +439,23 @@ async function pauseRuntimeControl(env, body) {
     error: "draft_store_control_sync_failed"
   };
   try {
-    await syncDraftStoreControl(env, result.control);
+    const synced = await syncDraftStoreControl(env, result.control);
     draftStoreSync = {
       ok: true,
       pre_fence_succeeded: preFenceSucceeded,
+      ...(synced.stale_version === true ? { stale_version_already_paused: true } : {}),
       ...(preFenceError ? { pre_fence_error: preFenceError } : {})
     };
-  } catch {
+  } catch (error) {
     // The State Store Pause is already durable. Surface Draft Store sync failure
     // separately so callers never mistake a paused runtime for a fully fenced authoring path.
+    draftStoreSync = {
+      ok: false,
+      pre_fence_succeeded: preFenceSucceeded,
+      error: "draft_store_control_sync_failed",
+      ...(error?.detail ? { detail: error.detail } : {}),
+      ...(preFenceError ? { pre_fence_error: preFenceError } : {})
+    };
   }
   return { ...result, draftStoreSync };
 }
