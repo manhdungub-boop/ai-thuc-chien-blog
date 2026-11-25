@@ -186,7 +186,7 @@ describe("article evidence readiness", () => {
     const draft = makeDraft();
     draft.body_markdown = draft.body_markdown.replace(
       ledger.claims[0].claim + " [1] [2] [3]. ",
-      ledger.claims[0].claim + " [1] [2] [3] Further explanation follows. "
+      ledger.claims[0].claim + ". [1] [2] [3] Further explanation follows. "
     );
     const result = await assessArticleEvidenceReadiness({
       draft,
@@ -195,7 +195,6 @@ describe("article evidence readiness", () => {
       authenticatedReviewer: { authenticated: true, reviewer_ref: reviewRecord.reviewer_ref },
       now
     });
-    console.log("DEBUG citation-no-period", JSON.stringify({ status: result.status, issues: result.issues }));
     expect(result.ok).toBe(true);
   });
 
@@ -244,7 +243,7 @@ describe("article evidence readiness", () => {
     const draft = makeDraft();
     draft.body_markdown = draft.body_markdown.replace(
       ledger.claims[0].claim + " [1] [2] [3]. ",
-      ledger.claims[0].claim + " [1] [2]. Further explanation follows. "
+      ledger.claims[0].claim + ". [1] [2]. Further explanation follows. "
     );
     const result = await assessArticleEvidenceReadiness({
       draft,
@@ -253,7 +252,6 @@ describe("article evidence readiness", () => {
       authenticatedReviewer: { authenticated: true, reviewer_ref: reviewRecord.reviewer_ref },
       now
     });
-    console.log("DEBUG citation-closing-period", JSON.stringify({ status: result.status, issues: result.issues }));
     expect(result.ok).toBe(true);
   });
 
