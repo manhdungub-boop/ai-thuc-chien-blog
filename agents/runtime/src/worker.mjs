@@ -405,12 +405,22 @@ async function pauseRuntimeControl(env, body) {
   // State Store Pause that closes task admission and cancels active leases.
   let preFenceSucceeded = false;
   let preFenceError = null;
+  let preFenceDetail = null;
   try {
     const draftStore = await getDraftStoreStub(env);
-    const fenced = await draftStore.setRuntimePaused(true, version + 1);
+    const requestedVersion = version + 1;
+    const fenced = await draftStore.setRuntimePaused(true, requestedVersion);
     if (fenced?.updated !== true || fenced.paused !== true ||
-        !Number.isSafeInteger(fenced.version) || fenced.version < version + 1) {
-      throw new Error("draft_store_pause_fence_failed");
+        !Number.isSafeInteger(fenced.version) || fenced.version < requestedVersion) {
+      throw Object.assign(new Error("draft_store_pause_fence_failed"), {
+        detail: {
+          reason: typeof fenced?.reason === "string" ? fenced.reason : "draft_store_pause_fence_result_mismatch",
+          requested_version: requestedVersion,
+          observed_version: Number.isSafeInteger(fenced?.version) ? fenced.version : null,
+          observed_paused: typeof fenced?.paused === "boolean" ? fenced.paused : null,
+          updated: fenced?.updated === true
+        }
+      });
     }
     preFenceSucceeded = true;
   } catch (error) {
@@ -418,6 +428,9 @@ async function pauseRuntimeControl(env, body) {
       error?.message === "draft_store_control_unavailable"
       ? error.message
       : "draft_store_pause_fence_failed";
+    preFenceDetail = error?.detail && typeof error.detail === "object"
+      ? error.detail
+      : { reason: preFenceError };
   }
 
   let result;
@@ -454,7 +467,8 @@ async function pauseRuntimeControl(env, body) {
       pre_fence_succeeded: preFenceSucceeded,
       error: "draft_store_control_sync_failed",
       ...(error?.detail ? { detail: error.detail } : {}),
-      ...(preFenceError ? { pre_fence_error: preFenceError } : {})
+      ...(preFenceError ? { pre_fence_error: preFenceError } : {}),
+      ...(preFenceDetail ? { pre_fence_detail: preFenceDetail } : {})
     };
   }
   return { ...result, draftStoreSync };
