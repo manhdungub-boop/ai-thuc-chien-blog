@@ -56,6 +56,9 @@ describe("AgentDraftStore Durable Object", () => {
     expect(await store.setRuntimePaused(false, 1)).toMatchObject({ updated: true, paused: false, version: 1 });
     expect((await store.createDraftFromAgent("agent-paused-0001", draft, [], 1)).accepted).toBe(true);
     expect(await store.setRuntimePaused(true, 2)).toMatchObject({ updated: true, paused: true, version: 2 });
+    expect(await store.setRuntimePaused(true, 1)).toMatchObject({
+      updated: true, duplicate: true, stale_version: true, paused: true, version: 2
+    });
     expect(await store.createDraftFromAgent("agent-late-0001", draft, [], 1))
       .toEqual({ accepted: false, reason: "runtime_paused" });
     expect(await store.setRuntimePaused(false, 1)).toMatchObject({ updated: false, reason: "runtime_control_version_stale" });
