@@ -43,12 +43,12 @@ function splitProseAssertions(markdown) {
       const trimmed = line.trim();
       if (!trimmed) continue;
       const startsBlock = /^(?:#{1,6}\s+|>\s*|[-*+]\s+|\d+[.)]\s+)/.test(trimmed);
-      if (startsBlock && current) {
-        blocks.push(current);
-        current = "";
+      if (startsBlock) {
+        if (current) blocks.push(current);
+        current = trimmed.replace(/^(?:#{1,6}\s+|>\s*|[-*+]\s+|\d+[.)]\s+)/, "");
+        continue;
       }
-      const text = trimmed.replace(/^(?:#{1,6}\s+|>\s*|[-*+]\s+|\d+[.)]\s+)/, "");
-      current += (current ? " " : "") + text;
+      current += (current ? " " : "") + trimmed;
     }
     if (current) blocks.push(current);
     return blocks.flatMap(block =>
