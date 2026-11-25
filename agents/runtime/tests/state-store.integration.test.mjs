@@ -126,6 +126,36 @@ test("task audit lookup is scoped to the exact task instead of aggregate counter
   });
 });
 
+test("task audit lookup retains terminal lifecycle events after many heartbeats", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const created = await call(stub, "/reserve", task("audit-heartbeats"));
+    assert.equal(created.status, 201);
+    const taskId = created.body.task.taskId;
+    const claimed = await call(stub, "/claim", { taskId });
+    assert.equal(claimed.status, 200);
+    for (let index = 0; index < 18; index += 1) {
+      const heartbeat = await call(stub, "/heartbeat", {
+        taskId,
+        leaseOwner: claimed.body.lease.owner,
+        leaseGeneration: claimed.body.lease.generation
+      });
+      assert.equal(heartbeat.status, 200);
+    }
+    const completed = await call(stub, "/complete", {
+      taskId,
+      leaseOwner: claimed.body.lease.owner,
+      leaseGeneration: claimed.body.lease.generation,
+      status: "succeeded"
+    });
+    assert.equal(completed.status, 200);
+    const audit = await call(stub, "/task-audit?taskId=" + encodeURIComponent(taskId));
+    assert.equal(audit.status, 200);
+    assert.deepEqual(audit.body.events.map(event => event.eventType), [
+      "task.queued", "task.claimed", "task.succeeded"
+    ]);
+  });
+});
+
 test("metrics distinguish qualifying breaker failures from budget failures and pause actor from reason text", async () => {
   await withRuntime({}, async ({ stub }) => {
     const created = await call(stub, "/reserve", task("metrics-budget-failure"));
