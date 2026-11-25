@@ -50,7 +50,7 @@ export class TestAgentStateStore extends AgentStateStore {
 
   async fetch(request) {
     const url = new URL(request.url);
-    if (!["/__test/rollback", "/__test/downgrade-v1", "/__test/prune", "/__test/seed-prune-fixture", "/__test/prune-counts", "/__test/downgrade-v6-budget-only", "/__test/downgrade-v6-result-only", "/__test/schema-state", "/__test/alarm-state", "/__test/expire-and-fire", "/__test/fire-alarm", "/__test/fault-suite"].includes(url.pathname)) {
+    if (!["/__test/rollback", "/__test/downgrade-v1", "/__test/prune", "/__test/seed-prune-fixture", "/__test/prune-counts", "/__test/downgrade-v6-budget-only", "/__test/downgrade-v6-result-only", "/__test/schema-state", "/__test/alarm-state", "/__test/delete-alarm", "/__test/expire-and-fire", "/__test/fire-alarm", "/__test/fault-suite"].includes(url.pathname)) {
       return super.fetch(request);
     }
     if (url.pathname === "/__test/alarm-state" || url.pathname === "/__test/schema-state" || url.pathname === "/__test/prune-counts" ? request.method !== "GET" : request.method !== "POST") {
@@ -367,6 +367,10 @@ export class TestAgentStateStore extends AgentStateStore {
       }
 
       if (url.pathname === "/__test/alarm-state" && request.method === "GET") {
+        return jsonResponse({ ok: true, alarmAt: await this.ctx.storage.getAlarm() });
+      }
+      if (url.pathname === "/__test/delete-alarm" && request.method === "POST") {
+        await this.ctx.storage.deleteAlarm();
         return jsonResponse({ ok: true, alarmAt: await this.ctx.storage.getAlarm() });
       }
       if (url.pathname === "/__test/expire-and-fire" && request.method === "POST") {
