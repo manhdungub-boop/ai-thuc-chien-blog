@@ -686,7 +686,21 @@ if (url.pathname === "/task" && request.method === "GET") {
         this.sql.exec("INSERT INTO oidc_jti_replay (jti_hash, expires_at, consumed_at) VALUES (?,?,?)", jtiHash, retentionUntil, now);
         return { status: 200, body: { ok: true, consumed: true } };
       });
-    } catch {
+    } catch (error) {
+      const message = typeof error?.message === "string" ? error.message : "";
+      const diagnosticCode = /no such table/i.test(message) ? "sqlite_no_such_table"
+        : /no such column/i.test(message) ? "sqlite_no_such_column"
+        : /constraint failed/i.test(message) ? "sqlite_constraint_failed"
+        : /syntax error/i.test(message) ? "sqlite_syntax_error"
+        : /database is locked|busy/i.test(message) ? "sqlite_busy"
+        : /transaction/i.test(message) ? "sqlite_transaction_error"
+        : error?.name === "TypeError" ? "runtime_type_error"
+        : error?.name === "Error" ? "runtime_error"
+        : "runtime_unknown_error";
+      console.error("oidc_replay_store_failure", {
+        diagnosticCode,
+        errorName: typeof error?.name === "string" ? error.name.slice(0, 32) : "Error",
+      });
       return { status: 503, body: { ok: false, error: "oidc_replay_store_unavailable" } };
     }
   }
