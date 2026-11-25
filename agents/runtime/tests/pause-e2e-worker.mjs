@@ -317,9 +317,37 @@ async function performIndependentOidcPause(request, env) {
   }
 }
 
+function runScopedNamespace(namespace, suffix) {
+  if (!namespace || typeof namespace.idFromName !== "function" ||
+      typeof namespace.get !== "function") return namespace;
+  const idFromName = namespace.idFromName.bind(namespace);
+  const get = namespace.get.bind(namespace);
+  return {
+    idFromName(name) {
+      if (typeof name !== "string" || name.length < 1 || name.length > 128) {
+        throw new TypeError("pause_e2e_namespace_name_invalid");
+      }
+      return idFromName(name + "-" + suffix);
+    },
+    get(id) { return get(id); },
+  };
+}
+
 const pauseE2eWorker = {
   async fetch(request, env, ctx) {
-    runtimeEnv = env;
+    // A Worker deployment may reuse Durable Object instances across versions.
+    // Scope this test's objects to the one-run token so an early pre-token probe
+    // cannot leave a stale DO instance with an empty/previous environment.
+    const stateToken = typeof env.AGENT_STATE_STORE_TOKEN === "string"
+      ? env.AGENT_STATE_STORE_TOKEN : "";
+    const namespaceSuffix = stateToken.length >= 32 ? stateToken.slice(0, 16) : "uninitialized";
+    const scopedEnv = {
+      ...env,
+      AGENT_STATE_STORE: runScopedNamespace(env.AGENT_STATE_STORE, namespaceSuffix),
+      AGENT_DRAFT_STORE: runScopedNamespace(env.AGENT_DRAFT_STORE, namespaceSuffix),
+    };
+    runtimeEnv = scopedEnv;
+    env = scopedEnv;
     const url = new URL(request.url);
 
     if (url.pathname === "/__e2e/status") {
