@@ -45,6 +45,21 @@ function highestQuotaPressure(daily, concurrent) {
   return rank[daily] >= rank[concurrent] ? daily : concurrent;
 }
 
+const NON_BREAKER_FAILURE_CODES = new Set([
+  "daily_external_request_budget_exhausted",
+  "research_budget_exhausted",
+  "daily_quota_exhausted",
+  "concurrency_limit_reached",
+  "runtime_capacity_limited",
+  "rate_limited",
+  "agent_disabled_or_paused",
+  "feature_disabled",
+]);
+
+function shouldCountTerminalFailure(errorCode) {
+  return typeof errorCode === "string" && !NON_BREAKER_FAILURE_CODES.has(errorCode);
+}
+
 
 
 function parseControlJson(text) {
@@ -309,10 +324,17 @@ export class AgentStateStore {
       if (url.pathname === "/external-budget/consume" && request.method === "POST") {
         const parsedBody = await readBoundedJson(request, 1024);
         if (!parsedBody.ok) return jsonResponse({ ok: false, error: parsedBody.status === 413 ? "request_body_too_large" : "request_invalid" }, parsedBody.status);
-        if (!isObject(parsedBody.value) || Object.keys(parsedBody.value).length !== 2 || !Object.hasOwn(parsedBody.value, "day") || !Object.hasOwn(parsedBody.value, "scope")) {
+        if (!isObject(parsedBody.value) ||
+            Object.keys(parsedBody.value).some((key) => !["day", "scope", "count"].includes(key)) ||
+            !Object.hasOwn(parsedBody.value, "day") || !Object.hasOwn(parsedBody.value, "scope") ||
+            (Object.hasOwn(parsedBody.value, "count") &&
+              (!Number.isSafeInteger(parsedBody.value.count) || parsedBody.value.count < 1))) {
           return jsonResponse({ ok: false, error: "external_request_budget_input_invalid" }, 400);
         }
-        const result = await this.consumeExternalRequestBudget(parsedBody.value.day, parsedBody.value.scope, this.requestTime(request));
+        const result = await this.consumeExternalRequestBudget(
+          parsedBody.value.day, parsedBody.value.scope, this.requestTime(request),
+          parsedBody.value.count ?? 1,
+        );
         return jsonResponse(result.ok ? { ok: true, budget: result } : { ok: false, error: result.error }, result.ok ? 200 : 400);
       }
       if (url.pathname === "/reserve" && request.method === "POST") {
@@ -607,7 +629,7 @@ if (url.pathname === "/task" && request.method === "GET") {
             leaseGeneration: row.lease_generation,
             source: "durable_object_alarm",
           });
-          if (decision.outcome === "failed") {
+          if (decision.outcome === "failed" && shouldCountTerminalFailure(fields.error_code)) {
             this.audit(row.task_id, "task.terminal_failure", now, { errorCode: fields.error_code });
             this.evaluateCircuitBreaker(row.task_id, now);
           }
@@ -633,9 +655,11 @@ if (url.pathname === "/task" && request.method === "GET") {
     return { ok: true, day, scope, used, limit, remaining: Math.max(0, limit - used) };
   }
 
-  async consumeExternalRequestBudget(day, scope, now = this.requestTime()) {
+  async consumeExternalRequestBudget(day, scope, now = this.requestTime(), count = 1) {
     const limit = EXTERNAL_REQUEST_LIMITS[scope];
-    if (!isValidUtcDay(day) || !Number.isSafeInteger(limit) || !Number.isSafeInteger(now) || now < 0) {
+    if (!isValidUtcDay(day) || !Number.isSafeInteger(limit) ||
+        !Number.isSafeInteger(count) || count < 1 || count > limit ||
+        !Number.isSafeInteger(now) || now < 0) {
       return { ok: false, error: "external_request_budget_input_invalid" };
     }
     let executionDay;
@@ -646,13 +670,13 @@ if (url.pathname === "/task" && request.method === "GET") {
       return { ok: false, error: "external_request_budget_day_mismatch" };
     }
     const consumed = readRow(this.sql,
-      "INSERT INTO external_request_budgets (budget_day,scope,used,updated_at) VALUES (?,?,1,?) ON CONFLICT(budget_day,scope) DO UPDATE SET used = external_request_budgets.used + 1, updated_at = excluded.updated_at WHERE external_request_budgets.used < ? RETURNING used",
-      day, scope, now, limit,
+      "INSERT INTO external_request_budgets (budget_day,scope,used,updated_at) VALUES (?,?,?,?) ON CONFLICT(budget_day,scope) DO UPDATE SET used = external_request_budgets.used + excluded.used, updated_at = excluded.updated_at WHERE external_request_budgets.used <= ? - excluded.used RETURNING used",
+      day, scope, count, now, limit,
     );
     if (consumed) return { ok: true, allowed: true, day, scope, used: consumed.used, limit, remaining: Math.max(0, limit - consumed.used) };
     const current = readRow(this.sql, "SELECT used FROM external_request_budgets WHERE budget_day = ? AND scope = ?", day, scope);
     const used = current?.used ?? 0;
-    return { ok: true, allowed: false, day, scope, used, limit, remaining: 0 };
+    return { ok: true, allowed: false, day, scope, used, limit, remaining: Math.max(0, limit - used) };
   }
   limits() {
     return {
@@ -1020,7 +1044,7 @@ if (url.pathname === "/task" && request.method === "GET") {
           taskType: row.task_type,
           leaseGeneration: row.lease_generation,
         });
-        if (fields.state === "failed" && fields.error_code !== "daily_external_request_budget_exhausted") {
+        if (fields.state === "failed" && shouldCountTerminalFailure(fields.error_code)) {
           this.audit(body.taskId, "task.terminal_failure", now, { errorCode: fields.error_code });
           this.evaluateCircuitBreaker(body.taskId, now);
         }
@@ -1070,7 +1094,7 @@ if (url.pathname === "/task" && request.method === "GET") {
           actor: body.actor,
           requestId: body.requestId,
         });
-        if (decision.outcome === "failed") {
+        if (decision.outcome === "failed" && shouldCountTerminalFailure(fields.error_code)) {
           this.audit(body.taskId, "task.terminal_failure", now, { errorCode: fields.error_code });
           this.evaluateCircuitBreaker(body.taskId, now);
         }
