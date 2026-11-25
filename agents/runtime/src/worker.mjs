@@ -25,6 +25,7 @@ const SECURITY_HEADERS = Object.freeze({
   "Referrer-Policy": "no-referrer",
 });
 const MAX_INTERNAL_RESPONSE_BYTES = 16 * 1024;
+const PUBLIC_HOMEPAGE_URL = "https://ai-thuc-chien-blog.manhdungub.workers.dev/";
 const LEASE_HEARTBEAT_INTERVAL_MS = 10_000;
 const INTERNAL_SCHEDULED_DISPATCH = Symbol("internal-scheduled-dispatch");
 const INTERNAL_OIDC_RUN = Symbol("internal-oidc-run");
@@ -486,6 +487,14 @@ const worker = {
     const reviewerResponse = await handleReviewerHttpRequest(request, env);
     if (reviewerResponse) return reviewerResponse;
     const url = new URL(request.url);
+    if (url.pathname === "/" && request.method === "GET") {
+      return new Response(null, { status: 302, headers: {
+        location: PUBLIC_HOMEPAGE_URL,
+        "cache-control": "no-store",
+        "referrer-policy": "no-referrer",
+        "x-content-type-options": "nosniff",
+      } });
+    }
     if (url.pathname === "/health") {
       if (request.method !== "GET") return json({ ok: false, error: "method_not_allowed" }, 405);
       return json({
