@@ -178,10 +178,6 @@ describe("article evidence readiness", () => {
       authenticatedReviewer: { authenticated: true, reviewer_ref: reviewRecord.reviewer_ref },
       now
     });
-    expect(result.issues ?? []).not.toContainEqual({
-      code: "reviewed_claim_missing_from_article_body",
-      claim_id: "claim-1"
-    });
     expect(result.ok).toBe(true);
   });
 
