@@ -509,33 +509,37 @@ async function consumeContentResearchBudget(env, count) {
   if (!Number.isSafeInteger(count) || count < 0 || count > CONTENT_RESEARCH_DAILY_LIMIT) {
     throw Object.assign(new Error("research_budget_request_invalid"), { status: 503 });
   }
-  if (count === 0) return { day: currentUtcBudgetDay(), used: 0, remaining: CONTENT_RESEARCH_DAILY_LIMIT };
   const day = currentUtcBudgetDay();
-  const snapshot = await readStateStore(
-    env,
-    "/external-budget?day=" + encodeURIComponent(day) + "&scope=content_research",
-  );
-  let budget = snapshot?.budget;
   const validBudget = (value) => value && value.ok === true && value.day === day &&
     value.scope === "content_research" && Number.isSafeInteger(value.used) && value.used >= 0 &&
     value.limit === CONTENT_RESEARCH_DAILY_LIMIT && Number.isSafeInteger(value.remaining) &&
     value.remaining >= 0 && value.used + value.remaining === value.limit;
-  if (!validBudget(budget)) {
-    throw Object.assign(new Error("research_budget_snapshot_invalid"), { status: 503 });
+  if (count === 0) {
+    const snapshot = await readStateStore(
+      env,
+      "/external-budget?day=" + encodeURIComponent(day) + "&scope=content_research",
+    );
+    if (!validBudget(snapshot?.budget)) {
+      throw Object.assign(new Error("research_budget_snapshot_invalid"), { status: 503 });
+    }
+    return { day, used: snapshot.budget.used, remaining: snapshot.budget.remaining };
   }
-  if (budget.remaining < count) {
+  // Reserve the complete batch in one State Store transaction. A read-then-loop
+  // can partially consume quota when concurrent callers race for the last units.
+  const reserved = await writeStateStore(env, "/external-budget/consume", {
+    day,
+    scope: "content_research",
+    count,
+  });
+  const budget = reserved?.budget;
+  if (!validBudget(budget) || typeof budget.allowed !== "boolean") {
+    throw Object.assign(new Error("research_budget_reservation_invalid"), { status: 503 });
+  }
+  if (!budget.allowed) {
     throw Object.assign(new Error("research_budget_exhausted"), { status: 429 });
   }
-  for (let index = 0; index < count; index += 1) {
-    const consumed = await writeStateStore(env, "/external-budget/consume", {
-      day,
-      scope: "content_research",
-    });
-    const next = consumed?.budget;
-    if (!validBudget(next) || next.used < budget.used + 1 || next.remaining > budget.remaining - 1) {
-      throw Object.assign(new Error("research_budget_consumption_invalid"), { status: 503 });
-    }
-    budget = next;
+  if (budget.used < count || budget.remaining > CONTENT_RESEARCH_DAILY_LIMIT - count) {
+    throw Object.assign(new Error("research_budget_reservation_invalid"), { status: 503 });
   }
   return { day, used: budget.used, remaining: budget.remaining };
 }
