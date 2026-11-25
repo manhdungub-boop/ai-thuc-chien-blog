@@ -460,7 +460,7 @@ describe("authenticated read-only AI Bank reviewer routes", () => {
       headers: { origin: base, "content-type": "application/json", cookie: "__Host-ai_reviewer_session=" + token },
       body: JSON.stringify({
         audit_event_id: "a4e6d1c2-3b7f-4a91-8c22-1234567890ae",
-        reviewed_release_identity: JSON.stringify(["https://github.com/ollama/ollama/releases/tag/v1.2.3", "2026-11-19T08:00:00.000Z"]),
+        reviewed_release_identity: "https://github.com/ollama/ollama/releases/tag/v1.2.3",
         evidence: { check_type: "pricing_and_free_limits", source_title: "Pricing", source_url: "https://ollama.com/pricing", excerpt: "Pending review." }
       })
     }), env);
