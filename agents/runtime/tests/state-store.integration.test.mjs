@@ -409,14 +409,15 @@ test("lease recovery alarm is disabled by default and recovers only expired leas
 });
 
 test("terminal failures reached by operator recovery count toward the circuit breaker", async () => {
-  await withRuntime({ concurrent: 10 }, async ({ stub }) => {
+  await withRuntime({}, async ({ stub }) => {
     const inFlight = await call(stub, "/reserve", task("manual-recovery-breaker-in-flight"));
     assert.equal(inFlight.status, 201);
     const inFlightClaim = await call(stub, "/claim", { taskId: inFlight.body.task.taskId });
     assert.equal(inFlightClaim.status, 200);
     const inFlightLease = inFlightClaim.body.lease;
 
-    const base = Date.parse("2026-11-19T10:00:00.000Z");
+    // Keep claims later than fixture creation so lease timestamps remain monotonic.
+    const base = Date.now() + 60_000;
     for (let index = 1; index <= 5; index += 1) {
       const actor = "manual-recovery-breaker-" + index;
       const created = await call(stub, "/reserve", task("manual-recovery-breaker-" + index));
