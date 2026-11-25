@@ -206,13 +206,22 @@ jobs:
           script="ai-thuc-chien-agent-runtime-fault-test"
           api="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$script"
           cleanup_failed=0
+          request_status() {
+            local output_file="$1"
+            shift
+            local status
+            if status="$(curl --silent --show-error --max-time 15 --output "$output_file" --write-out "%{http_code}" "$@")"; then
+              printf '%s' "$status"
+            else
+              printf '000'
+            fi
+          }
 
           # Disable public URLs first. If this succeeds, a later secret-delete failure still leaves the test Worker unreachable.
           disable_response="$RUNNER_TEMP/fault-worker-disable.json"
           disable_ok=0
           for attempt in 1 2 3; do
-            if ! disable_status="$(curl --silent --show-error --max-time 15 --output "$disable_response" --write-out "%{http_code}" \
-          then disable_status="000"; fi
+            disable_status="$(request_status "$disable_response" \
               --request POST --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
               --header "Content-Type: application/json" --header "Accept: application/json" \
               --data '{"enabled":false,"previews_enabled":false}' "$api/subdomain")"
@@ -234,8 +243,7 @@ jobs:
           delete_response="$RUNNER_TEMP/fault-secret-delete.json"
           delete_ok=0
           for attempt in 1 2 3; do
-            if ! delete_status="$(curl --silent --show-error --max-time 15 --output "$delete_response" --write-out "%{http_code}" \
-          then delete_status="000"; fi
+            delete_status="$(request_status "$delete_response" \
               --request DELETE --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
               --header "Accept: application/json" "$api/secrets/AGENT_FAULT_TEST_TOKEN")"
             if [[ "$delete_status" == "200" || "$delete_status" == "404" ]]; then
@@ -254,8 +262,7 @@ jobs:
 
           # Verify the one-run secret is absent without printing secret response contents.
           secrets_response="$RUNNER_TEMP/fault-worker-secrets.json"
-          if ! secrets_status="$(curl --silent --show-error --max-time 15 --output "$secrets_response" --write-out "%{http_code}" \
-          then secrets_status="000"; fi
+          secrets_status="$(request_status "$secrets_response" \
             --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             --header "Accept: application/json" "$api/secrets")"
           if [[ "$secrets_status" != "200" ]] || ! jq -e '.success == true and (.result | type == "array")' "$secrets_response" >/dev/null; then
@@ -270,8 +277,7 @@ jobs:
 
           # Verify both public URL switches remain disabled.
           subdomain_response="$RUNNER_TEMP/fault-worker-subdomain.json"
-          if ! subdomain_status="$(curl --silent --show-error --max-time 15 --output "$subdomain_response" --write-out "%{http_code}" \
-          then subdomain_status="000"; fi
+          subdomain_status="$(request_status "$subdomain_response" \
             --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             --header "Accept: application/json" "$api/subdomain")"
           if [[ "$subdomain_status" != "200" ]] || ! jq -e '.success == true and .result.enabled == false and .result.previews_enabled == false' "$subdomain_response" >/dev/null; then
