@@ -32,6 +32,22 @@ async function readJson(request, maxBytes) {
   if (!parsed.value || typeof parsed.value !== "object" || Array.isArray(parsed.value)) return { ok: false, status: 400, error: "request_object_required" };
   return parsed;
 }
+function isReviewedReleaseIdentity(value) {
+  if (typeof value !== "string" || value.length < 10 || value.length > 1200) return false;
+  let identity;
+  try { identity = JSON.parse(value); } catch { return false; }
+  if (!Array.isArray(identity) || identity.length !== 2 ||
+      typeof identity[0] !== "string" || typeof identity[1] !== "string" ||
+      JSON.stringify(identity) !== value) return false;
+  try {
+    const url = new URL(identity[0]);
+    if (url.protocol !== "https:" || url.username || url.password || url.hash ||
+        (url.port && url.port !== "443")) return false;
+  } catch { return false; }
+  const publishedAt = Date.parse(identity[1]);
+  return Number.isFinite(publishedAt) && new Date(publishedAt).toISOString() === identity[1];
+}
+
 function aiBankCandidateStore(env) {
   const namespace = env.AGENT_AI_BANK_CANDIDATE_STORE;
   if (!namespace || typeof namespace.idFromName !== "function" || typeof namespace.get !== "function") return null;
@@ -216,13 +232,12 @@ async function handleAIBankReviewerApi(request, env, url) {
     const parsed = await readJson(request, 16 * 1024);
     if (!parsed.ok) return json({ ok: false, error: parsed.error }, parsed.status);
     const body = parsed.value;
-    const allowedBodyKeys = ["audit_event_id", "evidence", "reviewed_release_url"];
+    const allowedBodyKeys = ["audit_event_id", "evidence", "reviewed_release_identity"];
     const evidenceKeys = ["check_type", "source_title", "source_url", "excerpt"];
     if (Object.keys(body).some(key => !allowedBodyKeys.includes(key)) ||
         Object.keys(body).length !== 3 ||
         typeof body.audit_event_id !== "string" ||
-        typeof body.reviewed_release_url !== "string" ||
-        !body.reviewed_release_url.trim() || body.reviewed_release_url.length > 1000 ||
+        !isReviewedReleaseIdentity(body.reviewed_release_identity) ||
         !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.audit_event_id) ||
         !body.evidence || typeof body.evidence !== "object" || Array.isArray(body.evidence) ||
         Object.keys(body.evidence).length !== 4 || Object.keys(body.evidence).some(key => !evidenceKeys.includes(key))) {
@@ -246,7 +261,7 @@ async function handleAIBankReviewerApi(request, env, url) {
     let result;
     try {
       result = await store.submitAuthorizedReviewEvidence(
-        candidateId, body.evidence, writerAuth.token, body.audit_event_id, body.reviewed_release_url, writerAuthConfig
+        candidateId, body.evidence, writerAuth.token, body.audit_event_id, body.reviewed_release_identity, writerAuthConfig
       );
     } catch {
       return json({ ok: false, error: "ai_bank_evidence_writer_unavailable", evidence_recorded: false }, 503);
@@ -255,7 +270,7 @@ async function handleAIBankReviewerApi(request, env, url) {
       const reason = result?.reason || "ai_bank_evidence_writer_unavailable";
       const status = reason === "evidence_writer_not_allowlisted" ? 403 :
         reason === "stale_candidate_release" || reason === "duplicate_audit_event" || reason === "audit_event_id_reused" ? 409 :
-        reason === "reviewed_release_identity_required" ? 400 :
+        reason === "reviewed_release_identity_required" || reason === "invalid_reviewed_release_identity" ? 400 :
         reason === "evidence_audit_daily_limit_reached" ? 429 :
         reason === "evidence_audit_capacity_reached" || reason === "reviewer_auth_not_configured" || reason === "evidence_writer_not_configured" ? 503 :
         reason === "reviewer_session_invalid" || reason === "reviewer_session_expired" ? 401 : 400;
