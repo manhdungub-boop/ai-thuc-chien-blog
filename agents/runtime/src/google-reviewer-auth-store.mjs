@@ -11,18 +11,52 @@ export class AgentReviewerAuthStore {
       this.ctx.storage.sql.exec("ALTER TABLE reviewer_auth_transactions ADD COLUMN return_path TEXT NOT NULL DEFAULT '/'");
     }
     this.ctx.storage.sql.exec("CREATE INDEX IF NOT EXISTS reviewer_auth_transactions_expiry ON reviewer_auth_transactions(expires_at)");
-    this.ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS reviewer_auth_start_rate_limit (id INTEGER PRIMARY KEY CHECK (id = 1), window_started_at INTEGER NOT NULL, attempts INTEGER NOT NULL)");
+    this.ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS reviewer_auth_start_rate_limit_by_client (client_hash TEXT PRIMARY KEY, window_started_at INTEGER NOT NULL, attempts INTEGER NOT NULL CHECK (attempts BETWEEN 1 AND 10))");
+    this.ctx.storage.sql.exec("CREATE INDEX IF NOT EXISTS reviewer_auth_start_rate_limit_expiry ON reviewer_auth_start_rate_limit_by_client(window_started_at)");
   }
-  consumeStartRateLimit(nowSeconds) {
-    if (!Number.isInteger(nowSeconds) || nowSeconds < 0) return { allowed: false, retry_after_seconds: 60 };
-    const row = this.ctx.storage.sql.exec("SELECT window_started_at, attempts FROM reviewer_auth_start_rate_limit WHERE id = 1").toArray()[0];
-    if (!row || nowSeconds >= row.window_started_at + 60) {
-      this.ctx.storage.sql.exec("INSERT INTO reviewer_auth_start_rate_limit (id, window_started_at, attempts) VALUES (1, ?, 1) ON CONFLICT(id) DO UPDATE SET window_started_at = excluded.window_started_at, attempts = 1", nowSeconds);
-      return { allowed: true, remaining: 9 };
+  consumeStartRateLimit(clientHash, nowSeconds) {
+    if (typeof clientHash !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(clientHash) ||
+        !Number.isInteger(nowSeconds) || nowSeconds < 0) {
+      return { allowed: false, retry_after_seconds: 60, reason: "client_rate_limit_key_invalid" };
     }
-    if (row.attempts >= 10) return { allowed: false, retry_after_seconds: Math.max(1, row.window_started_at + 60 - nowSeconds) };
-    this.ctx.storage.sql.exec("UPDATE reviewer_auth_start_rate_limit SET attempts = attempts + 1 WHERE id = 1");
-    return { allowed: true, remaining: 9 - row.attempts };
+    return this.ctx.storage.transactionSync(() => {
+      this.ctx.storage.sql.exec(
+        "DELETE FROM reviewer_auth_start_rate_limit_by_client WHERE window_started_at + 60 <= ?",
+        nowSeconds
+      );
+      const row = this.ctx.storage.sql.exec(
+        "SELECT window_started_at, attempts FROM reviewer_auth_start_rate_limit_by_client WHERE client_hash = ?",
+        clientHash
+      ).toArray()[0];
+      if (!row) {
+        const activeClients = this.ctx.storage.sql.exec(
+          "SELECT COUNT(*) AS total FROM reviewer_auth_start_rate_limit_by_client"
+        ).toArray()[0]?.total || 0;
+        if (activeClients >= 10000) {
+          return { allowed: false, retry_after_seconds: 60, reason: "client_rate_limit_capacity_reached" };
+        }
+        this.ctx.storage.sql.exec(
+          "INSERT INTO reviewer_auth_start_rate_limit_by_client (client_hash, window_started_at, attempts) VALUES (?, ?, 1)",
+          clientHash, nowSeconds
+        );
+        return { allowed: true, remaining: 9 };
+      }
+      if (nowSeconds >= row.window_started_at + 60) {
+        this.ctx.storage.sql.exec(
+          "UPDATE reviewer_auth_start_rate_limit_by_client SET window_started_at = ?, attempts = 1 WHERE client_hash = ?",
+          nowSeconds, clientHash
+        );
+        return { allowed: true, remaining: 9 };
+      }
+      if (row.attempts >= 10) {
+        return { allowed: false, retry_after_seconds: Math.max(1, row.window_started_at + 60 - nowSeconds) };
+      }
+      this.ctx.storage.sql.exec(
+        "UPDATE reviewer_auth_start_rate_limit_by_client SET attempts = attempts + 1 WHERE client_hash = ?",
+        clientHash
+      );
+      return { allowed: true, remaining: 9 - row.attempts };
+    });
   }
   createTransaction(stateHash, browserHash, nonce, codeVerifier, nowSeconds, returnPath = "/") {
     if (![stateHash, browserHash, nonce, codeVerifier].every(x => typeof x === "string" && x.length >= 32 && x.length <= 128) ||
