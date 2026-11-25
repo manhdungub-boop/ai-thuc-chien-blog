@@ -799,6 +799,7 @@ const worker = {
         });
         return json({
           ok: result.draftStoreSync?.ok === true,
+          ...(result.draftStoreSync?.ok === true ? {} : { error: "draft_store_pause_sync_failed" }),
           changed: result.changed,
           control: result.control,
           draft_store_sync: result.draftStoreSync
@@ -1284,6 +1285,7 @@ const worker = {
         if (action === "resume") await syncDraftStoreControl(env, result.control);
         return json({
           ok: action === "pause" ? result.draftStoreSync?.ok === true : true,
+          ...(action === "pause" && result.draftStoreSync?.ok !== true ? { error: "draft_store_pause_sync_failed" } : {}),
           changed: result.changed,
           control: result.control,
           ...(action === "pause" ? { draft_store_sync: result.draftStoreSync } : {})
