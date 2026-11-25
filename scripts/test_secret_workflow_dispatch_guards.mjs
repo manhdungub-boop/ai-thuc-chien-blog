@@ -47,7 +47,7 @@ assert.deepEqual(
   "Staging email E2E must have exactly one trusted-main workflow_dispatch condition."
 );
 
-const stagingCheckoutStart = stagingJobLines.indexOf("      - name: Check out trusted main source only");
+const stagingCheckoutStart = stagingJobLines.indexOf("      - name: Check out the exact trusted dispatch commit");
 assert.notEqual(stagingCheckoutStart, -1, "Staging email E2E must check out the trusted source.");
 const nextStepStart = stagingJobLines.findIndex((line, index) =>
   index > stagingCheckoutStart && /^      - name:/.test(line));
@@ -60,8 +60,8 @@ assert.equal(
   1,
   "Staging email checkout must define exactly one ref."
 );
-assert.ok(stagingCheckoutLines.includes("          ref: main"),
-  "Staging email E2E must check out exactly main, not a similarly named ref.");
+assert.ok(stagingCheckoutLines.includes("          ref: ${{ github.sha }}"),
+  "Staging email E2E must check out the immutable dispatch commit, not a moving branch ref.");
 assert.equal(
   stagingCheckoutLines.filter(line => /^          persist-credentials:/.test(line)).length,
   1,
