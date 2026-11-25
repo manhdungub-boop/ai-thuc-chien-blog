@@ -198,6 +198,23 @@ describe("article evidence readiness", () => {
     expect(result.ok).toBe(true);
   });
 
+  it("keeps citation markers inside a sentence rather than splitting the reviewed assertion", async () => {
+    const reviewRecord = await makeReview();
+    const draft = makeDraft();
+    draft.body_markdown = draft.body_markdown.replace(
+      ledger.claims[0].claim + " [1] [2] [3]. ",
+      "The system supports [1] bounded research discovery [2]. "
+    );
+    const result = await assessArticleEvidenceReadiness({
+      draft,
+      ledger,
+      reviewRecord,
+      authenticatedReviewer: { authenticated: true, reviewer_ref: reviewRecord.reviewer_ref },
+      now
+    });
+    expect(result.ok).toBe(true);
+  });
+
   it("does not let citations in an unrelated paragraph satisfy a reviewed claim", async () => {
     const reviewRecord = await makeReview();
     const draft = makeDraft();
