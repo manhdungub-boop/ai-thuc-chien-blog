@@ -179,7 +179,7 @@ export async function assessArticleEvidenceReadiness({
 
   const body = typeof draft.body_markdown === "string" ? draft.body_markdown : "";
   const proseBody = removeFencedCode(body);
-  const claimSentences = proseBody.split(/(?<=[.!?。！？])\s+|\n+/u);
+  const claimSentences = proseBody.split(/(?<=[.!?。！？])\s+(?!\[\d+\])|\n+/u);
   for (const item of draft.claims) {
     const normalizedClaim = normalizeClaimText(item.claim);
     const claimSentence = normalizedClaim
