@@ -387,18 +387,55 @@ async function pauseRuntimeControl(env, body) {
   const observed = await readStateStore(env, "/control");
   const version = observed?.control?.version;
   if (!Number.isSafeInteger(version) || version < 0 || !Number.isSafeInteger(version + 1)) throw Object.assign(new Error("runtime_control_snapshot_invalid"), { status: 503 });
-  const draftStore = await getDraftStoreStub(env);
-  const fenced = await draftStore.setRuntimePaused(true, version + 1);
-  if (fenced?.updated !== true || fenced.paused !== true || fenced.version !== version + 1) throw Object.assign(new Error("draft_store_pause_fence_failed"), { status: 409 });
+
+  // Best-effort pre-fence protects in-flight authoring, but must never block the
+  // State Store Pause that closes task admission and cancels active leases.
+  let preFenceSucceeded = false;
+  let preFenceError = null;
   try {
-    const result = await writeStateStore(env, "/control/pause", body);
-    await syncDraftStoreControl(env, result.control);
-    return result;
+    const draftStore = await getDraftStoreStub(env);
+    const fenced = await draftStore.setRuntimePaused(true, version + 1);
+    if (fenced?.updated !== true || fenced.paused !== true || fenced.version !== version + 1) {
+      throw new Error("draft_store_pause_fence_failed");
+    }
+    preFenceSucceeded = true;
   } catch (error) {
-    try { const current = await readStateStore(env, "/control"); await syncDraftStoreControl(env, current.control); }
-    catch { /* Keep the draft Durable Object paused if reconciliation is uncertain. */ }
+    preFenceError = error?.message === "draft_store_unavailable" ||
+      error?.message === "draft_store_control_unavailable"
+      ? error.message
+      : "draft_store_pause_fence_failed";
+  }
+
+  let result;
+  try {
+    result = await writeStateStore(env, "/control/pause", body);
+  } catch (error) {
+    try {
+      const current = await readStateStore(env, "/control");
+      await syncDraftStoreControl(env, current.control);
+    } catch {
+      // If the State Store mutation failed, preserve the original failure.
+    }
     throw error;
   }
+
+  let draftStoreSync = {
+    ok: false,
+    pre_fence_succeeded: preFenceSucceeded,
+    error: "draft_store_control_sync_failed"
+  };
+  try {
+    await syncDraftStoreControl(env, result.control);
+    draftStoreSync = {
+      ok: true,
+      pre_fence_succeeded: preFenceSucceeded,
+      ...(preFenceError ? { pre_fence_error: preFenceError } : {})
+    };
+  } catch {
+    // The State Store Pause is already durable. Surface Draft Store sync failure
+    // separately so callers never mistake a paused runtime for a fully fenced authoring path.
+  }
+  return { ...result, draftStoreSync };
 }
 function startAuthoringControlWatch(env, expectedVersion) {
   const controller = new AbortController();
