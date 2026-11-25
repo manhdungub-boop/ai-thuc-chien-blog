@@ -428,9 +428,23 @@ async function pauseRuntimeControl(env, body) {
       error?.message === "draft_store_control_unavailable"
       ? error.message
       : "draft_store_pause_fence_failed";
+    const safeErrorName = typeof error?.name === "string" && /^[A-Za-z][A-Za-z0-9]{0,63}$/.test(error.name)
+      ? error.name
+      : null;
+    const safeErrorMessage = typeof error?.message === "string"
+      ? error.message.replace(/[^A-Za-z0-9_.:-]/g, "_").slice(0, 160)
+      : null;
+    const safeErrorStack = typeof error?.stack === "string"
+      ? error.stack.split("\n").slice(0, 3).map(line => line.replace(/[^A-Za-z0-9_./:@ -]/g, "_").slice(0, 180))
+      : [];
     preFenceDetail = error?.detail && typeof error.detail === "object"
       ? error.detail
-      : { reason: preFenceError };
+      : {
+          reason: preFenceError,
+          ...(safeErrorName ? { error_name: safeErrorName } : {}),
+          ...(safeErrorMessage ? { error_message: safeErrorMessage } : {}),
+          ...(safeErrorStack.length ? { error_stack: safeErrorStack } : {})
+        };
   }
 
   let result;
