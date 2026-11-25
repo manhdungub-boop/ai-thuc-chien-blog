@@ -300,7 +300,12 @@ function bridgeEnv({ responseBody = { ok: true, dayUtc: "2026-11-19", acceptedTo
   let draftControl = { ...initialDraftControl };
   const draftStub = {
     async setRuntimePaused(paused, version) {
-      if (version < draftControl.version) return { updated: false, reason: "runtime_control_version_stale" };
+      if (version < draftControl.version) {
+        if (paused && draftControl.paused) {
+          return { updated: true, duplicate: true, stale_version: true, paused: true, version: draftControl.version };
+        }
+        return { updated: false, reason: "runtime_control_version_stale" };
+      }
       if (version === draftControl.version && paused !== draftControl.paused) return { updated: false, reason: "runtime_control_version_conflict" };
       draftControl = { paused, version };
       return { updated: true, paused, version };
