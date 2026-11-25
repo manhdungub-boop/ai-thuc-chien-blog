@@ -65,6 +65,20 @@ describe("AgentDraftStore Durable Object", () => {
     expect(await store.getDraft("agent-late-0001")).toBeNull();
   });
 
+  it("allows an emergency Pause to fence an unpaused Draft Store with a newer local version", async () => {
+    expect(await store.setRuntimePaused(false, 10)).toMatchObject({
+      updated: true, paused: false, version: 10
+    });
+    expect(await store.setRuntimePaused(true, 2)).toMatchObject({
+      updated: true, stale_version: true, paused: true, version: 11
+    });
+    expect(await store.setRuntimePaused(false, 10)).toMatchObject({
+      updated: false, reason: "runtime_control_version_stale", current_version: 11
+    });
+    expect(await store.createDraftFromAgent("agent-stale-pause-0001", validDraft(), [], 10))
+      .toEqual({ accepted: false, reason: "runtime_paused" });
+  });
+
   it("stores an eligible article only in the human-review queue", async () => {
     const result = await store.createDraft("draft-review-0001", validDraft());
     expect(result.accepted).toBe(true);
