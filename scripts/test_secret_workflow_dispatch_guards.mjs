@@ -56,14 +56,14 @@ const stagingCheckoutLines = stagingJobLines.slice(
   nextStepStart === -1 ? stagingJobLines.length : nextStepStart
 );
 assert.equal(
-  stagingCheckoutLines.filter(line => /^        ref:/.test(line)).length,
+  stagingCheckoutLines.filter(line => /^          ref:/.test(line)).length,
   1,
   "Staging email checkout must define exactly one ref."
 );
 assert.ok(stagingCheckoutLines.includes("          ref: main"),
   "Staging email E2E must check out exactly main, not a similarly named ref.");
 assert.equal(
-  stagingCheckoutLines.filter(line => /^        persist-credentials:/.test(line)).length,
+  stagingCheckoutLines.filter(line => /^          persist-credentials:/.test(line)).length,
   1,
   "Staging email checkout must define exactly one credential-persistence setting."
 );
