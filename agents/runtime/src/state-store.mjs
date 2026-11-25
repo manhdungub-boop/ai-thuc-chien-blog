@@ -363,6 +363,21 @@ if (url.pathname === "/task" && request.method === "GET") {
         const row = readRow(this.sql, "SELECT * FROM tasks WHERE task_id = ?", taskId);
         return row ? jsonResponse({ ok: true, task: safeTask(row) }) : jsonResponse({ ok: false, error: "task_not_found" }, 404);
       }
+      if (url.pathname === "/task-audit" && request.method === "GET") {
+        const allowed = new Set(["taskId"]);
+        const keys = [...url.searchParams.keys()];
+        const taskId = url.searchParams.get("taskId");
+        if (keys.some(key => !allowed.has(key)) ||
+            keys.some(key => url.searchParams.getAll(key).length !== 1) ||
+            typeof taskId !== "string" || !taskId || taskId.length > 64) {
+          return jsonResponse({ ok: false, error: "task_audit_query_invalid" }, 400);
+        }
+        const events = this.sql.exec(
+          "SELECT event_type AS eventType, occurred_at AS occurredAt FROM audit_events WHERE task_id = ? ORDER BY occurred_at ASC, event_id ASC LIMIT 20",
+          taskId
+        ).toArray();
+        return jsonResponse({ ok: true, taskId, events });
+      }
       if (url.pathname === "/dead-letter" && request.method === "GET") {
         const allowed = new Set(["limit", "beforeTerminalAt", "beforeTaskId"]);
         const keys = [...url.searchParams.keys()];
