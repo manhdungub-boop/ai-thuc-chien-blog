@@ -147,7 +147,7 @@ jobs:
           assert.equal('kv_namespaces' in config, false);
           assert.equal('r2_buckets' in config, false);
           assert.equal(preview.name, 'ai-thuc-chien-agent-runtime-preview');
-          assert.equal(preview.main, './src/worker.mjs');
+          assert.equal(preview.main, './src/worker-preview-recovery.mjs');
           assert.equal(preview.workers_dev, true);
           assert.equal(preview.preview_urls, false);
           assert.equal(preview.vars.AGENT_ENABLED, 'false');
@@ -172,7 +172,8 @@ jobs:
           assert.deepEqual(preview.migrations, [
             { tag: 'v1', new_sqlite_classes: ['AgentStateStore'] },
             { tag: 'v2', new_sqlite_classes: ['AgentReviewerAuthStore', 'AgentDraftStore'] },
-            { tag: 'v3-ai-bank-candidate-store', new_sqlite_classes: ['AgentAIBankCandidateStore'] }
+            { tag: 'v3-ai-bank-candidate-store', new_sqlite_classes: ['AgentAIBankCandidateStore'] },
+            { tag: 'fault-test-v1', new_sqlite_classes: ['TestAgentStateStore'] }
           ]);
           assert.equal('routes' in preview, false);
           assert.equal('d1_databases' in preview, false);
@@ -332,7 +333,7 @@ jobs:
           assert.equal(testConfig.main, './tests/state-store-test-worker.mjs');
           assert.notEqual(preview.name, testConfig.name, 'fault Worker must be separate from Preview');
           assert.notEqual(production.name, testConfig.name, 'fault Worker must be separate from Production');
-          assert.equal(preview.main, './src/worker.mjs');
+          assert.equal(preview.main, './src/worker-preview-recovery.mjs');
           assert.equal(production.main, './src/worker.mjs');
           for (const key of ['AGENT_ENABLED','AGENT_SCHEDULER_ENABLED','AGENT_RECOVERY_ALARM_ENABLED','AGENT_OIDC_ENABLED','AGENT_REVIEWER_AUTH_ENABLED']) {
             assert.equal(testConfig.vars[key], 'false', key + ' must remain disabled');
