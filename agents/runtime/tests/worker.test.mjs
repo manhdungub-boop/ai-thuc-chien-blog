@@ -647,6 +647,7 @@ test("emergency Pause reaches the State Store even when the Draft Store binding 
   assert.equal(body.control.paused, true, "the durable admission latch must still be closed");
   assert.equal(body.draft_store_sync.ok, false);
   assert.equal(body.draft_store_sync.pre_fence_succeeded, false);
+  assert.equal(body.draft_store_sync.pre_fence_detail.reason, "draft_store_unavailable");
 });
 
 test("operator resume bridge sends the observed control version and preserves stale-version conflicts", async () => {
