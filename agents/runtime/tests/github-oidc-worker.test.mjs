@@ -144,6 +144,7 @@ test("OIDC pause verifies GitHub signature, consumes jti, and records only the v
   assert.equal(response.status, 200);
   assert.equal(body.ok, true);
   assert.equal(body.control.paused, true);
+  assert.deepEqual(body.draft_store_sync, { ok: true, pre_fence_succeeded: true });
   assert.equal(internalCalls.length, 3);
   assert.equal(fetchCalls.length, 2);
   assert.equal(fetchCalls[0].options.redirect, "manual");
