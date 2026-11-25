@@ -391,7 +391,7 @@ export class AgentAIBankCandidateStore {
     }
     const fingerprintPayload = JSON.stringify({
       candidate_id: candidateId,
-      reviewed_release_url: reviewedReleaseIdentity,
+      reviewed_release_identity: reviewedReleaseIdentity,
       check_type: evidence.check_type,
       source_title: typeof evidence.source_title === "string" ? evidence.source_title.trim() : null,
       source_url: evidence.source_url,
@@ -448,7 +448,7 @@ export class AgentAIBankCandidateStore {
     ).toArray()[0];
     const candidate = candidateRow ? safeCandidate(candidateRow) : null;
     if (!candidate) return { accepted: false, reason: "candidate_not_found" };
-    if (typeof reviewedReleaseIdentity !== "string" || !reviewedReleaseIdentity.trim() || reviewedReleaseIdentity.length > 1000) {
+    if (typeof reviewedReleaseIdentity !== "string" || !reviewedReleaseIdentity.trim() || reviewedReleaseIdentity.length > 1200) {
       return { accepted: false, reason: "reviewed_release_identity_required" };
     }
     const releaseUrl = candidateReleaseIdentity(candidate.candidate);
