@@ -25,11 +25,36 @@ function removeInlineCode(markdown) {
 }
 
 function removeMarkdownLinks(markdown) {
-  return markdown.replace(/!?\[[^\]]*\]\([^)]*\)/g, " ");
+  return markdown
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1");
 }
 
 function proseCitationText(markdown) {
   return removeMarkdownLinks(removeInlineCode(markdown));
+}
+
+function splitProseAssertions(markdown) {
+  const prose = removeFencedCode(markdown);
+  return prose.split(/\n{2,}/).flatMap(paragraph => {
+    const blocks = [];
+    let current = "";
+    for (const line of paragraph.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      const startsBlock = /^(?:#{1,6}\s+|>\s*|[-*+]\s+|\d+[.)]\s+)/.test(trimmed);
+      if (startsBlock && current) {
+        blocks.push(current);
+        current = "";
+      }
+      const text = trimmed.replace(/^(?:#{1,6}\s+|>\s*|[-*+]\s+|\d+[.)]\s+)/, "");
+      current += (current ? " " : "") + text;
+    }
+    if (current) blocks.push(current);
+    return blocks.flatMap(block =>
+      block.split(/(?<=[.!?。！？])\s+(?!\[\d+\])/u)
+    );
+  });
 }
 
 function normalizeClaimText(value) {
@@ -57,7 +82,7 @@ function findUnmanifestedQuantitativeCandidates(markdown, reviewedClaims) {
     const sentences = withoutListMarkers.split(/(?<=[.!?。！？])\s+|\n+/u);
     for (const sentence of sentences) {
       const candidate = sentence
-        .replace(/!?\[[^\]]*\]\([^)]*\)/g, " ")
+        .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
         .replace(/\[\d+\]/g, " ")
         .replace(/https?:\/\/\S+/g, " ")
         .replace(/^\s*(?:[-*+]\s+|\d+[.)]\s+)/, "")
@@ -178,8 +203,7 @@ export async function assessArticleEvidenceReadiness({
   }
 
   const body = typeof draft.body_markdown === "string" ? draft.body_markdown : "";
-  const proseBody = removeFencedCode(body);
-  const claimSentences = proseBody.split(/(?<=[.!?。！？])\s+(?!\[\d+\])|\n+/u);
+  const claimSentences = splitProseAssertions(body);
   for (const item of draft.claims) {
     const normalizedClaim = normalizeClaimText(item.claim);
     const claimSentence = normalizedClaim
