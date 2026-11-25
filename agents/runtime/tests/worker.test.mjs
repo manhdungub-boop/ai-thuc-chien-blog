@@ -304,7 +304,11 @@ function bridgeEnv({ responseBody = { ok: true, dayUtc: "2026-11-19", acceptedTo
         if (paused && draftControl.paused) {
           return { updated: true, duplicate: true, stale_version: true, paused: true, version: draftControl.version };
         }
-        return { updated: false, reason: "runtime_control_version_stale" };
+        if (paused && !draftControl.paused) {
+          draftControl = { paused: true, version: draftControl.version + 1 };
+          return { updated: true, stale_version: true, paused: true, version: draftControl.version };
+        }
+        return { updated: false, reason: "runtime_control_version_stale", current_version: draftControl.version };
       }
       if (version === draftControl.version && paused !== draftControl.paused) return { updated: false, reason: "runtime_control_version_conflict" };
       draftControl = { paused, version };
@@ -586,6 +590,32 @@ test("Pause accepts a higher-version Draft Store only when it is already paused"
   assert.equal(body.draft_store_sync.ok, true);
   assert.equal(body.draft_store_sync.stale_version_already_paused, true);
   assert.deepEqual(runtime.draftControl, { paused: true, version: 9 });
+});
+
+test("emergency Pause fences an unpaused Draft Store whose local version is ahead", async () => {
+  const runtime = bridgeEnv({
+    initialDraftControl: { paused: false, version: 9 },
+    response: async (internalRequest) => {
+      const url = new URL(internalRequest.url);
+      if (url.pathname === "/control" && internalRequest.method === "GET") {
+        return Response.json({ ok: true, control: { paused: false, version: 4 } });
+      }
+      if (url.pathname === "/control/pause" && internalRequest.method === "POST") {
+        return Response.json({ ok: true, changed: true, control: { paused: true, version: 5 } });
+      }
+      throw new Error("unexpected State Store request");
+    },
+  });
+  const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/control/pause", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + OPERATOR_TOKEN, "Content-Type": "application/json" },
+    body: JSON.stringify({ reason: "fence stale unpaused authoring store" }),
+  }), runtime.env);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.draft_store_sync.ok, true);
+  assert.equal(body.draft_store_sync.pre_fence_succeeded, true);
+  assert.deepEqual(runtime.draftControl, { paused: true, version: 10 });
 });
 
 test("emergency Pause reaches the State Store even when the Draft Store binding is unavailable", async () => {
