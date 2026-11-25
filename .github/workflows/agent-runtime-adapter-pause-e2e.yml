@@ -163,6 +163,7 @@ jobs:
           assert.equal("routes" in config, false);
           await writeFile(process.env.GENERATED_CONFIG, JSON.stringify(config, null, 2) + "\n", { mode: 0o600 });
           NODE
+          echo "PAUSE_E2E_DEPLOY_ATTEMPTED=true" >> "$GITHUB_ENV"
           timeout --signal=TERM --kill-after=10s 180s npx --yes wrangler@4.166.0 deploy --config "$GENERATED_CONFIG" \
             --message "Isolated Adapter Pause E2E test Worker; no Production bindings"
 
@@ -357,6 +358,11 @@ jobs:
           GENERATED_CONFIG: .wrangler.pause-e2e.cleanup.jsonc
         run: |
           set -u
+          if [[ "${PAUSE_E2E_DEPLOY_ATTEMPTED:-false}" != "true" ]]; then
+            rm -f "$GENERATED_CONFIG" .wrangler.pause-e2e.generated.jsonc
+            echo "No isolated Worker deployment was attempted; no Cloudflare cleanup is required."
+            exit 0
+          fi
           if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
             echo "::error::Cloudflare credential unavailable; isolated Worker cleanup could not be confirmed."
             exit 1
@@ -419,7 +425,7 @@ jobs:
             cleanup_failed=1
           fi
 
-          rm -f "$GENERATED_CONFIG"
+          rm -f "$GENERATED_CONFIG" .wrangler.pause-e2e.generated.jsonc
           if [[ "$cleanup_failed" != "0" ]]; then
             echo "::error::Isolated Worker cleanup is incomplete; manual review is required."
             exit 1

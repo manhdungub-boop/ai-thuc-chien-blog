@@ -42,6 +42,7 @@ test("Pause E2E gate intercepts only the allowlisted public article fetch and pr
   const source = await read("./pause-e2e-worker.mjs");
   assert.match(source, /raw\.githubusercontent\.com\/manhdungub-boop\/ai-thuc-chien-blog\/main\/articles\/ai-agent-thuc-hanh-tu-thiet-ke-den-kiem-soat\.html/);
   assert.match(source, /runtimeEnv\?\.AGENT_PAUSE_E2E_GATE_ENABLED === "true"/);
+  assert.match(source, /delay === 8_000/);
   assert.match(source, /signal\.addEventListener\("abort"/);
   assert.match(source, /worker\.fetch\(request, env, ctx\)/);
   assert.match(source, /authorizeGitHubActionsOperator/);

@@ -71,6 +71,17 @@ function waitForAbort(signal) {
   });
 }
 
+// The real Preview source reader has an 8-second local timeout, shorter than
+// the lease heartbeat interval. Extend only that exact timer in this test-only
+// Worker so an independent Pause can fence the live lease before source timeout.
+const originalSetTimeout = globalThis.setTimeout.bind(globalThis);
+globalThis.setTimeout = (callback, delay, ...args) => {
+  const adjustedDelay = runtimeEnv?.AGENT_PAUSE_E2E_GATE_ENABLED === "true" && delay === 8_000
+    ? 45_000
+    : delay;
+  return originalSetTimeout(callback, adjustedDelay, ...args);
+};
+
 // Test-only interception of exactly one public, read-only GitHub article fetch.
 // The production Worker entrypoint never imports this module. The real Preview
 // reader receives the original AbortSignal and must unwind after independent Pause.
@@ -186,8 +197,13 @@ async function performIndependentOidcPause(request, env) {
   if ([...new URL(request.url).searchParams.keys()].length > 0) {
     return json({ ok: false, error: "request_invalid" }, 400);
   }
+  if (!/^application\/json(?:\s*;|$)/i.test(request.headers.get("content-type") || "")) {
+    return json({ ok: false, error: "json_content_type_required" }, 415);
+  }
+  const rawBody = await request.text();
+  if (rawBody.length > 256) return json({ ok: false, error: "request_body_too_large" }, 413);
   let body;
-  try { body = await request.json(); } catch { body = null; }
+  try { body = JSON.parse(rawBody); } catch { body = null; }
   if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).length !== 0) {
     return json({ ok: false, error: "pause_e2e_request_invalid" }, 400);
   }
