@@ -108,6 +108,24 @@ test("read-only metrics report bounded aggregate task, quota, age, and audit dat
   });
 });
 
+test("task audit lookup is scoped to the exact task instead of aggregate counters", async () => {
+  await withRuntime({}, async ({ stub }) => {
+    const first = await call(stub, "/reserve", task("audit-first"));
+    const second = await call(stub, "/reserve", task("audit-second"));
+    assert.equal(first.status, 201);
+    assert.equal(second.status, 201);
+    await call(stub, "/claim", { taskId: first.body.task.taskId });
+    await call(stub, "/claim", { taskId: second.body.task.taskId });
+
+    const audit = await call(stub, "/task-audit?taskId=" + encodeURIComponent(first.body.task.taskId));
+    assert.equal(audit.status, 200);
+    assert.equal(audit.body.taskId, first.body.task.taskId);
+    assert.deepEqual(audit.body.events.map(event => event.eventType), ["task.queued", "task.claimed"]);
+    assert.equal(JSON.stringify(audit.body).includes(second.body.task.taskId), false);
+    assert.equal((await call(stub, "/task-audit?taskId=missing&extra=1")).status, 400);
+  });
+});
+
 test("metrics distinguish qualifying breaker failures from budget failures and pause actor from reason text", async () => {
   await withRuntime({}, async ({ stub }) => {
     const created = await call(stub, "/reserve", task("metrics-budget-failure"));
@@ -1694,7 +1712,7 @@ test("outbound request budget rejects delayed and future UTC day keys at executi
   });
 });
 
-test("State Store retention cleanup removes at most 100 rows per table per invocation", async () => {
+test("State Store retention cleanup removes at most 100 task/control rows and 250 audit rows per invocation", async () => {
   await withRuntime({}, async ({ stub }) => {
     const now = Date.parse("2026-11-21T12:00:00.000Z");
     const seeded = await call(stub, "/__test/seed-prune-fixture", { now });
