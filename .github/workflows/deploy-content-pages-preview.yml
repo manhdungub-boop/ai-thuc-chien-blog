@@ -1,4 +1,5 @@
 name: Verify exact Cloudflare Preview without secrets
+# Static content-only diffs use Pages branch Preview; code/assets diffs still require Worker Preview.
 
 on:
   pull_request:
