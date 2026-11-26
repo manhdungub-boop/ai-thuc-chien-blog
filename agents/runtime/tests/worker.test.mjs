@@ -295,11 +295,15 @@ test("run requires operator authentication if both safety flags are opened", asy
 
 const OPERATOR_TOKEN = "worker-bridge-operator-token-034252848589abcdef";
 const STATE_TOKEN = "worker-bridge-state-store-token-034252848589abcdef";
-function bridgeEnv({ responseBody = { ok: true, dayUtc: "2026-11-19", acceptedToday: 2, inFlight: 1 }, response = null, responseStatus = 200, initialDraftControl = { paused: true, version: 0 } } = {}) {
+function bridgeEnv({ responseBody = { ok: true, dayUtc: "2026-11-19", acceptedToday: 2, inFlight: 1 }, response = null, responseStatus = 200, initialDraftControl = { paused: true, version: 0 }, draftSyncFailures = 0 } = {}) {
   const calls = [];
   let draftControl = { ...initialDraftControl };
   const draftStub = {
     async setRuntimePaused(paused, version) {
+      if (draftSyncFailures > 0 && paused === false) {
+        draftSyncFailures--;
+        throw new Error("injected_draft_store_sync_failure");
+      }
       if (version < draftControl.version) {
         if (paused && draftControl.paused) {
           return { updated: true, duplicate: true, stale_version: true, paused: true, version: draftControl.version };
@@ -680,6 +684,55 @@ test("operator resume bridge sends the observed control version and preserves st
   const forwarded = await calls[1].json();
   assert.equal(forwarded.expectedVersion, 7);
   assert.equal(forwarded.actor, "project-operator-01");
+});
+
+test("failed Draft Store sync after Resume conditionally compensates to a durable Pause", async () => {
+  let control = { paused: true, version: 7 };
+  const runtime = bridgeEnv({
+    draftSyncFailures: 1,
+    response: async (internalRequest) => {
+      const url = new URL(internalRequest.url);
+      if (url.pathname === "/control" && internalRequest.method === "GET") {
+        return Response.json({ ok: true, control });
+      }
+      if (url.pathname === "/control/resume" && internalRequest.method === "POST") {
+        const body = await internalRequest.json();
+        if (body.expectedVersion !== control.version) {
+          return Response.json({ ok: false, error: "runtime_control_version_conflict" }, { status: 409 });
+        }
+        control = { paused: false, version: control.version + 1 };
+        return Response.json({ ok: true, changed: true, control });
+      }
+      if (url.pathname === "/control/pause" && internalRequest.method === "POST") {
+        const body = await internalRequest.json();
+        if (body.expectedVersion !== control.version) {
+          return Response.json({ ok: false, error: "runtime_control_version_conflict" }, { status: 409 });
+        }
+        control = { paused: true, version: control.version + 1 };
+        return Response.json({ ok: true, changed: true, control });
+      }
+      throw new Error("unexpected State Store request: " + url.pathname);
+    },
+  });
+
+  const response = await worker.fetch(new Request("https://agent-runtime-preview.example.workers.dev/internal/control/resume", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + OPERATOR_TOKEN, "Content-Type": "application/json" },
+    body: JSON.stringify({ reason: "exercise failed resume synchronization" }),
+  }), runtime.env);
+  const body = await response.json();
+
+  assert.equal(response.status, 503);
+  assert.equal(body.ok, false);
+  assert.equal(body.error, "resume_draft_store_sync_failed");
+  assert.deepEqual(body.resume_committed_control, { paused: false, version: 8 });
+  assert.deepEqual(control, { paused: true, version: 9 },
+    "compensation must close runtime admission at the exact Resume version");
+  assert.deepEqual(body.control, { paused: true, version: 9 });
+  assert.equal(body.compensation.ok, true);
+  assert.equal(body.compensation.state_store_paused, true);
+  assert.equal(body.compensation.draft_store_sync.ok, true);
+  assert.deepEqual(runtime.draftControl, { paused: true, version: 9 });
 });
 
 test("operator resume bridge returns 409 without retrying after a newer Pause", async () => {
