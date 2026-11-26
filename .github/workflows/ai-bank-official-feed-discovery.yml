@@ -72,6 +72,12 @@ jobs:
       - name: Run focused AI Bank Worker endpoint tests
         run: timeout --signal=TERM --kill-after=10s 180s node --experimental-loader ./agents/runtime/tests/cloudflare-workers-loader.mjs --test agents/runtime/tests/worker.test.mjs
 
+      - name: Run AI Bank reservation, OIDC, and Preview config tests
+        run: timeout --signal=TERM --kill-after=10s 180s node --experimental-loader ./agents/runtime/tests/cloudflare-workers-loader.mjs --test agents/runtime/tests/ai-bank-reservation.test.mjs agents/runtime/tests/state-store-oidc-replay.test.mjs agents/runtime/tests/github-oidc-worker.test.mjs agents/runtime/tests/preview-config.test.mjs
+
+      - name: Run targeted Durable Object quota and replay transaction tests
+        run: timeout --signal=TERM --kill-after=10s 180s node --experimental-loader ./agents/runtime/tests/cloudflare-workers-loader.mjs --test --test-name-pattern='OIDC replay ledger|outbound request budgets|batch external quota reservations|concurrent batch reservations' agents/runtime/tests/state-store.integration.test.mjs
+
       - name: Run repository workflow security and dispatch guards
         run: node scripts/test_secret_workflow_dispatch_guards.mjs
 
