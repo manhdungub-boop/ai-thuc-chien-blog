@@ -37,6 +37,15 @@ export class TestAgentStateStore extends AgentStateStore {
     });
     super(ctx, testEnv);
     this.faultSuiteMode = faultSuiteMode;
+    this.failNextAlarmSchedule = false;
+  }
+
+  async scheduleRecoveryAlarm(now, options) {
+    if (this.failNextAlarmSchedule && options?.throwOnError === true) {
+      this.failNextAlarmSchedule = false;
+      throw new Error("test_alarm_schedule_storage_failure");
+    }
+    return super.scheduleRecoveryAlarm(now, options);
   }
 
   requestTime(request) {
@@ -50,7 +59,7 @@ export class TestAgentStateStore extends AgentStateStore {
 
   async fetch(request) {
     const url = new URL(request.url);
-    if (!["/__test/rollback", "/__test/downgrade-v1", "/__test/prune", "/__test/seed-prune-fixture", "/__test/prune-counts", "/__test/downgrade-v6-budget-only", "/__test/downgrade-v6-result-only", "/__test/schema-state", "/__test/alarm-state", "/__test/delete-alarm", "/__test/expire-and-fire", "/__test/fire-alarm", "/__test/fault-suite"].includes(url.pathname)) {
+    if (!["/__test/rollback", "/__test/downgrade-v1", "/__test/prune", "/__test/seed-prune-fixture", "/__test/prune-counts", "/__test/downgrade-v6-budget-only", "/__test/downgrade-v6-result-only", "/__test/schema-state", "/__test/alarm-state", "/__test/delete-alarm", "/__test/expire-and-fire", "/__test/fire-alarm", "/__test/fail-next-alarm-schedule", "/__test/fault-suite"].includes(url.pathname)) {
       return super.fetch(request);
     }
     if (url.pathname === "/__test/alarm-state" || url.pathname === "/__test/schema-state" || url.pathname === "/__test/prune-counts" ? request.method !== "GET" : request.method !== "POST") {
@@ -402,6 +411,15 @@ export class TestAgentStateStore extends AgentStateStore {
       if (url.pathname === "/__test/fire-alarm" && request.method === "POST") {
         await this.alarm();
         return jsonResponse({ ok: true, alarmAt: await this.ctx.storage.getAlarm() });
+      }
+      if (url.pathname === "/__test/fail-next-alarm-schedule" && request.method === "POST") {
+        this.failNextAlarmSchedule = true;
+        try {
+          await this.alarm();
+          return jsonResponse({ ok: false, error: "alarm_failure_was_swallowed" }, 500);
+        } catch (error) {
+          return jsonResponse({ ok: true, error: "alarm_retry_required", message: String(error?.message ?? error) }, 503);
+        }
       }
       if (url.pathname === "/__test/downgrade-v1") {
         this.ctx.storage.transactionSync(() => {
