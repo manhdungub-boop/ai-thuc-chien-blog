@@ -312,7 +312,7 @@ jobs:
           for path in / /thu-vien.html /ngan-hang-ai.html /sitemap.xml /feed.xml /data/ai-tools.json /articles/mcp-filesystem-server-an-toan; do
             code="$(curl --silent --show-error --location --max-time 20 -o /dev/null -w '%{http_code}' "$BASE_URL$path")"
             if [[ "$code" != "200" ]]; then
-              echo "::error::Exact-head Worker Preview route $path returned HTTP $code"
+              echo "::error::Exact-head Preview route $path returned HTTP $code"
               exit 1
             fi
             echo "PASS: $path returned HTTP 200"
@@ -320,17 +320,17 @@ jobs:
 
           library="$(curl --fail --silent --show-error --location --max-time 20 "$BASE_URL/thu-vien.html")"
           if ! grep -Eq '[0-9]+[[:space:]]+bài' <<< "$library"; then
-            echo "::error::Exact-head Worker Preview library does not display an article count."
+            echo "::error::Exact-head Preview library does not display an article count."
             exit 1
           fi
-          echo "PASS: exact-head Worker Preview library displays an article count."
+          echo "PASS: exact-head Preview library displays an article count."
 
           catalog="$(curl --fail --silent --show-error --location --max-time 20 "$BASE_URL/data/ai-tools.json")"
           if ! grep -q '"tools"' <<< "$catalog"; then
-            echo "::error::Exact-head Worker Preview AI Bank JSON is missing the tools collection."
+            echo "::error::Exact-head Preview AI Bank JSON is missing the tools collection."
             exit 1
           fi
-          echo "PASS: exact-head Worker Preview AI Bank JSON is readable."
+          echo "PASS: exact-head Preview AI Bank JSON is readable."
 
       - name: Verify security headers on exact-head Worker Preview
         if: steps.scope.outputs.preview_mode != 'none'
@@ -348,8 +348,8 @@ jobs:
             'Referrer-Policy: strict-origin-when-cross-origin' \
             'Strict-Transport-Security: max-age=31536000'; do
             grep -Fqi "$expected" "$headers" || {
-              echo "::error::Exact-head Worker Preview is missing security header: $expected"
+              echo "::error::Exact-head Preview is missing security header: $expected"
               exit 1
             }
           done
-          echo "PASS: required security headers are present on exact-head Worker Preview."
+          echo "PASS: required security headers are present on exact-head Preview."
