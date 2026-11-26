@@ -736,7 +736,8 @@ if (url.pathname === "/task" && request.method === "GET") {
         typeof body.actor !== "string" || !/^[a-zA-Z0-9._:-]{3,64}$/.test(body.actor) ||
         typeof body.requestId !== "string" || !/^[a-zA-Z0-9-]{16,64}$/.test(body.requestId) ||
         (!paused && (!Number.isSafeInteger(body.expectedVersion) || body.expectedVersion < 0)) ||
-        (paused && body.expectedVersion !== undefined) ||
+        (paused && body.expectedVersion !== undefined &&
+          (!Number.isSafeInteger(body.expectedVersion) || body.expectedVersion < 0)) ||
         (body.internalCleanup !== undefined && (body.internalCleanup !== true || !paused ||
           !/^github-actions:[0-9]{1,20}$/.test(body.actor) ||
           body.reason !== "one-shot OIDC Preview E2E complete")) ||
@@ -757,7 +758,7 @@ if (url.pathname === "/task" && request.method === "GET") {
         }
         const current = readRow(this.sql, "SELECT paused, changed_at, version FROM runtime_control WHERE singleton_id = 1");
         if (!current) return { status: 503, body: { ok: false, error: "runtime_control_unavailable" } };
-        if (!paused && current.version !== body.expectedVersion) {
+        if (body.expectedVersion !== undefined && current.version !== body.expectedVersion) {
           return { status: 409, body: { ok: false, error: "runtime_control_version_conflict" } };
         }
         const cancelRunningTasks = () => {
