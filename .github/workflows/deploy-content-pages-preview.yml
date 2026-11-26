@@ -66,7 +66,17 @@ jobs:
               "data/ai-tools.json", "index.html", "thu-vien.html",
               "ngan-hang-ai.html", "sitemap.xml", "feed.xml",
           }
-          changed = {item.get("filename", "") for item in files}
+          # GitHub caps this endpoint at 100 files per page. A capped or
+          # potentially incomplete list must fail closed to Worker Preview.
+          if len(files) >= 100:
+              print("workers")
+              raise SystemExit(0)
+          changed = set()
+          for item in files:
+              changed.add(item.get("filename", ""))
+              previous_filename = item.get("previous_filename")
+              if previous_filename:
+                  changed.add(previous_filename)
           is_article = lambda path: path.startswith("articles/") and path.endswith(".html") and path.count("/") == 1
           if changed and changed.issubset(workflow_only):
               print("none")
@@ -123,7 +133,7 @@ jobs:
               if expected[:7] not in summary:
                   continue
               match = re.search(
-                  r"Branch Preview URL:</strong>.*?<a href=['\"](https://[a-z0-9-]+\.ai-thuc-chien-blog\.pages\.dev)['\"]",
+                  r"<strong>Preview URL:</strong>.*?<a href=['\"](https://[a-z0-9-]+\.ai-thuc-chien-blog\.pages\.dev)['\"]",
                   summary,
                   re.S,
               )
