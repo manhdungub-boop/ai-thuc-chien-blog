@@ -425,8 +425,9 @@ export class TestAgentStateStore extends AgentStateStore {
         try {
           await this.alarm();
           return jsonResponse({ ok: false, error: "alarm_failure_was_swallowed" }, 500);
-        } catch (error) {
-          return jsonResponse({ ok: true, error: "alarm_retry_required", message: String(error?.message ?? error) }, 503);
+        } catch {
+          // Do not expose Durable Object exception details to HTTP callers.
+          return jsonResponse({ ok: true, error: "alarm_retry_required" }, 503);
         }
       }
       if (url.pathname === "/__test/downgrade-v1") {
@@ -454,7 +455,7 @@ export class TestAgentStateStore extends AgentStateStore {
         this.sql.exec("INSERT INTO daily_usage (day_utc, accepted_count) VALUES ('2099-12-31', 1)");
         throw new Error("intentional_rollback_probe");
       });
-    } catch (error) {
+    } catch {
       if (url.pathname === "/__test/rollback") {
         const usage = this.sql.exec(
           "SELECT accepted_count FROM daily_usage WHERE day_utc = '2099-12-31'"
@@ -465,10 +466,8 @@ export class TestAgentStateStore extends AgentStateStore {
           acceptedToday: usage?.accepted_count ?? 0,
         });
       }
-      const diagnostic = String(error?.message ?? error ?? "unknown")
-        .replace(/[^a-zA-Z0-9_.:-]/g, "_")
-        .slice(0, 180);
-      return jsonResponse({ ok: false, error: "test_fixture_operation_failed", diagnostic }, 500);
+      // Keep test diagnostics generic; exception details stay server-side.
+      return jsonResponse({ ok: false, error: "test_fixture_operation_failed" }, 500);
     }
     return jsonResponse({ ok: false, error: "rollback_probe_did_not_throw" }, 500);
   }
