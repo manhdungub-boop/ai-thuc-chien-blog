@@ -133,7 +133,7 @@ jobs:
               if expected[:7] not in summary:
                   continue
               match = re.search(
-                  r"Branch Preview URL:</strong>.*?<a href=['\"](https://[a-z0-9-]+\.ai-thuc-chien-blog\.pages\.dev)['\"]",
+                  r"<strong>Preview URL:</strong>.*?<a href=['\"](https://[a-z0-9-]+\.ai-thuc-chien-blog\.pages\.dev)['\"]",
                   summary,
                   re.S,
               )
