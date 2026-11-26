@@ -122,6 +122,58 @@ test("rejects pull_request OIDC tokens without the exact environment-bound subje
   assert.equal(result.error, "oidc_claims_invalid");
 });
 
+test("accepts a schedule token only for the exact AI Bank workflow, main ref, and pinned actor", async () => {
+  const scheduleExpected = Object.freeze({
+    ...expected,
+    workflowRef: "manhdungub-boop/ai-thuc-chien-blog/.github/workflows/ai-bank-official-feed-discovery.yml@refs/heads/main",
+    eventName: "schedule",
+  });
+  const token = await signedToken({
+    sub: "repo:manhdungub-boop@342528485/ai-thuc-chien-blog@1423636651:ref:refs/heads/main",
+    workflow_ref: scheduleExpected.workflowRef,
+    event_name: "schedule",
+  });
+  const result = await verify(token, { expected: scheduleExpected });
+  assert.equal(result.ok, true);
+  assert.equal(result.identity.eventName, "schedule");
+  assert.equal(result.identity.workflowRef, scheduleExpected.workflowRef);
+});
+
+test("rejects schedule tokens with a changed workflow, event, actor, ref, or environment subject", async () => {
+  const scheduleExpected = Object.freeze({
+    ...expected,
+    workflowRef: "manhdungub-boop/ai-thuc-chien-blog/.github/workflows/ai-bank-official-feed-discovery.yml@refs/heads/main",
+    eventName: "schedule",
+  });
+  const invalid = [
+    { workflow_ref: "manhdungub-boop/ai-thuc-chien-blog/.github/workflows/other.yml@refs/heads/main" },
+    { event_name: "workflow_dispatch" },
+    { actor_id: "70813640" },
+    { ref: "refs/heads/feature/attacker" },
+    { sub: "repo:manhdungub-boop@342528485/ai-thuc-chien-blog@1423636651:environment:agent-runtime-preview" },
+  ];
+  for (const overrides of invalid) {
+    const token = await signedToken({
+      sub: "repo:manhdungub-boop@342528485/ai-thuc-chien-blog@1423636651:ref:refs/heads/main",
+      workflow_ref: scheduleExpected.workflowRef,
+      event_name: "schedule",
+      ...overrides,
+    });
+    const result = await verify(token, { expected: scheduleExpected });
+    assert.equal(result.ok, false);
+    assert.equal(result.error, "oidc_claims_invalid");
+  }
+  const environmentExpected = { ...scheduleExpected, environment: "agent-runtime-preview" };
+  const environmentToken = await signedToken({
+    sub: "repo:manhdungub-boop@342528485/ai-thuc-chien-blog@1423636651:ref:refs/heads/main",
+    workflow_ref: scheduleExpected.workflowRef,
+    event_name: "schedule",
+  });
+  const environmentResult = await verify(environmentToken, { expected: environmentExpected });
+  assert.equal(environmentResult.ok, false);
+  assert.equal(environmentResult.error, "oidc_configuration_invalid");
+});
+
 test("rejects a token with a bad signature", async () => {
   const token = await signedToken();
   const parts = token.split(".");
