@@ -48,6 +48,9 @@ jobs:
       - name: Run AI Bank triage classification fixtures
         run: node scripts/ai-bank-lead-triage.mjs --self-test
 
+      - name: Run repository workflow security and dispatch guards
+        run: node scripts/test_secret_workflow_dispatch_guards.mjs
+
   discover:
     if: github.event_name == 'schedule' && vars.AI_BANK_RSS_ENABLED_AT != ''
     permissions:
