@@ -74,7 +74,7 @@ function config(env) {
       !env.GOOGLE_REVIEWER_REDIRECT_URI.startsWith("https://") ||
       env.GOOGLE_REVIEWER_REDIRECT_URI.length > 512 ||
       env.GOOGLE_REVIEWER_CLIENT_ID.length > 512 ||
-      allowedEmails.length !== 1 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(allowedEmails[0]) || allowedEmails[0].length > 254 || env.GOOGLE_REVIEWER_STATE_SECRET === env.GOOGLE_REVIEWER_SESSION_SECRET) return null;
+      allowedEmails.length !== 1 || !/^[^@\s]+@gmail\.com$/.test(allowedEmails[0]) || allowedEmails[0].length > 254 || env.GOOGLE_REVIEWER_STATE_SECRET === env.GOOGLE_REVIEWER_SESSION_SECRET) return null;
   try {
     const uri = new URL(env.GOOGLE_REVIEWER_REDIRECT_URI);
     if (uri.protocol !== "https:" || uri.hostname !== "ai-thuc-chien-agent-runtime-preview.manhdungub.workers.dev" || uri.pathname !== "/auth/google/callback" || uri.search || uri.hash || uri.username || uri.password) return null;
@@ -139,7 +139,10 @@ export async function handleGoogleReviewerAuth(request, env, { fetchImpl = fetch
     if (!["/", "/reviewer-console", "/operator-console"].includes(returnPath)) {
       return json({ error: "login_return_path_rejected" }, 400);
     }
-    const rateLimit = await store.consumeStartRateLimit(nowSeconds);
+    const clientIp = request.headers.get("cf-connecting-ip") || "";
+    if (!clientIp || clientIp.length > 45 || /[\s,]/.test(clientIp)) return json({ error: "client_ip_unavailable" }, 503);
+    const clientRateLimitKey = await digest("google-reviewer-login-start:" + clientIp);
+    const rateLimit = await store.consumeStartRateLimit(clientRateLimitKey, nowSeconds);
     if (!rateLimit.allowed) return json({ error: "login_start_rate_limited" }, 429, { "retry-after": String(rateLimit.retry_after_seconds) });
     const state = randomToken();
     const binding = randomToken();

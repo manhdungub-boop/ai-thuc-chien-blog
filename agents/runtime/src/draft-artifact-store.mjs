@@ -1,3 +1,4 @@
+import { DurableObject } from "cloudflare:workers";
 import { reviewArticleDraft } from "./article-quality-gate.mjs";
 import { selectProvider } from "./provider-policy.mjs";
 import { assessArticleEvidenceReadiness } from "./article-evidence-readiness.mjs";
@@ -155,7 +156,7 @@ function canonicalJson(value) {
 
 function safeArtifact(row) {
   return {
-    id: row.id, artifact_type: "article", status: row.status, version: row.version,
+    id: row.id, artifact_type: "article", status: row.status, version: row.version, content_version: row.content_version ?? 1,
     draft: JSON.parse(row.draft_json), quality_review: JSON.parse(row.quality_review_json),
     research_evidence: row.research_evidence_json ? JSON.parse(row.research_evidence_json) : [],
     evidence_review: parseEvidenceReview(row),
@@ -175,8 +176,9 @@ function queueItem(row) {
   };
 }
 
-export class AgentDraftStore {
+export class AgentDraftStore extends DurableObject {
   constructor(ctx, env) {
+    super(ctx, env);
     this.ctx = ctx;
     this.env = env;
     this.env = env;
@@ -184,18 +186,101 @@ export class AgentDraftStore {
       "CREATE TABLE IF NOT EXISTS draft_artifacts (" +
       "id TEXT PRIMARY KEY, draft_json TEXT NOT NULL, quality_review_json TEXT NOT NULL, " +
       "status TEXT NOT NULL CHECK(status IN ('pending_human_review','needs_revision')), " +
-      "version INTEGER NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, " +
+      "version INTEGER NOT NULL, content_version INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, " +
       "ledger_json TEXT, review_record_json TEXT, evidence_readiness_json TEXT, research_evidence_json TEXT)"
     );
-    const columns = this.ctx.storage.sql.exec("PRAGMA table_info(draft_artifacts)").toArray();
-    if (!columns.some(column => column.name === "ledger_json")) this.ctx.storage.sql.exec("ALTER TABLE draft_artifacts ADD COLUMN ledger_json TEXT");
-    if (!columns.some(column => column.name === "review_record_json")) this.ctx.storage.sql.exec("ALTER TABLE draft_artifacts ADD COLUMN review_record_json TEXT");
-    if (!columns.some(column => column.name === "evidence_readiness_json")) this.ctx.storage.sql.exec("ALTER TABLE draft_artifacts ADD COLUMN evidence_readiness_json TEXT");
-    if (!columns.some(column => column.name === "research_evidence_json")) this.ctx.storage.sql.exec("ALTER TABLE draft_artifacts ADD COLUMN research_evidence_json TEXT");
+    const columns = new Set(this.ctx.storage.sql.exec("PRAGMA table_info(draft_artifacts)").toArray().map(column => column.name));
+    for (const [name, definition] of [
+      ["ledger_json", "TEXT"],
+      ["review_record_json", "TEXT"],
+      ["evidence_readiness_json", "TEXT"],
+      ["research_evidence_json", "TEXT"]
+    ]) {
+      if (!columns.has(name)) {
+        this.ctx.storage.sql.exec("ALTER TABLE draft_artifacts ADD COLUMN " + name + " " + definition);
+        columns.add(name);
+      }
+    }
+    if (!columns.has("content_version")) {
+      this.ctx.storage.sql.exec("ALTER TABLE draft_artifacts ADD COLUMN content_version INTEGER NOT NULL DEFAULT 1");
+      columns.add("content_version");
+      const legacyRows = this.ctx.storage.sql.exec(
+        "SELECT id, version, ledger_json FROM draft_artifacts"
+      ).toArray();
+      for (const row of legacyRows) {
+        let contentVersion = row.version;
+        if (typeof row.ledger_json === "string") {
+          try {
+            const legacyLedger = JSON.parse(row.ledger_json);
+            if (Number.isSafeInteger(legacyLedger.draft_version) && legacyLedger.draft_version > 0) {
+              contentVersion = legacyLedger.draft_version;
+            }
+          } catch {
+            // Invalid legacy ledgers remain fail-closed during review validation.
+          }
+        }
+        this.ctx.storage.sql.exec(
+          "UPDATE draft_artifacts SET content_version = ? WHERE id = ?",
+          contentVersion, row.id
+        );
+      }
+    }
     this.ctx.storage.sql.exec("CREATE INDEX IF NOT EXISTS draft_artifacts_status_updated ON draft_artifacts(status, updated_at)");
+    this.ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS runtime_authoring_control (singleton_id INTEGER PRIMARY KEY CHECK(singleton_id = 1), paused INTEGER NOT NULL CHECK(paused IN (0,1)), version INTEGER NOT NULL CHECK(version >= 0))");
+    this.ctx.storage.sql.exec("INSERT OR IGNORE INTO runtime_authoring_control (singleton_id, paused, version) VALUES (1, 1, 0)");
   }
 
-  async createDraft(id, draft, retrievedEvidence = []) {
+  async setRuntimePaused(paused, version) {
+    if (typeof paused !== "boolean" || !Number.isSafeInteger(version) || version < 0) return { updated: false, reason: "runtime_control_input_invalid" };
+    return this.ctx.storage.transactionSync(() => {
+      const current = this.ctx.storage.sql.exec("SELECT paused, version FROM runtime_authoring_control WHERE singleton_id = 1").toArray()[0];
+      if (!current) return { updated: false, reason: "runtime_control_unavailable" };
+      if (version < current.version) {
+        // Emergency Pause is monotonic and must close the local authoring latch
+        // even when this store's version is ahead of the authoritative State Store.
+        // Advance this store's own version rather than lowering it. A stale Resume
+        // remains rejected, so version skew can never reopen authoring.
+        if (paused && current.paused === 1) {
+          return { updated: true, duplicate: true, stale_version: true, paused: true, version: current.version };
+        }
+        if (paused && current.paused === 0) {
+          const nextVersion = current.version + 1;
+          if (!Number.isSafeInteger(nextVersion)) return { updated: false, reason: "runtime_control_version_exhausted" };
+          const fenced = this.ctx.storage.sql.exec(
+            "UPDATE runtime_authoring_control SET paused = 1, version = ? WHERE singleton_id = 1 AND version = ? RETURNING paused, version",
+            nextVersion, current.version
+          ).toArray();
+          if (fenced.length !== 1 || fenced[0].paused !== 1 || fenced[0].version !== nextVersion) {
+            return { updated: false, reason: "runtime_control_version_conflict" };
+          }
+          return { updated: true, stale_version: true, paused: true, version: nextVersion };
+        }
+        return { updated: false, reason: "runtime_control_version_stale", current_version: current.version };
+      }
+      if (version === current.version) {
+        if (current.paused !== (paused ? 1 : 0)) return { updated: false, reason: "runtime_control_version_conflict" };
+        return { updated: true, duplicate: true, paused, version };
+      }
+      const updated = this.ctx.storage.sql.exec("UPDATE runtime_authoring_control SET paused = ?, version = ? WHERE singleton_id = 1 AND version = ? RETURNING paused, version", paused ? 1 : 0, version, current.version).toArray();
+      if (updated.length !== 1 || updated[0].paused !== (paused ? 1 : 0) || updated[0].version !== version) return { updated: false, reason: "runtime_control_version_conflict" };
+      return { updated: true, paused, version };
+    });
+  }
+
+  async createDraft(id, draft, retrievedEvidence = []) { return this.createDraftInternal(id, draft, retrievedEvidence); }
+
+  async createDraftFromAgent(id, draft, retrievedEvidence = [], expectedControlVersion) {
+    if (!Number.isSafeInteger(expectedControlVersion) || expectedControlVersion < 0) return { accepted: false, reason: "runtime_control_version_invalid" };
+    return this.ctx.storage.transactionSync(() => {
+      const control = this.ctx.storage.sql.exec("SELECT paused, version FROM runtime_authoring_control WHERE singleton_id = 1").toArray()[0];
+      if (!control) return { accepted: false, reason: "runtime_control_unavailable" };
+      if (control.paused === 1) return { accepted: false, reason: "runtime_paused" };
+      if (control.version !== expectedControlVersion) return { accepted: false, reason: "runtime_control_version_conflict" };
+      return this.createDraftInternal(id, draft, retrievedEvidence);
+    });
+  }
+
+  createDraftInternal(id, draft, retrievedEvidence = []) {
     if (typeof id !== "string" || !ID_PATTERN.test(id)) return { accepted: false, reason: "invalid_artifact_id" };
     const validated = validateDraft(draft);
     if (!validated.ok) return { accepted: false, reason: validated.reason };
@@ -231,7 +316,7 @@ export class AgentDraftStore {
     const status = review.ok ? "pending_human_review" : "needs_revision";
     const now = new Date().toISOString();
     const updated = this.ctx.storage.sql.exec(
-      "UPDATE draft_artifacts SET draft_json = ?, quality_review_json = ?, status = ?, version = version + 1, updated_at = ?, ledger_json = NULL, review_record_json = NULL, evidence_readiness_json = NULL " +
+      "UPDATE draft_artifacts SET draft_json = ?, quality_review_json = ?, status = ?, version = version + 1, content_version = content_version + 1, updated_at = ?, ledger_json = NULL, review_record_json = NULL, evidence_readiness_json = NULL " +
       "WHERE id = ? AND version = ? RETURNING *",
       validated.json, JSON.stringify(review), status, now, id, expectedVersion
     ).toArray();
@@ -299,7 +384,7 @@ export class AgentDraftStore {
       : retrievedEvidence;
     const built = buildHumanClaimReviewLedger(claims, evidenceSnapshot);
     if (!built.ok) return { stored: false, reason: built.reason, ledger_status: built.status };
-    const ledger = { ...built, draft_version: current.version };
+    const ledger = { ...built, draft_version: current.content_version ?? 1 };
     const ledgerJson = JSON.stringify(ledger);
     if (new TextEncoder().encode(ledgerJson).byteLength > MAX_EVIDENCE_REVIEW_BYTES) {
       return { stored: false, reason: "evidence_review_too_large" };
@@ -348,7 +433,7 @@ export class AgentDraftStore {
     let storedLedger;
     try { storedLedger = JSON.parse(current.ledger_json); }
     catch { return { recorded: false, reason: "stored_evidence_ledger_invalid" }; }
-    if (storedLedger.draft_version !== current.version - 1 ||
+    if (storedLedger.draft_version !== (current.content_version ?? 1) ||
         canonicalJson(ledger) !== canonicalJson(storedLedger)) {
       return { recorded: false, reason: "evidence_ledger_version_or_snapshot_mismatch" };
     }

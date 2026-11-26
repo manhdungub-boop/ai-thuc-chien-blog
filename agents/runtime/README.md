@@ -18,19 +18,14 @@ Status: **dedicated Preview Worker is deployed and fail-closed; no autonomous ta
 - The scheduled handler exists as code and hard-caps each invocation at one already-queued task. It is gated by `AGENT_SCHEDULER_ENABLED=true`, `AGENT_RECOVERY_ALARM_ENABLED=true`, the existing enabled/unpaused flags, and a valid operator bearer. The Preview config declares no Cron Trigger, so it cannot create recurring invocations. This is code-level scheduler support, not a running background executor or 24/7 service. A queued task left by an interrupted request remains visible for bounded lease recovery. `GET /health` still reports the current operator-triggered capability and does not imply background operation.
 - State Store routes are connected to the operator-triggered \`POST /run\` path and bounded \`/internal/dispatch\` path for reserve, claim and completion. \`/internal/recover\` remains manually invoked; the separate recovery alarm is disabled, and the Cron dispatcher is not configured in the Preview file pending cost verification.
 
-## Research-to-authoring scaffold — integration branch only
+## Research-to-authoring scaffold — intentionally disabled
 
-The current PR #327 integration branch adds an operator-triggered `POST /internal/authoring/prepare` route. This code is **not yet deployed to the dedicated Agent Runtime Preview Worker**; the checked-in fail-closed defaults remain `AGENT_ENABLED=false` and `AGENT_PAUSED=true`.
+The integration branch contains a research-to-authoring preparation endpoint, but it is **intentionally fail-closed**. Every POST to `/internal/authoring/prepare` returns HTTP 503 with `authoring_route_disabled_pending_durable_pause_fencing` before authentication, State Store access, Draft Store access, quota reservation, or outbound research. This remains true even if deployment flags are accidentally set to enabled/unpaused.
 
-- The route requires the enabled/unpaused gates, operator Bearer authentication, strict JSON input, and the dedicated `AGENT_DRAFT_STORE` binding. It has no public enqueue endpoint and no scheduled invocation.
-- It reads only the four fixed official research feeds and their allowlisted same-host source pages. It reserves one `content_research` budget unit before each outbound request, with a hard maximum of 8 per UTC day (four feed reads plus at most four evidence-page reads). It fails closed when the State Store budget is missing, malformed, or insufficient.
-- It uses only the registered deterministic local `article-authoring-brief` provider. It does not invoke external model inference, a paid provider, Workers AI, or a connected ChatGPT app.
-- SHA-256 idempotency prevents duplicate research and draft persistence for the same request. The route stores an internal authoring scaffold only; the current quality gate leaves it in `needs_revision` and requires a human author to complete and verify it. Retrieved excerpts are not fact-checked claims.
-- The route never creates article claims, writes the AI Bank catalog, publishes website content, or posts to social networks. Responses keep `claims_generated=false`, `catalog_modified=false`, and `publication_authorized=false`.
-- The exact-head test suite covers disabled/paused/auth gates, bounded quota, successful local scaffold persistence, duplicate replay, and invalid inputs. This is local Worker/Miniflare validation, not a live dedicated Runtime Worker E2E.
+Reason: State Store and Draft Store are separate Durable Objects. A read-then-write control check cannot atomically fence a draft commit against a concurrent emergency Pause. The route must remain disabled until pause/cancellation authority and draft persistence share a same-transaction durable fence, with targeted race and fault-injection tests.
 
-See [Zero-Cost Provider Admission and Failover Policy](../PROVIDER_FALLBACK_POLICY.md) for the external-inference, quota-evidence and paid-fallback prohibitions.
-
+The regression tests assert zero State Store calls, zero draft reads/writes, and zero outbound fetches when the endpoint is invoked. The route does not create drafts, modify the AI Bank, publish articles, or post to social networks. Do not remove this guard to make the feature appear operational.
+ 
 ## Emergency pause and in-flight cancellation — source-level evidence (2026-11-21)
 
 - The State Store `/control/pause` transaction atomically sets the durable pause flag, marks every currently running task `cancelled`, clears its lease fields, records `operator_paused`, and appends a per-task audit event. Queued tasks remain queued but cannot be claimed while paused. Repeated Pause is idempotent and also repairs stale running leases left by an earlier runtime version.
@@ -200,13 +195,15 @@ Read-only review results returned by `/run` and `/internal/dispatch` are explici
 - The helper is not registered as a `content_draft` task executor and does not change task queue executability. No automatic article generation is claimed.
 
 
-### Authenticated read-only AI Bank reviewer API
+### Authenticated AI Bank reviewer API and evidence intake
 
 - `GET /api/reviewer/ai-bank/candidates` returns at most 20 candidate summaries; an optional `limit` must be a single integer from 1 through 20.
 - `GET /api/reviewer/ai-bank/candidates/{owner}/{repo}` returns the review packet for the exact `github:owner/repository` candidate.
-- Both routes require the signed Google reviewer session cookie and same-origin request checks. No candidate-store access occurs before method, origin, and session checks.
-- The Preview Worker binds a dedicated AI Bank Candidate Durable Object. Review packets are scoped to the current candidate release and evidence remains pending human review, unverified, and unauthorized for verification.
-- Responses explicitly keep catalog writes, evidence verification, and public publication unauthorized. No evidence-write route is exposed.
+- `POST /api/reviewer/ai-bank/candidates/{owner}/{repo}/evidence` accepts one evidence record for one of six checks: `official_product_domain`, `pricing_and_free_limits`, `license_scope`, `privacy_and_data_handling`, `platform_support`, or `regional_availability`.
+- All routes require same-origin request checks and a signed Google reviewer session. Evidence submission additionally requires the separate evidence-writer email allowlist. The JSON request body is limited to 16 KiB. Reviewer authentication and evidence-writer access remain disabled by default in Preview; the evidence route returns `503` while authentication is unconfigured.
+- The evidence request has exactly three top-level fields: `audit_event_id` (UUID), `reviewed_release_identity`, and `evidence`. The evidence object has exactly `check_type`, `source_title`, `source_url`, and `excerpt`; title and excerpt are bounded, and the source URL must be a safe HTTPS URL.
+- `reviewed_release_identity` must be the exact canonical JSON serialization of a two-element array containing the candidate's current release URL and its canonical ISO-8601 UTC `published_at` timestamp, for example `JSON.stringify([release.source_url, release.published_at])`. A plain release URL, non-canonical serialization, or identity for an older release is rejected; a stale release returns `409`.
+- Evidence submission records a pending, unverified evidence item and an audit event. It does not verify or certify the evidence, change candidate/catalog status, write the public AI Bank catalog, or publish content. Responses keep verification, catalog writes, and public publication unauthorized.
 - The reviewer console renders candidate IDs and packet data as text nodes; it does not interpret untrusted candidate content as HTML.
 - These routes do not enable reviewer OAuth, configure credentials, deploy the Preview Worker, or authorize AI Bank changes or public publication.
 

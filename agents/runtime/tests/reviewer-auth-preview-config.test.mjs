@@ -15,7 +15,7 @@ const valid = {
   GOOGLE_REVIEWER_STATE_SECRET: "a".repeat(48),
   GOOGLE_REVIEWER_SESSION_SECRET: "b".repeat(48),
   GOOGLE_REVIEWER_REDIRECT_URI: "https://ai-thuc-chien-agent-runtime-preview.manhdungub.workers.dev/auth/google/callback",
-  GOOGLE_REVIEWER_ALLOWED_EMAILS: "reviewer@example.com"
+  GOOGLE_REVIEWER_ALLOWED_EMAILS: "reviewer@gmail.com"
 };
 
 describe("reviewer OAuth Preview configuration preflight", () => {
@@ -51,7 +51,7 @@ describe("reviewer OAuth Preview configuration preflight", () => {
       "GOOGLE_REVIEWER_CLIENT_SECRET",
       "GOOGLE_REVIEWER_SESSION_SECRET"
     ]);
-    expect(JSON.stringify(report)).not.toContain("reviewer@example.com");
+    expect(JSON.stringify(report)).not.toContain("reviewer@gmail.com");
     expect(JSON.stringify(report)).not.toContain("a".repeat(48));
     expect(JSON.stringify(report)).not.toContain("x".repeat(72));
   });
@@ -76,7 +76,7 @@ describe("reviewer OAuth Preview configuration preflight", () => {
     }, previewConfig).checks.state_and_session_secrets_distinct).toBe(false);
     expect(inspectReviewerAuthPreviewConfig({
       ...valid,
-      GOOGLE_REVIEWER_ALLOWED_EMAILS: "reviewer@example.com,other@example.com"
+      GOOGLE_REVIEWER_ALLOWED_EMAILS: "reviewer@gmail.com,other@example.com"
     }, previewConfig).checks.exactly_one_reviewer_allowlisted).toBe(false);
   });
 

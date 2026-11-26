@@ -7,6 +7,10 @@ const sources = [
   { vendor: "ComfyUI", product: "ComfyUI", repo: "Comfy-Org/ComfyUI" }
 ];
 
+function releaseIdentity(sourceUrl, publishedAt) {
+  return JSON.stringify([sourceUrl, publishedAt]);
+}
+
 function candidate(source = sources[0], release = "v1.2.3", publishedAt = "2026-11-19T08:00:00.000Z") {
   return {
     candidate_id: "github:" + source.repo,
@@ -45,8 +49,8 @@ const writerAuthEnv = {
   GOOGLE_REVIEWER_CLIENT_ID: "preview-test-client-id-abcdefghijklmnopqrstuvwxyz0123456789.apps.googleusercontent.com",
   GOOGLE_REVIEWER_CLIENT_SECRET: "test-google-client-secret-value-abcdefghijklmnopqrstuvwxyz0123456789",
   GOOGLE_REVIEWER_REDIRECT_URI: "https://ai-thuc-chien-agent-runtime-preview.manhdungub.workers.dev/auth/google/callback",
-  GOOGLE_REVIEWER_ALLOWED_EMAILS: "writer@example.com",
-  GOOGLE_REVIEWER_EVIDENCE_WRITER_EMAILS: "writer@example.com",
+  GOOGLE_REVIEWER_ALLOWED_EMAILS: "writer@gmail.com",
+  GOOGLE_REVIEWER_EVIDENCE_WRITER_EMAILS: "writer@gmail.com",
   GOOGLE_REVIEWER_STATE_SECRET: "state-secret-for-tests-only-abcdefghijklmnopqrstuvwxyz0123456789",
   GOOGLE_REVIEWER_SESSION_SECRET: "session-secret-for-tests-only-zyxwvutsrqponmlkjihgfedcba9876543210"
 };
@@ -56,7 +60,7 @@ function base64Url(bytes) {
   return btoa(binary).replace(/=/g, "").replaceAll("+", "-").replaceAll("/", "_");
 }
 async function writerSessionToken(now) {
-  const payload = { provider: "google", sub: "google-writer-test-subject", email: "writer@example.com", reviewer_ref: "google:google-writer-test-subject", iat: Math.floor(now / 1000) - 10, exp: Math.floor(now / 1000) + 600 };
+  const payload = { provider: "google", sub: "google-writer-test-subject", email: "writer@gmail.com", reviewer_ref: "google:google-writer-test-subject", iat: Math.floor(now / 1000) - 10, exp: Math.floor(now / 1000) + 600 };
   const encoded = base64Url(new TextEncoder().encode(JSON.stringify(payload)));
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(writerAuthEnv.GOOGLE_REVIEWER_SESSION_SECRET), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(encoded));
@@ -64,8 +68,10 @@ async function writerSessionToken(now) {
 }
 async function submitEvidence(store, candidateId, evidence, now = Date.now(), reviewedReleaseUrl) {
   const current = await store.getCandidate(candidateId);
-  const releaseIdentity = reviewedReleaseUrl ?? current?.candidate?.latest_release?.source_url;
-  return store.submitAuthorizedReviewEvidence(candidateId, evidence, await writerSessionToken(now), crypto.randomUUID(), releaseIdentity, writerAuthEnv, now);
+  const releaseIdentityValue = reviewedReleaseUrl ?? (current?.candidate?.latest_release
+    ? releaseIdentity(current.candidate.latest_release.source_url, current.candidate.latest_release.published_at)
+    : undefined);
+  return store.submitAuthorizedReviewEvidence(candidateId, evidence, await writerSessionToken(now), crypto.randomUUID(), releaseIdentityValue, writerAuthEnv, now);
 }
 
 describe("AgentAIBankCandidateStore Durable Object", () => {
@@ -230,6 +236,36 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
       [], "2026-11-19T08:07:00.000Z", "run-100-attempt-1", Date.parse("2026-11-19T08:09:00.000Z")
     )).toMatchObject({ accepted: false, reason: "discovery_scan_id_reused", cursor_advanced: false });
     expect(await store.getDiscoveryCursor()).toMatchObject({ cursor: firstCursor, scan_id: "run-100-attempt-1" });
+  });
+
+  it("binds every discovery scan ID to its original batch after later scans commit", async () => {
+    const firstCursor = "2026-11-19T08:06:00.000Z";
+    const secondCursor = "2026-11-19T08:07:00.000Z";
+    await store.upsertCandidatesAndAdvanceCursor(
+      [candidate()], firstCursor, "scan-lifetime-a", Date.parse("2026-11-19T08:08:00.000Z")
+    );
+    await store.upsertCandidatesAndAdvanceCursor(
+      [candidate(sources[1])], secondCursor, "scan-lifetime-b", Date.parse("2026-11-19T08:09:00.000Z")
+    );
+
+    const exactReplay = await store.upsertCandidatesAndAdvanceCursor(
+      [candidate()], firstCursor, "scan-lifetime-a", Date.parse("2026-11-19T08:10:00.000Z")
+    );
+    expect(exactReplay).toMatchObject({
+      accepted: true, duplicate: true, scan_id: "scan-lifetime-a", cursor_advanced: false,
+      cursor: secondCursor
+    });
+
+    const changedReplay = await store.upsertCandidatesAndAdvanceCursor(
+      [candidate(sources[1])], "2026-11-19T08:11:00.000Z", "scan-lifetime-a",
+      Date.parse("2026-11-19T08:12:00.000Z")
+    );
+    expect(changedReplay).toMatchObject({
+      accepted: false, reason: "discovery_scan_id_reused", cursor_advanced: false
+    });
+    expect(await store.getDiscoveryCursor()).toMatchObject({
+      cursor: secondCursor, scan_id: "scan-lifetime-b"
+    });
   });
 
   it("does not advance the discovery cursor when any candidate write fails", async () => {
@@ -420,12 +456,15 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     expect(packet.checks_missing_evidence).toBe(6);
     const history = await store.listReviewEvidence("github:ollama/ollama");
     expect(history).toHaveLength(1);
-    expect(history[0].candidate_release_url).toBe("https://github.com/ollama/ollama/releases/tag/v1.2.3");
+     expect(history[0].candidate_release_identity).toBe(releaseIdentity("https://github.com/ollama/ollama/releases/tag/v1.2.3", "2026-11-19T08:00:00.000Z"));
     expect(packet.verification_status).toBe("not_verified");
   });
 
-  it("reuses the same source as pending evidence for a newer release without losing its history", async () => {
-    await store.upsertCandidates([candidate()], Date.parse("2026-11-19T08:06:00.000Z"));
+  it("distinguishes mutable latest-release URLs by immutable publication version", async () => {
+    const latestUrl = "https://github.com/ollama/ollama/releases/latest";
+    const older = candidate();
+    older.latest_release.source_url = latestUrl;
+    await store.upsertCandidates([older], Date.parse("2026-11-19T08:06:00.000Z"));
     const evidence = {
       check_type: "license_scope",
       source_title: "Official license",
@@ -438,31 +477,83 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     expect(first.accepted).toBe(true);
 
     const newer = candidate(sources[0], "v1.2.4", "2026-11-19T11:00:00.000Z");
+    newer.latest_release.source_url = latestUrl;
     newer.discovered_at = "2026-11-19T11:05:00.000Z";
     await store.upsertCandidates([newer], Date.parse("2026-11-19T11:06:00.000Z"));
 
     const staleSubmission = await submitEvidence(store,
       "github:ollama/ollama", evidence, Date.parse("2026-11-19T11:10:00.000Z"),
-      "https://github.com/ollama/ollama/releases/tag/v1.2.3"
+      releaseIdentity(latestUrl, "2026-11-19T08:00:00.000Z")
     );
     expect(staleSubmission).toEqual({ accepted: false, reason: "stale_candidate_release" });
 
     const second = await submitEvidence(store,
       "github:ollama/ollama", evidence, Date.parse("2026-11-19T11:10:01.000Z"),
-      "https://github.com/ollama/ollama/releases/tag/v1.2.4"
+      releaseIdentity(latestUrl, "2026-11-19T11:00:00.000Z")
     );
     expect(second).toMatchObject({ accepted: true, evidence_id: first.evidence_id });
     const packet = await store.getReviewPacket("github:ollama/ollama");
     expect(packet.total_evidence).toBe(1);
     const history = await store.listReviewEvidence("github:ollama/ollama");
     expect(history).toHaveLength(2);
-    expect(new Set(history.map(item => item.candidate_release_url))).toEqual(new Set([
-      "https://github.com/ollama/ollama/releases/tag/v1.2.3",
-      "https://github.com/ollama/ollama/releases/tag/v1.2.4"
+    expect(new Set(history.map(item => item.candidate_release_identity))).toEqual(new Set([
+      releaseIdentity(latestUrl, "2026-11-19T08:00:00.000Z"),
+      releaseIdentity(latestUrl, "2026-11-19T11:00:00.000Z")
     ]));
     expect(await submitEvidence(store, 
       "github:ollama/ollama", evidence, Date.parse("2026-11-19T11:11:00.000Z")
     )).toEqual({ accepted: false, reason: "duplicate_evidence" });
+  });
+
+  it("preserves separate evidence text for the same source URL across release versions", async () => {
+    const latestUrl = "https://github.com/ollama/ollama/releases/latest";
+    const older = candidate();
+    older.latest_release.source_url = latestUrl;
+    await store.upsertCandidates([older], Date.parse("2026-11-19T08:06:00.000Z"));
+
+    const sourceUrl = "https://ollama.com/license";
+    const first = await submitEvidence(store, "github:ollama/ollama", {
+      check_type: "license_scope",
+      source_title: "License for v1.2.3",
+      source_url: sourceUrl,
+      excerpt: "Terms reviewed for release v1.2.3."
+    }, Date.parse("2026-11-19T08:10:00.000Z"));
+    expect(first.accepted).toBe(true);
+    const oldIdentity = releaseIdentity(latestUrl, "2026-11-19T08:00:00.000Z");
+
+    const newer = candidate(sources[0], "v1.2.4", "2026-11-19T11:00:00.000Z");
+    newer.latest_release.source_url = latestUrl;
+    newer.discovered_at = "2026-11-19T11:05:00.000Z";
+    await store.upsertCandidates([newer], Date.parse("2026-11-19T11:06:00.000Z"));
+    const newIdentity = releaseIdentity(latestUrl, "2026-11-19T11:00:00.000Z");
+    const second = await submitEvidence(store, "github:ollama/ollama", {
+      check_type: "license_scope",
+      source_title: "License for v1.2.4",
+      source_url: sourceUrl,
+      excerpt: "Terms reviewed separately for release v1.2.4."
+    }, Date.parse("2026-11-19T11:10:00.000Z"), newIdentity);
+
+    expect(second.accepted).toBe(true);
+    expect(second.evidence_id).toBe(first.evidence_id);
+    const packet = await store.getReviewPacket("github:ollama/ollama");
+    expect(packet.evidence).toHaveLength(1);
+    expect(packet.evidence[0]).toMatchObject({
+      source_title: "License for v1.2.4",
+      excerpt: "Terms reviewed separately for release v1.2.4."
+    });
+
+    const history = await store.listReviewEvidence("github:ollama/ollama");
+    const oldEvidence = history.find(item => item.candidate_release_identity === oldIdentity);
+    const newEvidence = history.find(item => item.candidate_release_identity === newIdentity);
+    expect(oldEvidence).toMatchObject({
+      source_title: "License for v1.2.3",
+      excerpt: "Terms reviewed for release v1.2.3."
+    });
+    expect(newEvidence).toMatchObject({
+      source_title: "License for v1.2.4",
+      excerpt: "Terms reviewed separately for release v1.2.4."
+    });
+    expect(oldEvidence.submitted_at).not.toBe(newEvidence.submitted_at);
   });
 
   it("applies the per-check evidence cap independently to each release version", async () => {
@@ -517,7 +608,7 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     const eventId = crypto.randomUUID().toUpperCase();
     const canonicalEventId = eventId.toLowerCase();
     const evidence = { check_type: "license_scope", source_title: "Official license", source_url: "https://ollama.com/license", excerpt: "Pending human review." };
-    const reviewedReleaseUrl = "https://github.com/ollama/ollama/releases/tag/v1.2.3";
+    const reviewedReleaseUrl = releaseIdentity("https://github.com/ollama/ollama/releases/tag/v1.2.3", "2026-11-19T08:00:00.000Z");
     const first = await store.submitAuthorizedReviewEvidence("github:ollama/ollama", evidence, token, eventId, reviewedReleaseUrl, writerAuthEnv, now);
     expect(first).toMatchObject({ accepted: true, replay_protected: true, audit_event_id: canonicalEventId, verification_authorized: false, catalog_write_authorized: false, public_publication_authorized: false });
     await store.testUppercaseAuditEventId(canonicalEventId);

@@ -96,19 +96,38 @@ test("OIDC pause verifies GitHub signature, consumes jti, and records only the v
             internalCalls.push(internalRequest);
             assert.equal(internalRequest.headers.get("authorization"), "Bearer " + STATE_TOKEN);
             assert.equal(internalRequest.headers.get("cookie"), null);
-            if (new URL(internalRequest.url).pathname === "/oidc/replay/consume") {
+            const pathname = new URL(internalRequest.url).pathname;
+            if (pathname === "/oidc/replay/consume") {
               assert.deepEqual(await internalRequest.json(), {
                 jti: "worker-oidc-pause-jti-000001",
                 expiresAt: String(expiresAt),
               });
               return Response.json({ ok: true, consumed: true });
             }
-            assert.equal(new URL(internalRequest.url).pathname, "/control/pause");
+            if (pathname === "/control" && internalRequest.method === "GET") {
+              return Response.json({ ok: true, control: { paused: true, version: 0 } });
+            }
+            assert.equal(pathname, "/control/pause");
             const payload = await internalRequest.json();
             assert.equal(payload.actor, "github-actions:342528485");
             assert.equal(typeof payload.requestId, "string");
             assert.equal(payload.reason, "manual safety test");
             return Response.json({ ok: true, changed: true, control: { paused: true, changedAt: Date.now(), version: 1 } });
+          },
+        };
+      },
+    },
+    AGENT_DRAFT_STORE: {
+      idFromName(name) { assert.equal(name, "agent-authoring-global"); return "draft-fixed-id"; },
+      get(id) {
+        assert.equal(id, "draft-fixed-id");
+        let control = { paused: true, version: 0 };
+        return {
+          async setRuntimePaused(paused, version) {
+            if (version < control.version) return { updated: false, reason: "runtime_control_version_stale" };
+            if (version === control.version && paused !== control.paused) return { updated: false, reason: "runtime_control_version_conflict" };
+            control = { paused, version };
+            return { updated: true, paused, version };
           },
         };
       },
@@ -125,7 +144,8 @@ test("OIDC pause verifies GitHub signature, consumes jti, and records only the v
   assert.equal(response.status, 200);
   assert.equal(body.ok, true);
   assert.equal(body.control.paused, true);
-  assert.equal(internalCalls.length, 2);
+  assert.deepEqual(body.draft_store_sync, { ok: true, pre_fence_succeeded: true });
+  assert.equal(internalCalls.length, 3);
   assert.equal(fetchCalls.length, 2);
   assert.equal(fetchCalls[0].options.redirect, "manual");
   assert.equal(fetchCalls[1].options.redirect, "manual");

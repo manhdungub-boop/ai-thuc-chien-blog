@@ -37,6 +37,15 @@ export class TestAgentStateStore extends AgentStateStore {
     });
     super(ctx, testEnv);
     this.faultSuiteMode = faultSuiteMode;
+    this.failNextAlarmSchedule = false;
+  }
+
+  async scheduleRecoveryAlarm(now, options) {
+    if (this.failNextAlarmSchedule && options?.throwOnError === true) {
+      this.failNextAlarmSchedule = false;
+      throw new Error("test_alarm_schedule_storage_failure");
+    }
+    return super.scheduleRecoveryAlarm(now, options);
   }
 
   requestTime(request) {
@@ -50,7 +59,7 @@ export class TestAgentStateStore extends AgentStateStore {
 
   async fetch(request) {
     const url = new URL(request.url);
-    if (!["/__test/rollback", "/__test/downgrade-v1", "/__test/prune", "/__test/seed-prune-fixture", "/__test/prune-counts", "/__test/downgrade-v6-budget-only", "/__test/downgrade-v6-result-only", "/__test/schema-state", "/__test/alarm-state", "/__test/expire-and-fire", "/__test/fire-alarm", "/__test/fault-suite"].includes(url.pathname)) {
+    if (!["/__test/rollback", "/__test/downgrade-v1", "/__test/prune", "/__test/seed-prune-fixture", "/__test/prune-counts", "/__test/downgrade-v6-budget-only", "/__test/downgrade-v6-result-only", "/__test/schema-state", "/__test/alarm-state", "/__test/delete-alarm", "/__test/expire-lease", "/__test/expire-and-fire", "/__test/fire-alarm", "/__test/fail-next-alarm-schedule", "/__test/fault-suite"].includes(url.pathname)) {
       return super.fetch(request);
     }
     if (url.pathname === "/__test/alarm-state" || url.pathname === "/__test/schema-state" || url.pathname === "/__test/prune-counts" ? request.method !== "GET" : request.method !== "POST") {
@@ -341,33 +350,61 @@ export class TestAgentStateStore extends AgentStateStore {
             taskCount: taskIds.length,
           };
         } finally {
-          // Fail closed even if an assertion above throws; the isolated store must end paused.
+          const cleanupFailures = [];
+          // Pause is mandatory even after an earlier scenario failure. Never report
+          // success unless the durable control state confirms the isolated store is closed.
           try {
-            const control = await callStore("/control");
-            if (control.status === 200 && control.body?.control?.paused === false) {
-              await callStore("/control/pause", {
-                actor: "fault-suite-cleanup", requestId: crypto.randomUUID(), reason: "fault suite cleanup",
-              });
+            const pause = await callStore("/control/pause", {
+              actor: "fault-suite-cleanup", requestId: crypto.randomUUID(), reason: "fault suite cleanup",
+            });
+            if (pause.status !== 200 || pause.body?.control?.paused !== true) {
+              cleanupFailures.push("pause_not_confirmed");
             }
-          } catch {}
+          } catch {
+            cleanupFailures.push("pause_request_failed");
+          }
           try {
-            const ids = this.sql.exec(
-              "SELECT task_id FROM tasks WHERE idempotency_key LIKE 'cloudflare-fault-suite:%'"
-            ).toArray();
-            for (const row of ids) this.sql.exec("DELETE FROM audit_events WHERE task_id = ?", row.task_id);
-            this.sql.exec("DELETE FROM tasks WHERE idempotency_key LIKE 'cloudflare-fault-suite:%'");
-            this.sql.exec("DELETE FROM daily_usage WHERE day_utc = ?", new Date().toISOString().slice(0, 10));
-            this.sql.exec("DELETE FROM external_request_budgets WHERE budget_day = ? AND scope = 'content_research'", new Date().toISOString().slice(0, 10));
-            this.sql.exec("DELETE FROM runtime_control_rate_limit WHERE actor LIKE 'fault-suite-%'");
-            this.sql.exec("DELETE FROM runtime_control_audit WHERE actor LIKE 'fault-suite-%'");
-          } catch {}
+            this.ctx.storage.transactionSync(() => {
+              const ids = this.sql.exec(
+                "SELECT task_id FROM tasks WHERE idempotency_key LIKE 'cloudflare-fault-suite:%'"
+              ).toArray();
+              for (const row of ids) this.sql.exec("DELETE FROM audit_events WHERE task_id = ?", row.task_id);
+              this.sql.exec("DELETE FROM tasks WHERE idempotency_key LIKE 'cloudflare-fault-suite:%'");
+              this.sql.exec("DELETE FROM daily_usage WHERE day_utc = ?", new Date().toISOString().slice(0, 10));
+              this.sql.exec("DELETE FROM external_request_budgets WHERE budget_day = ? AND scope = 'content_research'", new Date().toISOString().slice(0, 10));
+              this.sql.exec("DELETE FROM runtime_control_rate_limit WHERE actor LIKE 'fault-suite-%'");
+              this.sql.exec("DELETE FROM runtime_control_audit WHERE actor LIKE 'fault-suite-%'");
+            });
+          } catch {
+            cleanupFailures.push("fixture_cleanup_failed");
+          }
           this.faultSuiteMode.active = false;
+          if (cleanupFailures.length) {
+            report = {
+              ok: false,
+              error: "fault_suite_cleanup_failed",
+              cleanupFailures,
+              scenarios: report?.scenarios ?? null,
+            };
+          }
         }
         return jsonResponse(report ?? { ok: false, error: "fault_suite_failed" }, report?.ok ? 200 : 500);
       }
 
       if (url.pathname === "/__test/alarm-state" && request.method === "GET") {
         return jsonResponse({ ok: true, alarmAt: await this.ctx.storage.getAlarm() });
+      }
+      if (url.pathname === "/__test/delete-alarm" && request.method === "POST") {
+        await this.ctx.storage.deleteAlarm();
+        return jsonResponse({ ok: true, alarmAt: await this.ctx.storage.getAlarm() });
+      }
+      if (url.pathname === "/__test/expire-lease" && request.method === "POST") {
+        const body = await request.json();
+        if (!body || typeof body.taskId !== "string" || body.taskId.length > 64) {
+          return jsonResponse({ ok: false, error: "test_task_id_invalid" }, 400);
+        }
+        this.sql.exec("UPDATE tasks SET lease_expires_at=? WHERE task_id=? AND state='running'", Date.now() - 1, body.taskId);
+        return jsonResponse({ ok: true });
       }
       if (url.pathname === "/__test/expire-and-fire" && request.method === "POST") {
         const body = await request.json();
@@ -382,6 +419,15 @@ export class TestAgentStateStore extends AgentStateStore {
       if (url.pathname === "/__test/fire-alarm" && request.method === "POST") {
         await this.alarm();
         return jsonResponse({ ok: true, alarmAt: await this.ctx.storage.getAlarm() });
+      }
+      if (url.pathname === "/__test/fail-next-alarm-schedule" && request.method === "POST") {
+        this.failNextAlarmSchedule = true;
+        try {
+          await this.alarm();
+          return jsonResponse({ ok: false, error: "alarm_failure_was_swallowed" }, 500);
+        } catch (error) {
+          return jsonResponse({ ok: true, error: "alarm_retry_required", message: String(error?.message ?? error) }, 503);
+        }
       }
       if (url.pathname === "/__test/downgrade-v1") {
         this.ctx.storage.transactionSync(() => {

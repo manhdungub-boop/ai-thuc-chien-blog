@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - integration/agent-runtime-v5-preview-20261120
+      - feat/agent-runtime-v5-main-split-20261126
+      - feat/ai-bank-discovery-workflow-20261126
   workflow_dispatch:
     inputs:
       expected_sha:
@@ -44,7 +46,7 @@ jobs:
           set -euo pipefail
           case "$TARGET_REF" in
             refs/heads/reconcile/agent-runtime-pr339-schema-v7-20261121) ;;
-            refs/heads/integration/agent-runtime-v5-preview-20261120) ;;
+            refs/heads/integration/agent-runtime-v5-preview-20261120|refs/heads/feat/agent-runtime-v5-main-split-20261126|refs/heads/feat/ai-bank-discovery-workflow-20261126) ;;
             *)
               echo "::error::Selected branch is not in the explicit Preview preflight allowlist."
               exit 1
@@ -88,7 +90,7 @@ jobs:
 
       - name: Run complete Agent Runtime test suite
         timeout-minutes: 8
-        run: timeout --signal=TERM --kill-after=10s 420s node --test agents/runtime/tests/*.test.mjs
+        run: timeout --signal=TERM --kill-after=10s 420s node --experimental-loader ./agents/runtime/tests/cloudflare-workers-loader.mjs --test agents/runtime/tests/*.test.mjs
 
       - name: Validate Preview types and Worker bundle without deployment
         working-directory: agents/runtime

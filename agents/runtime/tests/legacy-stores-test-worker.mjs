@@ -4,7 +4,7 @@ import { AgentReviewerAuthStore } from "../src/google-reviewer-auth-store.mjs";
 
 const METHODS = {
   AGENT_AI_BANK_CANDIDATE_STORE: new Set(["upsertCandidates", "listCandidates", "getCandidate", "submitAuthorizedReviewEvidence", "listReviewEvidence", "getReviewPacket", "stats", "getDiscoveryCursor", "upsertCandidatesAndAdvanceCursor", "testFetch", "testInstallCandidateInsertFailureTrigger", "testDropCandidateInsertFailureTrigger", "testSetLegacyDiscoveryDigest", "testUppercaseAuditEventId"]),
-  AGENT_DRAFT_STORE: new Set(["createDraft", "reviseDraft", "reviseDraftForReviewer", "recordReviewerClaimDecisions", "storeEvidenceLedger", "recordEvidenceReview", "listPendingReviewsForReviewer", "listNeedsRevisionForReviewer", "getDraftForReviewer", "getDraft", "reviewDraft", "listPendingReviews", "listNeedsRevision", "listOwnerReleaseReviews", "stats"]),
+  AGENT_DRAFT_STORE: new Set(["createDraft", "createDraftFromAgent", "setRuntimePaused", "reviseDraft", "reviseDraftForReviewer", "recordReviewerClaimDecisions", "storeEvidenceLedger", "recordEvidenceReview", "listPendingReviewsForReviewer", "listNeedsRevisionForReviewer", "getDraftForReviewer", "getDraft", "reviewDraft", "listPendingReviews", "listNeedsRevision", "listOwnerReleaseReviews", "stats", "testRunLegacySchemaMigration"]),
   AGENT_REVIEWER_AUTH_STORE: new Set(["consumeStartRateLimit", "createTransaction", "consumeTransaction"])
 };
 
@@ -55,6 +55,9 @@ class TestAgentAIBankCandidateStore extends withRpcFetch(AgentAIBankCandidateSto
   }
 
   testSetLegacyDiscoveryDigest() {
+    this.ctx.storage.sql.exec(
+      "DELETE FROM ai_bank_discovery_scans WHERE scan_id = (SELECT scan_id FROM ai_bank_discovery_cursor WHERE singleton_id = 1)"
+    );
     this.ctx.storage.sql.exec("UPDATE ai_bank_discovery_cursor SET batch_sha256 = '' WHERE singleton_id = 1");
     return true;
   }
@@ -67,7 +70,28 @@ class TestAgentAIBankCandidateStore extends withRpcFetch(AgentAIBankCandidateSto
     return true;
   }
 }
-class TestAgentDraftStore extends withRpcFetch(AgentDraftStore, "AGENT_DRAFT_STORE") {}
+class TestAgentDraftStore extends withRpcFetch(AgentDraftStore, "AGENT_DRAFT_STORE") {
+  testRunLegacySchemaMigration() {
+    this.ctx.storage.sql.exec("DROP TABLE IF EXISTS draft_artifacts");
+    this.ctx.storage.sql.exec(
+      "CREATE TABLE draft_artifacts (" +
+      "id TEXT PRIMARY KEY, draft_json TEXT NOT NULL, quality_review_json TEXT NOT NULL, " +
+      "status TEXT NOT NULL CHECK(status IN ('pending_human_review','needs_revision')), " +
+      "version INTEGER NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)"
+    );
+    this.ctx.storage.sql.exec(
+      "INSERT INTO draft_artifacts (id, draft_json, quality_review_json, status, version, created_at, updated_at) " +
+      "VALUES ('legacy-draft-0001', '{}', '{\"issues\":[]}', 'pending_human_review', 7, '2026-11-20T00:00:00.000Z', '2026-11-20T00:00:00.000Z')"
+    );
+    new AgentDraftStore(this.ctx, this.env);
+    const columns = this.ctx.storage.sql.exec("PRAGMA table_info(draft_artifacts)").toArray().map(column => column.name);
+    const row = this.ctx.storage.sql.exec(
+      "SELECT version, content_version, ledger_json, review_record_json, evidence_readiness_json, research_evidence_json FROM draft_artifacts WHERE id = ?",
+      "legacy-draft-0001"
+    ).toArray()[0];
+    return { columns, row };
+  }
+}
 class TestAgentReviewerAuthStore extends withRpcFetch(AgentReviewerAuthStore, "AGENT_REVIEWER_AUTH_STORE") {}
 
 export { TestAgentAIBankCandidateStore, TestAgentDraftStore, TestAgentReviewerAuthStore };

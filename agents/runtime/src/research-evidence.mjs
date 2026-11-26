@@ -65,13 +65,17 @@ function extractExcerpt(html) {
     .replace(/<[^>]*>/g, " "))
     .replace(/\s+/g, " ").trim().slice(0, MAX_EXCERPT_CHARS);
 }
-async function retrieveOne(signal, fetchImpl, now) {
+async function retrieveOne(signal, fetchImpl, now, parentSignal) {
   if (!signal || !allowedUrl(signal.url)) {
     return { source: signal?.source || "unknown", url: null, status: "rejected_url", excerpt: "" };
   }
   const controller = new AbortController();
+  const abortParent = () => controller.abort(parentSignal?.reason);
+  if (parentSignal?.aborted) abortParent();
+  else parentSignal?.addEventListener("abort", abortParent, { once: true });
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
+    if (controller.signal.aborted) throw new Error("research_cancelled");
     const response = await fetchImpl(signal.url, {
       method: "GET",
       headers: { accept: "text/html,application/xhtml+xml", "user-agent": "DUNG-AI-Research-Evidence/1.0" },
@@ -98,17 +102,19 @@ async function retrieveOne(signal, fetchImpl, now) {
     return {
       source: signal.source,
       url: signal.url,
-      status: String(error?.message || "retrieval_failed").replace(/[^a-zA-Z0-9_.:-]/g, "_").slice(0, 80),
+      status: parentSignal?.aborted ? "cancelled" : String(error?.message || "retrieval_failed").replace(/[^a-zA-Z0-9_.:-]/g, "_").slice(0, 80),
       excerpt: ""
     };
   } finally {
     clearTimeout(timer);
+    parentSignal?.removeEventListener("abort", abortParent);
   }
 }
 
-export async function retrieveResearchEvidence(signals, { fetchImpl = fetch, now = Date.now() } = {}) {
+export async function retrieveResearchEvidence(signals, { fetchImpl = fetch, now = Date.now(), signal } = {}) {
   const candidates = Array.isArray(signals) ? signals.slice(0, MAX_EVIDENCE_ITEMS) : [];
-  const evidence = await Promise.all(candidates.map(item => retrieveOne(item, fetchImpl, now)));
+  const evidence = await Promise.all(candidates.map(item => retrieveOne(item, fetchImpl, now, signal)));
+  if (signal?.aborted) return { status: "cancelled", attempts: candidates.length, retrieved: 0, failed: candidates.length, evidence: [] };
   const successful = evidence.filter(item => item.status === "source_retrieved_not_fact_checked");
   return {
     status: successful.length ? "source_retrieval_complete" : "no_source_bodies_retrieved",

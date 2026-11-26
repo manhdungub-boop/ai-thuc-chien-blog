@@ -3,8 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { AgentStateStore, AgentReviewerAuthStore, AgentDraftStore, AgentAIBankCandidateStore } from "../src/worker.mjs";
-import { TestAgentStateStore } from "./state-store-test-worker.mjs";
+import { AgentStateStore, AgentReviewerAuthStore, AgentDraftStore, AgentAIBankCandidateStore, TestAgentStateStore } from "../src/worker-preview-recovery.mjs";
 
 const configPath = fileURLToPath(new URL("../wrangler.preview.jsonc", import.meta.url));
 const config = JSON.parse(readFileSync(configPath, "utf8"));
@@ -15,7 +14,7 @@ const faultTestWorkflowSource = readFileSync(faultTestWorkflowPath, "utf8");
 
 test("dedicated Agent Runtime Preview config binds its isolated State Store and rate limiter and remains disabled", () => {
   assert.equal(config.name, "ai-thuc-chien-agent-runtime-preview");
-  assert.equal(config.main, "./src/worker.mjs");
+  assert.equal(config.main, "./src/worker-preview-recovery.mjs");
   assert.equal(config.workers_dev, true);
   assert.equal(config.preview_urls, false);
   assert.deepEqual(config.vars, {
@@ -35,6 +34,9 @@ test("dedicated Agent Runtime Preview config binds its isolated State Store and 
     AGENT_OIDC_REF: "refs/heads/main",
     AGENT_OIDC_WORKFLOW_REF: "manhdungub-boop/ai-thuc-chien-blog/.github/workflows/agent-runtime-operator.yml@refs/heads/main",
     AGENT_OIDC_ACTOR_ID: "342528485",
+    AGENT_AI_BANK_INGESTION_ENABLED: "false",
+    AGENT_AI_BANK_OIDC_WORKFLOW_REF: "manhdungub-boop/ai-thuc-chien-blog/.github/workflows/ai-bank-official-feed-discovery.yml@refs/heads/main",
+    AGENT_AI_BANK_SCHEDULE_ACTOR_ID: "342528485",
   });
   assert.equal(Object.hasOwn(config, "triggers"), false, "recurring triggers stay absent until Free-plan headroom is independently verified and approved");
   assert.deepEqual(config.ratelimits, [{
@@ -54,6 +56,7 @@ test("dedicated Agent Runtime Preview config binds its isolated State Store and 
     { tag: "v1", new_sqlite_classes: ["AgentStateStore"] },
     { tag: "v2", new_sqlite_classes: ["AgentReviewerAuthStore", "AgentDraftStore"] },
     { tag: "v3-ai-bank-candidate-store", new_sqlite_classes: ["AgentAIBankCandidateStore"] },
+    { tag: "fault-test-v1", new_sqlite_classes: ["TestAgentStateStore"] },
   ]);
   for (const forbidden of [
     "account_id", "routes", "route", "custom_domains", "d1_databases",
@@ -95,6 +98,17 @@ test("fault-test DO enables state transitions only inside the token-gated isolat
   assert.ok(faultRouteIndex >= 0 && enableIndex > faultRouteIndex && resetIndex > enableIndex);
   assert.equal(faultTestConfig.vars.AGENT_ENABLED, "false");
   assert.equal(faultTestConfig.vars.AGENT_PAUSED, "true");
+});
+
+test("Preview recovery entrypoint preserves the already-applied fault-test Durable Object migration", () => {
+  const wrapperPath = fileURLToPath(new URL("../src/worker-preview-recovery.mjs", import.meta.url));
+  const wrapper = readFileSync(wrapperPath, "utf8");
+  assert.match(wrapper, /import worker, \{ AgentStateStore \} from "\.\/worker\.mjs"/);
+  assert.match(wrapper, /export class TestAgentStateStore extends AgentStateStore/);
+  assert.match(wrapper, /export default worker/);
+  assert.equal(typeof TestAgentStateStore, "function");
+  assert.equal(config.migrations.at(-1)?.tag, "fault-test-v1");
+  assert.deepEqual(config.migrations.at(-1)?.new_sqlite_classes, ["TestAgentStateStore"]);
 });
 
 test("fault-test Worker exports its test-only Durable Object class outside the application entrypoint", () => {

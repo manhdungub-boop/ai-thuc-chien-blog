@@ -23,6 +23,17 @@ function feedFor(source, index = 0, date = "2026-11-18T10:00:00.000Z") {
 }
 
 describe("read-only AI research discovery", () => {
+  it("cancels feed discovery when the parent authoring signal is already aborted", async () => {
+    const controller = new AbortController(); controller.abort();
+    const result = await discoverResearchSignals({
+      now: NOW, signal: controller.signal,
+      fetchImpl: async (_url, options) => { if (options.signal.aborted) throw new Error("aborted"); return new Response("<rss/>"); }
+    });
+    expect(result.status).toBe("cancelled");
+    expect(result.ok).toBe(false);
+    expect(result.latest_signals).toEqual([]);
+  });
+
   it("reads only four fixed sources and returns a bounded set of signals", async () => {
     const requested = [];
     const result = await discoverResearchSignals({

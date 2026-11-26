@@ -15,12 +15,22 @@ describe("AgentReviewerAuthStore Durable Object", () => {
     await runtime?.mf.dispose();
   });
 
-  it("limits authorization starts to ten attempts per minute and resets the window", async () => {
+  it("limits authorization starts per client and resets each client's window independently", async () => {
+    const clientA = "a".repeat(43);
+    const clientB = "b".repeat(43);
     for (let index = 0; index < 10; index += 1) {
-      expect(await store.consumeStartRateLimit(1000 + index)).toMatchObject({ allowed: true });
+      expect(await store.consumeStartRateLimit(clientA, 1000 + index)).toMatchObject({ allowed: true });
     }
-    expect(await store.consumeStartRateLimit(1009)).toMatchObject({ allowed: false, retry_after_seconds: 51 });
-    expect(await store.consumeStartRateLimit(1060)).toMatchObject({ allowed: true, remaining: 9 });
+    expect(await store.consumeStartRateLimit(clientA, 1009)).toMatchObject({ allowed: false, retry_after_seconds: 51 });
+    expect(await store.consumeStartRateLimit(clientB, 1009)).toMatchObject({ allowed: true, remaining: 9 });
+    expect(await store.consumeStartRateLimit(clientA, 1060)).toMatchObject({ allowed: true, remaining: 9 });
+  });
+
+  it("fails closed for malformed client rate-limit keys", async () => {
+    expect(await store.consumeStartRateLimit("spoofed-client", 1000)).toMatchObject({
+      allowed: false,
+      reason: "client_rate_limit_key_invalid"
+    });
   });
 
   it("stores OAuth transactions once and consumes them exactly once", async () => {

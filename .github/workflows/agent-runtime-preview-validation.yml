@@ -30,9 +30,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Check out source
+      - name: Check out the exact PR head validated by the one-shot E2E job
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 (Node.js 24)
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
 
       - name: Set up Node.js
@@ -110,7 +111,7 @@ jobs:
 
       - name: Run isolated Worker shell and contract tests
         timeout-minutes: 4
-        run: timeout --signal=TERM --kill-after=10s 180s node --test agents/runtime/tests/*.test.mjs
+        run: timeout --signal=TERM --kill-after=10s 180s node --experimental-loader ./agents/runtime/tests/cloudflare-workers-loader.mjs --test agents/runtime/tests/*.test.mjs
 
       - name: Validate Preview and isolated fault-harness bundles without deployment
         working-directory: agents/runtime
@@ -146,7 +147,7 @@ jobs:
           assert.equal('kv_namespaces' in config, false);
           assert.equal('r2_buckets' in config, false);
           assert.equal(preview.name, 'ai-thuc-chien-agent-runtime-preview');
-          assert.equal(preview.main, './src/worker.mjs');
+          assert.equal(preview.main, './src/worker-preview-recovery.mjs');
           assert.equal(preview.workers_dev, true);
           assert.equal(preview.preview_urls, false);
           assert.equal(preview.vars.AGENT_ENABLED, 'false');
@@ -171,7 +172,8 @@ jobs:
           assert.deepEqual(preview.migrations, [
             { tag: 'v1', new_sqlite_classes: ['AgentStateStore'] },
             { tag: 'v2', new_sqlite_classes: ['AgentReviewerAuthStore', 'AgentDraftStore'] },
-            { tag: 'v3-ai-bank-candidate-store', new_sqlite_classes: ['AgentAIBankCandidateStore'] }
+            { tag: 'v3-ai-bank-candidate-store', new_sqlite_classes: ['AgentAIBankCandidateStore'] },
+            { tag: 'fault-test-v1', new_sqlite_classes: ['TestAgentStateStore'] }
           ]);
           assert.equal('routes' in preview, false);
           assert.equal('d1_databases' in preview, false);
@@ -283,6 +285,9 @@ jobs:
           assert.throws(() => assertValidationOnly(injectValidationStep(workflow, injectedSecretStep)),
             /must not reference secret values/,
             'secret guard must inspect steps inserted immediately after its own assertion');
+          const dollar = String.fromCharCode(36);
+          const expectedHeadCheckout = "ref: " + dollar + "{{ github.event.pull_request.head.sha || github.sha }}";
+          assert.ok(workflow.includes(expectedHeadCheckout), "validation must test the exact PR head the E2E job deploys");
           assert.ok(e2eWorkflow.includes("github.event.action == 'synchronize'"));
           assert.ok(e2eWorkflow.includes("github.event.pull_request.labels.*.name"));
           assert.ok(e2eWorkflow.includes("github.actor_id == '342528485'"), 'one-shot E2E must be restricted to repository owner actor');
@@ -328,7 +333,7 @@ jobs:
           assert.equal(testConfig.main, './tests/state-store-test-worker.mjs');
           assert.notEqual(preview.name, testConfig.name, 'fault Worker must be separate from Preview');
           assert.notEqual(production.name, testConfig.name, 'fault Worker must be separate from Production');
-          assert.equal(preview.main, './src/worker.mjs');
+          assert.equal(preview.main, './src/worker-preview-recovery.mjs');
           assert.equal(production.main, './src/worker.mjs');
           for (const key of ['AGENT_ENABLED','AGENT_SCHEDULER_ENABLED','AGENT_RECOVERY_ALARM_ENABLED','AGENT_OIDC_ENABLED','AGENT_REVIEWER_AUTH_ENABLED']) {
             assert.equal(testConfig.vars[key], 'false', key + ' must remain disabled');
@@ -785,10 +790,12 @@ jobs:
               item?.result?.findingCount !== 0 || result?.persistence?.verified !== true ||
               result?.persistence?.state !== 'succeeded' ||
               !['task.queued', 'task.claimed', 'task.succeeded'].every(type =>
-                result.persistence.auditEvents?.[type]?.after >= result.persistence.auditEvents?.[type]?.before + 1)) {
+                result.persistence.auditEvents?.[type]?.taskId === item.taskId &&
+                Number.isSafeInteger(result.persistence.auditEvents?.[type]?.count) &&
+                result.persistence.auditEvents[type].count >= 1)) {
             throw new Error('One-shot read-only task or durable audit verification failed: ' +
               JSON.stringify({ httpStatus: first.response.status, error: result?.error,
-                diagnosticCode: result?.diagnosticCode, state: item?.state }));
+                diagnosticCode: result?.diagnosticCode, state: item?.state, draftStoreSync: result?.draft_store_sync }));
           }
 
           // Reuse the exact same signed JWT with a different idempotency key.

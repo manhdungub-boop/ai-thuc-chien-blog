@@ -31,6 +31,54 @@ describe("AgentDraftStore Durable Object", () => {
     await runtime?.mf.dispose();
   });
 
+  it("migrates legacy draft rows before backfilling content versions when evidence columns are absent", async () => {
+    const migrated = await store.testRunLegacySchemaMigration();
+    for (const column of [
+      "ledger_json", "review_record_json", "evidence_readiness_json",
+      "research_evidence_json", "content_version"
+    ]) {
+      expect(migrated.columns.includes(column)).toBe(true);
+    }
+    expect(migrated.row).toMatchObject({
+      version: 7,
+      content_version: 7,
+      ledger_json: null,
+      review_record_json: null,
+      evidence_readiness_json: null,
+      research_evidence_json: null
+    });
+  });
+
+  it("fences agent draft commits in the same Durable Object transaction as Pause", async () => {
+    const draft = validDraft();
+    expect(await store.createDraftFromAgent("agent-paused-0001", draft, [], 0))
+      .toEqual({ accepted: false, reason: "runtime_paused" });
+    expect(await store.setRuntimePaused(false, 1)).toMatchObject({ updated: true, paused: false, version: 1 });
+    expect((await store.createDraftFromAgent("agent-paused-0001", draft, [], 1)).accepted).toBe(true);
+    expect(await store.setRuntimePaused(true, 2)).toMatchObject({ updated: true, paused: true, version: 2 });
+    expect(await store.setRuntimePaused(true, 1)).toMatchObject({
+      updated: true, duplicate: true, stale_version: true, paused: true, version: 2
+    });
+    expect(await store.createDraftFromAgent("agent-late-0001", draft, [], 1))
+      .toEqual({ accepted: false, reason: "runtime_paused" });
+    expect(await store.setRuntimePaused(false, 1)).toMatchObject({ updated: false, reason: "runtime_control_version_stale" });
+    expect(await store.getDraft("agent-late-0001")).toBeNull();
+  });
+
+  it("allows an emergency Pause to fence an unpaused Draft Store with a newer local version", async () => {
+    expect(await store.setRuntimePaused(false, 10)).toMatchObject({
+      updated: true, paused: false, version: 10
+    });
+    expect(await store.setRuntimePaused(true, 2)).toMatchObject({
+      updated: true, stale_version: true, paused: true, version: 11
+    });
+    expect(await store.setRuntimePaused(false, 10)).toMatchObject({
+      updated: false, reason: "runtime_control_version_stale", current_version: 11
+    });
+    expect(await store.createDraftFromAgent("agent-stale-pause-0001", validDraft(), [], 10))
+      .toEqual({ accepted: false, reason: "runtime_paused" });
+  });
+
   it("stores an eligible article only in the human-review queue", async () => {
     const result = await store.createDraft("draft-review-0001", validDraft());
     expect(result.accepted).toBe(true);
@@ -142,6 +190,7 @@ describe("AgentDraftStore Durable Object", () => {
     const result = await store.storeEvidenceLedger("draft-ledger-0001", created.artifact.version);
     expect(result.stored).toBe(true);
     expect(result.artifact.version).toBe(2);
+    expect(result.artifact.content_version).toBe(1);
     expect(result.artifact.evidence_review).toMatchObject({
       ledger: {
         status: "all_claims_traceable_pending_human_review",
@@ -237,6 +286,7 @@ describe("AgentDraftStore Durable Object", () => {
     const revised = await store.reviseDraft("draft-ledger-0003", stored.artifact.version, revisedDraft);
     expect(revised.updated).toBe(true);
     expect(revised.artifact.version).toBe(3);
+    expect(revised.artifact.content_version).toBe(2);
     expect(revised.artifact.evidence_review).toBeNull();
   });
 

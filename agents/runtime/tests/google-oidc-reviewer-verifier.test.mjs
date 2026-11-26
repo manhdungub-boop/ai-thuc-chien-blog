@@ -88,6 +88,16 @@ describe("Google OIDC reviewer identity verifier", () => {
     });
   });
 
+  it("rejects third-party email allowlists even when the ID token claims them as verified", async () => {
+    const pair = await makeKeyPair();
+    const token = await makeToken(pair, { email: "reviewer@example.org" });
+    const result = await verifyGoogleReviewerIdToken(token, options(pair, {
+      allowedEmails: ["reviewer@example.org"],
+      fetchImpl: async () => { throw new Error("must_not_fetch"); }
+    }));
+    expect(result.status).toBe("google_oidc_allowlist_invalid");
+  });
+
   it("rejects an untrusted email even when the token signature is valid", async () => {
     const pair = await makeKeyPair();
     const token = await makeToken(pair, { email: "other@example.com" });

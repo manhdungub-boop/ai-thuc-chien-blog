@@ -25,6 +25,7 @@ const SECURITY_HEADERS = Object.freeze({
   "Referrer-Policy": "no-referrer",
 });
 const MAX_INTERNAL_RESPONSE_BYTES = 16 * 1024;
+const PUBLIC_HOMEPAGE_URL = "https://ai-thuc-chien-blog.manhdungub.workers.dev/";
 const LEASE_HEARTBEAT_INTERVAL_MS = 10_000;
 const INTERNAL_SCHEDULED_DISPATCH = Symbol("internal-scheduled-dispatch");
 const INTERNAL_OIDC_RUN = Symbol("internal-oidc-run");
@@ -369,6 +370,140 @@ async function readStateStore(env, pathname) {
   return body;
 }
 
+async function getDraftStoreStub(env) {
+  const namespace = env.AGENT_DRAFT_STORE;
+  if (!namespace || typeof namespace.idFromName !== "function" || typeof namespace.get !== "function") throw new Error("draft_store_unavailable");
+  const stub = namespace.get(namespace.idFromName("agent-authoring-global"));
+  if (!stub || typeof stub.setRuntimePaused !== "function") throw new Error("draft_store_control_unavailable");
+  return stub;
+}
+async function syncDraftStoreControl(env, control) {
+  if (!control || typeof control.paused !== "boolean" || !Number.isSafeInteger(control.version) || control.version < 0) throw new Error("runtime_control_snapshot_invalid");
+  const result = await (await getDraftStoreStub(env)).setRuntimePaused(control.paused, control.version);
+  const versionMatches = result?.version === control.version ||
+    (control.paused === true && Number.isSafeInteger(result?.version) && result.version > control.version);
+  if (result?.updated !== true || result.paused !== control.paused || !versionMatches) {
+    throw Object.assign(new Error("draft_store_control_sync_failed"), {
+      status: 503,
+      detail: {
+        reason: result?.reason || "draft_store_control_result_mismatch",
+        requested_version: control.version,
+        observed_version: Number.isSafeInteger(result?.version) ? result.version : null,
+        requested_paused: control.paused,
+        observed_paused: typeof result?.paused === "boolean" ? result.paused : null
+      }
+    });
+  }
+  return result;
+}
+async function pauseRuntimeControl(env, body) {
+  const observed = await readStateStore(env, "/control");
+  const version = observed?.control?.version;
+  if (!Number.isSafeInteger(version) || version < 0 || !Number.isSafeInteger(version + 1)) throw Object.assign(new Error("runtime_control_snapshot_invalid"), { status: 503 });
+  if (body.expectedVersion !== undefined &&
+      (!Number.isSafeInteger(body.expectedVersion) || body.expectedVersion < 0)) {
+    throw Object.assign(new Error("runtime_control_version_invalid"), { status: 400 });
+  }
+  const expectedVersion = body.expectedVersion ?? version;
+  if (expectedVersion !== version) {
+    throw Object.assign(new Error("runtime_control_version_conflict"), { status: 409 });
+  }
+
+  // Best-effort pre-fence protects in-flight authoring, but must never block the
+  // State Store Pause that closes task admission and cancels active leases.
+  let preFenceSucceeded = false;
+  let preFenceError = null;
+  let preFenceDetail = null;
+  try {
+    const draftStore = await getDraftStoreStub(env);
+    const requestedVersion = expectedVersion + 1;
+    const fenced = await draftStore.setRuntimePaused(true, requestedVersion);
+    if (fenced?.updated !== true || fenced.paused !== true ||
+        !Number.isSafeInteger(fenced.version) || fenced.version < requestedVersion) {
+      throw Object.assign(new Error("draft_store_pause_fence_failed"), {
+        detail: {
+          reason: typeof fenced?.reason === "string" ? fenced.reason : "draft_store_pause_fence_result_mismatch",
+          requested_version: requestedVersion,
+          observed_version: Number.isSafeInteger(fenced?.version) ? fenced.version : null,
+          observed_paused: typeof fenced?.paused === "boolean" ? fenced.paused : null,
+          updated: fenced?.updated === true
+        }
+      });
+    }
+    preFenceSucceeded = true;
+  } catch (error) {
+    preFenceError = error?.message === "draft_store_unavailable" ||
+      error?.message === "draft_store_control_unavailable"
+      ? error.message
+      : "draft_store_pause_fence_failed";
+    const safeErrorName = typeof error?.name === "string" && /^[A-Za-z][A-Za-z0-9]{0,63}$/.test(error.name)
+      ? error.name
+      : null;
+    // Never expose stack frames or raw exception diagnostics in an operator
+    // response. The stable reason and bounded error class are sufficient for
+    // support triage without disclosing Worker paths or runtime internals.
+    preFenceDetail = error?.detail && typeof error.detail === "object"
+      ? error.detail
+      : {
+          reason: preFenceError,
+          ...(safeErrorName ? { error_name: safeErrorName } : {}),
+        };
+  }
+
+  let result;
+  try {
+    result = await writeStateStore(env, "/control/pause", { ...body, expectedVersion });
+  } catch (error) {
+    try {
+      const current = await readStateStore(env, "/control");
+      await syncDraftStoreControl(env, current.control);
+    } catch {
+      // If the State Store mutation failed, preserve the original failure.
+    }
+    throw error;
+  }
+
+  let draftStoreSync = {
+    ok: false,
+    pre_fence_succeeded: preFenceSucceeded,
+    error: "draft_store_control_sync_failed"
+  };
+  try {
+    const synced = await syncDraftStoreControl(env, result.control);
+    draftStoreSync = {
+      ok: true,
+      pre_fence_succeeded: preFenceSucceeded,
+      ...(synced.stale_version === true ? { stale_version_already_paused: true } : {}),
+      ...(preFenceError ? { pre_fence_error: preFenceError } : {})
+    };
+  } catch (error) {
+    // The State Store Pause is already durable. Surface Draft Store sync failure
+    // separately so callers never mistake a paused runtime for a fully fenced authoring path.
+    draftStoreSync = {
+      ok: false,
+      pre_fence_succeeded: preFenceSucceeded,
+      error: "draft_store_control_sync_failed",
+      ...(error?.detail ? { detail: error.detail } : {}),
+      ...(preFenceError ? { pre_fence_error: preFenceError } : {}),
+      ...(preFenceDetail ? { pre_fence_detail: preFenceDetail } : {})
+    };
+  }
+  return { ...result, draftStoreSync };
+}
+function startAuthoringControlWatch(env, expectedVersion) {
+  const controller = new AbortController();
+  let stopped = false, timer = null;
+  const poll = async () => {
+    if (stopped || controller.signal.aborted) return;
+    try {
+      const control = (await readStateStore(env, "/control"))?.control;
+      if (!control || control.paused !== false || control.version !== expectedVersion) { controller.abort(new Error("authoring_control_changed")); return; }
+    } catch { controller.abort(new Error("authoring_control_unavailable")); return; }
+    if (!stopped && !controller.signal.aborted) timer = setTimeout(poll, 1000);
+  };
+  timer = setTimeout(poll, 1000);
+  return { signal: controller.signal, stop() { stopped = true; if (timer !== null) clearTimeout(timer); } };
+}
 
 const AUTHORING_IDEMPOTENCY_KEY = /^[A-Za-z0-9][A-Za-z0-9._:-]{15,127}$/;
 const CONTENT_RESEARCH_DAILY_LIMIT = 8;
@@ -377,33 +512,37 @@ async function consumeContentResearchBudget(env, count) {
   if (!Number.isSafeInteger(count) || count < 0 || count > CONTENT_RESEARCH_DAILY_LIMIT) {
     throw Object.assign(new Error("research_budget_request_invalid"), { status: 503 });
   }
-  if (count === 0) return { day: currentUtcBudgetDay(), used: 0, remaining: CONTENT_RESEARCH_DAILY_LIMIT };
   const day = currentUtcBudgetDay();
-  const snapshot = await readStateStore(
-    env,
-    "/external-budget?day=" + encodeURIComponent(day) + "&scope=content_research",
-  );
-  let budget = snapshot?.budget;
   const validBudget = (value) => value && value.ok === true && value.day === day &&
     value.scope === "content_research" && Number.isSafeInteger(value.used) && value.used >= 0 &&
     value.limit === CONTENT_RESEARCH_DAILY_LIMIT && Number.isSafeInteger(value.remaining) &&
     value.remaining >= 0 && value.used + value.remaining === value.limit;
-  if (!validBudget(budget)) {
-    throw Object.assign(new Error("research_budget_snapshot_invalid"), { status: 503 });
+  if (count === 0) {
+    const snapshot = await readStateStore(
+      env,
+      "/external-budget?day=" + encodeURIComponent(day) + "&scope=content_research",
+    );
+    if (!validBudget(snapshot?.budget)) {
+      throw Object.assign(new Error("research_budget_snapshot_invalid"), { status: 503 });
+    }
+    return { day, used: snapshot.budget.used, remaining: snapshot.budget.remaining };
   }
-  if (budget.remaining < count) {
+  // Reserve the complete batch in one State Store transaction. A read-then-loop
+  // can partially consume quota when concurrent callers race for the last units.
+  const reserved = await writeStateStore(env, "/external-budget/consume", {
+    day,
+    scope: "content_research",
+    count,
+  });
+  const budget = reserved?.budget;
+  if (!validBudget(budget) || typeof budget.allowed !== "boolean") {
+    throw Object.assign(new Error("research_budget_reservation_invalid"), { status: 503 });
+  }
+  if (!budget.allowed) {
     throw Object.assign(new Error("research_budget_exhausted"), { status: 429 });
   }
-  for (let index = 0; index < count; index += 1) {
-    const consumed = await writeStateStore(env, "/external-budget/consume", {
-      day,
-      scope: "content_research",
-    });
-    const next = consumed?.budget;
-    if (!validBudget(next) || next.used < budget.used + 1 || next.remaining > budget.remaining - 1) {
-      throw Object.assign(new Error("research_budget_consumption_invalid"), { status: 503 });
-    }
-    budget = next;
+  if (budget.used < count || budget.remaining > CONTENT_RESEARCH_DAILY_LIMIT - count) {
+    throw Object.assign(new Error("research_budget_reservation_invalid"), { status: 503 });
   }
   return { day, used: budget.used, remaining: budget.remaining };
 }
@@ -442,6 +581,14 @@ const worker = {
     const reviewerResponse = await handleReviewerHttpRequest(request, env);
     if (reviewerResponse) return reviewerResponse;
     const url = new URL(request.url);
+    if (url.pathname === "/" && request.method === "GET") {
+      return new Response(null, { status: 302, headers: {
+        location: PUBLIC_HOMEPAGE_URL,
+        "cache-control": "no-store",
+        "referrer-policy": "no-referrer",
+        "x-content-type-options": "nosniff",
+      } });
+    }
     if (url.pathname === "/health") {
       if (request.method !== "GET") return json({ ok: false, error: "method_not_allowed" }, 405);
       return json({
@@ -514,15 +661,6 @@ const worker = {
         return json({ ok: false, error: "github_oidc_token_invalid" }, 401);
       }
 
-      // Capture aggregate audit counters before the single task so persistence
-      // can be checked without exposing the State Store binding publicly.
-      let beforeMetrics;
-      try {
-        beforeMetrics = await readStateStore(env, "/metrics");
-      } catch {
-        return json({ ok: false, error: "oidc_run_audit_unavailable" }, 503);
-      }
-
       // Resume the Durable Object's independent admission latch only after exact
       // GitHub OIDC authorization. This route is task- and workflow-allowlisted,
       // and the latch is paused again in finally before any result is returned.
@@ -530,6 +668,7 @@ const worker = {
       const requestId = () => crypto.randomUUID();
       let response = null;
       let pauseVerified = true;
+      let draftStoreSync = { ok: true, pre_fence_succeeded: true };
       let resumeWasRequested = false;
       let resumeRejectedConflict = false;
       try {
@@ -581,20 +720,17 @@ const worker = {
             } else {
               try {
                 const persisted = await readStateStore(env, "/task?id=" + encodeURIComponent(item.taskId));
-                const afterMetrics = await readStateStore(env, "/metrics");
+                const taskAudit = await readStateStore(env, "/task-audit?taskId=" + encodeURIComponent(item.taskId));
                 const eventTypes = ["task.queued", "task.claimed", "task.succeeded"];
-                const count = (metrics, eventType) => {
-                  const entry = Array.isArray(metrics?.auditLast24h)
-                    ? metrics.auditLast24h.find((event) => event?.eventType === eventType)
-                    : null;
-                  return Number.isSafeInteger(entry?.count) && entry.count >= 0 ? entry.count : 0;
-                };
-                const auditEvents = Object.fromEntries(eventTypes.map((eventType) => [
+                const observedTypes = Array.isArray(taskAudit?.events)
+                  ? taskAudit.events.filter(event => event && typeof event.eventType === "string").map(event => event.eventType)
+                  : [];
+                const auditEvents = Object.fromEntries(eventTypes.map(eventType => [
                   eventType,
-                  { before: count(beforeMetrics, eventType), after: count(afterMetrics, eventType) },
+                  { taskId: item.taskId, count: observedTypes.filter(type => type === eventType).length },
                 ]));
-                const auditVerified = eventTypes.every((eventType) =>
-                  auditEvents[eventType].after >= auditEvents[eventType].before + 1);
+                const auditVerified = taskAudit?.taskId === item.taskId &&
+                  eventTypes.every(eventType => auditEvents[eventType].count >= 1);
                 if (persisted?.task?.taskId !== item.taskId || persisted.task.state !== "succeeded" ||
                     persisted.task.type !== "content.review" || !persisted.task.result ||
                     persisted.task.result.taskType !== "content.review" || !auditVerified) {
@@ -633,12 +769,13 @@ const worker = {
         // competing Pause has invalidated this request's observed version.
         if (resumeWasRequested && !resumeRejectedConflict) {
           try {
-            await writeStateStore(env, "/control/pause", {
+            const pauseResult = await pauseRuntimeControl(env, {
               actor,
               requestId: requestId(),
               reason: "one-shot OIDC Preview E2E complete",
               internalCleanup: true,
             });
+            draftStoreSync = pauseResult.draftStoreSync;
             const control = await readStateStore(env, "/control");
             pauseVerified = control?.control?.paused === true;
           } catch {
@@ -646,7 +783,8 @@ const worker = {
           }
         }
       }
-      if (!pauseVerified) return json({ ok: false, error: "oidc_run_pause_verification_failed" }, 503);
+      if (!pauseVerified) return json({ ok: false, error: "oidc_run_pause_verification_failed", draft_store_sync: draftStoreSync }, 503);
+      if (!draftStoreSync?.ok) return json({ ok: false, error: "draft_store_pause_sync_failed", draft_store_sync: draftStoreSync }, 503);
       return response ?? json({ ok: false, error: "oidc_run_result_unavailable" }, 503);
     }
     if (url.pathname === "/internal/oidc/pause") {
@@ -699,17 +837,89 @@ const worker = {
 
       const actor = "github-actions:" + authorized.identity.actorId;
       try {
-        const result = await writeStateStore(env, "/control/pause", {
+        const result = await pauseRuntimeControl(env, {
           actor,
           requestId: crypto.randomUUID(),
           ...(body.reason === undefined ? {} : { reason: body.reason }),
         });
-        return json({ ok: true, changed: result.changed, control: result.control });
+        return json({
+          ok: result.draftStoreSync?.ok === true,
+          ...(result.draftStoreSync?.ok === true ? {} : { error: "draft_store_pause_sync_failed" }),
+          changed: result.changed,
+          control: result.control,
+          draft_store_sync: result.draftStoreSync
+        }, result.draftStoreSync?.ok === true ? 200 : 503);
       } catch (error) {
         if (error?.status === 429) return json({ ok: false, error: "rate_limited" }, 429);
         return json({ ok: false, error: "control_unavailable" }, 503);
       }
     }
+    if (url.pathname === "/internal/oidc/ai-bank-reserve") {
+      if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
+      if (env.AGENT_AI_BANK_INGESTION_ENABLED !== "true") return json({ ok: false, error: "ai_bank_ingestion_disabled" }, 503);
+      if (env.AGENT_OIDC_ENABLED !== "true") return json({ ok: false, error: "oidc_operator_disabled" }, 503);
+      if ([...url.searchParams.keys()].length > 0) return json({ ok: false, error: "request_invalid" }, 400);
+      if (!/^application\/json(?:\s*;|$)/i.test(request.headers.get("content-type") || "")) {
+        return json({ ok: false, error: "json_content_type_required" }, 415);
+      }
+      const parsedBody = await readBoundedJsonValueRequest(request, 256);
+      if (!parsedBody.ok) return json({ ok: false, error: "request_invalid" }, parsedBody.status);
+      if (!parsedBody.value || typeof parsedBody.value !== "object" || Array.isArray(parsedBody.value) ||
+          Object.keys(parsedBody.value).length !== 0) {
+        return json({ ok: false, error: "ai_bank_reservation_request_invalid" }, 400);
+      }
+      const authorization = request.headers.get("authorization") || "";
+      const tokenMatch = /^Bearer ([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/.exec(authorization);
+      if (!tokenMatch || tokenMatch[1].length > 16384) return json({ ok: false, error: "github_oidc_token_required" }, 401);
+      const expected = {
+        audience: env.AGENT_OIDC_AUDIENCE,
+        repository: env.AGENT_OIDC_REPOSITORY,
+        repositoryOwner: env.AGENT_OIDC_REPOSITORY_OWNER,
+        repositoryId: env.AGENT_OIDC_REPOSITORY_ID,
+        repositoryOwnerId: env.AGENT_OIDC_REPOSITORY_OWNER_ID,
+        ref: env.AGENT_OIDC_REF,
+        workflowRef: env.AGENT_AI_BANK_OIDC_WORKFLOW_REF,
+        actorId: env.AGENT_AI_BANK_SCHEDULE_ACTOR_ID,
+        eventName: "schedule",
+      };
+      if (!Object.entries(expected).every(([key, value]) =>
+        typeof value === "string" && value.length > 0 && value.length <= (key === "workflowRef" ? 512 : 256)) ||
+        !/^\d{1,20}$/.test(expected.actorId) ||
+        !/^\d{1,20}$/.test(expected.repositoryId) ||
+        !/^\d{1,20}$/.test(expected.repositoryOwnerId)) {
+        return json({ ok: false, error: "github_oidc_schedule_policy_unconfigured" }, 503);
+      }
+      const authorized = await authorizeGitHubActionsOperator(tokenMatch[1], { env, expected });
+      if (!authorized.ok) {
+        if (authorized.error === "oidc_token_replayed") return json({ ok: false, error: "github_oidc_token_replayed" }, 409);
+        if (authorized.error?.includes("unavailable") || authorized.error === "oidc_replay_response_invalid") {
+          return json({ ok: false, error: "github_oidc_verification_unavailable" }, 503);
+        }
+        return json({ ok: false, error: "github_oidc_token_invalid" }, 401);
+      }
+      const day = currentUtcBudgetDay();
+      let reservation;
+      try {
+        reservation = await writeStateStore(env, "/external-budget/consume", {
+          day, scope: "ai_bank_discovery", count: 5,
+        });
+      } catch (error) {
+        if (error?.status === 429) return json({ ok: false, error: "daily_external_request_budget_exhausted" }, 429);
+        return json({ ok: false, error: "ai_bank_quota_reservation_unavailable" }, 503);
+      }
+      const budget = reservation?.budget;
+      if (!budget || budget.ok !== true || budget.day !== day || budget.scope !== "ai_bank_discovery" ||
+          budget.limit !== 10 || !Number.isSafeInteger(budget.used) || budget.used < 0 || budget.used > 10 ||
+          !Number.isSafeInteger(budget.remaining) || budget.remaining < 0 ||
+          budget.used + budget.remaining !== budget.limit || typeof budget.allowed !== "boolean") {
+        return json({ ok: false, error: "ai_bank_quota_reservation_invalid" }, 503);
+      }
+      if (!budget.allowed) return json({ ok: false, error: "daily_external_request_budget_exhausted" }, 429);
+      if (budget.used < 5 || budget.remaining > 5) return json({ ok: false, error: "ai_bank_quota_reservation_invalid" }, 503);
+      return json({ ok: true, scope: "ai_bank_discovery", day, reserved: 5,
+        used: budget.used, limit: budget.limit, remaining: budget.remaining });
+    }
+
     if (url.pathname === "/internal/oidc/ai-bank-cursor") {
       if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
       if (env.AGENT_AI_BANK_INGESTION_ENABLED !== "true") {
@@ -977,153 +1187,15 @@ const worker = {
 
     if (url.pathname === "/internal/authoring/prepare") {
       if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
-      if (!isEnabled(env.AGENT_ENABLED) || env.AGENT_PAUSED !== "false") {
-        return json({ ok: false, error: "agent_disabled_or_paused" }, 503);
-      }
-      if (!await hasValidOperatorBearer(request, env)) return json({ ok: false, error: "operator_auth_required" }, 401);
-      if ([...url.searchParams.keys()].length > 0) return json({ ok: false, error: "request_invalid" }, 400);
-      if (!/^application\/json(?:\s*;|$)/i.test(request.headers.get("content-type") || "")) {
-        return json({ ok: false, error: "json_content_type_required" }, 415);
-      }
-      const parsed = await readBoundedJsonValueRequest(request, 2048);
-      if (!parsed.ok) {
-        return json({ ok: false, error: parsed.status === 413 ? "request_body_too_large" : "request_invalid" }, parsed.status);
-      }
-      const body = parsed.value;
-      if (!body || typeof body !== "object" || Array.isArray(body) ||
-          Object.keys(body).sort().join(",") !== "idempotencyKey,topic" ||
-          typeof body.topic !== "string" || body.topic.trim() !== body.topic ||
-          body.topic.length < 5 || body.topic.length > 200 ||
-          /[\u0000-\u001f\u007f]/.test(body.topic) ||
-          typeof body.idempotencyKey !== "string" || !AUTHORING_IDEMPOTENCY_KEY.test(body.idempotencyKey)) {
-        return json({ ok: false, error: "authoring_request_invalid" }, 400);
-      }
-
-      const provider = selectProvider("content_draft", [{
-        id: "article-authoring-brief",
-        status: "ready",
-        execution_surface: "agent_runtime",
-        cost_class: "no_external_execution",
-        capabilities: ["content_draft"],
-      }]);
-      if (provider.action !== "execute" || provider.provider !== "article-authoring-brief") {
-        return json({ ok: false, error: "authoring_provider_deferred" }, 503);
-      }
-      const namespace = env.AGENT_DRAFT_STORE;
-      if (!namespace || typeof namespace.idFromName !== "function" || typeof namespace.get !== "function") {
-        return json({ ok: false, error: "draft_store_unavailable" }, 503);
-      }
-      const draftStub = namespace.get(namespace.idFromName("agent-authoring-global"));
-      if (!draftStub || typeof draftStub.getDraft !== "function" || typeof draftStub.createDraft !== "function") {
-        return json({ ok: false, error: "draft_store_unavailable" }, 503);
-      }
-
-      try {
-        const artifactId = await authoringArtifactId(body.idempotencyKey, body.topic);
-        const existing = await draftStub.getDraft(artifactId);
-        if (existing) {
-          if (existing.draft?.title !== body.topic.slice(0, 70)) {
-            return json({ ok: false, error: "authoring_idempotency_conflict" }, 409);
-          }
-          const summary = authoringArtifactSummary(existing);
-          if (!summary) return json({ ok: false, error: "draft_store_response_invalid" }, 503);
-          return json({
-            ok: true,
-            duplicate: true,
-            mode: "operator_triggered_research_to_authoring_brief",
-            execution: "local_deterministic_no_external_ai",
-            artifact: summary,
-            research: { sources_checked: 0, sources_succeeded: 0, signals: 0, evidence_retrieved: 0 },
-            claims_generated: false,
-            catalog_modified: false,
-            publication_authorized: false,
-          });
-        }
-
-        // Four fixed official feeds; reserve one unit before each outbound request.
-        await consumeContentResearchBudget(env, 4);
-        const discovery = await discoverResearchSignals({ now: Date.now(), lookbackDays: 14 });
-        if (!discovery.ok) return json({ ok: false, error: "research_sources_unavailable" }, 503);
-        const signals = Array.isArray(discovery.latest_signals) ? discovery.latest_signals.slice(0, 4) : [];
-        if (signals.length === 0) {
-          return json({
-            ok: true,
-            status: "no_fresh_research_signals",
-            mode: "operator_triggered_research_to_authoring_brief",
-            execution: "local_deterministic_no_external_ai",
-            research: { sources_checked: discovery.sources_checked, sources_succeeded: discovery.sources_succeeded, signals: 0, evidence_retrieved: 0 },
-            artifact_created: false,
-            claims_generated: false,
-            catalog_modified: false,
-            publication_authorized: false,
-          });
-        }
-
-        // Reserve only the number of source pages about to be fetched.
-        await consumeContentResearchBudget(env, signals.length);
-        const retrieval = await retrieveResearchEvidence(signals, { now: Date.now() });
-        const evidence = Array.isArray(retrieval.evidence)
-          ? retrieval.evidence.filter((item) => item?.status === "source_retrieved_not_fact_checked")
-          : [];
-        const brief = buildArticleAuthoringBrief({
-          topic: body.topic,
-          researchEvidence: evidence,
-          now: Date.now(),
-        });
-        if (!brief.prepared || !brief.draft) {
-          return json({
-            ok: false,
-            error: "authoring_brief_blocked",
-            reason: brief.reason || "research_evidence_insufficient",
-            research: {
-              sources_checked: discovery.sources_checked,
-              sources_succeeded: discovery.sources_succeeded,
-              signals: signals.length,
-              evidence_retrieved: evidence.length,
-            },
-            artifact_created: false,
-            claims_generated: false,
-            publication_authorized: false,
-          }, 422);
-        }
-
-        const persisted = await draftStub.createDraft(artifactId, brief.draft, evidence);
-        if (!persisted?.accepted || !persisted.artifact) {
-          const conflict = persisted?.reason === "artifact_id_conflict";
-          return json({ ok: false, error: conflict ? "authoring_idempotency_conflict" : "draft_persistence_rejected" }, conflict ? 409 : 422);
-        }
-        const summary = authoringArtifactSummary(persisted.artifact);
-        if (!summary) return json({ ok: false, error: "draft_store_response_invalid" }, 503);
-        return json({
-          ok: true,
-          duplicate: persisted.duplicate === true,
-          mode: "operator_triggered_research_to_authoring_brief",
-          execution: "local_deterministic_no_external_ai",
-          artifact: summary,
-          research: {
-            sources_checked: discovery.sources_checked,
-            sources_succeeded: discovery.sources_succeeded,
-            signals: signals.length,
-            evidence_retrieved: evidence.length,
-          },
-          claims_generated: false,
-          catalog_modified: false,
-          publication_authorized: false,
-          limitations: [
-            "human_authorship_required",
-            "source_excerpts_not_fact_checked_or_corroborated",
-            "no_ai_inference_or_paid_provider",
-            "no_catalog_or_publication_write",
-            "manual_operator_trigger_only",
-          ],
-        });
-      } catch (error) {
-        if (error?.status === 429) return json({ ok: false, error: "research_budget_exhausted" }, 429);
-        if (error?.status === 400) return json({ ok: false, error: "research_budget_exhausted_or_invalid" }, 429);
-        return json({ ok: false, error: "authoring_preparation_unavailable" }, 503);
-      }
+      // This path is intentionally fail-closed. The draft store and State Store
+      // are separate Durable Objects, so a read-then-write control check cannot
+      // atomically fence a draft commit against a concurrent emergency Pause.
+      // Keep authoring disabled until a same-transaction durable fence exists.
+      return json({
+        ok: false,
+        error: "authoring_route_disabled_pending_durable_pause_fencing",
+      }, 503);
     }
-
     if (url.pathname === "/internal/enqueue") {
       if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
       if (!isEnabled(env.AGENT_ENABLED) || env.AGENT_PAUSED !== "false") {
@@ -1318,13 +1390,60 @@ const worker = {
         }
       }
       try {
-        const result = await writeStateStore(env, "/control/" + action, {
-          actor,
-          requestId: crypto.randomUUID(),
-          ...(body.reason === undefined ? {} : { reason: body.reason }),
-          ...(action === "resume" ? { expectedVersion } : {}),
-        });
-        return json({ ok: true, changed: result.changed, control: result.control });
+        const result = action === "pause"
+          ? await pauseRuntimeControl(env, { actor, requestId: crypto.randomUUID(), ...(body.reason === undefined ? {} : { reason: body.reason }) })
+          : await writeStateStore(env, "/control/resume", { actor, requestId: crypto.randomUUID(), ...(body.reason === undefined ? {} : { reason: body.reason }), expectedVersion });
+        if (action === "resume") {
+          try {
+            await syncDraftStoreControl(env, result.control);
+          } catch {
+            // Resume is a two-store transition. If authoring cannot be unfenced,
+            // conditionally close runtime admission again at the exact version
+            // produced by this Resume. A newer operator decision must win.
+            let compensation = { attempted: true, ok: false, error: "runtime_control_compensation_failed" };
+            let currentControl = null;
+            try {
+              const paused = await pauseRuntimeControl(env, {
+                actor,
+                requestId: crypto.randomUUID(),
+                reason: "compensate_resume_after_draft_store_sync_failure",
+                expectedVersion: result.control.version,
+              });
+              currentControl = paused.control;
+              compensation = {
+                attempted: true,
+                ok: paused.control?.paused === true,
+                state_store_paused: paused.control?.paused === true,
+                draft_store_sync: paused.draftStoreSync,
+                ...(paused.draftStoreSync?.ok === true ? {} : { error: "draft_store_pause_sync_failed" }),
+              };
+            } catch (compensationError) {
+              compensation = {
+                attempted: true,
+                ok: false,
+                error: compensationError?.status === 409
+                  ? "runtime_control_version_conflict"
+                  : "runtime_control_compensation_failed",
+              };
+              try { currentControl = (await readStateStore(env, "/control")).control ?? null; } catch {}
+            }
+            return json({
+              ok: false,
+              error: "resume_draft_store_sync_failed",
+              resume_committed_control: result.control,
+              control: currentControl,
+              compensation,
+              draft_store_sync: { ok: false },
+            }, 503);
+          }
+        }
+        return json({
+          ok: action === "pause" ? result.draftStoreSync?.ok === true : true,
+          ...(action === "pause" && result.draftStoreSync?.ok !== true ? { error: "draft_store_pause_sync_failed" } : {}),
+          changed: result.changed,
+          control: result.control,
+          ...(action === "pause" ? { draft_store_sync: result.draftStoreSync } : {})
+        }, action === "pause" && result.draftStoreSync?.ok !== true ? 503 : 200);
       } catch (error) {
         if (error?.status === 409) {
           return json({ ok: false, error: "runtime_control_version_conflict" }, 409);

@@ -60,7 +60,10 @@ export async function verifyGoogleReviewerIdToken(token, {
   const allowlist = new Set(allowedEmails
     .filter(email => validString(email, 254))
     .map(email => email.trim().toLowerCase()));
-  if (allowlist.size === 0) return failure("google_oidc_allowlist_invalid");
+  // Google is authoritative for Gmail mailbox ownership; a verified third-party address can later change owners.
+  if (allowlist.size === 0 || [...allowlist].some(email => !/^[^@\s]+@gmail\.com$/.test(email))) {
+    return failure("google_oidc_allowlist_invalid");
+  }
 
   if (!validString(token, MAX_TOKEN_CHARS)) return failure("google_id_token_invalid");
   const parts = token.split(".");

@@ -7,6 +7,7 @@ const MAX_CANDIDATE_BYTES = 8192;
 const MAX_EVIDENCE_PER_CHECK = 5;
 const MAX_AUDIT_EVENTS_PER_UTC_DAY = 100;
 const MAX_AUDIT_EVENTS_TOTAL = 10000;
+const MAX_DISCOVERY_SCANS = 10000;
 const MAX_EVIDENCE_TITLE_CHARS = 180;
 const MAX_EVIDENCE_EXCERPT_CHARS = 1000;
 const REQUIRED_CHECKS = [
@@ -77,6 +78,13 @@ function validateCandidate(candidate) {
     return { ok: false, reason: "candidate_too_large" };
   }
   return { ok: true, json, releaseAt };
+}
+
+function candidateReleaseIdentity(candidate) {
+  return JSON.stringify([
+    candidate.latest_release.source_url,
+    candidate.latest_release.published_at
+  ]);
 }
 
 function safeCandidate(row) {
@@ -165,6 +173,13 @@ export class AgentAIBankCandidateStore {
       "cursor TEXT NOT NULL, scan_id TEXT NOT NULL, updated_at TEXT NOT NULL, " +
       "batch_sha256 TEXT NOT NULL DEFAULT '')"
     );
+    this.ctx.storage.sql.exec(
+      "CREATE TABLE IF NOT EXISTS ai_bank_discovery_scans (" +
+      "scan_id TEXT PRIMARY KEY, cursor TEXT NOT NULL, batch_sha256 TEXT NOT NULL, committed_at TEXT NOT NULL)"
+    );
+    this.ctx.storage.sql.exec(
+      "CREATE INDEX IF NOT EXISTS ai_bank_discovery_scans_committed ON ai_bank_discovery_scans(committed_at)"
+    );
     const cursorColumns = this.ctx.storage.sql.exec(
       "PRAGMA table_info(ai_bank_discovery_cursor)"
     ).toArray();
@@ -173,6 +188,11 @@ export class AgentAIBankCandidateStore {
         "ALTER TABLE ai_bank_discovery_cursor ADD COLUMN batch_sha256 TEXT NOT NULL DEFAULT ''"
       );
     }
+    this.ctx.storage.sql.exec(
+      "INSERT OR IGNORE INTO ai_bank_discovery_scans (scan_id, cursor, batch_sha256, committed_at) " +
+      "SELECT scan_id, cursor, batch_sha256, updated_at FROM ai_bank_discovery_cursor " +
+      "WHERE batch_sha256 <> ''"
+    );
     this.ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS ai_bank_review_evidence (" +
       "evidence_id TEXT PRIMARY KEY, candidate_id TEXT NOT NULL, check_type TEXT NOT NULL, " +
@@ -199,6 +219,21 @@ export class AgentAIBankCandidateStore {
     this.ctx.storage.sql.exec(
       "INSERT OR IGNORE INTO ai_bank_review_evidence_releases (evidence_id, candidate_release_url, associated_at) " +
       "SELECT evidence_id, candidate_release_url, submitted_at FROM ai_bank_review_evidence WHERE candidate_release_url <> ''"
+    );
+    // Evidence text is release-specific even when the publisher URL is mutable
+    // or reused. Keep the shared evidence identity/status, but preserve the
+    // exact title, excerpt, and submission time for each release association.
+    this.ctx.storage.sql.exec(
+      "CREATE TABLE IF NOT EXISTS ai_bank_review_evidence_release_details (" +
+      "evidence_id TEXT NOT NULL, candidate_release_url TEXT NOT NULL, " +
+      "source_title TEXT NOT NULL, excerpt TEXT NOT NULL, submitted_at TEXT NOT NULL, " +
+      "PRIMARY KEY(evidence_id, candidate_release_url))"
+    );
+    this.ctx.storage.sql.exec(
+      "INSERT OR IGNORE INTO ai_bank_review_evidence_release_details " +
+      "(evidence_id, candidate_release_url, source_title, excerpt, submitted_at) " +
+      "SELECT e.evidence_id, r.candidate_release_url, e.source_title, e.excerpt, e.submitted_at " +
+      "FROM ai_bank_review_evidence e JOIN ai_bank_review_evidence_releases r ON r.evidence_id = e.evidence_id"
     );
     this.ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS ai_bank_evidence_audit_events (" +
@@ -282,10 +317,24 @@ export class AgentAIBankCandidateStore {
       const current = this.ctx.storage.sql.exec(
         "SELECT cursor, scan_id, updated_at, batch_sha256 FROM ai_bank_discovery_cursor WHERE singleton_id = 1"
       ).toArray()[0];
+      const priorScan = this.ctx.storage.sql.exec(
+        "SELECT cursor, batch_sha256 FROM ai_bank_discovery_scans WHERE scan_id = ?",
+        scanId
+      ).toArray()[0];
+      if (priorScan) {
+        if (priorScan.cursor !== nextCursor || priorScan.batch_sha256 !== batchSha256) {
+          return { accepted: false, reason: "discovery_scan_id_reused", cursor_advanced: false };
+        }
+        const total = this.ctx.storage.sql.exec(
+          "SELECT COUNT(*) AS count FROM ai_bank_candidates"
+        ).one().count;
+        return { accepted: true, duplicate: true, inserted: 0, updated: 0, unchanged: 0,
+          total, cursor: current?.cursor ?? priorScan.cursor, scan_id: scanId, cursor_advanced: false,
+          catalog_write_authorized: false };
+      }
       if (current?.scan_id === scanId) {
         // A legacy cursor has no immutable batch digest. Candidate rows are
-        // mutable (last_seen_at and metadata can change), so they cannot safely
-        // reconstruct the originally committed batch identity. Fail closed.
+        // mutable (last_seen_at and metadata can change), so fail closed.
         const sameBatch = current.cursor === nextCursor &&
           current.batch_sha256 !== "" && current.batch_sha256 === batchSha256;
         if (!sameBatch) {
@@ -301,9 +350,19 @@ export class AgentAIBankCandidateStore {
       if (current && cursorMs <= Date.parse(current.cursor)) {
         return { accepted: false, reason: "discovery_cursor_not_monotonic", cursor_advanced: false };
       }
+      const scanCount = this.ctx.storage.sql.exec(
+        "SELECT COUNT(*) AS count FROM ai_bank_discovery_scans"
+      ).one().count;
+      if (scanCount >= MAX_DISCOVERY_SCANS) {
+        return { accepted: false, reason: "discovery_scan_history_capacity_reached", cursor_advanced: false };
+      }
 
       const result = writeValidatedCandidateBatch(this.ctx, batch.validated, now);
       const timestamp = new Date(now).toISOString();
+      this.ctx.storage.sql.exec(
+        "INSERT INTO ai_bank_discovery_scans (scan_id, cursor, batch_sha256, committed_at) VALUES (?, ?, ?, ?)",
+        scanId, nextCursor, batchSha256, timestamp
+      );
       this.ctx.storage.sql.exec(
         "INSERT INTO ai_bank_discovery_cursor (singleton_id, cursor, scan_id, updated_at, batch_sha256) VALUES (1, ?, ?, ?, ?) " +
         "ON CONFLICT(singleton_id) DO UPDATE SET cursor = excluded.cursor, scan_id = excluded.scan_id, updated_at = excluded.updated_at, batch_sha256 = excluded.batch_sha256",
@@ -334,7 +393,7 @@ export class AgentAIBankCandidateStore {
     return row ? safeCandidate(row) : null;
   }
 
-  async submitAuthorizedReviewEvidence(candidateId, evidence, sessionToken, eventId, reviewedReleaseUrl, authConfig, now = Date.now()) {
+  async submitAuthorizedReviewEvidence(candidateId, evidence, sessionToken, eventId, reviewedReleaseIdentity, authConfig, now = Date.now()) {
     const authorization = await authorizeAIBankEvidenceWriter(sessionToken, authConfig, eventId, now);
     if (!authorization.authorized) {
       return { accepted: false, reason: authorization.reason || "evidence_writer_not_authorized" };
@@ -347,7 +406,7 @@ export class AgentAIBankCandidateStore {
     }
     const fingerprintPayload = JSON.stringify({
       candidate_id: candidateId,
-      reviewed_release_url: reviewedReleaseUrl,
+      reviewed_release_identity: reviewedReleaseIdentity,
       check_type: evidence.check_type,
       source_title: typeof evidence.source_title === "string" ? evidence.source_title.trim() : null,
       source_url: evidence.source_url,
@@ -382,7 +441,7 @@ export class AgentAIBankCandidateStore {
       if (dailyAuditCount >= MAX_AUDIT_EVENTS_PER_UTC_DAY) {
         return { accepted: false, reason: "evidence_audit_daily_limit_reached" };
       }
-      const result = this.#submitReviewEvidence(candidateId, evidence, reviewedReleaseUrl, now);
+      const result = this.#submitReviewEvidence(candidateId, evidence, reviewedReleaseIdentity, now);
       if (!result.accepted) return result;
       this.ctx.storage.sql.exec(
         "INSERT INTO ai_bank_evidence_audit_events (event_id, actor_subject, actor_email, request_sha256, evidence_id, recorded_at) VALUES (?, ?, ?, ?, ?, ?)",
@@ -398,17 +457,17 @@ export class AgentAIBankCandidateStore {
     });
   }
 
-  #submitReviewEvidence(candidateId, evidence, reviewedReleaseUrl, now = Date.now()) {
+  #submitReviewEvidence(candidateId, evidence, reviewedReleaseIdentity, now = Date.now()) {
     const candidateRow = this.ctx.storage.sql.exec(
       "SELECT * FROM ai_bank_candidates WHERE candidate_id = ?", candidateId
     ).toArray()[0];
     const candidate = candidateRow ? safeCandidate(candidateRow) : null;
     if (!candidate) return { accepted: false, reason: "candidate_not_found" };
-    if (typeof reviewedReleaseUrl !== "string" || !reviewedReleaseUrl.trim() || reviewedReleaseUrl.length > 1000) {
+    if (typeof reviewedReleaseIdentity !== "string" || !reviewedReleaseIdentity.trim() || reviewedReleaseIdentity.length > 1200) {
       return { accepted: false, reason: "reviewed_release_identity_required" };
     }
-    const releaseUrl = candidate.candidate.latest_release.source_url;
-    if (reviewedReleaseUrl !== releaseUrl) return { accepted: false, reason: "stale_candidate_release" };
+    const releaseUrl = candidateReleaseIdentity(candidate.candidate);
+    if (reviewedReleaseIdentity !== releaseUrl) return { accepted: false, reason: "stale_candidate_release" };
     if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) {
       return { accepted: false, reason: "invalid_evidence" };
     }
@@ -475,6 +534,11 @@ export class AgentAIBankCandidateStore {
       "INSERT INTO ai_bank_review_evidence_releases (evidence_id, candidate_release_url, associated_at) VALUES (?, ?, ?)",
       evidenceId, releaseUrl, submittedAt
     );
+    this.ctx.storage.sql.exec(
+      "INSERT INTO ai_bank_review_evidence_release_details " +
+      "(evidence_id, candidate_release_url, source_title, excerpt, submitted_at) VALUES (?, ?, ?, ?, ?)",
+      evidenceId, releaseUrl, evidence.source_title.trim(), evidence.excerpt.trim(), submittedAt
+    );
     return {
       accepted: true,
       evidence_id: evidenceId,
@@ -492,7 +556,11 @@ export class AgentAIBankCandidateStore {
       throw new TypeError("invalid_evidence_list_limit");
     }
     return this.ctx.storage.sql.exec(
-      "SELECT e.evidence_id, e.candidate_id, e.check_type, e.source_title, e.source_url, e.excerpt, e.source_status, e.review_status, e.submitted_at, r.candidate_release_url, r.associated_at FROM ai_bank_review_evidence e JOIN ai_bank_review_evidence_releases r ON r.evidence_id = e.evidence_id WHERE e.candidate_id = ? ORDER BY r.associated_at ASC, e.evidence_id ASC LIMIT ?",
+      "SELECT e.evidence_id, e.candidate_id, e.check_type, d.source_title, e.source_url, d.excerpt, e.source_status, e.review_status, d.submitted_at, r.candidate_release_url AS candidate_release_identity, r.associated_at " +
+      "FROM ai_bank_review_evidence e " +
+      "JOIN ai_bank_review_evidence_releases r ON r.evidence_id = e.evidence_id " +
+      "JOIN ai_bank_review_evidence_release_details d ON d.evidence_id = r.evidence_id AND d.candidate_release_url = r.candidate_release_url " +
+      "WHERE e.candidate_id = ? ORDER BY d.submitted_at ASC, e.evidence_id ASC LIMIT ?",
       candidateId, limit
     ).toArray().map(row => ({ ...row }));
   }
@@ -502,7 +570,7 @@ export class AgentAIBankCandidateStore {
     if (!stored) return null;
     const rows = this.ctx.storage.sql.exec(
       "SELECT e.check_type, COUNT(*) AS evidence_count FROM ai_bank_review_evidence e JOIN ai_bank_review_evidence_releases r ON r.evidence_id = e.evidence_id WHERE e.candidate_id = ? AND r.candidate_release_url = ? GROUP BY e.check_type",
-      candidateId, stored.candidate.latest_release.source_url
+      candidateId, candidateReleaseIdentity(stored.candidate)
     ).toArray();
     const counts = new Map(rows.map(row => [row.check_type, row.evidence_count]));
     const checklist = REQUIRED_CHECKS.map(checkType => ({
@@ -512,11 +580,12 @@ export class AgentAIBankCandidateStore {
       verified: false
     }));
     const evidence = this.ctx.storage.sql.exec(
-      "SELECT e.evidence_id, e.check_type, e.source_title, e.source_url, e.excerpt, e.source_status, e.review_status, e.submitted_at " +
+      "SELECT e.evidence_id, e.check_type, d.source_title, e.source_url, d.excerpt, e.source_status, e.review_status, d.submitted_at " +
       "FROM ai_bank_review_evidence e JOIN ai_bank_review_evidence_releases r ON r.evidence_id = e.evidence_id " +
+      "JOIN ai_bank_review_evidence_release_details d ON d.evidence_id = r.evidence_id AND d.candidate_release_url = r.candidate_release_url " +
       "WHERE e.candidate_id = ? AND r.candidate_release_url = ? " +
-      "ORDER BY e.check_type ASC, e.submitted_at ASC, e.evidence_id ASC LIMIT 30",
-      candidateId, stored.candidate.latest_release.source_url
+      "ORDER BY e.check_type ASC, d.submitted_at ASC, e.evidence_id ASC LIMIT 30",
+      candidateId, candidateReleaseIdentity(stored.candidate)
     ).toArray().map(row => ({
       ...row,
       verified: false,

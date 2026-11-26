@@ -99,6 +99,188 @@ describe("article evidence readiness", () => {
     expect(missingMarkerResult.issues[0].code).toBe("claim_inline_citation_missing_from_body");
   });
 
+  it("rejects a negated sentence that merely contains the reviewed claim wording", async () => {
+    const reviewRecord = await makeReview();
+    const draft = makeDraft();
+    draft.body_markdown = draft.body_markdown.replace(
+      ledger.claims[0].claim,
+      "It is false that " + ledger.claims[0].claim
+    );
+    const result = await assessArticleEvidenceReadiness({
+      draft,
+      ledger,
+      reviewRecord,
+      authenticatedReviewer: { authenticated: true, reviewer_ref: reviewRecord.reviewer_ref },
+      now
+    });
+    expect(result.status).toBe("article_claim_evidence_not_ready");
+    expect(result.issues).toContainEqual({
+      code: "reviewed_claim_missing_from_article_body",
+      claim_id: "claim-1"
+    });
+  });
+
+  it("does not accept inline-code citation markers as prose citations", async () => {
+    const reviewRecord = await makeReview();
+    const draft = makeDraft();
+    draft.body_markdown = draft.body_markdown.replace(
+      " [1] [2] [3]. ",
+      " `[1]` `[2]` `[3]`. "
+    );
+    const result = await assessArticleEvidenceReadiness({
+      draft,
+      ledger,
+      reviewRecord,
+      authenticatedReviewer: { authenticated: true, reviewer_ref: reviewRecord.reviewer_ref },
+      now
+    });
+    expect(result.status).toBe("article_claim_evidence_not_ready");
+    expect(result.issues).toContainEqual({
+      code: "claim_inline_citation_missing_from_body",
+      claim_id: "claim-1",
+      citation_index: 1
+    });
+    expect(result.issues).toContainEqual({
+      code: "claim_inline_citation_missing_from_body",
+      claim_id: "claim-1",
+      citation_index: 2
+    });
+  });
+
+  it("does not count citations inside multi-backtick inline-code spans as prose citations", async () => {
+    const reviewRecord = await makeReview();
+    const draft = makeDraft();
+    draft.body_markdown = draft.body_markdown.replace(
+      " [1] [2] [3]. ",
+      " ``example ` [1] [2] [3]``. "
+    );
+    const result = await assessArticleEvidenceReadiness({
+      draft,
+      ledger,
+      reviewRecord,
+      authenticatedReviewer: { authenticated: true, reviewer_ref: reviewRecord.reviewer_ref },
+      now
+    });
+    expect(result.status).toBe("article_claim_evidence_not_ready");
+    expect(result.issues).toContainEqual({
+      code: "claim_inline_citation_missing_from_body",
+      claim_id: "claim-1",
+      citation_index: 1
+    });
+    expect(result.issues).toContainEqual({
+      code: "claim_inline_citation_missing_from_body",
+      claim_id: "claim-1",
+      citation_index: 2
+    });
+  });
+  it("preserves Markdown link labels when matching reviewed prose claims", async () => {
+    const reviewRecord = await makeReview();
+    const draft = makeDraft();
+    draft.body_markdown = draft.body_markdown.replace(
+      ledger.claims[0].claim,
+      "The system supports [bounded research discovery](https://example.com/research)."
+    );
+    const result = await assessArticleEvidenceReadiness({
+      draft,
+      ledger,
+      reviewRecord,
+      authenticatedReviewer: { authenticated: true, reviewer_ref: reviewRecord.reviewer_ref },
+      now
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it("joins soft-wrapped claim lines within a paragraph without crossing block boundaries", async () => {
+    const reviewRecord = await makeReview();
+    const draft = makeDraft();
+    draft.body_markdown = draft.body_markdown.replace(
+      ledger.claims[0].claim,
+      "The system supports\nbounded research discovery."
+    );
+    const result = await assessArticleEvidenceReadiness({
+      draft,
+      ledger,
+      reviewRecord,
+      authenticatedReviewer: { authenticated: true, reviewer_ref: reviewRecord.reviewer_ref },
+      now
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it("attaches a citation group to the preceding claim and splits the next sentence without a trailing period", async () => {
+    const reviewRecord = await makeReview();
+    const draft = makeDraft();
+    draft.body_markdown = draft.body_markdown.replace(
+      ledger.claims[0].claim + " [1] [2] [3]. ",
+      ledger.claims[0].claim + " [1] [2] [3] Further explanation follows. "
+    );
+    const result = await assessArticleEvidenceReadiness({
+      draft,
+      ledger,
+      reviewRecord,
+      authenticatedReviewer: { authenticated: true, reviewer_ref: reviewRecord.reviewer_ref },
+      now
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it("keeps citation markers inside a sentence rather than splitting the reviewed assertion", async () => {
+    const reviewRecord = await makeReview();
+    const draft = makeDraft();
+    draft.body_markdown = draft.body_markdown.replace(
+      ledger.claims[0].claim + " [1] [2] [3]. ",
+      "The system supports [1] bounded research discovery [2]. "
+    );
+    const result = await assessArticleEvidenceReadiness({
+      draft,
+      ledger,
+      reviewRecord,
+      authenticatedReviewer: { authenticated: true, reviewer_ref: reviewRecord.reviewer_ref },
+      now
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it("keeps in-sentence citation groups attached to the complete reviewed assertion", async () => {
+    const originalClaim = ledger.claims[0].claim;
+    ledger.claims[0].claim = "The system supports bounded research discovery under strict limits.";
+    try {
+      const reviewRecord = await makeReview();
+      const draft = makeDraft();
+      draft.body_markdown = draft.body_markdown.replace(
+        ledger.claims[0].claim + " [1] [2] [3]. ",
+        "The system supports bounded research discovery [1] [2] under strict limits. "
+      );
+      const result = await assessArticleEvidenceReadiness({
+        draft,
+        ledger,
+        reviewRecord,
+        authenticatedReviewer: { authenticated: true, reviewer_ref: reviewRecord.reviewer_ref },
+        now
+      });
+      expect(result.ok).toBe(true);
+    } finally {
+      ledger.claims[0].claim = originalClaim;
+    }
+  });
+
+  it("retains the complete citation group when a closing period follows it", async () => {
+    const reviewRecord = await makeReview();
+    const draft = makeDraft();
+    draft.body_markdown = draft.body_markdown.replace(
+      ledger.claims[0].claim + " [1] [2] [3]. ",
+      ledger.claims[0].claim + " [1] [2]. Further explanation follows. "
+    );
+    const result = await assessArticleEvidenceReadiness({
+      draft,
+      ledger,
+      reviewRecord,
+      authenticatedReviewer: { authenticated: true, reviewer_ref: reviewRecord.reviewer_ref },
+      now
+    });
+    expect(result.ok).toBe(true);
+  });
+
   it("does not let citations in an unrelated paragraph satisfy a reviewed claim", async () => {
     const reviewRecord = await makeReview();
     const draft = makeDraft();

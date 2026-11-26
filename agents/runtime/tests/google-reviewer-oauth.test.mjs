@@ -9,7 +9,7 @@ const env = {
   GOOGLE_REVIEWER_CLIENT_ID: "preview-test-client-id-abcdefghijklmnopqrstuvwxyz.apps.googleusercontent.com",
   GOOGLE_REVIEWER_CLIENT_SECRET: "test-google-client-secret-value-abcdefghijklmnopqrstuvwxyz0123456789",
   GOOGLE_REVIEWER_REDIRECT_URI: origin + "/auth/google/callback",
-  GOOGLE_REVIEWER_ALLOWED_EMAILS: "reviewer@example.com",
+  GOOGLE_REVIEWER_ALLOWED_EMAILS: "reviewer@gmail.com",
   GOOGLE_REVIEWER_STATE_SECRET: "state-secret-for-tests-only-abcdefghijklmnopqrstuvwxyz0123456789",
   GOOGLE_REVIEWER_SESSION_SECRET: "session-secret-for-tests-only-zyxwvutsrqponmlkjihgfedcba9876543210",
   AGENT_REVIEWER_AUTH_STORE: {
@@ -22,21 +22,58 @@ const env = {
   }
 };
 
+function startRequest(path = "/auth/google/start", clientIp = "203.0.113.9") {
+  return new Request(origin + path, { headers: { "cf-connecting-ip": clientIp } });
+}
+
 describe("Google reviewer OAuth session flow", () => {
   it("fails closed when reviewer auth is disabled or secrets are missing", async () => {
     const disabled = await handleGoogleReviewerAuth(
-      new Request(origin + "/auth/google/start"),
+      startRequest("/auth/google/start"),
       { ...env, AGENT_REVIEWER_AUTH_ENABLED: "false" },
       { now }
     );
     const incomplete = await handleGoogleReviewerAuth(
-      new Request(origin + "/auth/google/start"),
+      startRequest("/auth/google/start"),
       { ...env, GOOGLE_REVIEWER_SESSION_SECRET: "" },
       { now }
     );
     expect(disabled.status).toBe(503);
     expect(incomplete.status).toBe(503);
     expect(await disabled.json()).toMatchObject({ error: "reviewer_auth_not_configured" });
+  });
+
+  it("rejects third-party email allowlists because Google cannot guarantee continued ownership", async () => {
+    const response = await handleGoogleReviewerAuth(
+      startRequest("/auth/google/start"),
+      { ...env, GOOGLE_REVIEWER_ALLOWED_EMAILS: "reviewer@example.org" },
+      { now }
+    );
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ error: "reviewer_auth_not_configured" });
+  });
+
+  it("fails closed when the trusted Cloudflare client IP is missing or malformed", async () => {
+    let rateLimitCalls = 0;
+    const testEnv = {
+      ...env,
+      AGENT_REVIEWER_AUTH_STORE: {
+        getByName() {
+          return {
+            consumeStartRateLimit: async () => { rateLimitCalls += 1; return { allowed: true, remaining: 9 }; }
+          };
+        }
+      }
+    };
+    const missing = await handleGoogleReviewerAuth(new Request(origin + "/auth/google/start"), testEnv, { now });
+    const malformed = await handleGoogleReviewerAuth(
+      new Request(origin + "/auth/google/start", { headers: { "cf-connecting-ip": "203.0.113.9, 198.51.100.4" } }),
+      testEnv,
+      { now }
+    );
+    expect(missing.status).toBe(503);
+    expect(malformed.status).toBe(503);
+    expect(rateLimitCalls).toBe(0);
   });
 
   it("starts a server-bound authorization-code flow with nonce and S256 PKCE", async () => {
@@ -56,7 +93,7 @@ describe("Google reviewer OAuth session flow", () => {
       }
     };
     const response = await handleGoogleReviewerAuth(
-      new Request(origin + "/auth/google/start"),
+      startRequest("/auth/google/start"),
       testEnv,
       { now }
     );
@@ -96,15 +133,15 @@ describe("Google reviewer OAuth session flow", () => {
       }
     };
     const operator = await handleGoogleReviewerAuth(
-      new Request(origin + "/auth/google/start?return_to=%2Foperator-console"), testEnv, { now }
+      startRequest("/auth/google/start?return_to=%2Foperator-console"), testEnv, { now }
     );
     expect(operator.status).toBe(302);
     expect(created[5]).toBe("/operator-console");
     const external = await handleGoogleReviewerAuth(
-      new Request(origin + "/auth/google/start?return_to=https%3A%2F%2Fattacker.example"), testEnv, { now }
+      startRequest("/auth/google/start?return_to=https%3A%2F%2Fattacker.example"), testEnv, { now }
     );
     const duplicate = await handleGoogleReviewerAuth(
-      new Request(origin + "/auth/google/start?return_to=%2Freviewer-console&return_to=%2Foperator-console"), testEnv, { now }
+      startRequest("/auth/google/start?return_to=%2Freviewer-console&return_to=%2Foperator-console"), testEnv, { now }
     );
     expect(external.status).toBe(400);
     expect(duplicate.status).toBe(400);
@@ -135,7 +172,7 @@ describe("Google reviewer OAuth session flow", () => {
       }
     };
     const start = await handleGoogleReviewerAuth(
-      new Request(origin + "/auth/google/start"),
+      startRequest("/auth/google/start"),
       testEnv,
       { now }
     );
@@ -184,7 +221,7 @@ describe("Google reviewer OAuth session flow", () => {
     };
 
     const start = await handleGoogleReviewerAuth(
-      new Request(origin + "/auth/google/start?return_to=%2Freviewer-console"),
+      startRequest("/auth/google/start?return_to=%2Freviewer-console"),
       testEnv,
       { now }
     );
@@ -208,7 +245,7 @@ describe("Google reviewer OAuth session flow", () => {
       iss: "https://accounts.google.com",
       aud: env.GOOGLE_REVIEWER_CLIENT_ID,
       sub: "google-subject-e2e-123",
-      email: "reviewer@example.com",
+      email: "reviewer@gmail.com",
       email_verified: true,
       nonce: authorization.searchParams.get("nonce"),
       iat: Math.floor(now / 1000) - 10,
@@ -271,7 +308,7 @@ describe("Google reviewer OAuth session flow", () => {
       reviewer: {
         provider: "google",
         subject: "google-subject-e2e-123",
-        email: "reviewer@example.com",
+        email: "reviewer@gmail.com",
         reviewer_ref: "google:google-subject-e2e-123"
       }
     });
@@ -286,7 +323,7 @@ describe("Google reviewer OAuth session flow", () => {
     expect(me.status).toBe(200);
     expect(await me.json()).toMatchObject({
       authenticated: true,
-      reviewer: { email: "reviewer@example.com" },
+      reviewer: { email: "reviewer@gmail.com" },
       publication_authorized: false
     });
   });
@@ -361,7 +398,7 @@ describe("Google reviewer OAuth session flow", () => {
     const base = {
       provider: "google",
       sub: "google-subject-immutable-123",
-      email: "reviewer@example.com",
+      email: "reviewer@gmail.com",
       reviewer_ref: "google:google-subject-immutable-123",
       iat: Math.floor(now / 1000) - 10,
       exp: Math.floor(now / 1000) + 600
@@ -379,7 +416,7 @@ describe("Google reviewer OAuth session flow", () => {
 
   it("rejects a Preview-shaped callback on any other Cloudflare account subdomain", async () => {
     const response = await handleGoogleReviewerAuth(
-      new Request(origin + "/auth/google/start"),
+      startRequest("/auth/google/start"),
       {
         ...env,
         GOOGLE_REVIEWER_REDIRECT_URI: "https://ai-thuc-chien-agent-runtime-preview.attacker.workers.dev/auth/google/callback"
@@ -392,7 +429,7 @@ describe("Google reviewer OAuth session flow", () => {
 
   it("rejects a Production Worker callback URL even when all other OAuth settings are valid", async () => {
     const response = await handleGoogleReviewerAuth(
-      new Request(origin + "/auth/google/start"),
+      startRequest("/auth/google/start"),
       {
         ...env,
         GOOGLE_REVIEWER_REDIRECT_URI: "https://ai-thuc-chien-blog.manhdungub.workers.dev/auth/google/callback"

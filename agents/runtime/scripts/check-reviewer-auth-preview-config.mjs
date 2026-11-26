@@ -41,7 +41,7 @@ export function inspectReviewerAuthPreviewConfig(env = {}, previewConfig = {}) {
     : [];
   const allowlistValid = emails.length === 1 &&
     emails[0].length <= 254 &&
-    /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emails[0]);
+    /^[^@\s]+@gmail\.com$/.test(emails[0]);
   const secretsDistinct = validCredential(env.GOOGLE_REVIEWER_STATE_SECRET) &&
     validCredential(env.GOOGLE_REVIEWER_SESSION_SECRET) &&
     env.GOOGLE_REVIEWER_STATE_SECRET !== env.GOOGLE_REVIEWER_SESSION_SECRET;
@@ -55,7 +55,7 @@ export function inspectReviewerAuthPreviewConfig(env = {}, previewConfig = {}) {
     previewVars.AGENT_SCHEDULER_ENABLED === "false" &&
     previewVars.AGENT_RECOVERY_ALARM_ENABLED === "false";
   const previewConfigIsolated = previewConfig.name === PREVIEW_NAME &&
-    previewConfig.main === "./src/worker.mjs" &&
+    previewConfig.main === "./src/worker-preview-recovery.mjs" &&
     previewConfig.workers_dev === true &&
     previewConfig.preview_urls === false &&
     hasNoProductionBindings(previewConfig);

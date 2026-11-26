@@ -1,4 +1,5 @@
 import { reviewArticleDraft } from "./article-quality-gate.mjs";
+import { removeInlineCodeSpans } from "./markdown-inline-code.mjs";
 import { verifyHumanClaimReviewRecord } from "./human-review-record-verifier.mjs";
 
 function removeFencedCode(markdown) {
@@ -20,9 +21,57 @@ function removeFencedCode(markdown) {
   return kept.join("\n");
 }
 
+function removeMarkdownLinks(markdown) {
+  return markdown
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1");
+}
+
+function proseCitationText(markdown) {
+  return removeMarkdownLinks(removeInlineCodeSpans(markdown));
+}
+
+function splitAssertionBlock(block) {
+  const assertions = [];
+  let start = 0;
+  const boundaries = /(?:[.!?。！？](?:\s*\[\d+\])*(?:[.!?。！？])?|\s*\[\d+\](?:\s*\[\d+\])*[.!?。！？])(?=\s+)/gu;
+  for (const match of block.matchAll(boundaries)) {
+    const end = match.index + match[0].length;
+    const separator = block.slice(end).match(/^\s+/u)?.[0] || "";
+    const nextStart = end + separator.length;
+    if (!separator || nextStart >= block.length) continue;
+    const assertion = block.slice(start, end).trim();
+    if (assertion) assertions.push(assertion);
+    start = nextStart;
+  }
+  const remainder = block.slice(start).trim();
+  if (remainder) assertions.push(remainder);
+  return assertions;
+}
+
+function splitProseAssertions(markdown) {
+  const prose = removeFencedCode(markdown);
+  return prose.split(/\n{2,}/).flatMap(paragraph => {
+    const blocks = [];
+    let current = "";
+    for (const line of paragraph.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      const startsBlock = /^(?:#{1,6}\s+|>\s*|[-*+]\s+|\d+[.)]\s+)/.test(trimmed);
+      if (startsBlock) {
+        if (current) blocks.push(current);
+        current = trimmed.replace(/^(?:#{1,6}\s+|>\s*|[-*+]\s+|\d+[.)]\s+)/, "");
+        continue;
+      }
+      current += (current ? " " : "") + trimmed;
+    }
+    if (current) blocks.push(current);
+    return blocks.flatMap(splitAssertionBlock);
+  });
+}
+
 function normalizeClaimText(value) {
-  return String(value ?? "")
-    .replace(/`+([^`]*?)`+/g, " ")
+  return removeInlineCodeSpans(String(value ?? ""))
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
     .replace(/<[^>]*>/g, " ")
@@ -45,7 +94,7 @@ function findUnmanifestedQuantitativeCandidates(markdown, reviewedClaims) {
     const sentences = withoutListMarkers.split(/(?<=[.!?。！？])\s+|\n+/u);
     for (const sentence of sentences) {
       const candidate = sentence
-        .replace(/!?\[[^\]]*\]\([^)]*\)/g, " ")
+        .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
         .replace(/\[\d+\]/g, " ")
         .replace(/https?:\/\/\S+/g, " ")
         .replace(/^\s*(?:[-*+]\s+|\d+[.)]\s+)/, "")
@@ -166,14 +215,15 @@ export async function assessArticleEvidenceReadiness({
   }
 
   const body = typeof draft.body_markdown === "string" ? draft.body_markdown : "";
-  const proseBody = removeFencedCode(body);
-  const paragraphs = proseBody.split(/\n\s*\n/);
+  const claimSentences = splitProseAssertions(body);
   for (const item of draft.claims) {
     const normalizedClaim = normalizeClaimText(item.claim);
-    const claimParagraph = normalizedClaim
-      ? paragraphs.find(paragraph => normalizeClaimText(paragraph).includes(normalizedClaim))
+    const claimSentence = normalizedClaim
+      ? claimSentences.find(sentence => normalizeClaimText(
+          proseCitationText(sentence).replace(/\[\d+\]/g, " ")
+        ) === normalizedClaim)
       : null;
-    if (!claimParagraph) {
+    if (!claimSentence) {
       claimIssues.push({
         code: "reviewed_claim_missing_from_article_body",
         claim_id: item.claim_id
@@ -206,7 +256,7 @@ export async function assessArticleEvidenceReadiness({
       continue;
     }
     for (const citationIndex of expectedCitationIndices) {
-      if (!claimParagraph.includes(`[${citationIndex}]`)) {
+      if (!proseCitationText(claimSentence).includes(`[${citationIndex}]`)) {
         claimIssues.push({
           code: "claim_inline_citation_missing_from_body",
           claim_id: item.claim_id,
