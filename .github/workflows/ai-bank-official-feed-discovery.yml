@@ -41,12 +41,36 @@ jobs:
           node --check scripts/ai-bank-feed-discovery.mjs
           node --check scripts/ai-bank-lead-triage.mjs
           node --check scripts/ai-bank-editorial-briefs.mjs
+          node --check agents/runtime/src/worker.mjs
 
       - name: Run offline RSS parser and size-limit fixtures
         run: node scripts/ai-bank-feed-discovery.mjs --self-test
 
       - name: Run AI Bank triage classification fixtures
         run: node scripts/ai-bank-lead-triage.mjs --self-test
+
+      - name: Install pinned local Cloudflare runtime simulator
+        run: |
+          mkdir -p "$RUNNER_TEMP/agent-runtime-audit"
+          cat > "$RUNNER_TEMP/agent-runtime-audit/package.json" <<'JSON'
+          {
+            "private": true,
+            "dependencies": {
+              "miniflare": "4.20260730.0"
+            },
+            "overrides": {
+              "miniflare": {
+                "sharp": "0.35.5",
+                "undici": "7.30.2"
+              }
+            }
+          }
+          JSON
+          npm install --prefix "$RUNNER_TEMP/agent-runtime-audit" --ignore-scripts --no-audit --no-fund
+          ln -s "$RUNNER_TEMP/agent-runtime-audit/node_modules" "$GITHUB_WORKSPACE/node_modules"
+
+      - name: Run focused AI Bank Worker endpoint tests
+        run: timeout --signal=TERM --kill-after=10s 180s node --experimental-loader ./agents/runtime/tests/cloudflare-workers-loader.mjs --test agents/runtime/tests/worker.test.mjs
 
       - name: Run repository workflow security and dispatch guards
         run: node scripts/test_secret_workflow_dispatch_guards.mjs
