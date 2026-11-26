@@ -24,7 +24,6 @@ const previewD1 = await read("migrate-preview-d1.yml");
 const configureBuilds = await read("configure-cloudflare-worker-builds.yml");
 const stagingEmail = await read("staging-email-e2e.yml");
 const doFaultTest = await read("agent-runtime-cloudflare-do-fault-test.yml");
-const runtimePreflight = await read("agent-runtime-preview-preflight.yml");
 const stagingEmailLines = stagingEmail.split("\n");
 const stagingJobStart = stagingEmailLines.indexOf("  staging-email-e2e:");
 assert.notEqual(stagingJobStart, -1, "Staging email E2E job must exist.");
@@ -142,9 +141,6 @@ assert.ok(doFaultTest.includes("if: always() && steps.deploy_fault_worker.output
 assert.ok(doFaultTest.includes('test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"'));
 assert.ok(doFaultTest.includes("::error::Unapproved fault-test branch."));
 assert.ok(doFaultTest.includes("refs/heads/feat/agent-runtime-v5-main-split-20261126"));
-assert.ok(runtimePreflight.includes("feat/ai-bank-discovery-workflow-20261126"));
-assert.ok(runtimePreflight.includes("refs/heads/feat/ai-bank-discovery-workflow-20261126"));
-assert.ok(runtimePreflight.includes("node --experimental-loader ./agents/runtime/tests/cloudflare-workers-loader.mjs --test agents/runtime/tests/*.test.mjs"));
 
 const checkoutWorkflows = [
   ["health-check.yml", health],

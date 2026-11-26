@@ -5,7 +5,7 @@ const feeds = [
   { name: "OpenAI News", url: "https://openai.com/news/rss.xml", host: "openai.com" },
   { name: "Google DeepMind", url: "https://deepmind.google/blog/rss.xml", host: "deepmind.google" },
   { name: "Hugging Face Blog", url: "https://huggingface.co/blog/feed.xml", host: "huggingface.co" },
-  { name: "Google AI", url: "https://blog.google/innovation-and-ai/technology/ai/rss/", host: "blog.google" },
+  { name: "Google AI", url: "https://blog.google/technology/ai/rss/", host: "blog.google" },
   { name: "AWS Machine Learning", url: "https://aws.amazon.com/blogs/machine-learning/feed/", host: "aws.amazon.com" }
 ];
 
