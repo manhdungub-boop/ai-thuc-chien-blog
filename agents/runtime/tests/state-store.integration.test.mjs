@@ -479,12 +479,7 @@ test("recovery alarm surfaces a transient re-arm failure so the platform can ret
     assert.equal(expiredClaim.status, 200);
     assert.equal(runningClaim.status, 200);
 
-    const forcedExpiry = await call(stub, "/__test/expire-and-fire", { taskId: expired.body.task.taskId });
-    assert.equal(forcedExpiry.body.task.state, "queued");
-    // Reclaim the task and force its lease expiry without firing the alarm,
-    // leaving a second, future lease to require a re-armed alarm.
-    const reclaimed = await call(stub, "/claim", { taskId: expired.body.task.taskId });
-    assert.equal(reclaimed.status, 200);
+    await call(stub, "/__test/expire-lease", { taskId: expired.body.task.taskId });
     const alarmBefore = await call(stub, "/__test/alarm-state");
     assert.equal(typeof alarmBefore.body.alarmAt, "number");
 
