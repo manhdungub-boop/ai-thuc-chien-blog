@@ -220,6 +220,21 @@ export class AgentAIBankCandidateStore {
       "INSERT OR IGNORE INTO ai_bank_review_evidence_releases (evidence_id, candidate_release_url, associated_at) " +
       "SELECT evidence_id, candidate_release_url, submitted_at FROM ai_bank_review_evidence WHERE candidate_release_url <> ''"
     );
+    // Evidence text is release-specific even when the publisher URL is mutable
+    // or reused. Keep the shared evidence identity/status, but preserve the
+    // exact title, excerpt, and submission time for each release association.
+    this.ctx.storage.sql.exec(
+      "CREATE TABLE IF NOT EXISTS ai_bank_review_evidence_release_details (" +
+      "evidence_id TEXT NOT NULL, candidate_release_url TEXT NOT NULL, " +
+      "source_title TEXT NOT NULL, excerpt TEXT NOT NULL, submitted_at TEXT NOT NULL, " +
+      "PRIMARY KEY(evidence_id, candidate_release_url))"
+    );
+    this.ctx.storage.sql.exec(
+      "INSERT OR IGNORE INTO ai_bank_review_evidence_release_details " +
+      "(evidence_id, candidate_release_url, source_title, excerpt, submitted_at) " +
+      "SELECT e.evidence_id, r.candidate_release_url, e.source_title, e.excerpt, e.submitted_at " +
+      "FROM ai_bank_review_evidence e JOIN ai_bank_review_evidence_releases r ON r.evidence_id = e.evidence_id"
+    );
     this.ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS ai_bank_evidence_audit_events (" +
       "event_id TEXT PRIMARY KEY, actor_subject TEXT NOT NULL, actor_email TEXT NOT NULL, " +
@@ -519,6 +534,11 @@ export class AgentAIBankCandidateStore {
       "INSERT INTO ai_bank_review_evidence_releases (evidence_id, candidate_release_url, associated_at) VALUES (?, ?, ?)",
       evidenceId, releaseUrl, submittedAt
     );
+    this.ctx.storage.sql.exec(
+      "INSERT INTO ai_bank_review_evidence_release_details " +
+      "(evidence_id, candidate_release_url, source_title, excerpt, submitted_at) VALUES (?, ?, ?, ?, ?)",
+      evidenceId, releaseUrl, evidence.source_title.trim(), evidence.excerpt.trim(), submittedAt
+    );
     return {
       accepted: true,
       evidence_id: evidenceId,
@@ -536,7 +556,11 @@ export class AgentAIBankCandidateStore {
       throw new TypeError("invalid_evidence_list_limit");
     }
     return this.ctx.storage.sql.exec(
-      "SELECT e.evidence_id, e.candidate_id, e.check_type, e.source_title, e.source_url, e.excerpt, e.source_status, e.review_status, e.submitted_at, r.candidate_release_url AS candidate_release_identity, r.associated_at FROM ai_bank_review_evidence e JOIN ai_bank_review_evidence_releases r ON r.evidence_id = e.evidence_id WHERE e.candidate_id = ? ORDER BY r.associated_at ASC, e.evidence_id ASC LIMIT ?",
+      "SELECT e.evidence_id, e.candidate_id, e.check_type, d.source_title, e.source_url, d.excerpt, e.source_status, e.review_status, d.submitted_at, r.candidate_release_url AS candidate_release_identity, r.associated_at " +
+      "FROM ai_bank_review_evidence e " +
+      "JOIN ai_bank_review_evidence_releases r ON r.evidence_id = e.evidence_id " +
+      "JOIN ai_bank_review_evidence_release_details d ON d.evidence_id = r.evidence_id AND d.candidate_release_url = r.candidate_release_url " +
+      "WHERE e.candidate_id = ? ORDER BY d.submitted_at ASC, e.evidence_id ASC LIMIT ?",
       candidateId, limit
     ).toArray().map(row => ({ ...row }));
   }
@@ -556,10 +580,11 @@ export class AgentAIBankCandidateStore {
       verified: false
     }));
     const evidence = this.ctx.storage.sql.exec(
-      "SELECT e.evidence_id, e.check_type, e.source_title, e.source_url, e.excerpt, e.source_status, e.review_status, e.submitted_at " +
+      "SELECT e.evidence_id, e.check_type, d.source_title, e.source_url, d.excerpt, e.source_status, e.review_status, d.submitted_at " +
       "FROM ai_bank_review_evidence e JOIN ai_bank_review_evidence_releases r ON r.evidence_id = e.evidence_id " +
+      "JOIN ai_bank_review_evidence_release_details d ON d.evidence_id = r.evidence_id AND d.candidate_release_url = r.candidate_release_url " +
       "WHERE e.candidate_id = ? AND r.candidate_release_url = ? " +
-      "ORDER BY e.check_type ASC, e.submitted_at ASC, e.evidence_id ASC LIMIT 30",
+      "ORDER BY e.check_type ASC, d.submitted_at ASC, e.evidence_id ASC LIMIT 30",
       candidateId, candidateReleaseIdentity(stored.candidate)
     ).toArray().map(row => ({
       ...row,
