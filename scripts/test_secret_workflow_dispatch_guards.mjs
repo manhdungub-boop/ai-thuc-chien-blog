@@ -134,6 +134,9 @@ assert.ok(doFaultTest.includes("environment: agent-runtime-preview"));
 assert.ok(doFaultTest.includes('FAULT_TEST_CONFIG: "agents/runtime/wrangler.fault-test.jsonc"'));
 assert.ok(doFaultTest.includes("ref: ${{ inputs.expected_sha }}"));
 assert.ok(doFaultTest.includes("persist-credentials: false"));
+assert.ok(doFaultTest.includes("id: deploy_fault_worker"));
+assert.ok(doFaultTest.includes("deployment_attempted=true"));
+assert.ok(doFaultTest.includes("if: always() && steps.deploy_fault_worker.outputs.deployment_attempted == 'true'"));
 assert.ok(doFaultTest.includes('test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"'));
 assert.ok(doFaultTest.includes("::error::Unapproved fault-test branch."));
 
