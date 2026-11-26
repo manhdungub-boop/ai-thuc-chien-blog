@@ -4,10 +4,11 @@ on:
   push:
     branches:
       - security/release-readiness-hardening-20261110
+      - integration/agent-runtime-v5-preview-20261120
+      - security/fence-leases-on-circuit-breaker-pause-20261123
   pull_request:
     branches:
-      - security/pin-verified-actions-20261110
-      - fix/release-blockers-20261109
+      - main
   workflow_dispatch:
 
 permissions:
