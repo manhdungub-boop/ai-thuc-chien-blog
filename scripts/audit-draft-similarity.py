@@ -12,7 +12,7 @@ from html import unescape
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PUBLISHED = ROOT / "site-snapshot" / "articles"
+PUBLISHED = ROOT / "articles"
 DRAFTS = ROOT / "docs" / "content-drafts"
 EXPECTED_DRAFTS = [
     "kien-thuc-ai/bo-kiem-thu-20-cau-hoi-danh-gia-chat-luong-ai.md",
