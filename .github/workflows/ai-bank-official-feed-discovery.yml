@@ -15,6 +15,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: ai-bank-official-feed-discovery
@@ -22,7 +23,7 @@ concurrency:
 
 jobs:
   discover:
-    if: github.event_name == 'pull_request' || vars.AI_BANK_RSS_ENABLED_AT != ''
+    if: github.event_name == 'pull_request' || (github.event_name == 'schedule' && vars.AI_BANK_RSS_ENABLED_AT != '')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -55,6 +56,57 @@ jobs:
         if: github.event_name != 'pull_request'
         run: |
           node --input-type=module -e 'const value = process.env.AI_BANK_RSS_ENABLED_AT || ""; if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(value) || !Number.isFinite(Date.parse(value))) { console.error("AI_BANK_RSS_ENABLED_AT must be a UTC ISO-8601 timestamp; live discovery remains disabled."); process.exit(1); } console.log(`RSS activation window begins at ${new Date(value).toISOString()}`);'
+
+      - name: Reserve the complete official-feed batch before any outbound fetch
+        if: github.event_name == 'schedule'
+        env:
+          AI_BANK_RESERVATION_URL: https://ai-thuc-chien-agent-runtime-preview.manhdungub.workers.dev/internal/oidc/ai-bank-reserve
+        run: |
+          node --input-type=module <<'NODE'
+          const requestUrl = process.env.ACTIONS_ID_TOKEN_REQUEST_URL || '';
+          const requestToken = process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN || '';
+          const reservationUrl = process.env.AI_BANK_RESERVATION_URL || '';
+          if (!requestUrl || !requestToken || reservationUrl !== 'https://ai-thuc-chien-agent-runtime-preview.manhdungub.workers.dev/internal/oidc/ai-bank-reserve') {
+            throw new Error('AI Bank reservation identity or endpoint is unavailable; refusing outbound feed requests.');
+          }
+          const tokenUrl = new URL(requestUrl);
+          tokenUrl.searchParams.set('audience', 'ai-thuc-chien-agent-runtime-preview');
+          const tokenResponse = await fetch(tokenUrl, {
+            method: 'GET',
+            headers: { Authorization: 'Bearer ' + requestToken, Accept: 'application/json' },
+            redirect: 'manual',
+            signal: AbortSignal.timeout(5000),
+          });
+          if (!tokenResponse.ok || tokenResponse.status !== 200 ||
+              !/^application\/json(?:\s*;|$)/i.test(tokenResponse.headers.get('content-type') || '')) {
+            throw new Error('GitHub OIDC token request failed; refusing outbound feed requests.');
+          }
+          const tokenText = await tokenResponse.text();
+          if (new TextEncoder().encode(tokenText).byteLength > 16 * 1024) throw new Error('GitHub OIDC token response exceeded its limit.');
+          const tokenPayload = JSON.parse(tokenText);
+          if (typeof tokenPayload.value !== 'string' || tokenPayload.value.length < 100 || tokenPayload.value.length > 16 * 1024) {
+            throw new Error('GitHub OIDC token response was invalid.');
+          }
+          const reserveResponse = await fetch(reservationUrl, {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + tokenPayload.value, 'Content-Type': 'application/json', Accept: 'application/json' },
+            body: '{}',
+            redirect: 'manual',
+            signal: AbortSignal.timeout(8000),
+          });
+          if (!reserveResponse.ok || reserveResponse.status !== 200 ||
+              !/^application\/json(?:\s*;|$)/i.test(reserveResponse.headers.get('content-type') || '')) {
+            throw new Error('AI Bank quota reservation was denied or unavailable; refusing outbound feed requests.');
+          }
+          const resultText = await reserveResponse.text();
+          if (new TextEncoder().encode(resultText).byteLength > 2048) throw new Error('AI Bank quota reservation response exceeded its limit.');
+          const result = JSON.parse(resultText);
+          if (result.ok !== true || result.scope !== 'ai_bank_discovery' || result.reserved !== 5 ||
+              !Number.isSafeInteger(result.used) || !Number.isSafeInteger(result.remaining) || result.used + result.remaining !== 10) {
+            throw new Error('AI Bank quota reservation response was invalid; refusing outbound feed requests.');
+          }
+          console.log('Reserved exactly five AI Bank official-feed requests before starting RSS collection.');
+          NODE
 
       - name: Collect discovery leads from official feeds
         if: github.event_name != 'pull_request'
