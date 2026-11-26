@@ -400,6 +400,14 @@ async function pauseRuntimeControl(env, body) {
   const observed = await readStateStore(env, "/control");
   const version = observed?.control?.version;
   if (!Number.isSafeInteger(version) || version < 0 || !Number.isSafeInteger(version + 1)) throw Object.assign(new Error("runtime_control_snapshot_invalid"), { status: 503 });
+  if (body.expectedVersion !== undefined &&
+      (!Number.isSafeInteger(body.expectedVersion) || body.expectedVersion < 0)) {
+    throw Object.assign(new Error("runtime_control_version_invalid"), { status: 400 });
+  }
+  const expectedVersion = body.expectedVersion ?? version;
+  if (expectedVersion !== version) {
+    throw Object.assign(new Error("runtime_control_version_conflict"), { status: 409 });
+  }
 
   // Best-effort pre-fence protects in-flight authoring, but must never block the
   // State Store Pause that closes task admission and cancels active leases.
@@ -408,7 +416,7 @@ async function pauseRuntimeControl(env, body) {
   let preFenceDetail = null;
   try {
     const draftStore = await getDraftStoreStub(env);
-    const requestedVersion = version + 1;
+    const requestedVersion = expectedVersion + 1;
     const fenced = await draftStore.setRuntimePaused(true, requestedVersion);
     if (fenced?.updated !== true || fenced.paused !== true ||
         !Number.isSafeInteger(fenced.version) || fenced.version < requestedVersion) {
@@ -449,7 +457,7 @@ async function pauseRuntimeControl(env, body) {
 
   let result;
   try {
-    result = await writeStateStore(env, "/control/pause", body);
+    result = await writeStateStore(env, "/control/pause", { ...body, expectedVersion });
   } catch (error) {
     try {
       const current = await readStateStore(env, "/control");
@@ -1324,7 +1332,50 @@ const worker = {
         const result = action === "pause"
           ? await pauseRuntimeControl(env, { actor, requestId: crypto.randomUUID(), ...(body.reason === undefined ? {} : { reason: body.reason }) })
           : await writeStateStore(env, "/control/resume", { actor, requestId: crypto.randomUUID(), ...(body.reason === undefined ? {} : { reason: body.reason }), expectedVersion });
-        if (action === "resume") await syncDraftStoreControl(env, result.control);
+        if (action === "resume") {
+          try {
+            await syncDraftStoreControl(env, result.control);
+          } catch {
+            // Resume is a two-store transition. If authoring cannot be unfenced,
+            // conditionally close runtime admission again at the exact version
+            // produced by this Resume. A newer operator decision must win.
+            let compensation = { attempted: true, ok: false, error: "runtime_control_compensation_failed" };
+            let currentControl = null;
+            try {
+              const paused = await pauseRuntimeControl(env, {
+                actor,
+                requestId: crypto.randomUUID(),
+                reason: "compensate_resume_after_draft_store_sync_failure",
+                expectedVersion: result.control.version,
+              });
+              currentControl = paused.control;
+              compensation = {
+                attempted: true,
+                ok: paused.control?.paused === true,
+                state_store_paused: paused.control?.paused === true,
+                draft_store_sync: paused.draftStoreSync,
+                ...(paused.draftStoreSync?.ok === true ? {} : { error: "draft_store_pause_sync_failed" }),
+              };
+            } catch (compensationError) {
+              compensation = {
+                attempted: true,
+                ok: false,
+                error: compensationError?.status === 409
+                  ? "runtime_control_version_conflict"
+                  : "runtime_control_compensation_failed",
+              };
+              try { currentControl = (await readStateStore(env, "/control")).control ?? null; } catch {}
+            }
+            return json({
+              ok: false,
+              error: "resume_draft_store_sync_failed",
+              resume_committed_control: result.control,
+              control: currentControl,
+              compensation,
+              draft_store_sync: { ok: false },
+            }, 503);
+          }
+        }
         return json({
           ok: action === "pause" ? result.draftStoreSync?.ok === true : true,
           ...(action === "pause" && result.draftStoreSync?.ok !== true ? { error: "draft_store_pause_sync_failed" } : {}),
