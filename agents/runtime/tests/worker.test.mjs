@@ -652,6 +652,10 @@ test("emergency Pause reaches the State Store even when the Draft Store binding 
   assert.equal(body.draft_store_sync.ok, false);
   assert.equal(body.draft_store_sync.pre_fence_succeeded, false);
   assert.equal(body.draft_store_sync.pre_fence_detail.reason, "draft_store_unavailable");
+  assert.equal("error_stack" in body.draft_store_sync.pre_fence_detail, false,
+    "operator responses must not expose stack frames");
+  assert.equal(JSON.stringify(body).includes("worker.mjs"), false,
+    "operator responses must not disclose internal source paths");
 });
 
 test("operator resume bridge sends the observed control version and preserves stale-version conflicts", async () => {
