@@ -151,18 +151,18 @@ assert.ok(aiBankReadonly.includes("workflow_dispatch:"),
   "Read-only AI Bank discovery must remain manual-only until quota reservation is implemented.");
 assert.equal(aiBankReadonly.split("    if: ${{ false }}").length - 1, 1,
   "The manual AI Bank collector must have exactly one explicit disabled job guard.");
-assert.doesNotMatch(aiBankReadonly, /^\\s{2}schedule:/m,
+assert.doesNotMatch(aiBankReadonly, /^\s{2}schedule:/m,
   "The disabled manual AI Bank collector must not gain a scheduled trigger.");
-assert.doesNotMatch(aiBankReadonly, /^\\s{2}id-token:\\s*write/m,
+assert.doesNotMatch(aiBankReadonly, /^\s{2}id-token:\s*write/m,
   "The disabled manual AI Bank collector must not receive OIDC token permissions.");
 
-assert.ok(aiBankFeedDiscovery.includes("  validate:\\n    if: github.event_name == 'pull_request'"),
+assert.ok(aiBankFeedDiscovery.includes("  validate:\n    if: github.event_name == 'pull_request'"),
   "AI Bank pull requests must run in a separate offline validation job.");
-assert.ok(aiBankFeedDiscovery.includes("  discover:\\n    if: github.event_name == 'schedule' && vars.AI_BANK_RSS_ENABLED_AT != ''"),
+assert.ok(aiBankFeedDiscovery.includes("  discover:\n    if: github.event_name == 'schedule' && vars.AI_BANK_RSS_ENABLED_AT != ''"),
   "Live AI Bank discovery must run only from an explicitly activated schedule.");
-assert.doesNotMatch(aiBankFeedDiscovery, /^  id-token:\\s*write/m,
+assert.doesNotMatch(aiBankFeedDiscovery, /^  id-token:\s*write/m,
   "Untrusted pull-request validation must not inherit OIDC token permissions.");
-assert.match(aiBankFeedDiscovery, /  discover:\\n    if: github\\.event_name == 'schedule'[\\s\\S]*?    permissions:\\n      contents: read\\n      id-token: write/);
+assert.match(aiBankFeedDiscovery, /  discover:\n    if: github\.event_name == 'schedule'[\s\S]*?    permissions:\n      contents: read\n      id-token: write/);
 assert.ok(aiBankFeedDiscovery.indexOf("Reserve the complete official-feed batch before any outbound fetch") <
   aiBankFeedDiscovery.indexOf("Collect discovery leads from official feeds"),
   "Atomic AI Bank quota reservation must precede every outbound feed request.");
