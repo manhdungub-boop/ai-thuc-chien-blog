@@ -25,6 +25,7 @@ const configureBuilds = await read("configure-cloudflare-worker-builds.yml");
 const stagingEmail = await read("staging-email-e2e.yml");
 const doFaultTest = await read("agent-runtime-cloudflare-do-fault-test.yml");
 const runtimePreflight = await read("agent-runtime-preview-preflight.yml");
+const aiBankReadonly = await read("ai-bank-readonly-discovery.yml");
 const stagingEmailLines = stagingEmail.split("\n");
 const stagingJobStart = stagingEmailLines.indexOf("  staging-email-e2e:");
 assert.notEqual(stagingJobStart, -1, "Staging email E2E job must exist.");
@@ -145,6 +146,15 @@ assert.ok(doFaultTest.includes("refs/heads/feat/agent-runtime-v5-main-split-2026
 assert.ok(runtimePreflight.includes("feat/ai-bank-discovery-workflow-20261126"));
 assert.ok(runtimePreflight.includes("refs/heads/feat/ai-bank-discovery-workflow-20261126"));
 assert.ok(runtimePreflight.includes("node --experimental-loader ./agents/runtime/tests/cloudflare-workers-loader.mjs --test agents/runtime/tests/*.test.mjs"));
+assert.ok(aiBankReadonly.includes("workflow_dispatch:"),
+  "Read-only AI Bank discovery must remain manual-only until quota reservation is implemented.");
+assert.equal(aiBankReadonly.split("    if: ${{ false }}").length - 1, 1,
+  "The manual AI Bank collector must have exactly one explicit disabled job guard.");
+assert.doesNotMatch(aiBankReadonly, /^\\s{2}schedule:/m,
+  "The disabled manual AI Bank collector must not gain a scheduled trigger.");
+assert.doesNotMatch(aiBankReadonly, /^\\s{2}id-token:\\s*write/m,
+  "The disabled manual AI Bank collector must not receive OIDC token permissions.");
+
 
 const checkoutWorkflows = [
   ["health-check.yml", health],
