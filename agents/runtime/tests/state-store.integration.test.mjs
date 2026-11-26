@@ -467,6 +467,41 @@ test("terminal failures reached by operator recovery count toward the circuit br
   });
 });
 
+test("recovery alarm surfaces a transient re-arm failure so the platform can retry", async () => {
+  await withRuntime({ recoveryAlarmEnabled: "true" }, async ({ stub }) => {
+    const expired = await call(stub, "/reserve", task("alarm-rearm-expired"));
+    const stillRunning = await call(stub, "/reserve", task("alarm-rearm-running"));
+    assert.equal(expired.status, 201);
+    assert.equal(stillRunning.status, 201);
+
+    const expiredClaim = await call(stub, "/claim", { taskId: expired.body.task.taskId });
+    const runningClaim = await call(stub, "/claim", { taskId: stillRunning.body.task.taskId });
+    assert.equal(expiredClaim.status, 200);
+    assert.equal(runningClaim.status, 200);
+
+    const forcedExpiry = await call(stub, "/__test/expire-and-fire", { taskId: expired.body.task.taskId });
+    assert.equal(forcedExpiry.body.task.state, "queued");
+    // Reclaim the task and force its lease expiry without firing the alarm,
+    // leaving a second, future lease to require a re-armed alarm.
+    const reclaimed = await call(stub, "/claim", { taskId: expired.body.task.taskId });
+    assert.equal(reclaimed.status, 200);
+    const alarmBefore = await call(stub, "/__test/alarm-state");
+    assert.equal(typeof alarmBefore.body.alarmAt, "number");
+
+    const failedAlarm = await call(stub, "/__test/fail-next-alarm-schedule", {});
+    assert.equal(failedAlarm.status, 503);
+    assert.equal(failedAlarm.body.error, "alarm_retry_required");
+
+    const recovered = await call(stub, "/task?id=" + encodeURIComponent(expired.body.task.taskId));
+    assert.equal(recovered.body.task.state, "queued");
+    const remaining = await call(stub, "/task?id=" + encodeURIComponent(stillRunning.body.task.taskId));
+    assert.equal(remaining.body.task.state, "running");
+    const alarmAfter = await call(stub, "/__test/alarm-state");
+    assert.equal(typeof alarmAfter.body.alarmAt, "number",
+      "a surviving running lease must retain a recovery alarm after the failed invocation");
+  });
+});
+
 test("terminal failures reached by recovery alarms count toward the circuit breaker", async () => {
   await withRuntime({ recoveryAlarmEnabled: "true" }, async ({ stub }) => {
     for (let index = 1; index <= 5; index += 1) {
