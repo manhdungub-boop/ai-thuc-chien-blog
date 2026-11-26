@@ -560,7 +560,7 @@ if (url.pathname === "/task" && request.method === "GET") {
     return Date.now();
   }
 
-  async scheduleRecoveryAlarm(now = Date.now()) {
+  async scheduleRecoveryAlarm(now = Date.now(), { throwOnError = false } = {}) {
     if (this.env.AGENT_RECOVERY_ALARM_ENABLED !== "true" ||
         this.env.AGENT_ENABLED !== "true" || this.env.AGENT_PAUSED !== "false") {
       try { await this.ctx.storage.deleteAlarm(); } catch {}
@@ -586,22 +586,22 @@ if (url.pathname === "/task" && request.method === "GET") {
         await this.ctx.storage.setAlarm(desired);
       }
       return true;
-    } catch {
-      // Alarm scheduling is best-effort and must not turn a successful lease
-      // claim into a false failure. The operator path remains available.
+    } catch (error) {
+      // Claims must remain successful if their best-effort alarm scheduling
+      // fails. An alarm handler, however, must surface storage failures so the
+      // Durable Object alarm retry mechanism can retry lease recovery.
+      if (throwOnError) throw error;
       return false;
     }
   }
 
   async alarm() {
-    try {
-      await this.ready;
-    } catch {
-      return;
-    }
+    // Do not swallow initialization/storage failures: an alarm invocation that
+    // cannot inspect durable state must be eligible for platform retry.
+    await this.ready;
     if (this.env.AGENT_RECOVERY_ALARM_ENABLED !== "true" ||
         this.env.AGENT_ENABLED !== "true" || this.env.AGENT_PAUSED !== "false") {
-      try { await this.ctx.storage.deleteAlarm(); } catch {}
+      await this.ctx.storage.deleteAlarm();
       return;
     }
     const now = Date.now();
@@ -637,13 +637,14 @@ if (url.pathname === "/task" && request.method === "GET") {
         }
         return count;
       });
-      await this.scheduleRecoveryAlarm(now);
+      await this.scheduleRecoveryAlarm(now, { throwOnError: true });
       return recovered;
-    } catch {
-      // Re-arm only through the same gate and durable-pause checks. If the
-      // control state is unavailable, fail closed rather than retry forever.
-      await this.scheduleRecoveryAlarm(now);
-      return;
+    } catch (error) {
+      // Reconcile the alarm after a partial/failed recovery, but propagate the
+      // original failure even when re-arming succeeds. This lets the platform
+      // retry the handler instead of silently abandoning expired leases.
+      await this.scheduleRecoveryAlarm(now, { throwOnError: true });
+      throw error;
     }
   }
 
