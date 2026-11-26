@@ -505,6 +505,57 @@ describe("AgentAIBankCandidateStore Durable Object", () => {
     )).toEqual({ accepted: false, reason: "duplicate_evidence" });
   });
 
+  it("preserves separate evidence text for the same source URL across release versions", async () => {
+    const latestUrl = "https://github.com/ollama/ollama/releases/latest";
+    const older = candidate();
+    older.latest_release.source_url = latestUrl;
+    await store.upsertCandidates([older], Date.parse("2026-11-19T08:06:00.000Z"));
+
+    const sourceUrl = "https://ollama.com/license";
+    const first = await submitEvidence(store, "github:ollama/ollama", {
+      check_type: "license_scope",
+      source_title: "License for v1.2.3",
+      source_url: sourceUrl,
+      excerpt: "Terms reviewed for release v1.2.3."
+    }, Date.parse("2026-11-19T08:10:00.000Z"));
+    expect(first.accepted).toBe(true);
+    const oldIdentity = releaseIdentity(latestUrl, "2026-11-19T08:00:00.000Z");
+
+    const newer = candidate(sources[0], "v1.2.4", "2026-11-19T11:00:00.000Z");
+    newer.latest_release.source_url = latestUrl;
+    newer.discovered_at = "2026-11-19T11:05:00.000Z";
+    await store.upsertCandidates([newer], Date.parse("2026-11-19T11:06:00.000Z"));
+    const newIdentity = releaseIdentity(latestUrl, "2026-11-19T11:00:00.000Z");
+    const second = await submitEvidence(store, "github:ollama/ollama", {
+      check_type: "license_scope",
+      source_title: "License for v1.2.4",
+      source_url: sourceUrl,
+      excerpt: "Terms reviewed separately for release v1.2.4."
+    }, Date.parse("2026-11-19T11:10:00.000Z"), newIdentity);
+
+    expect(second.accepted).toBe(true);
+    expect(second.evidence_id).toBe(first.evidence_id);
+    const packet = await store.getReviewPacket("github:ollama/ollama");
+    expect(packet.evidence).toHaveLength(1);
+    expect(packet.evidence[0]).toMatchObject({
+      source_title: "License for v1.2.4",
+      excerpt: "Terms reviewed separately for release v1.2.4."
+    });
+
+    const history = await store.listReviewEvidence("github:ollama/ollama");
+    const oldEvidence = history.find(item => item.candidate_release_identity === oldIdentity);
+    const newEvidence = history.find(item => item.candidate_release_identity === newIdentity);
+    expect(oldEvidence).toMatchObject({
+      source_title: "License for v1.2.3",
+      excerpt: "Terms reviewed for release v1.2.3."
+    });
+    expect(newEvidence).toMatchObject({
+      source_title: "License for v1.2.4",
+      excerpt: "Terms reviewed separately for release v1.2.4."
+    });
+    expect(oldEvidence.submitted_at).not.toBe(newEvidence.submitted_at);
+  });
+
   it("applies the per-check evidence cap independently to each release version", async () => {
     await store.upsertCandidates([candidate()], Date.parse("2026-11-19T08:06:00.000Z"));
     const makeEvidence = (version, index) => ({
