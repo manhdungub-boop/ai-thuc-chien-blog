@@ -119,6 +119,16 @@ describe("deterministic article quality gate", () => {
     expect(result.publication_authorized).toBe(false);
   });
 
+  it("does not count citation markers inside multi-backtick code spans as article citations", () => {
+    const draft = validDraft();
+    draft.body_markdown = draft.body_markdown.replace(
+      /\[(1|2|3)\]/g,
+      (_, index) => "``example ` [" + index + "]``"
+    );
+    const result = reviewArticleDraft(draft);
+    expect(result.issues.map(issue => issue.code)).toContain("missing_inline_citations");
+    expect(result.publication_authorized).toBe(false);
+  });
   it("does not treat script examples inside fenced code as executable article markup", () => {
     const draft = validDraft();
     draft.body_markdown += "\n\n```html\n<script>alert(1)</script>\n```";

@@ -1,4 +1,5 @@
 import { reviewArticleDraft } from "./article-quality-gate.mjs";
+import { removeInlineCodeSpans } from "./markdown-inline-code.mjs";
 import { verifyHumanClaimReviewRecord } from "./human-review-record-verifier.mjs";
 
 function removeFencedCode(markdown) {
@@ -20,10 +21,6 @@ function removeFencedCode(markdown) {
   return kept.join("\n");
 }
 
-function removeInlineCode(markdown) {
-  return markdown.replace(/`+[^\`]*?`+/g, " ");
-}
-
 function removeMarkdownLinks(markdown) {
   return markdown
     .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
@@ -31,7 +28,7 @@ function removeMarkdownLinks(markdown) {
 }
 
 function proseCitationText(markdown) {
-  return removeMarkdownLinks(removeInlineCode(markdown));
+  return removeMarkdownLinks(removeInlineCodeSpans(markdown));
 }
 
 function splitAssertionBlock(block) {
@@ -74,8 +71,7 @@ function splitProseAssertions(markdown) {
 }
 
 function normalizeClaimText(value) {
-  return String(value ?? "")
-    .replace(/`+([^`]*?)`+/g, " ")
+  return removeInlineCodeSpans(String(value ?? ""))
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
     .replace(/<[^>]*>/g, " ")

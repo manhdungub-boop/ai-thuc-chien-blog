@@ -195,13 +195,15 @@ Read-only review results returned by `/run` and `/internal/dispatch` are explici
 - The helper is not registered as a `content_draft` task executor and does not change task queue executability. No automatic article generation is claimed.
 
 
-### Authenticated read-only AI Bank reviewer API
+### Authenticated AI Bank reviewer API and evidence intake
 
 - `GET /api/reviewer/ai-bank/candidates` returns at most 20 candidate summaries; an optional `limit` must be a single integer from 1 through 20.
 - `GET /api/reviewer/ai-bank/candidates/{owner}/{repo}` returns the review packet for the exact `github:owner/repository` candidate.
-- Both routes require the signed Google reviewer session cookie and same-origin request checks. No candidate-store access occurs before method, origin, and session checks.
-- The Preview Worker binds a dedicated AI Bank Candidate Durable Object. Review packets are scoped to the current candidate release and evidence remains pending human review, unverified, and unauthorized for verification.
-- Responses explicitly keep catalog writes, evidence verification, and public publication unauthorized. No evidence-write route is exposed.
+- `POST /api/reviewer/ai-bank/candidates/{owner}/{repo}/evidence` accepts one evidence record for one of six checks: `official_product_domain`, `pricing_and_free_limits`, `license_scope`, `privacy_and_data_handling`, `platform_support`, or `regional_availability`.
+- All routes require same-origin request checks and a signed Google reviewer session. Evidence submission additionally requires the separate evidence-writer email allowlist. The JSON request body is limited to 16 KiB. Reviewer authentication and evidence-writer access remain disabled by default in Preview; the evidence route returns `503` while authentication is unconfigured.
+- The evidence request has exactly three top-level fields: `audit_event_id` (UUID), `reviewed_release_identity`, and `evidence`. The evidence object has exactly `check_type`, `source_title`, `source_url`, and `excerpt`; title and excerpt are bounded, and the source URL must be a safe HTTPS URL.
+- `reviewed_release_identity` must be the exact canonical JSON serialization of a two-element array containing the candidate's current release URL and its canonical ISO-8601 UTC `published_at` timestamp, for example `JSON.stringify([release.source_url, release.published_at])`. A plain release URL, non-canonical serialization, or identity for an older release is rejected; a stale release returns `409`.
+- Evidence submission records a pending, unverified evidence item and an audit event. It does not verify or certify the evidence, change candidate/catalog status, write the public AI Bank catalog, or publish content. Responses keep verification, catalog writes, and public publication unauthorized.
 - The reviewer console renders candidate IDs and packet data as text nodes; it does not interpret untrusted candidate content as HTML.
 - These routes do not enable reviewer OAuth, configure credentials, deploy the Preview Worker, or authorize AI Bank changes or public publication.
 

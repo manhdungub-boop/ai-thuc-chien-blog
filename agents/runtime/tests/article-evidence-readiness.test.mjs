@@ -147,6 +147,32 @@ describe("article evidence readiness", () => {
     });
   });
 
+  it("does not count citations inside multi-backtick inline-code spans as prose citations", async () => {
+    const reviewRecord = await makeReview();
+    const draft = makeDraft();
+    draft.body_markdown = draft.body_markdown.replace(
+      " [1] [2] [3]. ",
+      " ``example ` [1] [2] [3]``. "
+    );
+    const result = await assessArticleEvidenceReadiness({
+      draft,
+      ledger,
+      reviewRecord,
+      authenticatedReviewer: { authenticated: true, reviewer_ref: reviewRecord.reviewer_ref },
+      now
+    });
+    expect(result.status).toBe("article_claim_evidence_not_ready");
+    expect(result.issues).toContainEqual({
+      code: "claim_inline_citation_missing_from_body",
+      claim_id: "claim-1",
+      citation_index: 1
+    });
+    expect(result.issues).toContainEqual({
+      code: "claim_inline_citation_missing_from_body",
+      claim_id: "claim-1",
+      citation_index: 2
+    });
+  });
   it("preserves Markdown link labels when matching reviewed prose claims", async () => {
     const reviewRecord = await makeReview();
     const draft = makeDraft();
