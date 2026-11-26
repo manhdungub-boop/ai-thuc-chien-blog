@@ -144,6 +144,7 @@ assert.ok(doFaultTest.includes("::error::Unapproved fault-test branch."));
 assert.ok(doFaultTest.includes("refs/heads/feat/agent-runtime-v5-main-split-20261126"));
 assert.ok(runtimePreflight.includes("feat/ai-bank-discovery-workflow-20261126"));
 assert.ok(runtimePreflight.includes("refs/heads/feat/ai-bank-discovery-workflow-20261126"));
+assert.ok(runtimePreflight.includes("node --experimental-loader ./agents/runtime/tests/cloudflare-workers-loader.mjs --test agents/runtime/tests/*.test.mjs"));
 
 const checkoutWorkflows = [
   ["health-check.yml", health],
