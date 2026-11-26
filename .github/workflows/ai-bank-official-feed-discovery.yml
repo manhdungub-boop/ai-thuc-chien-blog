@@ -78,7 +78,7 @@ jobs:
             signal: AbortSignal.timeout(5000),
           });
           if (!tokenResponse.ok || tokenResponse.status !== 200 ||
-              !/^application\\/json(?:\\s*;|$)/i.test(tokenResponse.headers.get('content-type') || '')) {
+              !/^application\/json(?:\s*;|$)/i.test(tokenResponse.headers.get('content-type') || '')) {
             throw new Error('GitHub OIDC token request failed; refusing outbound feed requests.');
           }
           const tokenText = await tokenResponse.text();
@@ -95,7 +95,7 @@ jobs:
             signal: AbortSignal.timeout(8000),
           });
           if (!reserveResponse.ok || reserveResponse.status !== 200 ||
-              !/^application\\/json(?:\\s*;|$)/i.test(reserveResponse.headers.get('content-type') || '')) {
+              !/^application\/json(?:\s*;|$)/i.test(reserveResponse.headers.get('content-type') || '')) {
             throw new Error('AI Bank quota reservation was denied or unavailable; refusing outbound feed requests.');
           }
           const resultText = await reserveResponse.text();

@@ -137,14 +137,14 @@ function parseControlJson(text) {
         index++;
         return JSON.parse(text.slice(start, index));
       }
-      if (character === "\\") {
+      if (character === "\") {
         index++;
         if (index >= text.length) throw new Error("control_json_invalid");
         if (text[index] === "u") {
           if (!/^[0-9a-fA-F]{4}$/.test(text.slice(index + 1, index + 5))) throw new Error("control_json_invalid");
           index += 5;
         } else {
-          if (!/["\\/bfnrt]/.test(text[index])) throw new Error("control_json_invalid");
+          if (!/["\/bfnrt]/.test(text[index])) throw new Error("control_json_invalid");
           index++;
         }
         continue;
@@ -856,7 +856,7 @@ const worker = {
       if (env.AGENT_AI_BANK_INGESTION_ENABLED !== "true") return json({ ok: false, error: "ai_bank_ingestion_disabled" }, 503);
       if (env.AGENT_OIDC_ENABLED !== "true") return json({ ok: false, error: "oidc_operator_disabled" }, 503);
       if ([...url.searchParams.keys()].length > 0) return json({ ok: false, error: "request_invalid" }, 400);
-      if (!/^application\\/json(?:\\s*;|$)/i.test(request.headers.get("content-type") || "")) {
+      if (!/^application\/json(?:\s*;|$)/i.test(request.headers.get("content-type") || "")) {
         return json({ ok: false, error: "json_content_type_required" }, 415);
       }
       const parsedBody = await readBoundedJsonValueRequest(request, 256);
@@ -866,7 +866,7 @@ const worker = {
         return json({ ok: false, error: "ai_bank_reservation_request_invalid" }, 400);
       }
       const authorization = request.headers.get("authorization") || "";
-      const tokenMatch = /^Bearer ([A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+)$/.exec(authorization);
+      const tokenMatch = /^Bearer ([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/.exec(authorization);
       if (!tokenMatch || tokenMatch[1].length > 16384) return json({ ok: false, error: "github_oidc_token_required" }, 401);
       const expected = {
         audience: env.AGENT_OIDC_AUDIENCE,
@@ -881,9 +881,9 @@ const worker = {
       };
       if (!Object.entries(expected).every(([key, value]) =>
         typeof value === "string" && value.length > 0 && value.length <= (key === "workflowRef" ? 512 : 256)) ||
-        !/^\\d{1,20}$/.test(expected.actorId) ||
-        !/^\\d{1,20}$/.test(expected.repositoryId) ||
-        !/^\\d{1,20}$/.test(expected.repositoryOwnerId)) {
+        !/^\d{1,20}$/.test(expected.actorId) ||
+        !/^\d{1,20}$/.test(expected.repositoryId) ||
+        !/^\d{1,20}$/.test(expected.repositoryOwnerId)) {
         return json({ ok: false, error: "github_oidc_schedule_policy_unconfigured" }, 503);
       }
       const authorized = await authorizeGitHubActionsOperator(tokenMatch[1], { env, expected });

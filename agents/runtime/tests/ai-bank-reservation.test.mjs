@@ -37,7 +37,7 @@ async function makeSignedToken(privateKey) {
     workflow_ref: workflowRef,
     event_name: "schedule",
     actor_id: actorId,
-    jti: "ai-bank-schedule-jti-00000001",
+    jti: "ai.bank.schedule.jti.00000001",
     run_id: "987654321",
     run_attempt: "1",
     iat: now - 5,
