@@ -9,25 +9,21 @@ on:
       - "data/ai-tools.json"
       - ".github/workflows/ai-bank-official-feed-discovery.yml"
   schedule:
-    # Wednesday 09:30 Asia/Ho_Chi_Minh; live discovery stays dormant until AI_BANK_RSS_ENABLED_AT is set.
+    # Wednesday 09:30 Asia/Ho_Chi_Minh; live discovery remains dormant until explicitly activated.
     - cron: "30 2 * * 3"
-  workflow_dispatch:
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: ai-bank-official-feed-discovery
   cancel-in-progress: false
 
 jobs:
-  discover:
-    if: github.event_name == 'pull_request' || (github.event_name == 'schedule' && vars.AI_BANK_RSS_ENABLED_AT != '')
+  validate:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    env:
-      AI_BANK_RSS_ENABLED_AT: ${{ vars.AI_BANK_RSS_ENABLED_AT }}
     steps:
       - name: Check out repository without persisted credentials
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -52,13 +48,32 @@ jobs:
       - name: Run AI Bank triage classification fixtures
         run: node scripts/ai-bank-lead-triage.mjs --self-test
 
+  discover:
+    if: github.event_name == 'schedule' && vars.AI_BANK_RSS_ENABLED_AT != ''
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      AI_BANK_RSS_ENABLED_AT: ${{ vars.AI_BANK_RSS_ENABLED_AT }}
+    steps:
+      - name: Check out repository without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+
       - name: Validate configured RSS activation timestamp
-        if: github.event_name != 'pull_request'
         run: |
-          node --input-type=module -e 'const value = process.env.AI_BANK_RSS_ENABLED_AT || ""; if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(value) || !Number.isFinite(Date.parse(value))) { console.error("AI_BANK_RSS_ENABLED_AT must be a UTC ISO-8601 timestamp; live discovery remains disabled."); process.exit(1); } console.log(`RSS activation window begins at ${new Date(value).toISOString()}`);'
+          node --input-type=module -e 'const value = process.env.AI_BANK_RSS_ENABLED_AT || ""; if (!/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,3})?Z$/.test(value) || !Number.isFinite(Date.parse(value))) { console.error("AI_BANK_RSS_ENABLED_AT must be a UTC ISO-8601 timestamp; live discovery remains disabled."); process.exit(1); } console.log(`RSS activation window begins at ${new Date(value).toISOString()}`);'
 
       - name: Reserve the complete official-feed batch before any outbound fetch
-        if: github.event_name == 'schedule'
         env:
           AI_BANK_RESERVATION_URL: https://ai-thuc-chien-agent-runtime-preview.manhdungub.workers.dev/internal/oidc/ai-bank-reserve
         run: |
@@ -78,7 +93,7 @@ jobs:
             signal: AbortSignal.timeout(5000),
           });
           if (!tokenResponse.ok || tokenResponse.status !== 200 ||
-              !/^application\/json(?:\s*;|$)/i.test(tokenResponse.headers.get('content-type') || '')) {
+              !/^application\\/json(?:\\s*;|$)/i.test(tokenResponse.headers.get('content-type') || '')) {
             throw new Error('GitHub OIDC token request failed; refusing outbound feed requests.');
           }
           const tokenText = await tokenResponse.text();
@@ -95,7 +110,7 @@ jobs:
             signal: AbortSignal.timeout(8000),
           });
           if (!reserveResponse.ok || reserveResponse.status !== 200 ||
-              !/^application\/json(?:\s*;|$)/i.test(reserveResponse.headers.get('content-type') || '')) {
+              !/^application\\/json(?:\\s*;|$)/i.test(reserveResponse.headers.get('content-type') || '')) {
             throw new Error('AI Bank quota reservation was denied or unavailable; refusing outbound feed requests.');
           }
           const resultText = await reserveResponse.text();
@@ -109,15 +124,12 @@ jobs:
           NODE
 
       - name: Collect discovery leads from official feeds
-        if: github.event_name != 'pull_request'
         run: node scripts/ai-bank-feed-discovery.mjs
 
       - name: Compare leads with the existing AI Bank
-        if: github.event_name != 'pull_request'
         run: node scripts/ai-bank-lead-triage.mjs
 
       - name: Create weekly editorial research briefs
-        if: github.event_name != 'pull_request'
         run: node scripts/ai-bank-editorial-briefs.mjs
 
       - name: Add discovery, triage and editorial reports to workflow summary
