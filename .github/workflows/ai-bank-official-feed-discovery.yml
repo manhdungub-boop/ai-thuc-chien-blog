@@ -71,7 +71,7 @@ jobs:
 
       - name: Validate configured RSS activation timestamp
         run: |
-          node --input-type=module -e 'const value = process.env.AI_BANK_RSS_ENABLED_AT || ""; if (!/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,3})?Z$/.test(value) || !Number.isFinite(Date.parse(value))) { console.error("AI_BANK_RSS_ENABLED_AT must be a UTC ISO-8601 timestamp; live discovery remains disabled."); process.exit(1); } console.log(`RSS activation window begins at ${new Date(value).toISOString()}`);'
+          node --input-type=module -e 'const value = process.env.AI_BANK_RSS_ENABLED_AT || ""; if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(value) || !Number.isFinite(Date.parse(value))) { console.error("AI_BANK_RSS_ENABLED_AT must be a UTC ISO-8601 timestamp; live discovery remains disabled."); process.exit(1); } console.log(`RSS activation window begins at ${new Date(value).toISOString()}`);'
 
       - name: Reserve the complete official-feed batch before any outbound fetch
         env:
@@ -93,7 +93,7 @@ jobs:
             signal: AbortSignal.timeout(5000),
           });
           if (!tokenResponse.ok || tokenResponse.status !== 200 ||
-              !/^application\\/json(?:\\s*;|$)/i.test(tokenResponse.headers.get('content-type') || '')) {
+              !/^application\/json(?:\s*;|$)/i.test(tokenResponse.headers.get('content-type') || '')) {
             throw new Error('GitHub OIDC token request failed; refusing outbound feed requests.');
           }
           const tokenText = await tokenResponse.text();
@@ -110,7 +110,7 @@ jobs:
             signal: AbortSignal.timeout(8000),
           });
           if (!reserveResponse.ok || reserveResponse.status !== 200 ||
-              !/^application\\/json(?:\\s*;|$)/i.test(reserveResponse.headers.get('content-type') || '')) {
+              !/^application\/json(?:\s*;|$)/i.test(reserveResponse.headers.get('content-type') || '')) {
             throw new Error('AI Bank quota reservation was denied or unavailable; refusing outbound feed requests.');
           }
           const resultText = await reserveResponse.text();
