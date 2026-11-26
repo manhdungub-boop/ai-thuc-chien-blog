@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://ai-thuc-chien-blog.manhdungub.workers.dev/sitemap.xml

@@ -8,5 +8,13 @@
     "test:content": "node scripts/test_article_quality.cjs",
     "test:seo": "node scripts/test_seo_consistency.cjs",
     "test:community": "node scripts/test_community_api.mjs && python3 scripts/test_community_schema.py && python3 scripts/test_analytics_schema.py"
+  },
+  "dependencies": {
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "framer-motion": "^14.14.0",
+    "lucide-react": "^1.81.0",
+    "react-icons": "^5.7.0",
+    "tailwind-merge": "^3.7.1"
   }
 }

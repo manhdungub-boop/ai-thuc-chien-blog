@@ -1,6 +1,6 @@
 const SECURITY_HEADERS = Object.freeze({
   "X-Content-Type-Options": "nosniff",
-  "X-Frame-Options": "DENY",
+  "X-Frame-Options": "ALLOWALL",
   "Referrer-Policy": "strict-origin-when-cross-origin",
   "Permissions-Policy": "camera=(), geolocation=(), microphone=(), payment=()",
 });

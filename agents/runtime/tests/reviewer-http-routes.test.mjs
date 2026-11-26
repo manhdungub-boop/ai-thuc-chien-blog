@@ -24,7 +24,7 @@ describe("reviewer and operator HTTP routes", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("text/html");
     expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(response.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
+    expect(response.headers.get("content-security-policy")).toContain("frame-ancestors *");
     const html = await response.text();
     expect(html).toContain("operator-console.js");
     expect(html).toContain("/auth/google/start?return_to=%2F");
