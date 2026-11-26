@@ -439,9 +439,6 @@ async function pauseRuntimeControl(env, body) {
     const safeErrorName = typeof error?.name === "string" && /^[A-Za-z][A-Za-z0-9]{0,63}$/.test(error.name)
       ? error.name
       : null;
-    const safeErrorMessage = typeof error?.message === "string"
-      ? error.message.replace(/[^A-Za-z0-9_.:-]/g, "_").slice(0, 160)
-      : null;
     // Never expose stack frames or raw exception diagnostics in an operator
     // response. The stable reason and bounded error class are sufficient for
     // support triage without disclosing Worker paths or runtime internals.
