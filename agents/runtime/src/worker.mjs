@@ -856,7 +856,7 @@ const worker = {
     }
     if (url.pathname === "/internal/oidc/ai-bank-reserve") {
       if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
-      if (env.AGENT_AI_BANK_INGESTION_ENABLED !== "true") return json({ ok: false, error: "ai_bank_ingestion_disabled" }, 503);
+      if (env.AGENT_AI_BANK_DISCOVERY_ENABLED !== "true") return json({ ok: false, error: "ai_bank_discovery_disabled" }, 503);
       if (env.AGENT_OIDC_ENABLED !== "true") return json({ ok: false, error: "oidc_operator_disabled" }, 503);
       if ([...url.searchParams.keys()].length > 0) return json({ ok: false, error: "request_invalid" }, 400);
       if (!/^application\/json(?:\s*;|$)/i.test(request.headers.get("content-type") || "")) {
