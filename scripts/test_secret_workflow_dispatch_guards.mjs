@@ -23,6 +23,7 @@ const googlePreview = await read("deploy-google-login-preview.yml");
 const previewD1 = await read("migrate-preview-d1.yml");
 const configureBuilds = await read("configure-cloudflare-worker-builds.yml");
 const stagingEmail = await read("staging-email-e2e.yml");
+const doFaultTest = await read("agent-runtime-cloudflare-do-fault-test.yml");
 const stagingEmailLines = stagingEmail.split("\n");
 const stagingJobStart = stagingEmailLines.indexOf("  staging-email-e2e:");
 assert.notEqual(stagingJobStart, -1, "Staging email E2E job must exist.");
@@ -125,6 +126,16 @@ assert.ok(previewD1.includes("github.ref == 'refs/heads/main'"));
 assert.ok(previewD1.includes("ref: main"));
 assert.ok(previewD1.includes("51d814c8-a3fc-4481-a5f1-60bc67617f3c"));
 assert.ok(configureBuilds.includes("test_configure_cloudflare_worker_builds.py"));
+assert.ok(doFaultTest.includes("github.repository == 'manhdungub-boop/ai-thuc-chien-blog'"));
+assert.ok(doFaultTest.includes("github.ref == 'refs/heads/fix/agent-runtime-fault-test-20261124'"));
+assert.ok(doFaultTest.includes("github.ref == 'refs/heads/security/fence-leases-on-circuit-breaker-pause-20261123'"));
+assert.ok(doFaultTest.includes("github.event.inputs.expected_sha == github.sha"));
+assert.ok(doFaultTest.includes("environment: agent-runtime-preview"));
+assert.ok(doFaultTest.includes('FAULT_TEST_CONFIG: "agents/runtime/wrangler.fault-test.jsonc"'));
+assert.ok(doFaultTest.includes("ref: ${{ inputs.expected_sha }}"));
+assert.ok(doFaultTest.includes("persist-credentials: false"));
+assert.ok(doFaultTest.includes('test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"'));
+assert.ok(doFaultTest.includes("::error::Unapproved fault-test branch."));
 
 const checkoutWorkflows = [
   ["health-check.yml", health],

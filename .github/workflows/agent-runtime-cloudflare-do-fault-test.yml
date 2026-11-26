@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       expected_sha:
-        description: Exact reviewed commit SHA on the isolated fault-test branch
+        description: Exact reviewed commit SHA on an allowlisted isolated fault-test branch
         required: true
         type: string
 
@@ -19,7 +19,8 @@ jobs:
   isolated-do-fault-test:
     if: >-
       github.repository == 'manhdungub-boop/ai-thuc-chien-blog' &&
-      github.ref == 'refs/heads/fix/agent-runtime-fault-test-20261124' &&
+      (github.ref == 'refs/heads/fix/agent-runtime-fault-test-20261124' ||
+       github.ref == 'refs/heads/security/fence-leases-on-circuit-breaker-pause-20261123') &&
       github.event.inputs.expected_sha == github.sha
     runs-on: ubuntu-latest
     environment: agent-runtime-preview
@@ -44,7 +45,10 @@ jobs:
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "manhdungub-boop/ai-thuc-chien-blog"
           test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
-          test "$GITHUB_REF" = "refs/heads/fix/agent-runtime-fault-test-20261124"
+          case "$GITHUB_REF" in
+            refs/heads/fix/agent-runtime-fault-test-20261124|refs/heads/security/fence-leases-on-circuit-breaker-pause-20261123) ;;
+            *) echo "::error::Unapproved fault-test branch."; exit 1 ;;
+          esac
           [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
           test -f "$FAULT_TEST_CONFIG"
