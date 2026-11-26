@@ -1,3 +1,4 @@
+import { DurableObject } from "cloudflare:workers";
 import { reviewArticleDraft } from "./article-quality-gate.mjs";
 import { selectProvider } from "./provider-policy.mjs";
 import { assessArticleEvidenceReadiness } from "./article-evidence-readiness.mjs";
@@ -175,8 +176,9 @@ function queueItem(row) {
   };
 }
 
-export class AgentDraftStore {
+export class AgentDraftStore extends DurableObject {
   constructor(ctx, env) {
+    super(ctx, env);
     this.ctx = ctx;
     this.env = env;
     this.env = env;
