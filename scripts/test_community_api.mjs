@@ -355,13 +355,21 @@ const declaredOversize = await callRaw('/analytics/pageview', declaredOversizeSt
 assert.equal(declaredOversize.status, 413, 'declared oversized request must be rejected');
 assert.equal(declaredOversizePulls, 0, 'declared oversized request must be rejected before reading the body');
 assert.equal(db.pageViews.length, 0, 'declared oversized request must not write analytics data');
-const invalidUtf8 = await callRaw('/analytics/pageview', new Uint8Array([0xff, 0xfe]));
-assert.equal(invalidUtf8.status, 400, 'invalid UTF-8 must fail closed');
+const invalidUtf8Bytes = new Uint8Array([
+  ...new TextEncoder().encode('{"path":"/'),
+  0xff,
+  ...new TextEncoder().encode('"}')
+]);
+const invalidUtf8 = await callRaw('/analytics/pageview', invalidUtf8Bytes);
+assert.equal(invalidUtf8.status, 400, 'invalid UTF-8 inside otherwise valid JSON must fail closed');
 assert.equal(db.pageViews.length, 0, 'invalid UTF-8 must not write analytics data');
+const validUtf8 = await callRaw('/analytics/pageview', new TextEncoder().encode('{"path":"/"}'));
+assert.equal(validUtf8.status, 202, 'valid UTF-8 JSON with the same shape must be accepted');
+assert.equal(db.pageViews.length, 1, 'valid UTF-8 request should write one analytics record');
 
 const pageView = await call('/analytics/pageview', { method: 'POST', body: { path: '/' } }); assert.equal(pageView.status, 202);
 const topicView = await call('/analytics/pageview', { method: 'POST', body: { path: '/', topic: 'tools' } }); assert.equal(topicView.status, 202);
-const analyticsStats = await call('/analytics/stats?topic=tools'); assert.equal(analyticsStats.status, 200); const analyticsPayload = await analyticsStats.json(); assert.equal(analyticsPayload.totalViews, 1); assert.equal(analyticsPayload.topicViews, 1);
+const analyticsStats = await call('/analytics/stats?topic=tools'); assert.equal(analyticsStats.status, 200); const analyticsPayload = await analyticsStats.json(); assert.equal(analyticsPayload.totalViews, 2); assert.equal(analyticsPayload.topicViews, 1);
 const invalidPageView = await call('/analytics/pageview', { method: 'POST', body: { path: '/../private' } }); assert.equal(invalidPageView.status, 400);
 assert.ok(db.pageViews.every((item) => !Object.hasOwn(item, 'ip') && !Object.hasOwn(item, 'ip_address')), 'aggregate analytics must not persist raw IP fields');
 
