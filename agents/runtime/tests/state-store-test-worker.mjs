@@ -59,7 +59,7 @@ export class TestAgentStateStore extends AgentStateStore {
 
   async fetch(request) {
     const url = new URL(request.url);
-    if (!["/__test/rollback", "/__test/downgrade-v1", "/__test/prune", "/__test/seed-prune-fixture", "/__test/prune-counts", "/__test/downgrade-v6-budget-only", "/__test/downgrade-v6-result-only", "/__test/schema-state", "/__test/alarm-state", "/__test/delete-alarm", "/__test/expire-and-fire", "/__test/fire-alarm", "/__test/fail-next-alarm-schedule", "/__test/fault-suite"].includes(url.pathname)) {
+    if (!["/__test/rollback", "/__test/downgrade-v1", "/__test/prune", "/__test/seed-prune-fixture", "/__test/prune-counts", "/__test/downgrade-v6-budget-only", "/__test/downgrade-v6-result-only", "/__test/schema-state", "/__test/alarm-state", "/__test/delete-alarm", "/__test/expire-lease", "/__test/expire-and-fire", "/__test/fire-alarm", "/__test/fail-next-alarm-schedule", "/__test/fault-suite"].includes(url.pathname)) {
       return super.fetch(request);
     }
     if (url.pathname === "/__test/alarm-state" || url.pathname === "/__test/schema-state" || url.pathname === "/__test/prune-counts" ? request.method !== "GET" : request.method !== "POST") {
@@ -397,6 +397,14 @@ export class TestAgentStateStore extends AgentStateStore {
       if (url.pathname === "/__test/delete-alarm" && request.method === "POST") {
         await this.ctx.storage.deleteAlarm();
         return jsonResponse({ ok: true, alarmAt: await this.ctx.storage.getAlarm() });
+      }
+      if (url.pathname === "/__test/expire-lease" && request.method === "POST") {
+        const body = await request.json();
+        if (!body || typeof body.taskId !== "string" || body.taskId.length > 64) {
+          return jsonResponse({ ok: false, error: "test_task_id_invalid" }, 400);
+        }
+        this.sql.exec("UPDATE tasks SET lease_expires_at=? WHERE task_id=? AND state='running'", Date.now() - 1, body.taskId);
+        return jsonResponse({ ok: true });
       }
       if (url.pathname === "/__test/expire-and-fire" && request.method === "POST") {
         const body = await request.json();
