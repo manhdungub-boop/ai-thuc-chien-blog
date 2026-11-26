@@ -154,4 +154,5 @@ tools=data.tools.filter(t=>t&&t.status==='active');buildFilters();render();
 }).catch(err=>{grid.replaceChildren(el('p','bank-empty','Chưa tải được dữ liệu thư viện. Vui lòng thử tải lại trang sau.'));count.textContent='Lỗi tải dữ liệu: '+err.message;});
 })();
 </script>
+<script defer src="/productos-badge.js"></script>
 </body></html>
