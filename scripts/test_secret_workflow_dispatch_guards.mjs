@@ -26,6 +26,7 @@ const stagingEmail = await read("staging-email-e2e.yml");
 const doFaultTest = await read("agent-runtime-cloudflare-do-fault-test.yml");
 const runtimePreflight = await read("agent-runtime-preview-preflight.yml");
 const aiBankReadonly = await read("ai-bank-readonly-discovery.yml");
+const aiBankFeedDiscovery = await read("ai-bank-official-feed-discovery.yml");
 const stagingEmailLines = stagingEmail.split("\n");
 const stagingJobStart = stagingEmailLines.indexOf("  staging-email-e2e:");
 assert.notEqual(stagingJobStart, -1, "Staging email E2E job must exist.");
@@ -154,6 +155,18 @@ assert.doesNotMatch(aiBankReadonly, /^\\s{2}schedule:/m,
   "The disabled manual AI Bank collector must not gain a scheduled trigger.");
 assert.doesNotMatch(aiBankReadonly, /^\\s{2}id-token:\\s*write/m,
   "The disabled manual AI Bank collector must not receive OIDC token permissions.");
+
+assert.ok(aiBankFeedDiscovery.includes("  validate:\\n    if: github.event_name == 'pull_request'"),
+  "AI Bank pull requests must run in a separate offline validation job.");
+assert.ok(aiBankFeedDiscovery.includes("  discover:\\n    if: github.event_name == 'schedule' && vars.AI_BANK_RSS_ENABLED_AT != ''"),
+  "Live AI Bank discovery must run only from an explicitly activated schedule.");
+assert.doesNotMatch(aiBankFeedDiscovery, /^  id-token:\\s*write/m,
+  "Untrusted pull-request validation must not inherit OIDC token permissions.");
+assert.match(aiBankFeedDiscovery, /  discover:\\n    if: github\\.event_name == 'schedule'[\\s\\S]*?    permissions:\\n      contents: read\\n      id-token: write/);
+assert.ok(aiBankFeedDiscovery.indexOf("Reserve the complete official-feed batch before any outbound fetch") <
+  aiBankFeedDiscovery.indexOf("Collect discovery leads from official feeds"),
+  "Atomic AI Bank quota reservation must precede every outbound feed request.");
+
 
 
 const checkoutWorkflows = [
