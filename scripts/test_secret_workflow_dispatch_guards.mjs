@@ -144,6 +144,10 @@ assert.ok(runtimePreviewValidation.includes("inputs.expected_head_sha"));
 assert.ok(runtimePreviewValidation.includes("inputs.pull_request_number"));
 assert.ok(runtimePreviewValidation.includes("pull-requests: read"));
 assert.ok(runtimePreviewValidation.includes("pr.head?.sha, process.env.EXPECTED_SHA"));
+assert.ok(runtimePreviewValidation.includes("const allowedBaseRefs = new Set(['main', 'integration/agent-runtime-v5-preview-20261120', 'fix/ai-bank-discovery-ingestion-gate-20261127'])"));
+assert.ok(runtimePreviewValidation.includes("pr.base?.ref), 'manual dispatch PR base must be an explicitly approved Agent Runtime integration branch'"));
+assert.ok(runtimePreviewValidation.includes("pr.labels ?? []).some(label => label.name === 'agent-runtime'"));
+
 assert.ok(runtimePreviewValidation.includes("environment: agent-runtime-preview"));
 assert.ok(runtimePreviewValidation.includes("if: always() && steps.deploy_e2e.outcome != 'skipped'"));
 assert.ok(runtimePreviewValidation.includes("github.event.pull_request.head.ref == 'fix/agent-runtime-manual-e2e-dispatch-20261127'"));
