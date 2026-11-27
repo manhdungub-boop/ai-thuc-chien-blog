@@ -8,7 +8,7 @@ This checklist is the release gate for changes to the public site. A green CI ru
 - [ ] Read the diff for accidental secrets, tokens, private URLs, generated noise, and unrelated changes.
 - [ ] Ensure all required GitHub Actions checks pass on the exact latest head commit; skipped, stale, cancelled or missing checks are BLOCKED, never PASS.
 - [ ] Complete automated technical/security review of the exact diff and record findings; no independent human/expert approval is required.
-- [ ] Confirm there are no unresolved Critical/High security findings and no unclassified blocking review findings.
+- [ ] Confirm there are no unresolved Critical/High findings of any category (security, functional, data, or operational); classification alone does not resolve them, and no blocking review finding remains unclassified.
 - [ ] Verify Preview isolation, free-tier quota headroom, idempotency/rollback controls and affected-route smoke tests where applicable.
 - [ ] Confirm article quality: useful for the Vietnamese reader, original wording, clear steps, and no unsupported promises.
 - [ ] Verify factual claims against primary or authoritative sources; mark uncertainty and date-sensitive claims.
@@ -50,4 +50,4 @@ Record the date, tested URLs, status codes, and any failures. A browser that can
 
 ## Release decision
 
-Release only when every applicable automated check passes on the exact release SHA, automated technical/security review is complete with no unresolved Critical/High findings, Preview and free-quota gates are verified, production smoke tests can be performed, and rollback is ready. No independent human/expert reviewer is required. A platform-level required-reviewer gate must be updated through its authorized settings to match this policy; until then the release remains BLOCKED. Never claim a change is live until the production URL has been checked. Production Worker, DNS, D1 Production and live configuration remain frozen until these gates pass.
+Release only when every applicable automated check passes on the exact release SHA, automated technical/security review is complete with no unresolved Critical/High findings of any category, Preview and free-quota gates are verified, production smoke tests can be performed, and rollback is ready. No independent human/expert reviewer is required. A platform-level required-reviewer gate must be updated through its authorized settings to match this policy; until then the release remains BLOCKED. Passing these gates makes a change eligible for a separately scoped release decision; it does not automatically lift the Production freeze. Production Worker, DNS, D1 Production and live configuration remain frozen unless an explicit release decision authorizes that specific Production change. Never claim a change is live until the production URL has been checked.
