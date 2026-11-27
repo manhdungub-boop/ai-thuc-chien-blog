@@ -545,7 +545,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -z "${CLOUDFLARE_BILLING_READ_API_TOKEN:-}" ]]; then
-            echo "::error::Preview deployment credential is unavailable; no deployment attempted."
+            echo "::error::Billing read credential is unavailable; no deployment attempted."
             exit 1
           fi
           response="$RUNNER_TEMP/cloudflare-subscriptions.json"
