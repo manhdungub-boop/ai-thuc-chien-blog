@@ -52,7 +52,7 @@ jobs:
           echo "scope=$scope" >> "$GITHUB_OUTPUT"
           echo "Changed-path class: $scope"
 
-      - name: Install locked dependencies
+      - name: Install repository dependencies
         run: npm install --ignore-scripts --no-save --package-lock=false --no-audit --no-fund
 
       - name: Validate documentation-only changes
@@ -146,6 +146,7 @@ jobs:
         run: |
           node scripts/test_premerge_path_classifier.mjs
           node scripts/test_premerge_validation_workflow.mjs
+          node scripts/test_premerge_validation_matrix.mjs
           for file in \
             scripts/test_workers_builds_workflow_guard.mjs \
             scripts/test_secret_workflow_dispatch_guards.mjs \
