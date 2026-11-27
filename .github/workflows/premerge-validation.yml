@@ -2,7 +2,7 @@ name: Pre-merge Validation
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, premerge-validation-test-base-20261128]
     types: [opened, synchronize, reopened, ready_for_review]
 
 permissions:
