@@ -9,25 +9,21 @@ on:
       - "data/ai-tools.json"
       - ".github/workflows/ai-bank-official-feed-discovery.yml"
   schedule:
-    # Wednesday 09:30 Asia/Ho_Chi_Minh; live discovery stays dormant until AI_BANK_RSS_ENABLED_AT is set.
+    # Wednesday 09:30 Asia/Ho_Chi_Minh; live discovery remains dormant until explicitly activated.
     - cron: "30 2 * * 3"
-  workflow_dispatch:
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: ai-bank-official-feed-discovery
   cancel-in-progress: false
 
 jobs:
-  discover:
-    if: github.event_name == 'pull_request' || (github.event_name == 'schedule' && vars.AI_BANK_RSS_ENABLED_AT != '')
+  validate:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    env:
-      AI_BANK_RSS_ENABLED_AT: ${{ vars.AI_BANK_RSS_ENABLED_AT }}
     steps:
       - name: Check out repository without persisted credentials
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -45,6 +41,7 @@ jobs:
           node --check scripts/ai-bank-feed-discovery.mjs
           node --check scripts/ai-bank-lead-triage.mjs
           node --check scripts/ai-bank-editorial-briefs.mjs
+          node --check agents/runtime/src/worker.mjs
 
       - name: Run offline RSS parser and size-limit fixtures
         run: node scripts/ai-bank-feed-discovery.mjs --self-test
@@ -52,13 +49,64 @@ jobs:
       - name: Run AI Bank triage classification fixtures
         run: node scripts/ai-bank-lead-triage.mjs --self-test
 
+      - name: Install pinned local Cloudflare runtime simulator
+        run: |
+          mkdir -p "$RUNNER_TEMP/agent-runtime-audit"
+          cat > "$RUNNER_TEMP/agent-runtime-audit/package.json" <<'JSON'
+          {
+            "private": true,
+            "dependencies": {
+              "miniflare": "4.20260730.0"
+            },
+            "overrides": {
+              "miniflare": {
+                "sharp": "0.35.5",
+                "undici": "7.30.2"
+              }
+            }
+          }
+          JSON
+          npm install --prefix "$RUNNER_TEMP/agent-runtime-audit" --ignore-scripts --no-audit --no-fund
+          ln -s "$RUNNER_TEMP/agent-runtime-audit/node_modules" "$GITHUB_WORKSPACE/node_modules"
+
+      - name: Run focused AI Bank Worker endpoint tests
+        run: timeout --signal=TERM --kill-after=10s 180s node --experimental-loader ./agents/runtime/tests/cloudflare-workers-loader.mjs --test agents/runtime/tests/worker.test.mjs
+
+      - name: Run AI Bank reservation, OIDC, and Preview config tests
+        run: timeout --signal=TERM --kill-after=10s 180s node --experimental-loader ./agents/runtime/tests/cloudflare-workers-loader.mjs --test agents/runtime/tests/ai-bank-reservation.test.mjs agents/runtime/tests/state-store-oidc-replay.test.mjs agents/runtime/tests/github-oidc-worker.test.mjs agents/runtime/tests/preview-config.test.mjs
+
+      - name: Run targeted Durable Object quota and replay transaction tests
+        run: timeout --signal=TERM --kill-after=10s 180s node --experimental-loader ./agents/runtime/tests/cloudflare-workers-loader.mjs --test --test-name-pattern='OIDC replay ledger|outbound request budgets|batch external quota reservations|concurrent batch reservations' agents/runtime/tests/state-store.integration.test.mjs
+
+      - name: Run repository workflow security and dispatch guards
+        run: node scripts/test_secret_workflow_dispatch_guards.mjs
+
+  discover:
+    if: github.event_name == 'schedule' && vars.AI_BANK_RSS_ENABLED_AT != ''
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      AI_BANK_RSS_ENABLED_AT: ${{ vars.AI_BANK_RSS_ENABLED_AT }}
+    steps:
+      - name: Check out repository without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+
       - name: Validate configured RSS activation timestamp
-        if: github.event_name != 'pull_request'
         run: |
           node --input-type=module -e 'const value = process.env.AI_BANK_RSS_ENABLED_AT || ""; if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(value) || !Number.isFinite(Date.parse(value))) { console.error("AI_BANK_RSS_ENABLED_AT must be a UTC ISO-8601 timestamp; live discovery remains disabled."); process.exit(1); } console.log(`RSS activation window begins at ${new Date(value).toISOString()}`);'
 
       - name: Reserve the complete official-feed batch before any outbound fetch
-        if: github.event_name == 'schedule'
         env:
           AI_BANK_RESERVATION_URL: https://ai-thuc-chien-agent-runtime-preview.manhdungub.workers.dev/internal/oidc/ai-bank-reserve
         run: |
@@ -109,15 +157,12 @@ jobs:
           NODE
 
       - name: Collect discovery leads from official feeds
-        if: github.event_name != 'pull_request'
         run: node scripts/ai-bank-feed-discovery.mjs
 
       - name: Compare leads with the existing AI Bank
-        if: github.event_name != 'pull_request'
         run: node scripts/ai-bank-lead-triage.mjs
 
       - name: Create weekly editorial research briefs
-        if: github.event_name != 'pull_request'
         run: node scripts/ai-bank-editorial-briefs.mjs
 
       - name: Add discovery, triage and editorial reports to workflow summary

@@ -1741,3 +1741,38 @@ test("dead-letter bridge fails closed on malformed State Store items or inconsis
   assert.equal((await response.json()).error, "state_store_response_invalid");
 });
 
+test("AI Bank discovery reservation is independently gated from candidate ingestion", async () => {
+  let stateStoreCalled = false;
+  const stateStore = {
+    idFromName() { return "unused"; },
+    get() {
+      return { async fetch() { stateStoreCalled = true; throw new Error("must_not_reach_state_store"); } };
+    },
+  };
+  const endpoint = "https://agent-runtime-preview.example.workers.dev/internal/oidc/ai-bank-reserve";
+  const makeRequest = () => new Request(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+
+  const disabled = await worker.fetch(makeRequest(), {
+    AGENT_AI_BANK_DISCOVERY_ENABLED: "false",
+    AGENT_AI_BANK_INGESTION_ENABLED: "false",
+    AGENT_OIDC_ENABLED: "true",
+    AGENT_STATE_STORE: stateStore,
+  });
+  assert.equal(disabled.status, 503);
+  assert.equal((await disabled.json()).error, "ai_bank_discovery_disabled");
+  assert.equal(stateStoreCalled, false);
+
+  const discoveryOnly = await worker.fetch(makeRequest(), {
+    AGENT_AI_BANK_DISCOVERY_ENABLED: "true",
+    AGENT_AI_BANK_INGESTION_ENABLED: "false",
+    AGENT_OIDC_ENABLED: "true",
+    AGENT_STATE_STORE: stateStore,
+  });
+  assert.equal(discoveryOnly.status, 401);
+  assert.equal((await discoveryOnly.json()).error, "github_oidc_token_required");
+  assert.equal(stateStoreCalled, false);
+});

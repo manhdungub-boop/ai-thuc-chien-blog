@@ -25,6 +25,9 @@ const configureBuilds = await read("configure-cloudflare-worker-builds.yml");
 const stagingEmail = await read("staging-email-e2e.yml");
 const doFaultTest = await read("agent-runtime-cloudflare-do-fault-test.yml");
 const runtimePreflight = await read("agent-runtime-preview-preflight.yml");
+const aiBankReadonly = await read("ai-bank-readonly-discovery.yml");
+const aiBankFeedDiscovery = await read("ai-bank-official-feed-discovery.yml");
+const aiBankPreviewConfig = await readFile(new URL("../agents/runtime/wrangler.preview.jsonc", import.meta.url), "utf8");
 const stagingEmailLines = stagingEmail.split("\n");
 const stagingJobStart = stagingEmailLines.indexOf("  staging-email-e2e:");
 assert.notEqual(stagingJobStart, -1, "Staging email E2E job must exist.");
@@ -145,6 +148,31 @@ assert.ok(doFaultTest.includes("refs/heads/feat/agent-runtime-v5-main-split-2026
 assert.ok(runtimePreflight.includes("feat/ai-bank-discovery-workflow-20261126"));
 assert.ok(runtimePreflight.includes("refs/heads/feat/ai-bank-discovery-workflow-20261126"));
 assert.ok(runtimePreflight.includes("node --experimental-loader ./agents/runtime/tests/cloudflare-workers-loader.mjs --test agents/runtime/tests/*.test.mjs"));
+assert.match(aiBankPreviewConfig, /"AGENT_AI_BANK_DISCOVERY_ENABLED":\s*"false"/,
+  "AI Bank discovery must remain disabled by default in Preview.");
+assert.match(aiBankPreviewConfig, /"AGENT_AI_BANK_INGESTION_ENABLED":\s*"false"/,
+  "AI Bank candidate ingestion must remain disabled by default in Preview.");
+assert.ok(aiBankReadonly.includes("workflow_dispatch:"),
+  "Read-only AI Bank discovery must remain manual-only until quota reservation is implemented.");
+assert.equal(aiBankReadonly.split("    if: ${{ false }}").length - 1, 1,
+  "The manual AI Bank collector must have exactly one explicit disabled job guard.");
+assert.doesNotMatch(aiBankReadonly, /^\s{2}schedule:/m,
+  "The disabled manual AI Bank collector must not gain a scheduled trigger.");
+assert.doesNotMatch(aiBankReadonly, /^\s{2}id-token:\s*write/m,
+  "The disabled manual AI Bank collector must not receive OIDC token permissions.");
+
+assert.ok(aiBankFeedDiscovery.includes("  validate:\n    if: github.event_name == 'pull_request'"),
+  "AI Bank pull requests must run in a separate offline validation job.");
+assert.ok(aiBankFeedDiscovery.includes("  discover:\n    if: github.event_name == 'schedule' && vars.AI_BANK_RSS_ENABLED_AT != ''"),
+  "Live AI Bank discovery must run only from an explicitly activated schedule.");
+assert.doesNotMatch(aiBankFeedDiscovery, /^  id-token:\s*write/m,
+  "Untrusted pull-request validation must not inherit OIDC token permissions.");
+assert.match(aiBankFeedDiscovery, /  discover:\n    if: github\.event_name == 'schedule'[\s\S]*?    permissions:\n      contents: read\n      id-token: write/);
+assert.ok(aiBankFeedDiscovery.indexOf("Reserve the complete official-feed batch before any outbound fetch") <
+  aiBankFeedDiscovery.indexOf("Collect discovery leads from official feeds"),
+  "Atomic AI Bank quota reservation must precede every outbound feed request.");
+
+
 
 const checkoutWorkflows = [
   ["health-check.yml", health],

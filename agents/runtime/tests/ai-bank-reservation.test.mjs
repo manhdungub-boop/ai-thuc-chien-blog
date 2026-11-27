@@ -70,7 +70,8 @@ async function fixture({ quotaAllowed = true, replayStatus = 200, failBudget = f
   let reservationBody = null;
   const env = {
     AGENT_RATE_LIMIT_REQUIRED: "false",
-    AGENT_AI_BANK_INGESTION_ENABLED: "true",
+    AGENT_AI_BANK_DISCOVERY_ENABLED: "true",
+    AGENT_AI_BANK_INGESTION_ENABLED: "false",
     AGENT_OIDC_ENABLED: "true",
     AGENT_OIDC_AUDIENCE: audience,
     AGENT_OIDC_REPOSITORY: repository,
@@ -173,13 +174,13 @@ test("AI Bank scheduled reservation rejects replay before consuming quota", asyn
   } finally { f.restore(); }
 });
 
-test("AI Bank scheduled reservation is disabled by default and never contacts State Store", async () => {
+test("AI Bank scheduled discovery reservation is disabled by default and never contacts State Store", async () => {
   const f = await fixture();
   try {
-    const env = { ...f.env, AGENT_AI_BANK_INGESTION_ENABLED: "false" };
+    const env = { ...f.env, AGENT_AI_BANK_DISCOVERY_ENABLED: "false" };
     const response = await worker.fetch(request(f.token), env);
     assert.equal(response.status, 503);
-    assert.equal((await response.json()).error, "ai_bank_ingestion_disabled");
+    assert.equal((await response.json()).error, "ai_bank_discovery_disabled");
     assert.equal(f.stateCalls.length, 0);
   } finally { f.restore(); }
 });
