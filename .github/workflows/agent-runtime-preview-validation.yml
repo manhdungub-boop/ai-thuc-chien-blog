@@ -494,6 +494,9 @@ jobs:
           assert.equal(pr.state, 'open', 'target PR must remain open');
           assert.equal(pr.head?.repo?.full_name, repository, 'fork PR heads are not eligible');
           assert.equal(pr.base?.repo?.full_name, repository, 'PR base must belong to this repository');
+          const allowedBaseRefs = new Set(['main', 'integration/agent-runtime-v5-preview-20261120', 'fix/ai-bank-discovery-ingestion-gate-20261127']);
+          assert.ok(allowedBaseRefs.has(pr.base?.ref), 'manual dispatch PR base must be an explicitly approved Agent Runtime integration branch');
+          assert.ok((pr.labels ?? []).some(label => label.name === 'agent-runtime'), 'manual dispatch PR must carry the agent-runtime label');
           assert.equal(pr.head?.sha, process.env.EXPECTED_SHA, 'manual dispatch must pin the exact current PR head SHA');
           assert.match(pr.head?.ref ?? '', /^(feat|fix|security)\/[A-Za-z0-9._/-]+$/, 'PR head branch must be an approved development branch');
           console.log(JSON.stringify({ pull_request: pr.number, head_sha: pr.head.sha, head_ref: pr.head.ref, base_ref: pr.base.ref, state: pr.state }));
