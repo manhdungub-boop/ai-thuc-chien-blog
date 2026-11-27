@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  checks: read
 
 concurrency:
   group: premerge-validation-${{ github.event.pull_request.number }}
@@ -20,6 +21,7 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
+      checks: read
     steps:
       - name: Check out exact pull request head
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -71,11 +73,11 @@ jobs:
           set -euo pipefail
           checks_file="$RUNNER_TEMP/premerge-check-runs.json"
           for attempt in $(seq 1 36); do
-            curl --fail --silent --show-error \\
-              -H "Authorization: Bearer $GH_TOKEN" \\
-              -H "Accept: application/vnd.github+json" \\
-              -H "X-GitHub-Api-Version: 2022-11-28" \\
-              "https://api.github.com/repos/$REPOSITORY/commits/$HEAD_SHA/check-runs?per_page=100" \\
+            curl --fail --silent --show-error \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/$REPOSITORY/commits/$HEAD_SHA/check-runs?per_page=100" \
               -o "$checks_file"
             result="$(HEAD_SHA="$HEAD_SHA" CHECKS_FILE="$checks_file" python3 - <<'PY'
           import json, os
