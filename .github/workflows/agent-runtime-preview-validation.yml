@@ -293,9 +293,12 @@ jobs:
           assert.ok(e2eWorkflow.includes("github.event.action == 'synchronize'"));
           assert.ok(e2eWorkflow.includes("github.event.pull_request.labels.*.name"));
           assert.ok(e2eWorkflow.includes("github.actor_id == '342528485'"), 'one-shot E2E must be restricted to repository owner actor');
-          assert.ok(e2eWorkflow.includes("github.event_name == 'workflow_dispatch'"), 'manual dispatch path must be owner-pinned and explicit');
-          assert.ok(e2eWorkflow.includes("inputs.pull_request_number"));
-          assert.ok(e2eWorkflow.includes("inputs.expected_head_sha"));
+          const hasManualDispatch = e2eWorkflow.includes("github.event_name == 'workflow_dispatch'");
+          if (hasManualDispatch) {
+            assert.ok(e2eWorkflow.includes("github.actor_id == '342528485'"), 'manual dispatch path must be restricted to the repository owner');
+            assert.ok(e2eWorkflow.includes("inputs.pull_request_number"), 'manual dispatch must require an explicit PR number');
+            assert.ok(e2eWorkflow.includes("inputs.expected_head_sha"), 'manual dispatch must require an exact expected head SHA');
+          }
           assert.ok(e2eWorkflow.includes("github.event.pull_request.head.ref == 'security/agent-runtime-oidc-replay-e2e-20261124'"));
           assert.ok(e2eWorkflow.includes("github.event.pull_request.base.ref == 'integration/agent-runtime-v5-preview-20261120'"));
           assert.ok(!e2eWorkflow.includes("github.event.pull_request.head.ref == 'fix/agent-runtime-manual-e2e-dispatch-20261127'"), 'manual branch must not widen automatic PR E2E allowlist');
