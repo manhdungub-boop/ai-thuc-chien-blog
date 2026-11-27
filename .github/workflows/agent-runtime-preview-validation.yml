@@ -1,4 +1,5 @@
 name: Agent Runtime Preview Shell Validation
+# Manual dispatch is owner-pinned; automatic PR E2E remains on the pre-existing security allowlist.
 
 on:
   pull_request:
