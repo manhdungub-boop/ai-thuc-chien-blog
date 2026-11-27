@@ -5,32 +5,32 @@ import { execFileSync } from 'node:child_process';
 
 const PATH_CLASSES = Object.freeze({
   docs: [
-    /^README(?:\\..*)?$/i,
-    /^docs\\//,
-    /^\\.github\\/(?:ISSUE_TEMPLATE|PULL_REQUEST_TEMPLATE)\\//,
-    /^(?:LICENSE|CONTRIBUTING)(?:\\..*)?$/i,
+    /^README(?:\..*)?$/i,
+    /^docs\//,
+    /^\.github\/(?:ISSUE_TEMPLATE|PULL_REQUEST_TEMPLATE)\//,
+    /^(?:LICENSE|CONTRIBUTING)(?:\..*)?$/i,
   ],
   content: [
-    /^articles\\//,
-    /^(?:index\\.html|thu-vien\\.html|ngan-hang-ai\\.html|sitemap\\.xml|feed\\.xml|styles\\.css|script\\.js)$/,
-    /^data\\/ai-tools\\.json$/,
-    /^(?:images|illustrations)\\//,
+    /^articles\//,
+    /^(?:index\.html|thu-vien\.html|ngan-hang-ai\.html|sitemap\.xml|feed\.xml|styles\.css|script\.js)$/,
+    /^data\/ai-tools\.json$/,
+    /^(?:images|illustrations)\//,
   ],
   runtime: [
-    /^agents\\/runtime\\//,
-    /^agents\\/agent-registry\\.json$/,
-    /^scripts\\/agent-/,
-    /^tests\\/agent-/,
+    /^agents\/runtime\//,
+    /^agents\/agent-registry\.json$/,
+    /^scripts\/agent-/,
+    /^tests\/agent-/,
   ],
   application: [
-    /^(?:worker\\.mjs|wrangler(?:\\.[^/]+)?\\.jsonc?)$/,
-    /^(?:src|functions|migrations|db|tests)\\//,
-    /^scripts\\//,
-    /^package(?:-lock)?\\.json$/,
+    /^(?:worker\.mjs|wrangler(?:\.[^/]+)?\.jsonc?)$/,
+    /^(?:src|functions|migrations|db|tests)\//,
+    /^scripts\//,
+    /^package(?:-lock)?\.json$/,
   ],
   workflow: [
-    /^\\.github\\/workflows\\//,
-    /^\\.github\\/actions\\//,
+    /^\.github\/workflows\//,
+    /^\.github\/actions\//,
   ],
 });
 
@@ -39,7 +39,7 @@ export function classifyChangedPaths(paths) {
   const classes = new Set();
   for (const rawPath of paths) {
     if (typeof rawPath !== 'string' || !rawPath.trim()) return 'mixed-unknown';
-    const path = rawPath.replaceAll('\\\\', '/').replace(/^\\.\\//, '');
+    const path = rawPath.replaceAll('\\', '/').replace(/^\.\//, '');
     const matches = Object.entries(PATH_CLASSES)
       .filter(([, patterns]) => patterns.some((pattern) => pattern.test(path)))
       .map(([name]) => name);
@@ -60,6 +60,6 @@ if (import.meta.url === new URL(process.argv[1], 'file:').href) {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'inherit'],
   });
-  const paths = output.split('\\0').filter(Boolean);
-  process.stdout.write(classifyChangedPaths(paths) + '\\n');
+  const paths = output.split('\0').filter(Boolean);
+  process.stdout.write(classifyChangedPaths(paths) + '\n');
 }
