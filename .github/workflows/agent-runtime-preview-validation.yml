@@ -541,16 +541,16 @@ jobs:
       - name: Verify Workers Free plan before deployment
         timeout-minutes: 2
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}
+          CLOUDFLARE_BILLING_READ_API_TOKEN: ${{ secrets.CLOUDFLARE_BILLING_READ_API_TOKEN }}
         run: |
           set -euo pipefail
-          if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+          if [[ -z "${CLOUDFLARE_BILLING_READ_API_TOKEN:-}" ]]; then
             echo "::error::Preview deployment credential is unavailable; no deployment attempted."
             exit 1
           fi
           response="$RUNNER_TEMP/cloudflare-subscriptions.json"
           status="$(curl --silent --show-error --max-time 15 --output "$response" --write-out "%{http_code}" \
-            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            --header "Authorization: Bearer $CLOUDFLARE_BILLING_READ_API_TOKEN" \
             --header "Accept: application/json" \
             "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/subscriptions")"
           if [[ "$status" != "200" ]]; then
