@@ -67,19 +67,19 @@ for (const page of publicPages) {
     // Every displayed topic count must match the number of public article links in that section.
     const expectedTopicIds = ['tools-title', 'automation-title', 'creative-title', 'earning-title', 'deep-dive-title'];
     for (const topicId of expectedTopicIds) {
-      const markerIndex = source.indexOf(`aria-labelledby="${topicId}"`);
+      const markerIndex = source.indexOf('aria-labelledby="' + topicId + '"');
       assert.notEqual(markerIndex, -1, 'Topic library is missing section ' + topicId);
       const sectionStart = source.lastIndexOf('<section', markerIndex);
       const sectionEnd = source.indexOf('</section>', markerIndex);
       assert.ok(sectionStart >= 0 && sectionEnd >= 0, topicId + ': malformed section');
       const sectionHtml = source.slice(sectionStart, sectionEnd);
-      const headingStart = sectionHtml.indexOf(`<h2 id="${topicId}"`);
+      const headingStart = sectionHtml.indexOf('<h2 id="' + topicId + '"');
       const headingEnd = sectionHtml.indexOf('</h2>', headingStart);
       assert.ok(headingStart >= 0 && headingEnd > headingStart, topicId + ': missing section heading');
       const headingText = sectionHtml.slice(headingStart, headingEnd).replace(/<[^>]+>/g, ' ');
-      const countMatch = headingText.match(/(\\d+)\\s*bài/i);
+      const countMatch = headingText.match(/(\d+)\s*bài/i);
       assert.ok(countMatch, topicId + ': heading must expose a numeric article count');
-      const articleLinkCount = (sectionHtml.match(/href="\\/articles\\//g) || []).length;
+      const articleLinkCount = (sectionHtml.match(/href="\/articles\//g) || []).length;
       assert.equal(Number(countMatch[1]), articleLinkCount, topicId + ': displayed count must match public article links');
     }
   }
