@@ -7,6 +7,7 @@ on:
     - main
     - integration/agent-runtime-v5-preview-20261120
     - "feat/agent-runtime-**"
+    - "feat/ai-bank-discovery-workflow-20261126"
     - "fix/agent-runtime-**"
     - "test/agent-runtime-**"
     - "security/agent-runtime-**"
