@@ -90,13 +90,13 @@ Before either Path A or Path B may waive the project's extra independent-review 
 
 - The exact PR, commit SHA, changed-file scope, and diff have been inspected and recorded.
 - All applicable required CI, static analysis, CodeQL/security checks, and focused tests pass on that exact HEAD. No relevant check may be skipped, stale, or merely passed on an earlier commit.
-- Automated review and security findings have been triaged. No unresolved critical/high finding remains; every actionable finding is fixed or has a documented, justified non-applicability rationale.
+- **All automated review and security findings have been triaged**, including non-security correctness, reliability, maintainability, and quality findings. Each actionable finding must be fixed or have a documented, technically justified reason for not fixing it. No actionable finding may remain untriaged. No unresolved critical/high security finding may remain.
 - All review threads are resolved. No unresolved actionable review comment remains.
 - The threat/risk assessment, affected users and data, mitigations, residual risk, and rollback/containment plan are documented and proportionate to the change.
-- The project release gates in Section 8 and every repository/organization branch-protection, ruleset, required-review, and protected-environment requirement remain satisfied.
+- The project's release gates in Section 8 and every repository/organization branch-protection, ruleset, required-review, and protected-environment requirement remain satisfied.
 - The owner has explicitly accepted the residual risk and authorized the specific waiver in a recorded decision.
 
-If a shared gate is not met, the waiver is unavailable. This does **not** prohibit the normal path: the change may proceed through ordinary independent review if that review and every other applicable gate are completed successfully.
+If a shared gate is not met, the waiver is unavailable. This does **not** prohibit the normal path: the change may proceed through ordinary independent review once all shared evidence gates are met and the review and every other applicable gate are completed successfully.
 
 ### Path A — routine low-risk change
 
@@ -121,7 +121,7 @@ The written exception must:
 - confirm that all shared evidence gates above are satisfied; and
 - authorize that exact change only. A new commit or materially changed scope requires a fresh assessment and authorization.
 
-If the exception evidence is incomplete or the risk cannot be bounded, the change **must not proceed under the waiver**. It may still proceed through the normal independent-review path once the review is obtained and all other gates pass; the missing exception evidence is not a prohibition on that ordinary path.
+If the exception evidence is incomplete but the risk is demonstrably bounded, the change may proceed only through the normal independent-review path after all shared evidence gates are met and an eligible independent review is completed. If the risk itself cannot be bounded to an acceptable level, the change **must not proceed under either path**, even if an independent review is obtained. Resolve the risk or redesign the change before reconsideration.
 
 ### Non-waivable external requirements
 
