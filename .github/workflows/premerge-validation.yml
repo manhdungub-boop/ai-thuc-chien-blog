@@ -1,0 +1,191 @@
+name: Pre-merge Validation
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  checks: read
+
+concurrency:
+  group: premerge-validation-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  aggregate:
+    name: Pre-merge Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      checks: read
+    steps:
+      - name: Reject fork PR code before checkout
+        if: github.event.pull_request.head.repo.full_name != github.repository
+        run: |
+          echo "::error::Fork PR code is not executed by this read-only validation workflow."
+          exit 1
+
+      - name: Check out exact pull request head
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+
+      - name: Classify exact-head changed paths
+        id: scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          scope="$(node scripts/premerge-path-classifier.mjs "$BASE_SHA" "$HEAD_SHA")"
+          echo "scope=$scope" >> "$GITHUB_OUTPUT"
+          echo "Changed-path class: $scope"
+
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Validate documentation-only changes
+        if: steps.scope.outputs.scope == 'docs-only'
+        run: npm run build
+
+      - name: Validate static content-only changes
+        if: steps.scope.outputs.scope == 'content-only'
+        run: |
+          npm run build
+          npm run test:content
+          npm run test:seo
+          node scripts/verify-article-attribution.mjs
+          node scripts/verify-article-diagrams.mjs
+          node scripts/test_article_navigation.cjs
+
+      - name: Require exact-head Pages Preview for static content
+        if: steps.scope.outputs.scope == 'content-only'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          checks_file="$RUNNER_TEMP/premerge-check-runs.json"
+          for attempt in $(seq 1 36); do
+            curl --fail --silent --show-error \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/$REPOSITORY/commits/$HEAD_SHA/check-runs?filter=latest&per_page=100" \
+              -o "$checks_file"
+            result="$(HEAD_SHA="$HEAD_SHA" CHECKS_FILE="$checks_file" python3 - <<'PY'
+          import json, os
+          with open(os.environ["CHECKS_FILE"], encoding="utf-8") as stream:
+              checks = json.load(stream).get("check_runs", [])
+          matching = [item for item in checks if item.get("name") == "verify-preview" and item.get("head_sha") == os.environ["HEAD_SHA"]]
+          if not matching:
+              print("pending")
+          elif matching[0].get("status") != "completed":
+              print("pending")
+          elif matching[0].get("conclusion") == "success":
+              print("success")
+          else:
+              print("failure")
+          PY
+          )"
+            if [[ "$result" == "success" ]]; then
+              echo "PASS: exact-head Cloudflare Pages Preview verification succeeded."
+              exit 0
+            fi
+            if [[ "$result" == "failure" ]]; then
+              echo "::error::Exact-head Pages Preview check failed or was skipped; refusing to pass aggregate validation."
+              exit 1
+            fi
+            echo "Waiting for exact-head verify-preview check (attempt $attempt/36)."
+            sleep 10
+          done
+          echo "::error::Timed out waiting for exact-head Pages Preview verification."
+          exit 1
+
+      - name: Validate application and Worker changes
+        if: steps.scope.outputs.scope == 'application-only'
+        run: |
+          node --check worker.mjs
+          node --check script.js
+          node scripts/test_homepage_search.cjs
+          node scripts/test_accessibility_performance.cjs
+          node scripts/test_copy_prompt.cjs
+          node scripts/test_article_navigation.cjs
+          node scripts/test_homepage_article_coverage.cjs
+          node scripts/test_worker_headers.mjs
+          node scripts/test_community_api.mjs
+          node scripts/test_worker_retrieval.mjs
+          node scripts/test_email_verification.mjs
+          node scripts/test-password-reset.mjs
+          python3 scripts/test_community_schema.py
+          python3 scripts/test_analytics_schema.py
+          node scripts/test_d1_preview_config.cjs
+
+      - name: Validate Agent Runtime changes without deployment
+        if: steps.scope.outputs.scope == 'runtime-only'
+        run: |
+          if [[ -f scripts/test_agent_runtime_workflow_guards.mjs ]]; then node scripts/test_agent_runtime_workflow_guards.mjs; fi
+          find agents/runtime -type f -name '*.mjs' -print0 2>/dev/null | xargs -0 -r -n1 node --check
+          node --check scripts/agent-coordinator-dry-run.mjs
+          node scripts/agent-coordinator-dry-run.mjs agents/examples/read-only-ai-bank-review.tasks.json
+
+      - name: Validate workflow-only changes without deployment
+        if: steps.scope.outputs.scope == 'workflow-only'
+        run: |
+          node scripts/test_premerge_path_classifier.mjs
+          node scripts/test_premerge_validation_workflow.mjs
+          for file in \
+            scripts/test_workers_builds_workflow_guard.mjs \
+            scripts/test_secret_workflow_dispatch_guards.mjs \
+            scripts/test_agent_runtime_workflow_guards.mjs; do
+            if [[ -f "$file" ]]; then node "$file"; fi
+          done
+
+      - name: Fail-closed validation for mixed or unknown changes
+        if: steps.scope.outputs.scope == 'mixed-unknown'
+        run: |
+          npm run build
+          npm run test:content
+          npm run test:seo
+          node scripts/test_worker_headers.mjs
+          node scripts/test_community_api.mjs
+          node scripts/test_worker_retrieval.mjs
+          node scripts/test_email_verification.mjs
+          node scripts/test-password-reset.mjs
+          python3 scripts/test_community_schema.py
+          python3 scripts/test_analytics_schema.py
+          node scripts/test_d1_preview_config.cjs
+          node scripts/test_premerge_path_classifier.mjs
+          node scripts/test_premerge_validation_workflow.mjs
+          for file in \
+            scripts/test_workers_builds_workflow_guard.mjs \
+            scripts/test_secret_workflow_dispatch_guards.mjs \
+            scripts/test_agent_runtime_workflow_guards.mjs; do
+            if [[ -f "$file" ]]; then node "$file"; fi
+          done
+
+      - name: Record validation evidence
+        if: always()
+        env:
+          SCOPE: ${{ steps.scope.outputs.scope }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          {
+            echo "### Pre-merge Validation"
+            echo "- Exact head: `$HEAD_SHA`"
+            echo "- Changed-path class: `${SCOPE:-unavailable}`"
+            echo "- Deployment performed: **No**"
+            echo "- Protected environment or secret used: **No**"
+          } >> "$GITHUB_STEP_SUMMARY"
