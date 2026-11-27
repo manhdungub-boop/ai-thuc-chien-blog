@@ -1,0 +1,60 @@
+---
+files:
+  - ".github/workflows/*.yml"
+  - ".github/workflows/*.yaml"
+---
+
+# Secret trong GitHub Actions chỉ đến được từ `main` đáng tin cậy
+
+Mọi job hoặc step nhận `${{ secrets.* }}` (token Cloudflare, credential staging, khóa API…) chỉ được chạy trên mã đã vào `main`. Không có đường nào để một branch, pull request hoặc fork khiến mã của chính nó chạy cùng secret. Ranh giới này đã được siết qua nhiều PR, gần nhất là [#378](https://github.com/manhdungub-boop/ai-thuc-chien-blog/pull/378) ([thảo luận review](https://github.com/manhdungub-boop/ai-thuc-chien-blog/pull/378#discussion_r4694112799)). `scripts/test_secret_workflow_dispatch_guards.mjs` cũng yêu cầu `deploy-auth-preview-candidate.yml` và `verify-auth-preview-candidate.yml` phải vắng mặt vì "branch-controlled workflows must not receive Cloudflare or application secrets".
+
+## Vi phạm khi một job hoặc step dùng secret mà
+
+- chạy được từ `pull_request`, `pull_request_target`, `push` lên branch khác `main`, hoặc `workflow_run` không ràng buộc `github.event.workflow_run.head_branch == 'main'`;
+- là `workflow_dispatch` nhưng thiếu điều kiện `github.ref == 'refs/heads/main'` trong `if:` của job hoặc của chính step mang secret;
+- checkout một ref do người gọi kiểm soát (`github.head_ref`, input tự do, SHA của pull request) thay vì `main`, `${{ github.sha }}` của lần dispatch trên `main`, hoặc `workflow_run.head_sha` đã ràng buộc với `main`;
+- checkout mà không có `persist-credentials: false`;
+- chèn trực tiếp `${{ inputs.* }}` hoặc dữ liệu sự kiện vào `run:` thay vì truyền qua `env:` rồi kiểm tra định dạng (như bước "Validate inputs and mask one-time tokens" trong `staging-email-e2e.yml`);
+- dùng action không ghim theo SHA đầy đủ 40 ký tự;
+- mở rộng `permissions:` vượt quá mức job cần (mặc định `contents: read`).
+
+Workflow mới hoặc job mới nhận secret của tài khoản thật (staging, Preview, Production) cũng cần gắn `environment:` có deployment branch policy chỉ cho phép `main`, vì điều kiện `if:` nằm trong tệp workflow và người có quyền ghi có thể xóa nó trên branch khác rồi dispatch, như đã nêu ở #378. Khi thêm hoặc đổi một workflow mang secret, cần thêm hoặc cập nhật assertion tương ứng trong `scripts/test_secret_workflow_dispatch_guards.mjs`.
+
+Lý do: secret ở đây cho phép triển khai Production Worker, đọc/ghi D1 hoặc đăng nhập tài khoản staging; lộ qua một branch là sự cố không thể đảo ngược.
+
+## Ví dụ
+
+Sai: dispatch được từ bất kỳ branch nào, checkout ref do người gọi chọn và giữ token checkout:
+
+```yaml
+on:
+  workflow_dispatch:
+    inputs:
+      ref: { type: string }
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - run: node scripts/test-live-staging-email-e2e.mjs
+        env:
+          STAGING_E2E_PASSWORD: ${{ secrets.STAGING_E2E_PASSWORD }}
+```
+
+Đúng (theo `staging-email-e2e.yml`):
+
+```yaml
+jobs:
+  staging-email-e2e:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    environment: staging-e2e
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the exact trusted dispatch commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+```
