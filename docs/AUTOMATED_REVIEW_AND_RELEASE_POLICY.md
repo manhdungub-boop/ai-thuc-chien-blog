@@ -17,8 +17,8 @@ Tất cả điều kiện áp dụng phải đạt trên đúng commit SHA đang
 1. **Tính toàn vẹn:** xác minh repository, PR, base/head SHA, branch, diff và dependency; không có thay đổi ngoài phạm vi.
 2. **CI:** tất cả required jobs hoàn tất SUCCESS trên đúng HEAD SHA. SKIPPED, CANCELLED, WAITING, stale hoặc không có kết quả là BLOCKED/NOT RUN, không phải PASS.
 3. **Kiểm thử theo tác động:** chạy unit, integration, contract, regression và E2E phù hợp với thay đổi; mock không được thay thế live E2E.
-4. **Bảo mật:** kiểm tra secrets, quyền tối thiểu, OIDC claims, branch/ref pinning, injection, auth/session, dữ liệu cá nhân, dependency advisories và ranh giới môi trường. Không còn Critical/High chưa xử lý.
-5. **Review tự động:** trợ lý đọc toàn bộ diff và các luồng liên quan; mọi phát hiện phải được sửa hoặc phân loại có lý do và bằng chứng. Không được tự đóng finding chỉ để đạt điều kiện.
+4. **Bảo mật và rủi ro:** kiểm tra secrets, quyền tối thiểu, OIDC claims, branch/ref pinning, injection, auth/session, dữ liệu cá nhân, dependency advisories và ranh giới môi trường. Mọi finding mức Critical/High, bất kể thuộc bảo mật, chức năng, dữ liệu hay vận hành, đều phải được khắc phục và xác minh trước khi PASS; việc phân loại hoặc ghi chú lý do không thay thế việc xử lý.
+5. **Review tự động:** trợ lý đọc toàn bộ diff và các luồng liên quan. Finding mức Critical/High phải được khắc phục và kiểm tra lại; không được chỉ phân loại để đóng finding. Finding mức thấp hơn có thể được phân loại kèm lý do, bằng chứng và biện pháp giảm thiểu phù hợp. Không được tự đóng finding chỉ để đạt điều kiện.
 6. **Preview:** triển khai và kiểm thử Preview cô lập khi thay đổi cần kiểm chứng runtime; xác nhận không chạm Production.
 7. **Chi phí:** chỉ sử dụng gói miễn phí/hạn mức được cấp. Xác minh quota liên quan trước khi chạy; quota không đọc được hoặc không đủ thì BLOCKED, không thử dịch vụ có nguy cơ tính phí.
 8. **Rollback:** xác định phiên bản tốt gần nhất, quy trình khôi phục và kiểm tra sau rollback trước khi phát hành.
@@ -26,9 +26,9 @@ Tất cả điều kiện áp dụng phải đạt trên đúng commit SHA đang
 
 ## 3. Quy tắc quyết định
 
-- **PASS:** tất cả cổng bắt buộc đều đạt, bằng chứng đúng SHA và không còn blocker.
+- **PASS:** tất cả cổng bắt buộc đều đạt, bằng chứng đúng SHA, không còn blocker và không còn finding Critical/High chưa khắc phục, bất kể nhóm lỗi.
 - **BLOCKED:** có cổng đang chờ, bị skip, thiếu bằng chứng, thiếu quota, không truy cập được cấu hình hoặc môi trường còn yêu cầu phê duyệt thủ công.
-- **FAIL:** có kiểm thử thất bại hoặc finding bảo mật nghiêm trọng chưa xử lý.
+- **FAIL:** có kiểm thử thất bại hoặc còn bất kỳ finding Critical/High chưa khắc phục nào, bất kể nhóm lỗi.
 - Chỉ khi PASS mới được merge hoặc phát hành theo phạm vi đã được ủy quyền.
 - Không cần người độc lập ký duyệt; quyết định của trợ lý phải có căn cứ kiểm chứng được và được ghi vào GitHub.
 - Không tự động biến BLOCKED/FAIL thành PASS bằng cách bỏ job, giảm assertion, tắt kiểm tra hoặc thay đổi ngưỡng.
@@ -37,11 +37,11 @@ Tất cả điều kiện áp dụng phải đạt trên đúng commit SHA đang
 
 Việc bỏ người duyệt độc lập không đồng nghĩa bỏ kiểm soát rủi ro:
 
-- Không sửa Production Worker, DNS, D1 Production hoặc cấu hình đang phục vụ người dùng trước khi release gate PASS.
+- Việc release gate PASS chỉ xác nhận một thay đổi đủ điều kiện được xem xét phát hành; không tự động gỡ lệnh đóng băng Production. Không sửa Production Worker, DNS, D1 Production hoặc cấu hình đang phục vụ người dùng khi chưa có quyết định mở băng riêng, rõ phạm vi cho chính thay đổi đó.
 - Không chạy migration hoặc thao tác dữ liệu thật từ Preview.
 - Không bật lịch Agent 24/7, RSS ingestion, AI Bank ingestion hay Facebook publishing khi quota, quyền và kiểm thử vận hành chưa được xác minh.
 - Không xuất bản nội dung chưa qua kiểm chứng nguồn, chất lượng, trùng lặp và kiểm tra an toàn.
-- Mọi thay đổi phải có phương án rollback và smoke test sau phát hành.
+- Mọi thay đổi Production phải có quyết định mở băng riêng, phương án rollback và smoke test sau phát hành; nếu chưa có quyết định mở băng thì tiếp tục giữ nguyên Production.
 
 ## 5. Đồng bộ cấu hình nền tảng
 
