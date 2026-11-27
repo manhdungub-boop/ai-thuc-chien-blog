@@ -23,7 +23,7 @@
 - Mọi thay đổi phải bắt đầu từ trạng thái GitHub được xác minh; ghi nhận branch, commit SHA, PR và các workflow liên quan.
 - Thực hiện thay đổi trên branch riêng và mở Pull Request để CI tự động kiểm tra; không ghi trực tiếp lên `main`.
 - **Không yêu cầu người duyệt độc lập hoặc phê duyệt thủ công của chuyên gia.** Trợ lý được phép tự thực hiện technical review và ra quyết định kỹ thuật theo bộ cổng tự động đã định nghĩa; phải lưu kết quả, SHA và bằng chứng kiểm thử.
-- Chỉ merge khi toàn bộ required checks trên đúng HEAD SHA đều PASS, không còn lỗi bảo mật Critical/High chưa xử lý, không có review finding chưa được phân loại, và các điều kiện Preview/quota/rollback liên quan đã được xác minh. Thiếu bằng chứng, check bị skip hoặc trạng thái không rõ thì BLOCKED.
+- Chỉ merge khi toàn bộ required checks trên đúng HEAD SHA đều PASS, không còn bất kỳ finding Critical/High chưa khắc phục nào (bất kể nhóm lỗi), không có review finding chưa được phân loại, và các điều kiện Preview/quota/rollback liên quan đã được xác minh. Phân loại không thay thế khắc phục đối với Critical/High. Thiếu bằng chứng, check bị skip hoặc trạng thái không rõ thì BLOCKED.
 - Chỉ công nhận kết quả CI khi workflow đã hoàn tất trên đúng commit SHA đang được xem xét. Check đang chạy, cũ, thiếu hoặc thuộc SHA khác không được coi là PASS.
 - Khi có nhiều PR hoặc branch liên quan, kiểm tra base/head SHA để tránh nhầm lẫn; không suy diễn rằng một PR đã nhận thay đổi từ PR khác nếu chưa xác minh.
 - Nếu GitHub Actions bị giới hạn, ưu tiên kiểm thử cục bộ/độc lập miễn phí hoặc chờ quota; không chuyển lại GitLab.
@@ -33,7 +33,7 @@
 
 - Ưu tiên read-only, test, simulation và Preview/Staging.
 - Không yêu cầu người độc lập phê duyệt PR hoặc phát hành. Quyết định kỹ thuật dựa trên cổng kiểm tra tự động và hồ sơ bằng chứng; trợ lý phải tự rà soát diff, bảo mật, CI, Preview và rollback.
-- Việc bỏ người duyệt độc lập **không** đồng nghĩa bỏ kiểm soát an toàn: Production Worker, DNS, D1 Production, secrets và cấu hình live vẫn bị đóng băng cho đến khi mọi release gate liên quan PASS, quota miễn phí được xác minh và phương án quay lui sẵn sàng.
+- Việc bỏ người duyệt độc lập **không** đồng nghĩa bỏ kiểm soát an toàn: Production Worker, DNS, D1 Production, secrets và cấu hình live vẫn bị đóng băng. Việc mọi release gate PASS chỉ làm thay đổi đủ điều kiện để xem xét phát hành, không tự động gỡ đóng băng; chỉ được mở băng cho một thay đổi cụ thể bằng quyết định phát hành riêng, có phạm vi và bằng chứng quota miễn phí/rollback rõ ràng.
 - Không tự gỡ các kiểm soát bảo vệ nền tảng (GitHub rulesets, protected environments, deployment approvals) bằng cách thay đổi trái phép hoặc che giấu trạng thái. Cấu hình nào còn yêu cầu human approval phải được ghi là BLOCKED cho đến khi được cập nhật hợp lệ theo quy tắc mới.
 
 ## 5. Quy tắc chống nhầm lẫn
