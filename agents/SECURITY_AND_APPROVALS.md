@@ -77,3 +77,20 @@ Release Agent can recommend GO only when all applicable conditions are evidenced
 - required owner approval is recorded.
 
 The agent itself cannot merge or deploy.
+
+## 9. Conditional independent-review requirement
+
+An additional independent human review is a **risk-based safeguard, not a universal prerequisite**. The project may skip that extra review for a change only when **all** of the following are evidenced on the exact commit proposed for merge or release:
+
+- The change is low risk and narrowly scoped; it does not alter authentication or authorization behavior, OAuth, secrets or credential handling, billing or payment controls, production infrastructure, DNS, Worker bindings, D1 schema/data, privacy boundaries, or public publishing permissions.
+- All applicable required CI, static analysis, CodeQL/security checks, and focused tests pass on the exact HEAD; no relevant check is skipped, stale, or merely passed on an earlier commit.
+- Automated review/security findings have been triaged; no unresolved critical/high finding remains, and all actionable findings are fixed or documented with a justified non-applicability rationale.
+- All review threads are resolved, the diff and changed-file scope have been inspected, and the rollback/containment path is clear where applicable.
+- The owner has explicitly accepted the residual risk and authorized proceeding without the extra independent review.
+- The project release gates in Section 8 and every repository/organization branch-protection or ruleset requirement remain satisfied.
+
+Independent review remains required by project policy for high-risk or security-sensitive changes, including authentication/authorization, OAuth, secrets, billing, production infrastructure, data/privacy boundaries, and irreversible public or financial actions, unless the owner records a specific, informed exception for that exact change after reviewing the residual risk. A blanket instruction does not waive such a case-specific exception.
+
+**This section never bypasses GitHub rulesets, required approvals, required status checks, environment approvals, or legal/compliance obligations.** If GitHub or an organization policy requires a human approval, that approval must still be obtained from an eligible reviewer; an AI/bot review or an owner-controlled automation account does not count as an independent human reviewer. Do not weaken branch protection to implement this policy.
+
+Skipping the *extra independent review* does not skip technical validation, security triage, owner authorization, Preview/rollback evidence, or any applicable release gate. If evidence is missing or uncertain, fail closed and retain the review requirement.
