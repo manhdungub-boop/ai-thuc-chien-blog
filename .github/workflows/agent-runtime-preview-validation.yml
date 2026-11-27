@@ -8,6 +8,7 @@ on:
     - integration/agent-runtime-v5-preview-20261120
     - "feat/agent-runtime-**"
     - "fix/agent-runtime-**"
+    - "fix/ai-bank-discovery-ingestion-gate-20261127"
     - "test/agent-runtime-**"
     - "security/agent-runtime-**"
     - "security/fence-leases-on-circuit-breaker-pause-20261123"
