@@ -33,7 +33,7 @@ permissions:
 
 concurrency:
   group: agent-runtime-preview-validation-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   validate:
@@ -308,8 +308,11 @@ jobs:
           assert.ok(e2eWorkflow.includes("github.event.pull_request.labels.*.name"));
           assert.ok(e2eWorkflow.includes("github.actor_id == '342528485'"), 'one-shot E2E must be restricted to repository owner actor');
           assert.ok(e2eWorkflow.includes("github.event.pull_request.head.ref == 'security/fence-leases-on-circuit-breaker-pause-20261123'"));
-          assert.ok(e2eWorkflow.includes("github.event.pull_request.head.ref == 'fix/agent-runtime-manual-e2e-dispatch-20261127'"));
-          assert.ok(e2eWorkflow.includes("github.event.pull_request.base.ref == 'fix/ai-bank-discovery-ingestion-gate-20261127'"));
+          assert.ok(e2eWorkflow.includes("github.event.pull_request.head.ref == 'security/agent-runtime-oidc-replay-e2e-20261124'"));
+          assert.ok(e2eWorkflow.includes("github.event.pull_request.base.ref == 'integration/agent-runtime-v5-preview-20261120'"));
+          assert.ok(!e2eWorkflow.includes("github.event.pull_request.head.ref == 'fix/agent-runtime-manual-e2e-dispatch-20261127'"), 'manual dispatch branch must not widen the automatic PR E2E allowlist');
+          assert.ok(!e2eWorkflow.includes("github.event.pull_request.base.ref == 'fix/ai-bank-discovery-ingestion-gate-20261127'"), 'AI Bank branch must not widen the automatic PR E2E base allowlist');
+          assert.ok(workflow.includes("cancel-in-progress: ${{ github.event_name == 'pull_request' }}"), 'manual dispatches must not cancel an active E2E run');
           assert.ok(e2eWorkflow.includes('id-token: write'));
           assert.ok(e2eWorkflow.includes('Probe OIDC run gate readiness before requesting the token'));
           assert.ok(e2eWorkflow.includes('github_oidc_token_required'));
@@ -429,8 +432,8 @@ jobs:
       contains(github.event.pull_request.labels.*.name, 'agent-runtime') &&
       github.repository == 'manhdungub-boop/ai-thuc-chien-blog' &&
       github.event.pull_request.head.repo.full_name == 'manhdungub-boop/ai-thuc-chien-blog' &&
-      (github.event.pull_request.head.ref == 'security/fence-leases-on-circuit-breaker-pause-20261123' || github.event.pull_request.head.ref == 'security/agent-runtime-oidc-replay-e2e-20261124' || github.event.pull_request.head.ref == 'fix/agent-runtime-manual-e2e-dispatch-20261127') &&
-      (github.event.pull_request.base.ref == 'integration/agent-runtime-v5-preview-20261120' || github.event.pull_request.base.ref == 'fix/ai-bank-discovery-ingestion-gate-20261127') &&
+      (github.event.pull_request.head.ref == 'security/fence-leases-on-circuit-breaker-pause-20261123' || github.event.pull_request.head.ref == 'security/agent-runtime-oidc-replay-e2e-20261124') &&
+      github.event.pull_request.base.ref == 'integration/agent-runtime-v5-preview-20261120' &&
       github.actor_id == '342528485') ||
       (github.event_name == 'workflow_dispatch' &&
       github.ref == 'refs/heads/main' &&
@@ -505,7 +508,7 @@ jobs:
             test "$GITHUB_EVENT_NAME" = "pull_request"
             test "$EVENT_ACTION" = "synchronize"
             node --input-type=module -e "import assert from 'node:assert/strict'; const labels = JSON.parse(process.env.EVENT_LABELS); assert.ok(labels.includes('agent-runtime'), 'required agent-runtime label must remain present')"
-            [[ "$EXPECTED_HEAD_REF" == "security/fence-leases-on-circuit-breaker-pause-20261123" || "$EXPECTED_HEAD_REF" == "security/agent-runtime-oidc-replay-e2e-20261124" || "$EXPECTED_HEAD_REF" == "fix/agent-runtime-manual-e2e-dispatch-20261127" ]]
+            [[ "$EXPECTED_HEAD_REF" == "security/fence-leases-on-circuit-breaker-pause-20261123" || "$EXPECTED_HEAD_REF" == "security/agent-runtime-oidc-replay-e2e-20261124" ]]
             [[ "$GITHUB_REF" =~ ^refs/pull/[0-9]+/merge$ ]]
             test "$GITHUB_WORKFLOW_REF" = "$GITHUB_REPOSITORY/.github/workflows/agent-runtime-preview-validation.yml@$GITHUB_REF"
           fi
