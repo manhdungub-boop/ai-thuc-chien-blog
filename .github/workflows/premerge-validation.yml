@@ -1,0 +1,129 @@
+name: Pre-merge Validation
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: premerge-validation-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  aggregate:
+    name: Pre-merge Validation
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Check out exact pull request head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+
+      - name: Classify exact-head changed paths
+        id: scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          scope="$(node scripts/premerge-path-classifier.mjs "$BASE_SHA" "$HEAD_SHA")"
+          echo "scope=$scope" >> "$GITHUB_OUTPUT"
+          echo "Changed-path class: $scope"
+
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Validate documentation-only changes
+        if: steps.scope.outputs.scope == 'docs-only'
+        run: npm run build
+
+      - name: Validate static content-only changes
+        if: steps.scope.outputs.scope == 'content-only'
+        run: |
+          npm run build
+          npm run test:content
+          npm run test:seo
+          node scripts/verify-article-attribution.mjs
+          node scripts/verify-article-diagrams.mjs
+          node scripts/test_article_navigation.cjs
+
+      - name: Validate application and Worker changes
+        if: steps.scope.outputs.scope == 'application-only'
+        run: |
+          node --check worker.mjs
+          node scripts/test_worker_headers.mjs
+          node scripts/test_community_api.mjs
+          node scripts/test_worker_retrieval.mjs
+          node scripts/test_email_verification.mjs
+          node scripts/test-password-reset.mjs
+          python3 scripts/test_community_schema.py
+          python3 scripts/test_analytics_schema.py
+          node scripts/test_d1_preview_config.cjs
+
+      - name: Validate Agent Runtime changes without deployment
+        if: steps.scope.outputs.scope == 'runtime-only'
+        run: |
+          node scripts/test_agent_runtime_workflow_guards.mjs
+          node --check scripts/agent-coordinator-dry-run.mjs
+          node scripts/agent-coordinator-dry-run.mjs agents/examples/read-only-ai-bank-review.tasks.json
+
+      - name: Validate workflow-only changes without deployment
+        if: steps.scope.outputs.scope == 'workflow-only'
+        run: |
+          node scripts/test_premerge_validation_workflow.mjs
+          for file in \
+            scripts/test_workers_builds_workflow_guard.mjs \
+            scripts/test_secret_workflow_dispatch_guards.mjs \
+            scripts/test_agent_runtime_workflow_guards.mjs; do
+            if [[ -f "$file" ]]; then node "$file"; fi
+          done
+
+      - name: Fail-closed validation for mixed or unknown changes
+        if: steps.scope.outputs.scope == 'mixed-unknown'
+        run: |
+          npm run build
+          npm run test:content
+          npm run test:seo
+          node scripts/test_worker_headers.mjs
+          node scripts/test_community_api.mjs
+          node scripts/test_worker_retrieval.mjs
+          node scripts/test_email_verification.mjs
+          node scripts/test-password-reset.mjs
+          python3 scripts/test_community_schema.py
+          python3 scripts/test_analytics_schema.py
+          node scripts/test_d1_preview_config.cjs
+          node scripts/test_premerge_validation_workflow.mjs
+          for file in \
+            scripts/test_workers_builds_workflow_guard.mjs \
+            scripts/test_secret_workflow_dispatch_guards.mjs \
+            scripts/test_agent_runtime_workflow_guards.mjs; do
+            if [[ -f "$file" ]]; then node "$file"; fi
+          done
+
+      - name: Record validation evidence
+        if: always()
+        env:
+          SCOPE: ${{ steps.scope.outputs.scope }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          {
+            echo "### Pre-merge Validation"
+            echo "- Exact head: `$HEAD_SHA`"
+            echo "- Changed-path class: `${SCOPE:-unavailable}`"
+            echo "- Deployment performed: **No**"
+            echo "- Protected environment or secret used: **No**"
+          } >> "$GITHUB_STEP_SUMMARY"
