@@ -45,7 +45,10 @@ Phạm vi: toàn bộ repository `manhdungub-boop/ai-thuc-chien-blog`.
 - Dùng tài khoản thử nghiệm riêng và credential Preview độc lập đã xác minh.
 - Không trả phí, nâng cấp, thiết lập thanh toán hoặc sử dụng trial có rủi ro phát sinh phí.
 - Ưu tiên read-only, offline, mock và Preview; mock không thay thế kiểm chứng live.
-- Không merge hoặc triển khai Production khi chưa đạt đầy đủ release gate và chưa có phê duyệt cần thiết.
+- Không yêu cầu người độc lập hoặc chuyên gia bên ngoài phê duyệt PR/phát hành. Trợ lý tự thực hiện technical review và quyết định theo bằng chứng từ các cổng tự động; không giả mạo danh tính reviewer.
+- Không merge/phát hành nếu required checks chưa PASS trên đúng HEAD SHA, có lỗi Critical/High chưa xử lý, có review finding chưa phân loại, thiếu xác minh Preview/quota hoặc chưa có rollback plan. Check bị skipped, cancelled, stale hoặc không chạy phải ghi BLOCKED/NOT RUN, tuyệt đối không tính là PASS.
+- Nếu nền tảng vẫn chặn bằng required reviewer/protected environment, ghi rõ cấu hình đang chặn và chỉ cập nhật bằng cơ chế quản trị hợp lệ; không dùng tài khoản phụ, token khác hoặc thủ thuật để lách bảo vệ.
+- Production Worker, DNS, D1 Production và live configuration tiếp tục đóng băng cho tới khi toàn bộ release gate kỹ thuật, bảo mật, quota miễn phí và rollback đều đạt.
 
 ## 6. Trình tự làm việc mặc định
 
@@ -55,6 +58,6 @@ Phạm vi: toàn bộ repository `manhdungub-boop/ai-thuc-chien-blog`.
 4. Sửa theo nhóm nguyên nhân gốc; thêm regression test.
 5. Chạy test có mục tiêu; sửa tiếp cho đến khi pass hoặc ghi rõ blocker ngoài quyền kiểm soát.
 6. Đối chiếu kết quả trên đúng SHA; cập nhật audit sau mỗi đợt.
-7. Chỉ chuyển trạng thái release khi mọi gate đều có bằng chứng và reviewer độc lập đã hoàn tất.
+7. Chỉ chuyển trạng thái release khi mọi gate tự động đều có bằng chứng trên đúng SHA; không có bước reviewer độc lập. Nếu nền tảng vẫn yêu cầu người duyệt thì trạng thái là BLOCKED do cấu hình chưa đồng bộ với quy tắc dự án.
 
 Quy tắc ưu tiên: **Không mở rộng công việc khi lỗi cũ chưa được xử lý; không tạo thêm PR để che khuất lỗi; không tuyên bố hoàn tất nếu bằng chứng chưa đủ.**
