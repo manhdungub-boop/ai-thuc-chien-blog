@@ -1,4 +1,5 @@
 name: Agent Runtime Preview Shell Validation
+# Trigger validation against the updated PR-base workflow branch filter; E2E remains gated.
 # The base-branch validation job asserts this exact owner-only manual-dispatch contract.
 # Manual dispatch is owner-pinned; automatic PR E2E remains on the pre-existing security allowlist.
 
