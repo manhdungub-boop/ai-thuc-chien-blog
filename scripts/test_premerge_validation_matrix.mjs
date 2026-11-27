@@ -18,19 +18,20 @@ test('every path class maps to its intended bounded validation step', () => {
   for (const [pathClass, stepName] of requiredBranches) {
     const step = workflow.split('- name: ' + stepName)[1];
     assert.ok(step, 'missing workflow step: ' + stepName);
-    assert.ok(step.split('\\n')[1].includes("if: steps.scope.outputs.scope == '" + pathClass + "'"),
+    const expectedCondition = "if: steps.scope.outputs.scope == '" + pathClass + "'";
+    assert.ok(step.slice(0, 180).includes(expectedCondition),
       stepName + ' must be conditional on ' + pathClass);
   }
 });
 
 test('content path class cannot pass without exact-head Preview success', () => {
-  assert.match(workflow, /name: Require exact-head Pages Preview for static content/);
-  assert.match(workflow, /item\\.get\\("head_sha"\\) == os\\.environ\\["HEAD_SHA"\\]/);
-  assert.match(workflow, /matching\\[0\\]\\.get\\("conclusion"\\) == "success"/);
-  assert.match(workflow, /failed or was skipped; refusing to pass aggregate validation/);
+  assert.ok(workflow.includes('name: Require exact-head Pages Preview for static content'));
+  assert.ok(workflow.includes('item.get("head_sha") == os.environ["HEAD_SHA"]'));
+  assert.ok(workflow.includes('matching[0].get("conclusion") == "success"'));
+  assert.ok(workflow.includes('failed or was skipped; refusing to pass aggregate validation'));
 });
 
 test('mixed and unknown paths have a strict fallback', () => {
-  assert.match(workflow, /scope == 'mixed-unknown'/);
-  assert.match(workflow, /Fail-closed validation for mixed or unknown changes/);
+  assert.ok(workflow.includes("scope == 'mixed-unknown'"));
+  assert.ok(workflow.includes('Fail-closed validation for mixed or unknown changes'));
 });
