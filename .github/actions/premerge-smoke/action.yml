@@ -1,0 +1,7 @@
+name: Pre-merge smoke fixture
+description: Temporary inert composite action metadata for isolated workflow-only route validation
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: echo "workflow-only fixture; not invoked"
