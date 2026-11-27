@@ -5,6 +5,7 @@ This checklist is the release gate for changes to the public site. A green CI ru
 ## 1. Before merging
 
 - [ ] Confirm the pull request targets the intended default branch and contains only expected files.
+- [ ] Inspect hosting Git integration before any merge: if Cloudflare Pages Production deployments are enabled for `main`, merging/pushing to `main` is a Production release trigger. During the Production freeze, do not merge to or push to `main`; use isolated branch Preview only.
 - [ ] Read the diff for accidental secrets, tokens, private URLs, generated noise, and unrelated changes.
 - [ ] Ensure all required GitHub Actions checks pass on the exact latest head commit; skipped, stale, cancelled or missing checks are BLOCKED, never PASS.
 - [ ] Complete automated technical/security review of the exact diff and record findings; no independent human/expert approval is required.
