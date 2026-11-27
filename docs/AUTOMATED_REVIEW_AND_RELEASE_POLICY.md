@@ -38,6 +38,7 @@ Tất cả điều kiện áp dụng phải đạt trên đúng commit SHA đang
 Việc bỏ người duyệt độc lập không đồng nghĩa bỏ kiểm soát rủi ro:
 
 - Việc release gate PASS chỉ xác nhận một thay đổi đủ điều kiện được xem xét phát hành; không tự động gỡ lệnh đóng băng Production. Không sửa Production Worker, DNS, D1 Production hoặc cấu hình đang phục vụ người dùng khi chưa có quyết định mở băng riêng, rõ phạm vi cho chính thay đổi đó.
+- Cloudflare Pages project `ai-thuc-chien-blog` đang liên kết GitHub với `production_branch=main` và bật `production_deployments_enabled=true`. Vì vậy, merge hoặc push vào `main` có thể tự kích hoạt triển khai Production qua Git integration, kể cả khi workflow GitHub Actions triển khai thủ công không được chạy. Trong thời gian đóng băng, không merge PR vào `main` và không push trực tiếp lên `main`; mọi kiểm tra phải dùng branch/Preview. Không coi việc không chạy lệnh deploy thủ công là bằng chứng không có Production deployment.
 - Không chạy migration hoặc thao tác dữ liệu thật từ Preview.
 - Không bật lịch Agent 24/7, RSS ingestion, AI Bank ingestion hay Facebook publishing khi quota, quyền và kiểm thử vận hành chưa được xác minh.
 - Không xuất bản nội dung chưa qua kiểm chứng nguồn, chất lượng, trùng lặp và kiểm tra an toàn.
