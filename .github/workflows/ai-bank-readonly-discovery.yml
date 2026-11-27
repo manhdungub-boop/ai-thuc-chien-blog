@@ -18,6 +18,10 @@ concurrency:
 
 jobs:
   discover:
+    # DISABLED: this manual collector makes outbound requests without an atomic
+    # AI Bank quota reservation. Keep it closed until a dedicated OIDC-bound
+    # reservation gate is implemented and independently reviewed.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     env:
       # User-selected RSS boundary: From now on (2026-11-22 03:04:52 UTC).
