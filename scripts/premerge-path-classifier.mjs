@@ -14,9 +14,8 @@ const PATH_CLASSES = Object.freeze({
   ],
   content: [
     /^articles\//,
-    /^(?:index\.html|thu-vien\.html|ngan-hang-ai\.html|sitemap\.xml|feed\.xml|styles\.css)$/,
+    /^(?:index\.html|thu-vien\.html|ngan-hang-ai\.html|sitemap\.xml|feed\.xml)$/,
     /^data\/ai-tools\.json$/,
-    /^(?:images|illustrations)\//,
   ],
   runtime: [
     /^agents\/runtime\//,
@@ -25,10 +24,11 @@ const PATH_CLASSES = Object.freeze({
     /^tests\/agent-/,
   ],
   application: [
-    /^(?:worker\.mjs|wrangler(?:\.[^/]+)?\.jsonc?)$/,
+    /^(?:worker\.mjs|script\.js|styles\.css|wrangler(?:\.[^/]+)?\.jsonc?)$/,
     /^(?:src|functions|migrations|db)\//,
     /^tests\/(?!agent-)/,
     /^scripts\/(?!agent-)/,
+    /^(?:images|illustrations)\//,
     /^package(?:-lock)?\.json$/,
   ],
   workflow: [
