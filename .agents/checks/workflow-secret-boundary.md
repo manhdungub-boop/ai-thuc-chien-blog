@@ -10,7 +10,7 @@ Mọi job hoặc step nhận `${{ secrets.* }}` (token Cloudflare, credential st
 
 ## Vi phạm khi một job hoặc step dùng secret mà
 
-- chạy được từ `pull_request`, `pull_request_target`, `push` lên branch khác `main`, hoặc `workflow_run` mà chỉ kiểm tra tên branch. Với `workflow_run`, bắt buộc xác minh đồng thời producer event là `push`, `github.event.workflow_run.head_repository.full_name == github.repository`, và `github.event.workflow_run.head_branch == 'main'`; không chấp nhận producer chạy từ `pull_request` hay fork, kể cả fork đặt tên branch là `main`. Nếu không thể chứng minh cả nguồn repo và event producer đáng tin cậy, không chuyển SHA hoặc artifact của run đó sang job có secret;
+- chạy được từ `pull_request`, `pull_request_target`, `push` lên branch khác `main`, hoặc `workflow_run` mà chỉ kiểm tra tên branch. Với `workflow_run`, consumer chỉ được tin producer khi đồng thời xác minh `github.event.workflow_run.event` là `push` hoặc `workflow_dispatch`, `github.event.workflow_run.head_repository.full_name == github.repository`, và `github.event.workflow_run.head_branch == 'main'`. Chấp nhận `workflow_dispatch` là cần thiết cho các deployment workflow được dispatch trực tiếp từ `main`; tuyệt đối không chấp nhận producer chạy từ `pull_request` hay fork, kể cả fork đặt tên branch là `main`. Nếu không thể chứng minh cả nguồn repo, loại event và branch đáng tin cậy, không chuyển SHA hoặc artifact của run đó sang job có secret;
 - là `workflow_dispatch` nhưng thiếu điều kiện `github.ref == 'refs/heads/main'` trong `if:` của job hoặc của chính step mang secret;
 - checkout một ref do người gọi kiểm soát (`github.head_ref`, input tự do, SHA của pull request) thay vì SHA bất biến của lần dispatch (`${{ github.sha }}`) hoặc `workflow_run.head_sha` đã được ràng buộc với trusted repository, trusted producer event và branch `main`. Không dùng tên branch mutable như `main` làm checkout ref khi cần chứng minh exact commit;
 - checkout mà không có `persist-credentials: false`;
@@ -59,4 +59,4 @@ jobs:
           persist-credentials: false
 ```
 
-Đối với consumer dùng `workflow_run`, ngoài kiểm tra nguồn repo, producer event và branch như trên, checkout đúng `github.event.workflow_run.head_sha`; không checkout branch name hoặc artifact của run không đáng tin cậy.
+Đối với consumer dùng `workflow_run`, kiểm tra `workflow_run.event` thuộc `push` hoặc `workflow_dispatch`, `workflow_run.head_repository.full_name` bằng repository hiện tại, và `workflow_run.head_branch` là `main`; sau đó checkout đúng `github.event.workflow_run.head_sha`. Không checkout branch name hoặc artifact của run không đáng tin cậy.
