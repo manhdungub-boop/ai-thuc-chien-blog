@@ -343,24 +343,53 @@ jobs:
           const deployStep = e2eWorkflow.slice(deployStart, rateLimitDeployStart);
           const rateLimitDeployStep = e2eWorkflow.slice(rateLimitDeployStart, restoreStart);
           const restoreStep = e2eWorkflow.slice(restoreStart);
-          const secretReferences = step => [...step.matchAll(/\$\{\{([\s\S]*?)\}\}/g)]
-            .map(match => match[1].trim())
-            .filter(expression => /\bsecrets\b/.test(expression))
-            .map(expression => expression.replace(/\s+/g, '').replace(/\[\s*(['"])([A-Z0-9_]+)\1\s*\]/g, '.$2'));
+          const secretReferences = source => [...source.matchAll(/\$\{\{([\s\S]*?)\}\}/g)]
+            .flatMap(match => {
+              const expression = match[1];
+              const references = [...expression.matchAll(/\bsecrets\b\s*(?:\.\s*([A-Z0-9_]+)|\[\s*(['"])([A-Z0-9_]+)\2\s*\])/gi)];
+              if (/\bsecrets\b/i.test(expression) && references.length === 0) return ['secrets.<unparsed>'];
+              return references.map(reference => 'secrets.' + (reference[1] || reference[3]).toUpperCase());
+            });
           const assertOnlySecret = (label, step, expectedSecret) => {
             const references = secretReferences(step);
             assert.deepEqual(references, ['secrets.' + expectedSecret], label + ' must reference exactly the intended GitHub Secret');
           };
+          const assertNoBillingOrPreviewSecret = (label, source) => {
+            const references = secretReferences(source);
+            assert.ok(!references.includes('secrets.CLOUDFLARE_BILLING_READ_API_TOKEN'), label + ' must not reference the Billing Read secret');
+            assert.ok(!references.includes('secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN'), label + ' must not reference the Preview deployment secret');
+          };
+          const extractEnvBlock = (source, envLine, childIndent) => {
+            const lines = source.split('\\n');
+            const index = lines.findIndex(line => line === envLine);
+            if (index < 0) return '';
+            const block = [];
+            for (const line of lines.slice(index + 1)) {
+              if (line.trim() === '') { block.push(line); continue; }
+              if (!line.startsWith(childIndent)) break;
+              block.push(line);
+            }
+            return block.join('\\n');
+          };
+          const workflowHeader = workflow.slice(0, workflow.indexOf('\\njobs:'));
+          assertNoBillingOrPreviewSecret('workflow-level env', extractEnvBlock(workflowHeader, 'env:', '  '));
+          const e2eJobStart = workflow.indexOf('  one-shot-preview-e2e:\\n');
+          const e2eStepsStart = workflow.indexOf('    steps:\\n', e2eJobStart);
+          assert.ok(e2eJobStart >= 0 && e2eStepsStart > e2eJobStart, 'E2E job environment boundary must exist');
+          const e2eJobHeader = workflow.slice(e2eJobStart, e2eStepsStart);
+          assertNoBillingOrPreviewSecret('E2E job-level env', extractEnvBlock(e2eJobHeader, '    env:', '      '));
           assertOnlySecret('Workers Free-plan verification', planGateStep, 'CLOUDFLARE_BILLING_READ_API_TOKEN');
           assertOnlySecret('one-shot Preview deployment', deployStep, 'CLOUDFLARE_AGENT_PREVIEW_API_TOKEN');
           assertOnlySecret('rate-limit Preview deployment', rateLimitDeployStep, 'CLOUDFLARE_AGENT_PREVIEW_API_TOKEN');
           assertOnlySecret('Preview restoration', restoreStep, 'CLOUDFLARE_AGENT_PREVIEW_API_TOKEN');
-          const indexedBillingReference = 'env:\n  BILLING_TOKEN: ' + dollar + '{{ secrets[\'CLOUDFLARE_BILLING_READ_API_TOKEN\'] }}';
-          const indexedPreviewReference = 'env:\n  PREVIEW_TOKEN: ' + dollar + '{{ secrets[\'CLOUDFLARE_AGENT_PREVIEW_API_TOKEN\'] }}';
-          const spacedIndexedPreviewReference = 'env:\n  PREVIEW_TOKEN: ' + dollar + '{{  secrets [ "CLOUDFLARE_AGENT_PREVIEW_API_TOKEN" ]  }}';
+          const indexedBillingReference = 'env:\\n  BILLING_TOKEN: ' + dollar + '{{ secrets[\\'CLOUDFLARE_BILLING_READ_API_TOKEN\\'] }}';
+          const indexedPreviewReference = 'env:\\n  PREVIEW_TOKEN: ' + dollar + '{{ secrets[\\'CLOUDFLARE_AGENT_PREVIEW_API_TOKEN\\'] }}';
+          const spacedIndexedPreviewReference = 'env:\\n  PREVIEW_TOKEN: ' + dollar + '{{  secrets [ "CLOUDFLARE_AGENT_PREVIEW_API_TOKEN" ]  }}';
+          const mixedCaseExtraPreviewReference = 'env:\\n  BILLING_TOKEN: ' + dollar + '{{ Secrets.CLOUDFLARE_BILLING_READ_API_TOKEN }}\\n  PREVIEW_TOKEN: ' + dollar + '{{ Secrets [ "cloudflare_agent_preview_api_token" ] }}';
           assertOnlySecret('indexed Billing Read syntax regression fixture', indexedBillingReference, 'CLOUDFLARE_BILLING_READ_API_TOKEN');
           assertOnlySecret('indexed Preview deployment syntax regression fixture', indexedPreviewReference, 'CLOUDFLARE_AGENT_PREVIEW_API_TOKEN');
           assertOnlySecret('whitespace/indexed Preview syntax regression fixture', spacedIndexedPreviewReference, 'CLOUDFLARE_AGENT_PREVIEW_API_TOKEN');
+          assert.throws(() => assertOnlySecret('mixed-case extra Preview secret in Billing step', mixedCaseExtraPreviewReference, 'CLOUDFLARE_BILLING_READ_API_TOKEN'), /must reference exactly the intended GitHub Secret/);
           assert.throws(() => assertOnlySecret('forbidden indexed Preview secret in plan gate', indexedPreviewReference, 'CLOUDFLARE_BILLING_READ_API_TOKEN'), /must reference exactly the intended GitHub Secret/);
           assert.throws(() => assertOnlySecret('forbidden indexed Billing secret in deploy step', indexedBillingReference, 'CLOUDFLARE_AGENT_PREVIEW_API_TOKEN'), /must reference exactly the intended GitHub Secret/);
           assert.ok(e2eWorkflow.includes('function classifyCloudflareWorkersPlan'), 'the Free-plan classifier must be present in the gated E2E job');
