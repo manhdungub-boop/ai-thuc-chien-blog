@@ -91,6 +91,9 @@ jobs:
       - name: Test article content quality
         run: npm run test:content
 
+      - name: Test published article extraction for draft similarity audit
+        run: python3 scripts/test_audit_draft_similarity.py
+
       - name: Validate AI bank catalog and review queue
         run: |
           node scripts/validate-ai-tools-catalog.mjs data/ai-tools.json
