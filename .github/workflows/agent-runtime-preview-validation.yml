@@ -7,6 +7,7 @@ on:
     - main
     - integration/agent-runtime-v5-preview-20261120
     - "feat/agent-runtime-**"
+    - "feat/ai-bank-discovery-workflow-20261126"
     - "fix/agent-runtime-**"
     - "test/agent-runtime-**"
     - "security/agent-runtime-**"
@@ -111,7 +112,7 @@ jobs:
 
       - name: Run isolated Worker shell and contract tests
         timeout-minutes: 4
-        run: timeout --signal=TERM --kill-after=10s 180s node --test agents/runtime/tests/*.test.mjs
+        run: timeout --signal=TERM --kill-after=10s 180s node --experimental-loader ./agents/runtime/tests/cloudflare-workers-loader.mjs --test agents/runtime/tests/*.test.mjs
 
       - name: Validate Preview and isolated fault-harness bundles without deployment
         working-directory: agents/runtime

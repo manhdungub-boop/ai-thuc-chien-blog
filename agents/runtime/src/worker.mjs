@@ -854,6 +854,72 @@ const worker = {
         return json({ ok: false, error: "control_unavailable" }, 503);
       }
     }
+    if (url.pathname === "/internal/oidc/ai-bank-reserve") {
+      if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
+      if (env.AGENT_AI_BANK_INGESTION_ENABLED !== "true") return json({ ok: false, error: "ai_bank_ingestion_disabled" }, 503);
+      if (env.AGENT_OIDC_ENABLED !== "true") return json({ ok: false, error: "oidc_operator_disabled" }, 503);
+      if ([...url.searchParams.keys()].length > 0) return json({ ok: false, error: "request_invalid" }, 400);
+      if (!/^application\/json(?:\s*;|$)/i.test(request.headers.get("content-type") || "")) {
+        return json({ ok: false, error: "json_content_type_required" }, 415);
+      }
+      const parsedBody = await readBoundedJsonValueRequest(request, 256);
+      if (!parsedBody.ok) return json({ ok: false, error: "request_invalid" }, parsedBody.status);
+      if (!parsedBody.value || typeof parsedBody.value !== "object" || Array.isArray(parsedBody.value) ||
+          Object.keys(parsedBody.value).length !== 0) {
+        return json({ ok: false, error: "ai_bank_reservation_request_invalid" }, 400);
+      }
+      const authorization = request.headers.get("authorization") || "";
+      const tokenMatch = /^Bearer ([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/.exec(authorization);
+      if (!tokenMatch || tokenMatch[1].length > 16384) return json({ ok: false, error: "github_oidc_token_required" }, 401);
+      const expected = {
+        audience: env.AGENT_OIDC_AUDIENCE,
+        repository: env.AGENT_OIDC_REPOSITORY,
+        repositoryOwner: env.AGENT_OIDC_REPOSITORY_OWNER,
+        repositoryId: env.AGENT_OIDC_REPOSITORY_ID,
+        repositoryOwnerId: env.AGENT_OIDC_REPOSITORY_OWNER_ID,
+        ref: env.AGENT_OIDC_REF,
+        workflowRef: env.AGENT_AI_BANK_OIDC_WORKFLOW_REF,
+        actorId: env.AGENT_AI_BANK_SCHEDULE_ACTOR_ID,
+        eventName: "schedule",
+      };
+      if (!Object.entries(expected).every(([key, value]) =>
+        typeof value === "string" && value.length > 0 && value.length <= (key === "workflowRef" ? 512 : 256)) ||
+        !/^\d{1,20}$/.test(expected.actorId) ||
+        !/^\d{1,20}$/.test(expected.repositoryId) ||
+        !/^\d{1,20}$/.test(expected.repositoryOwnerId)) {
+        return json({ ok: false, error: "github_oidc_schedule_policy_unconfigured" }, 503);
+      }
+      const authorized = await authorizeGitHubActionsOperator(tokenMatch[1], { env, expected });
+      if (!authorized.ok) {
+        if (authorized.error === "oidc_token_replayed") return json({ ok: false, error: "github_oidc_token_replayed" }, 409);
+        if (authorized.error?.includes("unavailable") || authorized.error === "oidc_replay_response_invalid") {
+          return json({ ok: false, error: "github_oidc_verification_unavailable" }, 503);
+        }
+        return json({ ok: false, error: "github_oidc_token_invalid" }, 401);
+      }
+      const day = currentUtcBudgetDay();
+      let reservation;
+      try {
+        reservation = await writeStateStore(env, "/external-budget/consume", {
+          day, scope: "ai_bank_discovery", count: 5,
+        });
+      } catch (error) {
+        if (error?.status === 429) return json({ ok: false, error: "daily_external_request_budget_exhausted" }, 429);
+        return json({ ok: false, error: "ai_bank_quota_reservation_unavailable" }, 503);
+      }
+      const budget = reservation?.budget;
+      if (!budget || budget.ok !== true || budget.day !== day || budget.scope !== "ai_bank_discovery" ||
+          budget.limit !== 10 || !Number.isSafeInteger(budget.used) || budget.used < 0 || budget.used > 10 ||
+          !Number.isSafeInteger(budget.remaining) || budget.remaining < 0 ||
+          budget.used + budget.remaining !== budget.limit || typeof budget.allowed !== "boolean") {
+        return json({ ok: false, error: "ai_bank_quota_reservation_invalid" }, 503);
+      }
+      if (!budget.allowed) return json({ ok: false, error: "daily_external_request_budget_exhausted" }, 429);
+      if (budget.used < 5 || budget.remaining > 5) return json({ ok: false, error: "ai_bank_quota_reservation_invalid" }, 503);
+      return json({ ok: true, scope: "ai_bank_discovery", day, reserved: 5,
+        used: budget.used, limit: budget.limit, remaining: budget.remaining });
+    }
+
     if (url.pathname === "/internal/oidc/ai-bank-cursor") {
       if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
       if (env.AGENT_AI_BANK_INGESTION_ENABLED !== "true") {

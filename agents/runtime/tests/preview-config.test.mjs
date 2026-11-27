@@ -34,6 +34,9 @@ test("dedicated Agent Runtime Preview config binds its isolated State Store and 
     AGENT_OIDC_REF: "refs/heads/main",
     AGENT_OIDC_WORKFLOW_REF: "manhdungub-boop/ai-thuc-chien-blog/.github/workflows/agent-runtime-operator.yml@refs/heads/main",
     AGENT_OIDC_ACTOR_ID: "342528485",
+    AGENT_AI_BANK_INGESTION_ENABLED: "false",
+    AGENT_AI_BANK_OIDC_WORKFLOW_REF: "manhdungub-boop/ai-thuc-chien-blog/.github/workflows/ai-bank-official-feed-discovery.yml@refs/heads/main",
+    AGENT_AI_BANK_SCHEDULE_ACTOR_ID: "342528485",
   });
   assert.equal(Object.hasOwn(config, "triggers"), false, "recurring triggers stay absent until Free-plan headroom is independently verified and approved");
   assert.deepEqual(config.ratelimits, [{
