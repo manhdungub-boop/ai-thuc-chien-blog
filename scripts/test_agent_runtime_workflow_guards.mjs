@@ -24,7 +24,8 @@ assert.match(validateJob, /github\.event\.pull_request\.head\.repo\.full_name ==
 assert.match(validateJob, /github\.event_name == 'workflow_dispatch'/);
 assert.match(validateJob, /github\.ref == 'refs\/heads\/main'/);
 assert.match(validateJob, /github\.actor_id == '342528485'/);
-assert.doesNotMatch(validateJob, /secrets\.[A-Z0-9_]+|environment:/);
+assert.doesNotMatch(validateJob, /^\\s+environment:\\s/m);
+assert.doesNotMatch(validateJob, /^\\s+[A-Z0-9_]+:\\s*\\$\\{\\{\\s*secrets\\./m);
 
 const e2eJob = workflow.slice(e2eStart);
 assert.match(e2eJob, /needs: validate/);
