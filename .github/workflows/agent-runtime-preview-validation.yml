@@ -1,4 +1,5 @@
 name: Agent Runtime Preview Shell Validation
+# Validate this AI Bank base branch through the runtime shell workflow without enabling E2E deployment.
 
 on:
   pull_request:
