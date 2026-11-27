@@ -334,6 +334,23 @@ jobs:
           assert.ok(e2eWorkflow.includes('--config "$generated_config"'));
           assert.ok(e2eWorkflow.includes("readFile('wrangler.preview.jsonc', 'utf8')"));
           assert.ok(e2eWorkflow.includes('if: always()'), 'rollback must run even after an E2E failure');
+          const billingSecretRef = 'CLOUDFLARE_BILLING_READ_API_TOKEN: ' + dollar + '{{ secrets.CLOUDFLARE_BILLING_READ_API_TOKEN }}';
+          const previewSecretRef = 'CLOUDFLARE_API_TOKEN: ' + dollar + '{{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}';
+          const planGateStart = e2eWorkflow.indexOf('      - name: Verify Workers Free plan before deployment');
+          const deployStart = e2eWorkflow.indexOf('      - name: Deploy the one-shot read-only E2E configuration to dedicated Preview');
+          const rateLimitDeployStart = e2eWorkflow.indexOf('      - name: Deploy a bounded low-threshold rate-limit probe configuration');
+          const restoreStart = e2eWorkflow.indexOf('      - name: Always restore Preview to disabled and paused configuration');
+          assert.ok(planGateStart >= 0 && deployStart > planGateStart && rateLimitDeployStart > deployStart && restoreStart > rateLimitDeployStart, 'Billing and Preview credential steps must remain present and ordered');
+          const planGateStep = e2eWorkflow.slice(planGateStart, deployStart);
+          const deployStep = e2eWorkflow.slice(deployStart, rateLimitDeployStart);
+          const rateLimitDeployStep = e2eWorkflow.slice(rateLimitDeployStart, restoreStart);
+          const restoreStep = e2eWorkflow.slice(restoreStart);
+          assert.ok(planGateStep.includes(billingSecretRef), 'Workers Free-plan verification must use the dedicated Billing Read secret');
+          assert.equal(planGateStep.includes(previewSecretRef), false, 'plan verification must not use the Preview deployment token');
+          for (const [label, step] of [['one-shot Preview deployment', deployStep], ['rate-limit Preview deployment', rateLimitDeployStep], ['Preview restoration', restoreStep]]) {
+            assert.ok(step.includes(previewSecretRef), label + ' must use the dedicated Preview deployment token');
+            assert.equal(step.includes(billingSecretRef), false, label + ' must never use the Billing Read token');
+          }
           assert.ok(e2eWorkflow.includes('function classifyCloudflareWorkersPlan'), 'the Free-plan classifier must be present in the gated E2E job');
           assert.ok(e2eWorkflow.includes('info.total_count === payload.result.length'), 'total_count must equal the returned result length when used as completeness proof');
           assert.ok(e2eWorkflow.includes('info.next_page === undefined'), 'total_count cannot override an explicit or malformed next_page marker');
