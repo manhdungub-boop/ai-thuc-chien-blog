@@ -346,13 +346,13 @@
         "self_hosted"
       ],
       "description": "Nền tảng workflow automation kết nối ứng dụng, trigger/action và AI agent.",
-      "free_tier_summary": "Cloud Free có giá $0, không cần thẻ và không giới hạn số flow. Trang giá chính thức nêu 1.000 credits/tháng, nhưng cùng trang có mô tả reset/overage không nhất quán: bảng so sánh ghi reset hằng ngày và chờ đến ngày hôm sau, còn FAQ nói 1.000 credits làm mới theo tháng. Kiểm tra quota thực tế trong workspace; không bật pay-as-you-go hoặc nâng cấp nếu ngân sách bằng 0. AI steps tiêu thụ credits theo model (fast 2, smart 10, frontier 20).",
+      "free_tier_summary": "Cloud Free có giá $0, không cần thẻ và không giới hạn số flow; gói Free gồm 1.000 credits/tháng, reset hằng tháng và lượt chạy vượt quota chờ đến tháng tiếp theo. Một lượt chạy Flow là 1 credit; AI step được tính theo chi phí thực tế của model quy đổi thành credits; mỗi agent tool call tính 1 credit. Kiểm tra quota thực tế trong workspace; không bật pay-as-you-go hoặc nâng cấp nếu ngân sách bằng 0.",
       "official_sources": [
         "https://www.activepieces.com/pricing",
         "https://www.activepieces.com/docs/about/license",
         "https://www.activepieces.com/docs/install/overview"
       ],
-      "last_verified": "2026-11-20",
+      "last_verified": "2026-11-27",
       "verification_status": "verified",
       "status": "active",
       "tags": [
