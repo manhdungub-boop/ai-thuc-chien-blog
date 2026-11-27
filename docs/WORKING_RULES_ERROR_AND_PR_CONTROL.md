@@ -46,9 +46,9 @@ Phạm vi: toàn bộ repository `manhdungub-boop/ai-thuc-chien-blog`.
 - Không trả phí, nâng cấp, thiết lập thanh toán hoặc sử dụng trial có rủi ro phát sinh phí.
 - Ưu tiên read-only, offline, mock và Preview; mock không thay thế kiểm chứng live.
 - Không yêu cầu người độc lập hoặc chuyên gia bên ngoài phê duyệt PR/phát hành. Trợ lý tự thực hiện technical review và quyết định theo bằng chứng từ các cổng tự động; không giả mạo danh tính reviewer.
-- Không merge/phát hành nếu required checks chưa PASS trên đúng HEAD SHA, có lỗi Critical/High chưa xử lý, có review finding chưa phân loại, thiếu xác minh Preview/quota hoặc chưa có rollback plan. Check bị skipped, cancelled, stale hoặc không chạy phải ghi BLOCKED/NOT RUN, tuyệt đối không tính là PASS.
+- Không merge/phát hành nếu required checks chưa PASS trên đúng HEAD SHA, còn bất kỳ finding Critical/High nào chưa khắc phục (bất kể nhóm lỗi), có review finding chưa phân loại, thiếu xác minh Preview/quota hoặc chưa có rollback plan. Phân loại không thay thế khắc phục Critical/High. Check bị skipped, cancelled, stale hoặc không chạy phải ghi BLOCKED/NOT RUN, tuyệt đối không tính là PASS.
 - Nếu nền tảng vẫn chặn bằng required reviewer/protected environment, ghi rõ cấu hình đang chặn và chỉ cập nhật bằng cơ chế quản trị hợp lệ; không dùng tài khoản phụ, token khác hoặc thủ thuật để lách bảo vệ.
-- Production Worker, DNS, D1 Production và live configuration tiếp tục đóng băng cho tới khi toàn bộ release gate kỹ thuật, bảo mật, quota miễn phí và rollback đều đạt.
+- Production Worker, DNS, D1 Production và live configuration tiếp tục đóng băng kể cả khi toàn bộ release gate kỹ thuật, bảo mật, quota miễn phí và rollback đã đạt. PASS chỉ làm thay đổi đủ điều kiện để xem xét phát hành; chỉ mở băng cho một thay đổi Production cụ thể bằng quyết định phát hành riêng, có phạm vi rõ ràng.
 
 ## 6. Trình tự làm việc mặc định
 
