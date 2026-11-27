@@ -94,7 +94,7 @@ jobs:
               print("pending")
           elif matching[0].get("status") != "completed":
               print("pending")
-          elif matching[-1].get("conclusion") == "success":
+          elif matching[0].get("conclusion") == "success":
               print("success")
           else:
               print("failure")
