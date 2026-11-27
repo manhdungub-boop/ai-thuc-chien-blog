@@ -52,6 +52,12 @@ jobs:
           echo "scope=$scope" >> "$GITHUB_OUTPUT"
           echo "Changed-path class: $scope"
 
+      - name: Validate path-class routing contract for every PR
+        run: |
+          node scripts/test_premerge_path_classifier.mjs
+          node scripts/test_premerge_validation_workflow.mjs
+          node scripts/test_premerge_validation_matrix.mjs
+
       - name: Install repository dependencies
         run: npm install --ignore-scripts --no-save --package-lock=false --no-audit --no-fund
 
@@ -144,9 +150,6 @@ jobs:
       - name: Validate workflow-only changes without deployment
         if: steps.scope.outputs.scope == 'workflow-only'
         run: |
-          node scripts/test_premerge_path_classifier.mjs
-          node scripts/test_premerge_validation_workflow.mjs
-          node scripts/test_premerge_validation_matrix.mjs
           for file in \
             scripts/test_workers_builds_workflow_guard.mjs \
             scripts/test_secret_workflow_dispatch_guards.mjs \
@@ -168,9 +171,6 @@ jobs:
           python3 scripts/test_community_schema.py
           python3 scripts/test_analytics_schema.py
           node scripts/test_d1_preview_config.cjs
-          node scripts/test_premerge_path_classifier.mjs
-          node scripts/test_premerge_validation_workflow.mjs
-          node scripts/test_premerge_validation_matrix.mjs
           for file in \
             scripts/test_workers_builds_workflow_guard.mjs \
             scripts/test_secret_workflow_dispatch_guards.mjs \
