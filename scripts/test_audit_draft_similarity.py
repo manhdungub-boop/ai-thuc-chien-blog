@@ -3,7 +3,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from audit_draft_similarity import published_words
+import runpy
+
+published_words = runpy.run_path(str(Path(__file__).with_name('audit-draft-similarity.py')))['published_words']
 
 
 class PublishedArticleExtractionTests(unittest.TestCase):
