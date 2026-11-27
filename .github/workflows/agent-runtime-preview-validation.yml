@@ -41,7 +41,7 @@ concurrency:
 
 jobs:
   validate:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.actor_id == '342528485'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
