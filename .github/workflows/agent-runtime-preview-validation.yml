@@ -1,4 +1,7 @@
 name: Agent Runtime Preview Shell Validation
+# Trigger validation against the updated PR-base workflow branch filter; E2E remains gated.
+# The base-branch validation job asserts this exact owner-only manual-dispatch contract.
+# Manual dispatch is owner-pinned; automatic PR E2E remains on the pre-existing security allowlist.
 
 on:
   pull_request:
@@ -19,12 +22,21 @@ on:
       - ".github/workflows/agent-runtime-preview-validation.yml"
       - ".github/workflows/agent-runtime-operator.yml"
   workflow_dispatch:
+    inputs:
+      pull_request_number:
+        description: Open same-repository pull request number to validate
+        required: true
+        type: number
+      expected_head_sha:
+        description: Exact 40-character PR head SHA to validate and deploy to Preview
+        required: true
+        type: string
 permissions:
   contents: read
 
 concurrency:
   group: agent-runtime-preview-validation-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   validate:
@@ -34,7 +46,7 @@ jobs:
       - name: Check out the exact PR head validated by the one-shot E2E job
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 (Node.js 24)
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.event.pull_request.head.sha || inputs.expected_head_sha || github.sha }}
           persist-credentials: false
 
       - name: Set up Node.js
@@ -287,9 +299,15 @@ jobs:
             /must not reference secret values/,
             'secret guard must inspect steps inserted immediately after its own assertion');
           const dollar = String.fromCharCode(36);
-          const expectedHeadCheckout = "ref: " + dollar + "{{ github.event.pull_request.head.sha || github.sha }}";
+          const expectedHeadCheckout = "ref: " + dollar + "{{ github.event.pull_request.head.sha || inputs.expected_head_sha || github.sha }}";
           assert.ok(workflow.includes(expectedHeadCheckout), "validation must test the exact PR head the E2E job deploys");
           assert.ok(e2eWorkflow.includes("github.event.action == 'synchronize'"));
+          assert.ok(e2eWorkflow.includes("github.event_name == 'workflow_dispatch'"));
+          assert.ok(e2eWorkflow.includes("github.ref == 'refs/heads/main'"));
+          assert.ok(e2eWorkflow.includes("inputs.expected_head_sha"));
+          assert.ok(e2eWorkflow.includes("inputs.pull_request_number"));
+          assert.ok(e2eWorkflow.includes("pr.head?.sha, process.env.EXPECTED_SHA"));
+          assert.ok(e2eWorkflow.includes("pull-requests: read"));
           assert.ok(e2eWorkflow.includes("github.event.pull_request.labels.*.name"));
           assert.ok(e2eWorkflow.includes("github.actor_id == '342528485'"), 'one-shot E2E must be restricted to repository owner actor');
           assert.ok(e2eWorkflow.includes("github.event_name == 'workflow_dispatch'"), 'manual dispatch path must be owner-pinned and explicit');
@@ -301,6 +319,11 @@ jobs:
           assert.ok(!e2eWorkflow.includes("github.event.pull_request.base.ref == 'fix/ai-bank-discovery-ingestion-gate-20261127'"), 'AI Bank base must not widen automatic PR E2E allowlist');
           assert.ok(workflow.includes("cancel-in-progress: ${{ github.event_name == 'pull_request' }}"), 'manual dispatches must not cancel an active E2E run');
           assert.ok(e2eWorkflow.includes("github.event.pull_request.head.ref == 'security/fence-leases-on-circuit-breaker-pause-20261123'"));
+          assert.ok(e2eWorkflow.includes("github.event.pull_request.head.ref == 'security/agent-runtime-oidc-replay-e2e-20261124'"));
+          assert.ok(e2eWorkflow.includes("github.event.pull_request.base.ref == 'integration/agent-runtime-v5-preview-20261120'"));
+          assert.ok(!e2eWorkflow.includes("github.event.pull_request.head.ref == 'fix/agent-runtime-manual-e2e-dispatch-20261127'"), 'manual dispatch branch must not widen the automatic PR E2E allowlist');
+          assert.ok(!e2eWorkflow.includes("github.event.pull_request.base.ref == 'fix/ai-bank-discovery-ingestion-gate-20261127'"), 'AI Bank branch must not widen the automatic PR E2E base allowlist');
+          assert.ok(workflow.includes("cancel-in-progress: ${{ github.event_name == 'pull_request' }}"), 'manual dispatches must not cancel an active E2E run');
           assert.ok(e2eWorkflow.includes('id-token: write'));
           assert.ok(e2eWorkflow.includes('Probe OIDC run gate readiness before requesting the token'));
           assert.ok(e2eWorkflow.includes('github_oidc_token_required'));
@@ -415,14 +438,18 @@ jobs:
           NODE
   one-shot-preview-e2e:
     if: >-
-      github.event_name == 'pull_request' &&
+      (github.event_name == 'pull_request' &&
       github.event.action == 'synchronize' &&
       contains(github.event.pull_request.labels.*.name, 'agent-runtime') &&
       github.repository == 'manhdungub-boop/ai-thuc-chien-blog' &&
       github.event.pull_request.head.repo.full_name == 'manhdungub-boop/ai-thuc-chien-blog' &&
       (github.event.pull_request.head.ref == 'security/fence-leases-on-circuit-breaker-pause-20261123' || github.event.pull_request.head.ref == 'security/agent-runtime-oidc-replay-e2e-20261124') &&
       github.event.pull_request.base.ref == 'integration/agent-runtime-v5-preview-20261120' &&
-      github.actor_id == '342528485'
+      github.actor_id == '342528485') ||
+      (github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      github.repository == 'manhdungub-boop/ai-thuc-chien-blog' &&
+      github.actor_id == '342528485')
     needs: validate
     runs-on: ubuntu-latest
     environment: agent-runtime-preview
@@ -432,6 +459,7 @@ jobs:
       cancel-in-progress: false
     permissions:
       contents: read
+      pull-requests: read
       id-token: write
     env:
       CLOUDFLARE_ACCOUNT_ID: "92cf091bbac8b4879ec65feb30b4715b"
@@ -441,28 +469,60 @@ jobs:
         timeout-minutes: 2
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ inputs.expected_head_sha || github.event.pull_request.head.sha }}
           persist-credentials: false
 
       - name: Verify exact branch, actor, and commit pin
         timeout-minutes: 2
         env:
-          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
-          EXPECTED_HEAD_REF: ${{ github.event.pull_request.head.ref }}
-          EVENT_ACTION: ${{ github.event.action }}
+          EXPECTED_SHA: ${{ inputs.expected_head_sha || github.event.pull_request.head.sha }}
+          EXPECTED_PR_NUMBER: ${{ inputs.pull_request_number || github.event.pull_request.number }}
+          EXPECTED_HEAD_REF: ${{ github.event.pull_request.head.ref || '' }}
+          EVENT_ACTION: ${{ github.event.action || '' }}
           EVENT_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "manhdungub-boop/ai-thuc-chien-blog"
-          test "$GITHUB_EVENT_NAME" = "pull_request"
-          test "$EVENT_ACTION" = "synchronize"
-          node --input-type=module -e "import assert from 'node:assert/strict'; const labels = JSON.parse(process.env.EVENT_LABELS); assert.ok(labels.includes('agent-runtime'), 'required agent-runtime label must remain present')"
-          [[ "$EXPECTED_HEAD_REF" == "security/fence-leases-on-circuit-breaker-pause-20261123" || "$EXPECTED_HEAD_REF" == "security/agent-runtime-oidc-replay-e2e-20261124" ]]
           test "$GITHUB_ACTOR_ID" = "342528485"
-          [[ "$GITHUB_REF" =~ ^refs/pull/[0-9]+/merge$ ]]
-          test "$GITHUB_WORKFLOW_REF" = "$GITHUB_REPOSITORY/.github/workflows/agent-runtime-preview-validation.yml@$GITHUB_REF"
           [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            test "$GITHUB_REF" = "refs/heads/main"
+            test "$GITHUB_WORKFLOW_REF" = "$GITHUB_REPOSITORY/.github/workflows/agent-runtime-preview-validation.yml@refs/heads/main"
+            [[ "$EXPECTED_PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+            EXPECTED_SHA="$EXPECTED_SHA" EXPECTED_PR_NUMBER="$EXPECTED_PR_NUMBER" GITHUB_TOKEN="$GITHUB_TOKEN" node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          const repository = 'manhdungub-boop/ai-thuc-chien-blog';
+          const number = process.env.EXPECTED_PR_NUMBER;
+          const response = await fetch('https://api.github.com/repos/' + repository + '/pulls/' + number, {
+            headers: {
+              Accept: 'application/vnd.github+json',
+              Authorization: 'Bearer ' + process.env.GITHUB_TOKEN,
+              'X-GitHub-Api-Version': '2022-11-28',
+            },
+            signal: AbortSignal.timeout(10000),
+          });
+          assert.equal(response.status, 200, 'GitHub must return the requested PR');
+          const pr = await response.json();
+          assert.equal(pr.state, 'open', 'target PR must remain open');
+          assert.equal(pr.head?.repo?.full_name, repository, 'fork PR heads are not eligible');
+          assert.equal(pr.base?.repo?.full_name, repository, 'PR base must belong to this repository');
+          const allowedBaseRefs = new Set(['main', 'integration/agent-runtime-v5-preview-20261120', 'fix/ai-bank-discovery-ingestion-gate-20261127']);
+          assert.ok(allowedBaseRefs.has(pr.base?.ref), 'manual dispatch PR base must be an explicitly approved Agent Runtime integration branch');
+          assert.ok((pr.labels ?? []).some(label => label.name === 'agent-runtime'), 'manual dispatch PR must carry the agent-runtime label');
+          assert.equal(pr.head?.sha, process.env.EXPECTED_SHA, 'manual dispatch must pin the exact current PR head SHA');
+          assert.match(pr.head?.ref ?? '', /^(feat|fix|security)\/[A-Za-z0-9._/-]+$/, 'PR head branch must be an approved development branch');
+          console.log(JSON.stringify({ pull_request: pr.number, head_sha: pr.head.sha, head_ref: pr.head.ref, base_ref: pr.base.ref, state: pr.state }));
+          NODE
+          else
+            test "$GITHUB_EVENT_NAME" = "pull_request"
+            test "$EVENT_ACTION" = "synchronize"
+            node --input-type=module -e "import assert from 'node:assert/strict'; const labels = JSON.parse(process.env.EVENT_LABELS); assert.ok(labels.includes('agent-runtime'), 'required agent-runtime label must remain present')"
+            [[ "$EXPECTED_HEAD_REF" == "security/fence-leases-on-circuit-breaker-pause-20261123" || "$EXPECTED_HEAD_REF" == "security/agent-runtime-oidc-replay-e2e-20261124" ]]
+            [[ "$GITHUB_REF" =~ ^refs/pull/[0-9]+/merge$ ]]
+            test "$GITHUB_WORKFLOW_REF" = "$GITHUB_REPOSITORY/.github/workflows/agent-runtime-preview-validation.yml@$GITHUB_REF"
+          fi
           test -f agents/runtime/wrangler.preview.jsonc
           node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
@@ -631,6 +691,7 @@ jobs:
           config.vars.AGENT_ENABLED = 'true';
           config.vars.AGENT_PAUSED = 'false';
           config.vars.AGENT_OIDC_RUN_ENABLED = 'true';
+          config.vars.AGENT_OIDC_RUN_EVENT_NAME = process.env.GITHUB_EVENT_NAME;
           config.vars.AGENT_OIDC_RUN_REF = process.env.GITHUB_REF;
           config.vars.AGENT_OIDC_RUN_WORKFLOW_REF = process.env.GITHUB_WORKFLOW_REF;
           config.vars.AGENT_OIDC_RUN_ACTOR_ID = process.env.GITHUB_ACTOR_ID;

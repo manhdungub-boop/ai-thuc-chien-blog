@@ -642,10 +642,11 @@ const worker = {
         ref: env.AGENT_OIDC_RUN_REF,
         workflowRef: env.AGENT_OIDC_RUN_WORKFLOW_REF,
         actorId: env.AGENT_OIDC_RUN_ACTOR_ID,
-        eventName: "pull_request",
+        eventName: env.AGENT_OIDC_RUN_EVENT_NAME || "pull_request",
         environment: "agent-runtime-preview",
       };
-      if (!Object.entries(expected).every(([key, value]) =>
+      if (!["pull_request", "workflow_dispatch"].includes(expected.eventName) ||
+          !Object.entries(expected).every(([key, value]) =>
         typeof value === "string" && value.length > 0 && value.length <= (key === "workflowRef" ? 512 : 256)) ||
         !/^\d{1,20}$/.test(expected.actorId) ||
         !/^\d{1,20}$/.test(expected.repositoryId) ||
