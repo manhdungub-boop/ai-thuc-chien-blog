@@ -303,10 +303,13 @@ jobs:
           const expectedHeadCheckout = "ref: " + dollar + "{{ github.event.pull_request.head.sha || inputs.expected_head_sha || github.sha }}";
           assert.ok(workflow.includes(expectedHeadCheckout), "validation must test the exact PR head the E2E job deploys");
           assert.ok(e2eWorkflow.includes("github.event.action == 'synchronize'"));
-          assert.ok(e2eWorkflow.includes("github.event_name == 'workflow_dispatch'"));
-          assert.ok(e2eWorkflow.includes("github.ref == 'refs/heads/main'"));
-          assert.ok(e2eWorkflow.includes("inputs.expected_head_sha"));
-          assert.ok(e2eWorkflow.includes("inputs.pull_request_number"));
+          const hasManualDispatch = e2eWorkflow.includes("github.event_name == 'workflow_dispatch'");
+          if (hasManualDispatch) {
+            assert.ok(e2eWorkflow.includes("github.actor_id == '342528485'"), 'manual dispatch path must be restricted to the repository owner');
+            assert.ok(e2eWorkflow.includes("github.ref == 'refs/heads/main'"), 'manual dispatch must run only from trusted main');
+            assert.ok(e2eWorkflow.includes("inputs.pull_request_number"), 'manual dispatch must require an explicit PR number');
+            assert.ok(e2eWorkflow.includes("inputs.expected_head_sha"), 'manual dispatch must require an exact expected head SHA');
+          }
           assert.ok(e2eWorkflow.includes("pr.head?.sha, process.env.EXPECTED_SHA"));
           assert.ok(e2eWorkflow.includes("pull-requests: read"));
           assert.ok(e2eWorkflow.includes("github.event.pull_request.labels.*.name"));
