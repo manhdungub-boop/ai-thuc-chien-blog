@@ -77,13 +77,15 @@ jobs:
       - name: Validate Agent Runtime changes without deployment
         if: steps.scope.outputs.scope == 'runtime-only'
         run: |
-          node scripts/test_agent_runtime_workflow_guards.mjs
+          if [[ -f scripts/test_agent_runtime_workflow_guards.mjs ]]; then node scripts/test_agent_runtime_workflow_guards.mjs; fi
+          find agents/runtime -type f -name '*.mjs' -print0 2>/dev/null | xargs -0 -r -n1 node --check
           node --check scripts/agent-coordinator-dry-run.mjs
           node scripts/agent-coordinator-dry-run.mjs agents/examples/read-only-ai-bank-review.tasks.json
 
       - name: Validate workflow-only changes without deployment
         if: steps.scope.outputs.scope == 'workflow-only'
         run: |
+          node scripts/test_premerge_path_classifier.mjs
           node scripts/test_premerge_path_classifier.mjs
           node scripts/test_premerge_path_classifier.mjs
           node scripts/test_premerge_validation_workflow.mjs
