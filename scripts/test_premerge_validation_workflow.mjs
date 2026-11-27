@@ -8,7 +8,7 @@ test('pre-merge validation is PR-only, read-only, and non-deploying', () => {
   assert.match(workflow, /pull_request:/);
   assert.match(workflow, /permissions:\n  contents: read/);
   assert.match(workflow, /persist-credentials: false/);
-  assert.doesNotMatch(workflow, /^\\s+(?:pull_request_target|workflow_dispatch|schedule):/m);
+  assert.doesNotMatch(workflow, /^\s+(?:pull_request_target|workflow_dispatch|schedule):/m);
   assert.doesNotMatch(workflow, /environment:|secrets\./);
   assert.doesNotMatch(workflow, /wrangler[^\n]*deploy|cloudflare[^\n]*deploy/i);
   assert.match(workflow, /head\.repo\.full_name == github\.repository/);
