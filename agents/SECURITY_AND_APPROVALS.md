@@ -80,23 +80,51 @@ The agent itself cannot merge or deploy.
 
 ## 9. Conditional independent-review requirement
 
-An additional independent human review is a **risk-based safeguard, not a universal prerequisite**. There are two distinct paths for waiving only the project's *extra independent-review step*. Neither path waives a human approval, status check, environment approval, or other requirement imposed by GitHub, an organization, law, or compliance policy.
+An additional independent human review is a **risk-based safeguard, not a universal prerequisite**. This section defines when the project may waive only its *extra project-level independent-review step*. It never waives a human approval, status check, environment approval, or other requirement imposed by GitHub, an organization, law, or compliance policy.
+
+The two paths below are alternatives. Path A applies only to routine low-risk changes. Path B is a narrow, documented owner exception for a specific high-risk change. The shared evidence gates below apply to **both** paths.
+
+### Shared evidence gates — required for every waiver
+
+Before either Path A or Path B may waive the project's extra independent-review step, all of the following must be evidenced on the exact commit proposed for merge or release:
+
+- The exact PR, commit SHA, changed-file scope, and diff have been inspected and recorded.
+- All applicable required CI, static analysis, CodeQL/security checks, and focused tests pass on that exact HEAD. No relevant check may be skipped, stale, or merely passed on an earlier commit.
+- Automated review and security findings have been triaged. No unresolved critical/high finding remains; every actionable finding is fixed or has a documented, justified non-applicability rationale.
+- All review threads are resolved. No unresolved actionable review comment remains.
+- The threat/risk assessment, affected users and data, mitigations, residual risk, and rollback/containment plan are documented and proportionate to the change.
+- The project release gates in Section 8 and every repository/organization branch-protection, ruleset, required-review, and protected-environment requirement remain satisfied.
+- The owner has explicitly accepted the residual risk and authorized the specific waiver in a recorded decision.
+
+If a shared gate is not met, the waiver is unavailable. This does **not** prohibit the normal path: the change may proceed through ordinary independent review if that review and every other applicable gate are completed successfully.
 
 ### Path A — routine low-risk change
 
-The project may skip the extra independent review only when **all** of the following are evidenced on the exact commit proposed for merge or release:
+The project may waive its extra independent-review step under Path A only when the change is narrow, reversible where applicable, and demonstrably low risk. It must not:
 
-- The change is low risk and narrowly scoped; it does not alter authentication or authorization behavior, OAuth, secrets or credential handling, billing or payment controls, production infrastructure, DNS, Worker bindings, D1 schema/data, privacy boundaries, or public publishing permissions.
-- All applicable required CI, static analysis, CodeQL/security checks, and focused tests pass on the exact HEAD; no relevant check is skipped, stale, or merely passed on an earlier commit.
-- Automated review/security findings have been triaged; no unresolved critical/high finding remains, and all actionable findings are fixed or documented with a justified non-applicability rationale.
-- All review threads are resolved, the diff and changed-file scope have been inspected, and the rollback/containment path is clear where applicable.
-- The owner has explicitly accepted the residual risk and authorized proceeding without the extra independent review.
-- The project release gates in Section 8 and every repository/organization branch-protection or ruleset requirement remain satisfied.
+- alter authentication or authorization behavior, OAuth, secrets or credential handling;
+- alter billing, payment, financial controls, or access to paid services;
+- alter production infrastructure, DNS, Worker bindings, D1 schema/data, privacy boundaries, or security boundaries;
+- alter public publishing permissions or the controls governing external side effects; or
+- perform or enable an irreversible public or financial action.
+
+If any exclusion applies or risk classification is uncertain, Path A is unavailable. Use normal independent review or assess the change for the specific Path B exception.
 
 ### Path B — exceptional high-risk change
 
-A high-risk or security-sensitive change is **not eligible for Path A**. The owner may request a case-specific exception to the project's extra independent-review step only after reviewing the exact diff, threat/risk assessment, affected users and data, mitigations, residual risk, test evidence, and rollback/containment plan. The written exception must identify the exact PR/commit, explain why an independent reviewer is unavailable or disproportionate, record the owner's informed acceptance, and authorize that specific change only. All applicable technical/security checks and release gates must still pass. If the risk cannot be bounded or the evidence is incomplete, the exception is not available and the change must not proceed.
+A high-risk or security-sensitive change, including an irreversible public or financial action, is **not eligible for Path A**. The owner may grant a case-specific exception to the project's extra independent-review step only after reviewing the exact diff, threat/risk assessment, affected users and data, mitigations, residual risk, test evidence, and rollback/containment plan.
 
-This project-level exception does **not** waive any independent review or approval required by GitHub, repository/organization rulesets, environment protection, law, or compliance. If GitHub or an organization policy requires a human approval, that approval must still be obtained from an eligible reviewer; an AI/bot review or an owner-controlled automation account does not count as an independent human reviewer. Do not weaken branch protection to implement this policy.
+The written exception must:
+- identify the exact PR and commit SHA and the specific independent-review step being waived;
+- explain why an independent reviewer is unavailable or why the additional project-level review is disproportionate;
+- record the owner's informed acceptance of the specific residual risks and the reasons the change remains acceptably bounded;
+- confirm that all shared evidence gates above are satisfied; and
+- authorize that exact change only. A new commit or materially changed scope requires a fresh assessment and authorization.
 
-Skipping the project's *extra independent-review step* does not skip technical validation, security triage, owner authorization, Preview/rollback evidence, or any applicable release gate. If evidence is missing or uncertain, fail closed and retain the review requirement.
+If the exception evidence is incomplete or the risk cannot be bounded, the change **must not proceed under the waiver**. It may still proceed through the normal independent-review path once the review is obtained and all other gates pass; the missing exception evidence is not a prohibition on that ordinary path.
+
+### Non-waivable external requirements
+
+A project-level exception does **not** waive any independent review or approval required by GitHub, repository/organization rulesets, protected environments, law, or compliance. If GitHub or an organization policy requires a human approval, that approval must still be obtained from an eligible reviewer. An AI/bot review or an owner-controlled automation account does not count as an independent human reviewer. Never weaken branch protection or fabricate review/deployment/check statuses to implement this policy.
+
+Waiving the project's extra independent-review step does not skip technical validation, security triage, owner authorization, Preview/rollback evidence, or any applicable release gate. When evidence is missing or uncertain, fail closed for the waiver and retain the normal review requirement.
