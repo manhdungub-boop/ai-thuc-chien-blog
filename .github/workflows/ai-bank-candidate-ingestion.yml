@@ -1,0 +1,165 @@
+name: AI Bank candidate ingestion (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      lookback_days:
+        description: "Bounded discovery lookback (1–90 days)"
+        required: false
+        type: number
+        default: 90
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: ai-bank-candidate-ingestion
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      AGENT_RUNTIME_PREVIEW_URL: ${{ vars.AGENT_RUNTIME_PREVIEW_URL }}
+      AI_BANK_DISCOVERY_START_AT: "2026-11-22T03:04:52.000Z"
+      AI_BANK_DISCOVERY_DAYS: ${{ inputs.lookback_days || 90 }}
+      AI_BANK_DISCOVERY_OUTPUT: reports/ai-bank/discovery-signals.json
+    steps:
+      - name: Check out exact main revision without persisting credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+
+      - name: Read durable discovery cursor using GitHub OIDC
+        id: cursor
+        run: |
+          node --input-type=module <<'NODE'
+          const base = new URL(process.env.AGENT_RUNTIME_PREVIEW_URL || "");
+          if (base.origin !== "https://ai-thuc-chien-agent-runtime-preview.manhdungub.workers.dev" ||
+              base.pathname !== "/" || base.username || base.password || base.search || base.hash) {
+            throw new Error("dedicated_runtime_preview_url_invalid");
+          }
+          if (!process.env.ACTIONS_ID_TOKEN_REQUEST_URL || !process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN) {
+            throw new Error("github_oidc_request_context_missing");
+          }
+          const tokenUrl = new URL(process.env.ACTIONS_ID_TOKEN_REQUEST_URL);
+          tokenUrl.searchParams.set("audience", "ai-thuc-chien-agent-runtime-preview");
+          const tokenResponse = await fetch(tokenUrl, {
+            headers: { Authorization: `Bearer ${process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN}` },
+            redirect: "manual",
+          });
+          if (!tokenResponse.ok) throw new Error(`github_oidc_token_request_failed_${tokenResponse.status}`);
+          const tokenBody = await tokenResponse.json();
+          if (typeof tokenBody.value !== "string" || tokenBody.value.length < 100) throw new Error("github_oidc_token_invalid");
+          const response = await fetch(new URL("/internal/oidc/ai-bank-cursor", base), {
+            method: "POST",
+            headers: { Authorization: `Bearer ${tokenBody.value}`, "Content-Type": "application/json" },
+            body: "{}",
+            redirect: "manual",
+          });
+          if (!response.ok) throw new Error(`durable_cursor_read_failed_${response.status}`);
+          const result = await response.json();
+          if (result.ok !== true || (result.cursor !== null && typeof result.cursor !== "string")) {
+            throw new Error("durable_cursor_response_invalid");
+          }
+          const selected = result.cursor || process.env.AI_BANK_DISCOVERY_START_AT;
+          const parsed = Date.parse(selected || "");
+          if (!Number.isFinite(parsed)) throw new Error("discovery_start_cursor_invalid");
+          const startAt = new Date(parsed).toISOString();
+          if (result.cursor && startAt !== result.cursor) throw new Error("stored_cursor_not_canonical");
+          await import("node:fs").then(({ appendFileSync }) => appendFileSync(process.env.GITHUB_OUTPUT, `start_at=${startAt}\n`));
+          NODE
+
+      - name: Collect bounded official release signals
+        env:
+          AI_BANK_DISCOVERY_START_AT: ${{ steps.cursor.outputs.start_at }}
+        run: node scripts/run-ai-bank-readonly-discovery.mjs
+
+      - name: Validate complete feed results and prepare candidate-only batch
+        env:
+          AI_BANK_DISCOVERY_START_AT: ${{ steps.cursor.outputs.start_at }}
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const report = JSON.parse(fs.readFileSync(process.env.AI_BANK_DISCOVERY_OUTPUT, "utf8"));
+          if (report.ok !== true || !Array.isArray(report.sources_failed) || report.sources_failed.length !== 0 ||
+              report.sources_succeeded !== report.sources_checked || report.sources_checked < 1) {
+            throw new Error("discovery_incomplete_no_cursor_advance");
+          }
+          const generated = Date.parse(report.generated_at || "");
+          if (!Number.isFinite(generated) || new Date(generated).toISOString() !== report.generated_at ||
+              report.start_at !== process.env.AI_BANK_DISCOVERY_START_AT) {
+            throw new Error("discovery_report_cursor_invalid");
+          }
+          if (!Array.isArray(report.catalog_candidates) || report.catalog_candidates.length > 5 ||
+              report.safety?.catalog_modified !== false || report.safety?.public_content_modified !== false) {
+            throw new Error("discovery_candidate_batch_invalid");
+          }
+          for (const candidate of report.catalog_candidates) {
+            if (candidate.catalog_write_authorized !== false || candidate.public_publication_authorized !== false ||
+                candidate.review_status !== "needs_official_source_review") {
+              throw new Error("candidate_review_boundary_invalid");
+            }
+          }
+          const payload = {
+            candidates: report.catalog_candidates,
+            cursor: report.generated_at,
+            scanId: `run-${process.env.GITHUB_RUN_ID}-attempt-${process.env.GITHUB_RUN_ATTEMPT}`,
+          };
+          fs.mkdirSync("reports/ai-bank", { recursive: true });
+          fs.writeFileSync("reports/ai-bank/ingest-payload.json", JSON.stringify(payload) + "\n", { mode: 0o600 });
+          NODE
+
+      - name: Submit candidate batch with a fresh GitHub OIDC token
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const base = new URL(process.env.AGENT_RUNTIME_PREVIEW_URL || "");
+          if (base.origin !== "https://ai-thuc-chien-agent-runtime-preview.manhdungub.workers.dev" ||
+              base.pathname !== "/" || base.username || base.password || base.search || base.hash) {
+            throw new Error("dedicated_runtime_preview_url_invalid");
+          }
+          const tokenUrl = new URL(process.env.ACTIONS_ID_TOKEN_REQUEST_URL);
+          tokenUrl.searchParams.set("audience", "ai-thuc-chien-agent-runtime-preview");
+          const tokenResponse = await fetch(tokenUrl, {
+            headers: { Authorization: `Bearer ${process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN}` },
+            redirect: "manual",
+          });
+          if (!tokenResponse.ok) throw new Error(`github_oidc_token_request_failed_${tokenResponse.status}`);
+          const tokenBody = await tokenResponse.json();
+          if (typeof tokenBody.value !== "string" || tokenBody.value.length < 100) throw new Error("github_oidc_token_invalid");
+          const payload = JSON.parse(fs.readFileSync("reports/ai-bank/ingest-payload.json", "utf8"));
+          const response = await fetch(new URL("/internal/oidc/ai-bank-ingest", base), {
+            method: "POST",
+            headers: { Authorization: `Bearer ${tokenBody.value}`, "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+            redirect: "manual",
+          });
+          const result = await response.json().catch(() => ({}));
+          if (!response.ok || result.ok !== true || result.catalog_modified !== false ||
+              result.public_publication_authorized !== false ||
+              !(result.cursor_advanced === true || result.duplicate === true)) {
+            throw new Error(`candidate_ingestion_rejected_${response.status}_${result.error || "invalid_response"}`);
+          }
+          fs.writeFileSync("reports/ai-bank/ingest-result.json", JSON.stringify(result, null, 2) + "\n", { mode: 0o600 });
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+            `## AI Bank candidate ingestion\n\n- Candidates submitted: ${payload.candidates.length}\n- Inserted: ${result.inserted}\n- Updated: ${result.updated}\n- Unchanged: ${result.unchanged}\n- Durable cursor: ${result.cursor}\n- Catalog modified: no\n- Public content published: no\n`);
+          NODE
+
+      - name: Preserve discovery and ingestion audit report
+        if: always() && hashFiles('reports/ai-bank/discovery-signals.json') != ''
+        uses: actions/upload-artifact@cf430e030ddb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: ai-bank-candidate-ingestion-${{ github.run_id }}
+          path: reports/ai-bank/
+          if-no-files-found: warn
+          retention-days: 30

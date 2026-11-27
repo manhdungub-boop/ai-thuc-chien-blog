@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/nen-chon-activepieces-n8n-hay-github-actions</loc><lastmod>2026-11-20</lastmod></url>
   <url>
     <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/</loc>
   </url>
@@ -10,7 +9,9 @@
   <url>
     <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/thu-vien.html</loc>
   </url>
-  <url><loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/ngan-hang-ai.html</loc><lastmod>2026-10-31</lastmod></url>
+  <url>
+    <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/ngan-hang-ai.html</loc>
+  </url>
   <url>
     <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/activepieces-trigger-va-action</loc>
     <lastmod>2026-10-28</lastmod>
@@ -20,12 +21,32 @@
     <lastmod>2026-10-28</lastmod>
   </url>
   <url>
+    <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/ai-agent-thuc-hanh-tu-thiet-ke-den-kiem-soat</loc>
+    <lastmod>2026-11-01</lastmod>
+  </url>
+  <url>
+    <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/ai-cuc-bo-jan-ollama-cline-librechat</loc>
+    <lastmod>2026-11-20</lastmod>
+  </url>
+  <url>
     <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/airtable-lam-kho-du-lieu-workflow</loc>
     <lastmod>2026-10-28</lastmod>
   </url>
   <url>
+    <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/antiscam-pango-ai-phat-hien-lua-dao-tren-dien-thoai</loc>
+    <lastmod>2026-11-16</lastmod>
+  </url>
+  <url>
     <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/ban-do-cong-cu-blog-ai</loc>
     <lastmod>2026-10-28</lastmod>
+  </url>
+  <url>
+    <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/bao-cao-tuan-google-sheets-voi-ai</loc>
+    <lastmod>2026-10-28</lastmod>
+  </url>
+  <url>
+    <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/bao-mat-mcp-server-oauth-ai</loc>
+    <lastmod>2026-11-16</lastmod>
   </url>
   <url>
     <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/bao-ve-api-key-automation</loc>
@@ -37,7 +58,7 @@
   </url>
   <url>
     <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/bao-ve-du-lieu-khi-dung-ai</loc>
-    <lastmod>2026-10-28</lastmod>
+    <lastmod>2026-11-15</lastmod>
   </url>
   <url>
     <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/bat-dau-voi-ai</loc>
@@ -78,6 +99,18 @@
   <url>
     <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/do-luong-hieu-qua-workflow-ai</loc>
     <lastmod>2026-10-28</lastmod>
+  </url>
+  <url>
+    <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/dong-goi-dich-vu-ai-cho-doanh-nghiep-nho</loc>
+    <lastmod>2026-11-10</lastmod>
+  </url>
+  <url>
+    <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/gioi-han-quota-ai-agent</loc>
+    <lastmod>2026-11-02</lastmod>
+  </url>
+  <url>
+    <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/google-ai-edge-gallery-ai-cuc-bo</loc>
+    <lastmod>2026-11-17</lastmod>
   </url>
   <url>
     <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/human-in-the-loop-trong-workflow</loc>
@@ -164,6 +197,10 @@
     <lastmod>2026-11-01</lastmod>
   </url>
   <url>
+    <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/nen-chon-activepieces-n8n-hay-github-actions</loc>
+    <lastmod>2026-11-20</lastmod>
+  </url>
+  <url>
     <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/nghien-cuu-chu-de-noi-dung</loc>
     <lastmod>2026-10-28</lastmod>
   </url>
@@ -228,12 +265,20 @@
     <lastmod>2026-10-28</lastmod>
   </url>
   <url>
+    <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/tinh-diem-hoa-von-va-tco-du-an-ai</loc>
+    <lastmod>2026-11-10</lastmod>
+  </url>
+  <url>
     <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/tinh-loi-nhuan-thuc-tu-affiliate</loc>
     <lastmod>2026-10-28</lastmod>
   </url>
   <url>
     <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/tinh-roi-tu-dong-hoa-ai</loc>
     <lastmod>2026-10-28</lastmod>
+  </url>
+  <url>
+    <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/tu-dong-doc-hoa-don-bang-ai-an-toan</loc>
+    <lastmod>2026-11-15</lastmod>
   </url>
   <url>
     <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/viet-noi-dung-san-pham-co-bang-chung</loc>
@@ -250,6 +295,10 @@
   <url>
     <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/workflow-ai-chong-loi-va-chay-lai-an-toan</loc>
     <lastmod>2026-10-28</lastmod>
+  </url>
+  <url>
+    <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/xay-ai-agent-dieu-khien-trinh-duyet-an-toan</loc>
+    <lastmod>2026-11-20</lastmod>
   </url>
   <url>
     <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/xay-bang-theo-doi-loi-nhuan-affiliate</loc>
@@ -274,46 +323,5 @@
   <url>
     <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/xu-ly-loi-retry-workflow</loc>
     <lastmod>2026-10-28</lastmod>
-  </url>
-  <url><loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/bao-cao-tuan-google-sheets-voi-ai</loc><lastmod>2026-10-28</lastmod></url>
-  <url>
-    <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/ai-agent-thuc-hanh-tu-thiet-ke-den-kiem-soat</loc>
-    <lastmod>2026-11-01</lastmod>
-  </url>
-  <url>
-    <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/gioi-han-quota-ai-agent</loc>
-    <lastmod>2026-11-02</lastmod>
-  </url>
-  <url>
-    <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/dong-goi-dich-vu-ai-cho-doanh-nghiep-nho</loc>
-    <lastmod>2026-11-10</lastmod>
-  </url>
-  <url>
-    <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/tinh-diem-hoa-von-va-tco-du-an-ai</loc>
-    <lastmod>2026-11-10</lastmod>
-  </url>
-  <url>
-    <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/tu-dong-doc-hoa-don-bang-ai-an-toan</loc>
-    <lastmod>2026-11-15</lastmod>
-  </url>
-<url>
-    <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/bao-mat-mcp-server-oauth-ai</loc>
-    <lastmod>2026-11-17</lastmod>
-  </url>
-<url>
-    <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/google-ai-edge-gallery-ai-cuc-bo</loc>
-    <lastmod>2026-11-17</lastmod>
-  </url>
-<url>
-    <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/antiscam-pango-ai-phat-hien-lua-dao-tren-dien-thoai</loc>
-    <lastmod>2026-11-17</lastmod>
-  </url>
-  <url>
-    <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/ai-cuc-bo-jan-ollama-cline-librechat</loc>
-    <lastmod>2026-11-20</lastmod>
-  </url>
-  <url>
-    <loc>https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/xay-ai-agent-dieu-khien-trinh-duyet-an-toan</loc>
-    <lastmod>2026-11-20</lastmod>
   </url>
 </urlset>
