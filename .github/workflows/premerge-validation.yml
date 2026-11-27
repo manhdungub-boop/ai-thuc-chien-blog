@@ -61,6 +61,51 @@ jobs:
           node scripts/verify-article-diagrams.mjs
           node scripts/test_article_navigation.cjs
 
+      - name: Require exact-head Pages Preview for static content
+        if: steps.scope.outputs.scope == 'content-only'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          checks_file="$RUNNER_TEMP/premerge-check-runs.json"
+          for attempt in $(seq 1 36); do
+            curl --fail --silent --show-error \\
+              -H "Authorization: Bearer $GH_TOKEN" \\
+              -H "Accept: application/vnd.github+json" \\
+              -H "X-GitHub-Api-Version: 2022-11-28" \\
+              "https://api.github.com/repos/$REPOSITORY/commits/$HEAD_SHA/check-runs?per_page=100" \\
+              -o "$checks_file"
+            result="$(HEAD_SHA="$HEAD_SHA" CHECKS_FILE="$checks_file" python3 - <<'PY'
+          import json, os
+          with open(os.environ["CHECKS_FILE"], encoding="utf-8") as stream:
+              checks = json.load(stream).get("check_runs", [])
+          matching = [item for item in checks if item.get("name") == "verify-preview" and item.get("head_sha") == os.environ["HEAD_SHA"]]
+          if not matching:
+              print("pending")
+          elif matching[-1].get("status") != "completed":
+              print("pending")
+          elif matching[-1].get("conclusion") == "success":
+              print("success")
+          else:
+              print("failure")
+          PY
+          )"
+            if [[ "$result" == "success" ]]; then
+              echo "PASS: exact-head Cloudflare Pages Preview verification succeeded."
+              exit 0
+            fi
+            if [[ "$result" == "failure" ]]; then
+              echo "::error::Exact-head Pages Preview check failed or was skipped; refusing to pass aggregate validation."
+              exit 1
+            fi
+            echo "Waiting for exact-head verify-preview check (attempt $attempt/36)."
+            sleep 10
+          done
+          echo "::error::Timed out waiting for exact-head Pages Preview verification."
+          exit 1
+
       - name: Validate application and Worker changes
         if: steps.scope.outputs.scope == 'application-only'
         run: |
