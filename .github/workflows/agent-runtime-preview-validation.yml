@@ -336,6 +336,8 @@ jobs:
           assert.ok(e2eWorkflow.includes('if: always()'), 'rollback must run even after an E2E failure');
           const billingSecretRef = 'CLOUDFLARE_BILLING_READ_API_TOKEN: ' + dollar + '{{ secrets.CLOUDFLARE_BILLING_READ_API_TOKEN }}';
           const previewSecretRef = 'CLOUDFLARE_API_TOKEN: ' + dollar + '{{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}';
+          const billingSecretExpression = dollar + '{{ secrets.CLOUDFLARE_BILLING_READ_API_TOKEN }}';
+          const previewSecretExpression = dollar + '{{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}';
           const planGateStart = e2eWorkflow.indexOf('      - name: Verify Workers Free plan before deployment');
           const deployStart = e2eWorkflow.indexOf('      - name: Deploy the one-shot read-only E2E configuration to dedicated Preview');
           const rateLimitDeployStart = e2eWorkflow.indexOf('      - name: Deploy a bounded low-threshold rate-limit probe configuration');
@@ -347,6 +349,14 @@ jobs:
           const restoreStep = e2eWorkflow.slice(restoreStart);
           assert.ok(planGateStep.includes(billingSecretRef), 'Workers Free-plan verification must use the dedicated Billing Read secret');
           assert.equal(planGateStep.includes(previewSecretRef), false, 'plan verification must not use the Preview deployment token');
+          assert.ok(planGateStep.includes(billingSecretExpression), 'plan verification must reference the Billing Read secret regardless of environment key');
+          assert.equal(planGateStep.includes(previewSecretExpression), false, 'plan verification must not reference the Preview deployment secret under any environment key');
+          assert.ok(deployStep.includes(previewSecretExpression), 'Preview deployment must reference the Preview deployment secret');
+          assert.equal(deployStep.includes(billingSecretExpression), false, 'Preview deployment must not reference the Billing Read secret under any environment key');
+          assert.ok(rateLimitDeployStep.includes(previewSecretExpression), 'rate-limit deployment must reference the Preview deployment secret');
+          assert.equal(rateLimitDeployStep.includes(billingSecretExpression), false, 'rate-limit deployment must not reference the Billing Read secret under any environment key');
+          assert.ok(restoreStep.includes(previewSecretExpression), 'Preview restoration must reference the Preview deployment secret');
+          assert.equal(restoreStep.includes(billingSecretExpression), false, 'Preview restoration must not reference the Billing Read secret under any environment key');
           for (const [label, step] of [['one-shot Preview deployment', deployStep], ['rate-limit Preview deployment', rateLimitDeployStep], ['Preview restoration', restoreStep]]) {
             assert.ok(step.includes(previewSecretRef), label + ' must use the dedicated Preview deployment token');
             assert.equal(step.includes(billingSecretRef), false, label + ' must never use the Billing Read token');
