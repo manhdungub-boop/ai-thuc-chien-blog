@@ -98,6 +98,8 @@ Before merge or release, the following must be evidenced on the exact commit pro
 
 If the risk assessment is inconclusive or the risk bounds have not yet been established, **pause**: gather evidence, mitigate, or redesign until the risk is demonstrably bounded. An independent reviewer may help assess the evidence, but review approval alone does not convert unknown or unbounded risk into acceptable risk. No merge or release may proceed while this condition remains unresolved.
 
+For avoidance of doubt, **the normal independent-review path does not require the owner to authorize or record a waiver**. Owner authorization is required only when the project actually invokes Path A or Path B to waive its extra project-level independent-review step.
+
 ### Path A — routine low-risk waiver
 
 The project may waive its extra independent-review step under Path A only when the change is narrow, reversible where applicable, and demonstrably low risk. It must not:
