@@ -12,6 +12,8 @@ test('classifies static content-only changes', () => {
 
 test('classifies application and runtime changes separately', () => {
   assert.equal(classifyChangedPaths(['worker.mjs', 'scripts/test_worker_headers.mjs']), 'application-only');
+  assert.equal(classifyChangedPaths(['script.js']), 'application-only');
+  assert.equal(classifyChangedPaths(['tests/agent-runtime-contract.test.mjs']), 'runtime-only');
   assert.equal(classifyChangedPaths(['agents/runtime/src/index.mjs']), 'runtime-only');
 });
 
