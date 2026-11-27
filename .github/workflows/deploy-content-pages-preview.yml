@@ -4,7 +4,7 @@ name: Verify exact Cloudflare Preview without secrets
 on:
   pull_request:
     types: [opened, synchronize, reopened]
-    branches: [main, fix/content-pages-preview-verifier-20261126]
+    branches: [main, fix/content-pages-preview-verifier-20261126, premerge-validation-test-base-20261128]
     paths:
       - "articles/**"
       - "index.html"
@@ -33,7 +33,7 @@ jobs:
   verify-preview:
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
-      (github.event.pull_request.base.ref == 'main' || github.event.pull_request.base.ref == 'fix/content-pages-preview-verifier-20261126')
+      (github.event.pull_request.base.ref == 'main' || github.event.pull_request.base.ref == 'fix/content-pages-preview-verifier-20261126' || github.event.pull_request.base.ref == 'premerge-validation-test-base-20261128')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
