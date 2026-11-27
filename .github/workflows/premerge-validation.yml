@@ -185,7 +185,7 @@ jobs:
           {
             echo "### Pre-merge Validation"
             echo "- Exact head: $HEAD_SHA"
-            echo "- Changed-path class: ${SCOPE:-unavailable}
+            echo "- Changed-path class: ${SCOPE:-unavailable}"
             echo "- Deployment performed: **No**"
             echo "- Protected environment or secret used: **No**"
           } >> "$GITHUB_STEP_SUMMARY"
