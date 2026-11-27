@@ -10,15 +10,15 @@ Mọi job hoặc step nhận `${{ secrets.* }}` (token Cloudflare, credential st
 
 ## Vi phạm khi một job hoặc step dùng secret mà
 
-- chạy được từ `pull_request`, `pull_request_target`, `push` lên branch khác `main`, hoặc `workflow_run` không ràng buộc `github.event.workflow_run.head_branch == 'main'`;
+- chạy được từ `pull_request`, `pull_request_target`, `push` lên branch khác `main`, hoặc `workflow_run` mà chỉ kiểm tra tên branch. Với `workflow_run`, bắt buộc xác minh đồng thời producer event là `push`, `github.event.workflow_run.head_repository.full_name == github.repository`, và `github.event.workflow_run.head_branch == 'main'`; không chấp nhận producer chạy từ `pull_request` hay fork, kể cả fork đặt tên branch là `main`. Nếu không thể chứng minh cả nguồn repo và event producer đáng tin cậy, không chuyển SHA hoặc artifact của run đó sang job có secret;
 - là `workflow_dispatch` nhưng thiếu điều kiện `github.ref == 'refs/heads/main'` trong `if:` của job hoặc của chính step mang secret;
-- checkout một ref do người gọi kiểm soát (`github.head_ref`, input tự do, SHA của pull request) thay vì `main`, `${{ github.sha }}` của lần dispatch trên `main`, hoặc `workflow_run.head_sha` đã ràng buộc với `main`;
+- checkout một ref do người gọi kiểm soát (`github.head_ref`, input tự do, SHA của pull request) thay vì SHA bất biến của lần dispatch (`${{ github.sha }}`) hoặc `workflow_run.head_sha` đã được ràng buộc với trusted repository, trusted producer event và branch `main`. Không dùng tên branch mutable như `main` làm checkout ref khi cần chứng minh exact commit;
 - checkout mà không có `persist-credentials: false`;
 - chèn trực tiếp `${{ inputs.* }}` hoặc dữ liệu sự kiện vào `run:` thay vì truyền qua `env:` rồi kiểm tra định dạng (như bước "Validate inputs and mask one-time tokens" trong `staging-email-e2e.yml`);
 - dùng action không ghim theo SHA đầy đủ 40 ký tự;
 - mở rộng `permissions:` vượt quá mức job cần (mặc định `contents: read`).
 
-Workflow mới hoặc job mới nhận secret của tài khoản thật (staging, Preview, Production) cũng cần gắn `environment:` có deployment branch policy chỉ cho phép `main`, vì điều kiện `if:` nằm trong tệp workflow và người có quyền ghi có thể xóa nó trên branch khác rồi dispatch, như đã nêu ở #378. Khi thêm hoặc đổi một workflow mang secret, cần thêm hoặc cập nhật assertion tương ứng trong `scripts/test_secret_workflow_dispatch_guards.mjs`.
+Workflow mới hoặc job mới nhận secret của tài khoản thật (staging, Preview, Production) cũng cần gắn `environment:` có deployment branch policy chỉ cho phép `main`, vì điều kiện `if:` nằm trong tệp workflow và người có quyền ghi có thể xóa nó trên branch khác rồi dispatch, như đã nêu ở #378. Secret của tài khoản thật chỉ được lưu dưới dạng environment secret trong environment tương ứng; không lưu cùng tên dưới repository secret hoặc organization secret, vì job bỏ khóa `environment:` vẫn có thể đọc secret cấp repository/organization. Khi thêm hoặc đổi một workflow mang secret, cần thêm hoặc cập nhật assertion tương ứng trong `scripts/test_secret_workflow_dispatch_guards.mjs`. Quy tắc lưu trữ này áp dụng cho workflow/job mới; không tự ý thay đổi các workflow triển khai hiện hữu trong phạm vi check tài liệu này.
 
 Lý do: secret ở đây cho phép triển khai Production Worker, đọc/ghi D1 hoặc đăng nhập tài khoản staging; lộ qua một branch là sự cố không thể đảo ngược.
 
@@ -58,3 +58,5 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
 ```
+
+Đối với consumer dùng `workflow_run`, ngoài kiểm tra nguồn repo, producer event và branch như trên, checkout đúng `github.event.workflow_run.head_sha`; không checkout branch name hoặc artifact của run không đáng tin cậy.
