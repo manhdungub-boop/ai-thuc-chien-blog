@@ -39,7 +39,7 @@
   "url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/mcp-filesystem-server-an-toan",
   "mainEntityOfPage":{"@type":"WebPage","@id":"https://ai-thuc-chien-blog.manhdungub.workers.dev/articles/mcp-filesystem-server-an-toan"},
   "datePublished":"2026-11-01",
-  "dateModified":"2026-11-01",
+  "dateModified":"2026-11-27",
   "inLanguage":"vi-VN",
   "author":{"@type":"Person","name":"DUNG - AI"},
   "publisher":{"@type":"Organization","name":"AI Thực Chiến","url":"https://ai-thuc-chien-blog.manhdungub.workers.dev/","logo":"https://ai-thuc-chien-blog.manhdungub.workers.dev/logo.svg"}
@@ -103,14 +103,14 @@ printf 'Bao cao thu nghiem - du lieu gia lap\n' &gt; agent-lab/input/mau.txt</co
 
 <section>
 <h2>3. Dựng máy chủ với phiên bản được ghim</h2>
-<p>Tại ngày kiểm tra <time datetime="2026-11-01">01/11/2026</time>, README chính thức của Filesystem MCP Server yêu cầu Node.js 24 trở lên. Hai cảnh báo bảo mật được công bố ngày 25/10/2026 liệt kê <code>2.0.1</code> là phiên bản đã vá các lỗi được mô tả. Vì vậy, không sao chép cấu hình cũ đang ghim các bản <code>2026.8.31</code>, <code>1.0.0</code> hoặc <code>2.0.0</code> mà chưa kiểm tra lại.</p>
+<p>Tại ngày kiểm tra <time datetime="2026-11-27">27/11/2026</time>, README và Release Notes chính thức cho biết gói <code>@modelcontextprotocol/server-filesystem</code> đã có phiên bản <code>2.4.0</code>. Bản <code>2.0.1</code> chỉ xử lý nhóm lỗi công bố tháng 10/2026; các advisory tháng 11 tiếp tục ghi nhận lỗi ở thao tác đọc, di chuyển và liệt kê thư mục. Vì vậy, ví dụ dưới đây ghim <code>2.4.0</code>, không dùng lại cấu hình <code>2.0.1</code> cũ. Khi cài từ dòng phiên bản ngày như <code>2026.8.31</code>, cần chỉ định rõ phiên bản semver đã vá vì trình quản lý gói có thể không coi <code>2.4.0</code> là bản nâng cấp mới hơn.</p>
 <p>Một cách dễ tái lập là đóng gói phiên bản máy chủ đã ghim vào image Docker riêng. Tạo tệp <code>Dockerfile</code> trong thư mục thử nghiệm:</p>
 <pre><code>FROM node:24-alpine
-RUN npm install --global @modelcontextprotocol/server-filesystem@2.0.1
+RUN npm install --global @modelcontextprotocol/server-filesystem@2.4.0
 ENTRYPOINT ["mcp-server-filesystem"]</code></pre>
 <p>Build image tại máy của bạn:</p>
-<pre><code>docker build -t mcp-filesystem:2.0.1 .</code></pre>
-<p>Tên image <code>mcp-filesystem:2.0.1</code> là nhãn cục bộ do bạn đặt, không phải tên image chính thức. Khi dùng lâu dài, hãy ghim cả digest của image nền Node.js sau khi đã xác minh nguồn và bản cập nhật; không coi một tag có thể thay đổi là bằng chứng bất biến.</p>
+<pre><code>docker build -t mcp-filesystem:2.4.0 .</code></pre>
+<p>Tên image <code>mcp-filesystem:2.4.0</code> là nhãn cục bộ do bạn đặt, không phải tên image chính thức. Khi dùng lâu dài, hãy ghim cả digest của image nền Node.js sau khi đã xác minh nguồn và bản cập nhật; không coi một tag có thể thay đổi là bằng chứng bất biến.</p>
 </section>
 
 <section>
@@ -126,7 +126,7 @@ ENTRYPOINT ["mcp-server-filesystem"]</code></pre>
         "type=bind,src=/absolute/path/agent-lab/input,dst=/projects/input,ro",
         "--mount",
         "type=bind,src=/absolute/path/agent-lab/output,dst=/projects/output",
-        "mcp-filesystem:2.0.1",
+        "mcp-filesystem:2.4.0",
         "/projects/input",
         "/projects/output"
       ]
@@ -172,13 +172,16 @@ ENTRYPOINT ["mcp-server-filesystem"]</code></pre>
 </section>
 
 <section>
-<h2>7. Hai lỗi đường dẫn cần biết và giới hạn trên Windows</h2>
-<p>Ngày 25/10/2026, dự án MCP công bố hai advisory cho <code>@modelcontextprotocol/server-filesystem</code>:</p>
+<h2>7. Các advisory đường dẫn cần biết và giới hạn trên Windows</h2>
+<p>Đến ngày 27/11/2026, ngoài hai advisory công bố ngày 25/10, dự án MCP đã công bố thêm các lỗi liên quan đến thao tác đọc, di chuyển và liệt kê thư mục:</p>
 <ul>
-<li><strong>GHSA-4gxg-m5jx-9j57:</strong> trên hệ thống tệp không phân biệt chữ hoa/chữ thường, một cách viết khác chữ hoa/thường của tên symlink có thể làm đường dẫn thoát khỏi thư mục được phép ở các phiên bản bị ảnh hưởng. Advisory liệt kê <code>2.0.1</code> là bản đã vá.</li>
-<li><strong>GHSA-53mr-w429-c597:</strong> lỗi TOCTOU (time-of-check to time-of-use) xảy ra khi thư mục cha bị thay bằng symlink sau bước kiểm tra nhưng trước bước ghi. Advisory cũng liệt kê <code>2.0.1</code> là bản đã vá cho phạm vi nêu trong cảnh báo.</li>
+<li><strong>GHSA-4gxg-m5jx-9j57:</strong> trên hệ thống tệp không phân biệt chữ hoa/chữ thường, cách viết khác chữ hoa/thường của symlink có thể vượt kiểm tra đường dẫn ở phiên bản bị ảnh hưởng. Bản vá: <code>2.0.1</code>.</li>
+<li><strong>GHSA-53mr-w429-c597:</strong> lỗi TOCTOU khi thư mục cha bị thay bằng symlink giữa bước kiểm tra và ghi. Bản vá ghi được công bố ở <code>2.0.1</code>; trên Windows, bảo vệ thao tác ghi vẫn có giới hạn với junction và thư mục do tiến trình không tin cậy khác kiểm soát.</li>
+<li><strong>GHSA-p9cv-8g75-4xcg:</strong> <code>read_text_file</code> có thể đọc nội dung ngoài <code>allowedDirectories</code> nếu thư mục bị thay bằng symlink sau khi xác thực. Bản vá: <code>2.3.0</code>; phạm vi bảo vệ được nêu rõ cho Linux và macOS, Windows vẫn có giới hạn với directory junction.</li>
+<li><strong>GHSA-7m4x-rv66-mxhh:</strong> thao tác <code>move_file</code> cùng thiết bị có thể dùng đường dẫn nguồn chưa được neo vào thư mục đã kiểm tra. Bản vá: <code>2.3.0</code>.</li>
+<li><strong>GHSA-rq2p-q7c4-6g27:</strong> công cụ liệt kê thư mục có thể trả về tên mục ngoài vùng cho phép khi thư mục bị thay bằng symlink sau bước kiểm tra. Bản phát hành <code>@modelcontextprotocol/server-filesystem 2.4.0</code> khắc phục việc này trên Linux và macOS; trên Windows, thao tác liệt kê trong bản phát hành đó vẫn chưa được neo vào thư mục đã xác thực. Maintainer sau đó ghi nhận thay đổi kiểm tra danh tính thư mục trước và sau thao tác đã được hợp nhất vào nhánh phát triển <code>v2/main</code> qua PR <a href="https://github.com/modelcontextprotocol/servers/pull/5622" target="_blank" rel="noopener noreferrer">#5622</a>. Cách kiểm tra hai thời điểm vẫn không phát hiện được trường hợp thư mục bị thay rồi khôi phục giữa hai lần kiểm tra; chỉ dựa vào thay đổi trong nhánh phát triển không chứng minh bản phát hành npm đã chứa bản vá.</li>
 </ul>
-<p>Có một giới hạn quan trọng: advisory thứ hai nói rõ bản sửa trên Linux và macOS neo thao tác ghi vào thư mục đã kiểm tra; trên Windows, việc sửa vẫn chưa hoàn toàn, do thao tác đường dẫn có thể bị chuyển hướng bởi junction thay đổi giữa lúc kiểm tra và sử dụng. Tài liệu khuyến cáo không cấu hình thư mục được phép mà một tiến trình hoặc người dùng không tin cậy khác có thể ghi vào. Vì vậy, đừng diễn giải “đã lên 2.0.1” thành “an toàn tuyệt đối trên mọi hệ điều hành”.</p>
+<p>Vì vậy, <code>2.4.0</code> là mốc vá cho các vấn đề liệt kê thư mục trên Linux và macOS, không phải bản vá đầy đủ cho Windows. Với Windows, hãy kiểm tra ghi chú phát hành và mã nguồn của đúng phiên bản đã cài; không coi nhánh phát triển <code>v2/main</code> là bằng chứng rằng gói npm đang dùng đã có thay đổi từ PR #5622. Dù có kiểm tra danh tính trước/sau, khoảng đua khi thay rồi khôi phục thư mục vẫn còn. Hãy ưu tiên chạy máy chủ với quyền hệ điều hành tối thiểu, không cho tiến trình không tin cậy ghi vào thư mục được phép, mount INPUT chỉ đọc, tách OUTPUT và kiểm thử trên đúng hệ điều hành triển khai.</p>
 <p>README chính thức còn lưu ý hard link: nếu tệp bên trong thư mục được phép có một tên khác trỏ tới cùng nội dung, việc ghi qua tên được phép có thể làm thay đổi nội dung nhìn thấy ở tên còn lại. <code>get_file_info</code> có thể báo số hard link. Đây là lý do nên tạo tệp kết quả mới trong OUTPUT thay vì chỉnh sửa trực tiếp tài liệu gốc.</p>
 </section>
 
@@ -242,9 +245,13 @@ AN TOÀN:
 <section>
 <h2>Nguồn tham khảo chính thức</h2>
 <ul>
-<li><a href="https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem" target="_blank" rel="noopener noreferrer">Model Context Protocol — Filesystem MCP Server README</a> (đối số thư mục được phép, Docker, Node.js, hard link và dry-run; kiểm tra 01/11/2026).</li>
+<li><a href="https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem" target="_blank" rel="noopener noreferrer">Model Context Protocol — Filesystem MCP Server README</a> (đối số thư mục được phép, Docker, Node.js, hard link và dry-run; kiểm tra 27/11/2026).</li>
 <li><a href="https://github.com/modelcontextprotocol/servers/security/advisories/GHSA-4gxg-m5jx-9j57" target="_blank" rel="noopener noreferrer">GitHub Security Advisory GHSA-4gxg-m5jx-9j57</a> (công bố 25/10/2026; bản vá được liệt kê: 2.0.1).</li>
 <li><a href="https://github.com/modelcontextprotocol/servers/security/advisories/GHSA-53mr-w429-c597" target="_blank" rel="noopener noreferrer">GitHub Security Advisory GHSA-53mr-w429-c597</a> (công bố 25/10/2026; mô tả giới hạn còn lại trên Windows).</li>
+<li><a href="https://github.com/modelcontextprotocol/servers/security/advisories/GHSA-p9cv-8g75-4xcg" target="_blank" rel="noopener noreferrer">GitHub Security Advisory GHSA-p9cv-8g75-4xcg</a> (công bố 11/11/2026; lỗi đọc tệp ngoài thư mục được phép).</li>
+<li><a href="https://github.com/modelcontextprotocol/servers/security/advisories/GHSA-7m4x-rv66-mxhh" target="_blank" rel="noopener noreferrer">GitHub Security Advisory GHSA-7m4x-rv66-mxhh</a> (công bố 11/11/2026; lỗi nguồn của thao tác move_file).</li>
+<li><a href="https://github.com/modelcontextprotocol/servers/security/advisories/GHSA-rq2p-q7c4-6g27" target="_blank" rel="noopener noreferrer">GitHub Security Advisory GHSA-rq2p-q7c4-6g27</a> (công bố 18/11/2026; lỗi liệt kê thư mục ngoài phạm vi).</li>
+<li><a href="https://github.com/modelcontextprotocol/servers/releases/tag/v2.5.0" target="_blank" rel="noopener noreferrer">MCP Servers Release v2.5.0</a> (18/11/2026; xác nhận gói filesystem 2.4.0 và các bản vá).</li>
 <li><a href="https://developers.openai.com/api/docs/guides/agents/guardrails-approvals" target="_blank" rel="noopener noreferrer">OpenAI — Guardrails and human review</a> (mẫu kiểm tra và tạm dừng trước hành động có side effect; kiểm tra 01/11/2026).</li>
 </ul>
 <p>Đây là hướng dẫn kiến trúc và kiểm thử chung, không phải chứng nhận an toàn cho một cấu hình cụ thể. Phiên bản, giao diện, advisory và điều kiện hệ điều hành có thể thay đổi; hãy mở tài liệu gốc trước khi áp dụng.</p>
@@ -257,8 +264,8 @@ AN TOÀN:
 <p>Chưa. Danh sách này giới hạn thư mục mà máy chủ được phép xử lý, nhưng không tự tách quyền đọc và ghi theo từng thư mục. Hãy dùng mount read-only hoặc quyền hệ điều hành phù hợp, thu hẹp công cụ và kiểm tra đường dẫn sau khi phân giải.</p>
 <h3>Có thể chạy trực tiếp bằng npx mà không dùng Docker không?</h3>
 <p>Có thể dùng để thử nghiệm nếu truyền đúng các thư mục được phép và đã giới hạn quyền của tiến trình. Tuy nhiên, nếu INPUT và OUTPUT đều có quyền ghi, cấu hình đó không tương đương với bind mount chỉ đọc. Không dùng dữ liệu thật cho đến khi có ranh giới ở cấp hệ điều hành.</p>
-<h3>Phiên bản 2.0.1 có giải quyết mọi rủi ro trên Windows không?</h3>
-<p>Không nên kết luận như vậy. Advisory GHSA-53mr-w429-c597 nêu rằng phần sửa TOCTOU trên Windows vẫn chưa hoàn toàn. Tránh dùng thư mục được phép mà tiến trình không tin cậy khác có thể thay đổi; ưu tiên cô lập, mount chỉ đọc và kiểm thử theo hệ điều hành thực tế.</p>
+<h3>Phiên bản 2.4.0 có giải quyết mọi rủi ro trên Windows không?</h3>
+<p>Không. Với bản phát hành 2.4.0, thao tác liệt kê thư mục trên Windows chưa được neo vào thư mục đã xác thực, nên không được coi là đã có biện pháp kiểm tra trước/sau từ PR #5622. Maintainer ghi nhận thay đổi kiểm tra danh tính trước và sau đã được hợp nhất vào nhánh phát triển v2/main, nhưng điều đó không chứng minh gói npm 2.4.0 có thay đổi này. Chỉ dựa vào phiên bản phát hành và ghi chú chính thức đã xác minh; không để tiến trình không tin cậy ghi vào thư mục được phép, ưu tiên cô lập, mount INPUT chỉ đọc và quyền tối thiểu.</p>
 </section>
 <section class="related-articles" aria-labelledby="related-mcp-articles">
 <h2 id="related-mcp-articles">Bài viết liên quan</h2>
@@ -275,5 +282,6 @@ AN TOÀN:
 </section>
 </main>
 <footer><a class="brand" href="../"><span class="brand-mark">AI</span><span>AI <b>Thực Chiến</b></span></a><span>Học thật · Thử thật · Tối ưu từng bước · <a href="../feed.xml">RSS</a></span><span>© 2026 AI Thực Chiến</span></footer>
+
 </body>
 </html>
