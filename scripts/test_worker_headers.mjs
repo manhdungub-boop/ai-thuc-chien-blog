@@ -92,7 +92,7 @@ const ok = await worker.fetch(new Request('https://example.test/index.html'), {
           'Content-Type': 'text/html; charset=utf-8',
           'Cache-Control': 'public, max-age=60',
           'ETag': '\"abc123\"',
-          'X-Frame-Options': 'DENY',
+          'X-Frame-Options': 'SAMEORIGIN',
         },
       });
     },
