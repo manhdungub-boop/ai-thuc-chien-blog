@@ -12,5 +12,6 @@ test('pre-merge validation is PR-only, read-only, and non-deploying', () => {
   assert.doesNotMatch(workflow, /environment:|secrets\./);
   assert.doesNotMatch(workflow, /wrangler[^\n]*deploy|cloudflare[^\n]*deploy/i);
   assert.match(workflow, /head\.repo\.full_name == github\.repository/);
+  assert.match(workflow, /Reject fork PR code before checkout/);
   assert.match(workflow, /Fail-closed validation for mixed or unknown changes/);
 });
