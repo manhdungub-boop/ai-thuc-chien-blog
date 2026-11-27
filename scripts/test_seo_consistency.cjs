@@ -63,6 +63,20 @@ for (const page of publicPages) {
   if (page.file === 'thu-vien.html') {
     assert.match(source, new RegExp(`${articleFiles.length} bài thực hành`, 'i'), 'Topic library should expose the complete article collection');
     assert.doesNotMatch(source, /52 bài được liệt kê|48 bài thực hành|40 hướng dẫn|40 bài thực hành/i, 'Topic library must not retain stale partial-inventory copy');
+
+    // Every displayed topic count must match the number of public article links in that section.
+    const librarySections = [...source.matchAll(/<section\\b[^>]*aria-labelledby=["']([^"']+)["'][^>]*>([\\s\\S]*?)<\\/section>/gi)];
+    const expectedTopicIds = ['tools-title', 'automation-title', 'creative-title', 'earning-title', 'deep-dive-title'];
+    for (const topicId of expectedTopicIds) {
+      const sectionMatch = librarySections.find((match) => match[1] === topicId);
+      assert.ok(sectionMatch, 'Topic library is missing section ' + topicId);
+      const heading = sectionMatch[2].match(new RegExp('<h2\\\\b[^>]*id=["']' + topicId + '["'][^>]*>([\\\\s\\\\S]*?)<\\\\/h2>', 'i'));
+      assert.ok(heading, topicId + ': missing section heading');
+      const countMatch = heading[1].replace(/<[^>]+>/g, ' ').match(/(\\d+)\\s*bài/i);
+      assert.ok(countMatch, topicId + ': heading must expose a numeric article count');
+      const articleLinkCount = [...sectionMatch[2].matchAll(/href=["']\\/articles\\/[^"']+["']/gi)].length;
+      assert.equal(Number(countMatch[1]), articleLinkCount, topicId + ': displayed count must match public article links');
+    }
   }
   const canonicalTag = (source.match(/<link\b[^>]*rel=["']canonical["'][^>]*>/i) || [])[0] || '';
   const canonicalMatch = canonicalTag.match(/\bhref=["']([^"']+)["']/i);
