@@ -80,7 +80,11 @@ The agent itself cannot merge or deploy.
 
 ## 9. Conditional independent-review requirement
 
-An additional independent human review is a **risk-based safeguard, not a universal prerequisite**. The project may skip that extra review for a change only when **all** of the following are evidenced on the exact commit proposed for merge or release:
+An additional independent human review is a **risk-based safeguard, not a universal prerequisite**. There are two distinct paths for waiving only the project's *extra independent-review step*. Neither path waives a human approval, status check, environment approval, or other requirement imposed by GitHub, an organization, law, or compliance policy.
+
+### Path A — routine low-risk change
+
+The project may skip the extra independent review only when **all** of the following are evidenced on the exact commit proposed for merge or release:
 
 - The change is low risk and narrowly scoped; it does not alter authentication or authorization behavior, OAuth, secrets or credential handling, billing or payment controls, production infrastructure, DNS, Worker bindings, D1 schema/data, privacy boundaries, or public publishing permissions.
 - All applicable required CI, static analysis, CodeQL/security checks, and focused tests pass on the exact HEAD; no relevant check is skipped, stale, or merely passed on an earlier commit.
@@ -89,8 +93,10 @@ An additional independent human review is a **risk-based safeguard, not a univer
 - The owner has explicitly accepted the residual risk and authorized proceeding without the extra independent review.
 - The project release gates in Section 8 and every repository/organization branch-protection or ruleset requirement remain satisfied.
 
-Independent review remains required by project policy for high-risk or security-sensitive changes, including authentication/authorization, OAuth, secrets, billing, production infrastructure, data/privacy boundaries, and irreversible public or financial actions, unless the owner records a specific, informed exception for that exact change after reviewing the residual risk. A blanket instruction does not waive such a case-specific exception.
+### Path B — exceptional high-risk change
 
-**This section never bypasses GitHub rulesets, required approvals, required status checks, environment approvals, or legal/compliance obligations.** If GitHub or an organization policy requires a human approval, that approval must still be obtained from an eligible reviewer; an AI/bot review or an owner-controlled automation account does not count as an independent human reviewer. Do not weaken branch protection to implement this policy.
+A high-risk or security-sensitive change is **not eligible for Path A**. The owner may request a case-specific exception to the project's extra independent-review step only after reviewing the exact diff, threat/risk assessment, affected users and data, mitigations, residual risk, test evidence, and rollback/containment plan. The written exception must identify the exact PR/commit, explain why an independent reviewer is unavailable or disproportionate, record the owner's informed acceptance, and authorize that specific change only. All applicable technical/security checks and release gates must still pass. If the risk cannot be bounded or the evidence is incomplete, the exception is not available and the change must not proceed.
 
-Skipping the *extra independent review* does not skip technical validation, security triage, owner authorization, Preview/rollback evidence, or any applicable release gate. If evidence is missing or uncertain, fail closed and retain the review requirement.
+This project-level exception does **not** waive any independent review or approval required by GitHub, repository/organization rulesets, environment protection, law, or compliance. If GitHub or an organization policy requires a human approval, that approval must still be obtained from an eligible reviewer; an AI/bot review or an owner-controlled automation account does not count as an independent human reviewer. Do not weaken branch protection to implement this policy.
+
+Skipping the project's *extra independent-review step* does not skip technical validation, security triage, owner authorization, Preview/rollback evidence, or any applicable release gate. If evidence is missing or uncertain, fail closed and retain the review requirement.
