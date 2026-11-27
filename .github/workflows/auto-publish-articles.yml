@@ -2,7 +2,7 @@ name: Validate and package approved content (no Production deployment)
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, fix/content-pages-preview-verifier-20261126]
     paths:
       - "articles/*.html"
       - "data/ai-tools.json"
