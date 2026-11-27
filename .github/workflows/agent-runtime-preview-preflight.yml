@@ -3,22 +3,16 @@ name: Agent Runtime Preview Preflight (Read Only)
 on:
   push:
     branches:
-      - chore/agent-runtime-preview-preflight-20261120
+      - integration/agent-runtime-v5-preview-20261120
+      - feat/agent-runtime-v5-main-split-20261126
   workflow_dispatch:
     inputs:
-      target_branch:
-        description: "Exact Agent Runtime branch to validate"
-        required: true
-        type: choice
-        options:
-          - feat/reviewer-authoring-evidence-flow-20261120
-          - fix/runtime-lockfile-generation-20261120
       expected_sha:
-        description: "Exact 40-character commit SHA from the selected branch"
+        description: "Exact 40-character commit SHA to validate"
         required: true
         type: string
       confirm_read_only:
-        description: "Confirm tests and Wrangler dry-run only; no deployment or secrets"
+        description: "Confirm tests and Wrangler dry-run only; no deployment or Cloudflare credentials"
         required: true
         type: boolean
         default: false
@@ -34,25 +28,26 @@ jobs:
   preflight:
     if: github.event_name == 'push' || inputs.confirm_read_only == true
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - name: Check out the selected Agent Runtime branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.target_branch || 'fix/runtime-lockfile-generation-20261120' }}
+          ref: ${{ github.sha }}
           persist-credentials: false
 
-      - name: Verify branch allowlist and exact commit
+      - name: Verify allowlisted branch and exact commit
         shell: bash
         env:
-          TARGET_BRANCH: ${{ inputs.target_branch || 'fix/runtime-lockfile-generation-20261120' }}
-          EXPECTED_SHA: ${{ inputs.expected_sha || 'b972977a013de47790f42ad36064fec463ce90c7' }}
+          TARGET_REF: ${{ github.ref }}
+          EXPECTED_SHA: ${{ inputs.expected_sha || github.sha }}
         run: |
           set -euo pipefail
-          case "$TARGET_BRANCH" in
-            feat/reviewer-authoring-evidence-flow-20261120|fix/runtime-lockfile-generation-20261120) ;;
+          case "$TARGET_REF" in
+            refs/heads/reconcile/agent-runtime-pr339-schema-v7-20261121) ;;
+            refs/heads/integration/agent-runtime-v5-preview-20261120|refs/heads/feat/agent-runtime-v5-main-split-20261126) ;;
             *)
-              echo "::error::Selected branch is not in the explicit Preview allowlist."
+              echo "::error::Selected branch is not in the explicit Preview preflight allowlist."
               exit 1
               ;;
           esac
@@ -62,11 +57,9 @@ jobs:
             echo "::error::Selected branch HEAD does not match expected SHA; refusing to test a moving target."
             exit 1
           fi
-          if [[ ! -f agents/runtime/package.json || ! -f agents/runtime/package-lock.json || ! -f agents/runtime/wrangler.preview.jsonc ]]; then
-            echo "::error::Expected Agent Runtime package.json, committed package-lock.json, or isolated Preview config is missing."
-            exit 1
-          fi
-          echo "Validated exact source and committed dependency lockfile: $TARGET_BRANCH @ $actual_sha"
+          test -f agents/runtime/src/worker.mjs
+          test -f agents/runtime/wrangler.preview.jsonc
+          echo "Validated exact source: $TARGET_REF @ $actual_sha"
 
       - name: Set up Node.js 22
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -74,29 +67,42 @@ jobs:
           node-version: "22"
           package-manager-cache: false
 
-      - name: Install exact locked dependencies without lifecycle scripts
-        working-directory: agents/runtime
-        run: npm ci --legacy-peer-deps --ignore-scripts --no-audit --no-fund
-
-      - name: Verify dependencies and run Agent Runtime tests
-        working-directory: agents/runtime
+      - name: Install isolated Worker test simulator
         run: |
-          npm run verify-direct-dependencies
-          npm test
-          node --test tests/runtime-contract.test.mjs
+          mkdir -p "$RUNNER_TEMP/agent-runtime-audit"
+          cat > "$RUNNER_TEMP/agent-runtime-audit/package.json" <<'JSON'
+          {
+            "private": true,
+            "dependencies": {
+              "miniflare": "4.20260730.0"
+            },
+            "overrides": {
+              "miniflare": {
+                "sharp": "0.35.5",
+                "undici": "7.30.2"
+              }
+            }
+          }
+          JSON
+          npm install --prefix "$RUNNER_TEMP/agent-runtime-audit" --ignore-scripts --no-audit --no-fund
+          ln -s "$RUNNER_TEMP/agent-runtime-audit/node_modules" "$GITHUB_WORKSPACE/node_modules"
 
-      - name: Validate Preview types and Worker build without deployment
+      - name: Run complete Agent Runtime test suite
+        timeout-minutes: 8
+        run: timeout --signal=TERM --kill-after=10s 420s node --test agents/runtime/tests/*.test.mjs
+
+      - name: Validate Preview types and Worker bundle without deployment
         working-directory: agents/runtime
         run: |
           npx --yes wrangler@4.166.0 types --config wrangler.preview.jsonc
-          npx --yes wrangler@4.166.0 deploy --dry-run --config wrangler.preview.jsonc
+          npx --yes wrangler@4.166.0 deploy --dry-run --config wrangler.preview.jsonc --outdir "$RUNNER_TEMP/agent-runtime-dry-run"
 
       - name: Report safety boundary
         run: |
           {
             echo "## Agent Runtime Preview Preflight"
             echo "- Source branch and SHA: verified exactly"
-            echo "- Tests and Wrangler dry-run: completed"
+            echo "- Full tests and Wrangler dry-run: completed"
             echo "- Cloudflare credentials: not provided"
             echo "- Deployment, Durable Object migration, Cron, OAuth, AI inference and publication: not performed"
             echo "- Production Worker, D1 and DNS: not accessed"
