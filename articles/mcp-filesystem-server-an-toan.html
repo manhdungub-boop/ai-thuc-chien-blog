@@ -265,7 +265,7 @@ AN TOÀN:
 <h3>Có thể chạy trực tiếp bằng npx mà không dùng Docker không?</h3>
 <p>Có thể dùng để thử nghiệm nếu truyền đúng các thư mục được phép và đã giới hạn quyền của tiến trình. Tuy nhiên, nếu INPUT và OUTPUT đều có quyền ghi, cấu hình đó không tương đương với bind mount chỉ đọc. Không dùng dữ liệu thật cho đến khi có ranh giới ở cấp hệ điều hành.</p>
 <h3>Phiên bản 2.4.0 có giải quyết mọi rủi ro trên Windows không?</h3>
-<p>Không. Advisory GHSA-53mr-w429-c597 nêu giới hạn với junction trong thao tác ghi; GHSA-p9cv-8g75-4xcg nêu giới hạn với directory junction trong thao tác đọc; GHSA-rq2p-q7c4-6g27 cho biết việc kiểm tra danh sách thư mục trên Windows vẫn có thể bỏ sót một thay đổi được tạo rồi khôi phục giữa hai lần kiểm tra. Không để tiến trình không tin cậy khác ghi vào thư mục được phép; ưu tiên cô lập, mount INPUT chỉ đọc, quyền tối thiểu và kiểm thử theo hệ điều hành thực tế.</p>
+<p>Không. Với bản phát hành 2.4.0, thao tác liệt kê thư mục trên Windows chưa được neo vào thư mục đã xác thực, nên không được coi là đã có biện pháp kiểm tra trước/sau từ PR #5622. Maintainer ghi nhận thay đổi kiểm tra danh tính trước và sau đã được hợp nhất vào nhánh phát triển v2/main, nhưng điều đó không chứng minh gói npm 2.4.0 có thay đổi này. Chỉ dựa vào phiên bản phát hành và ghi chú chính thức đã xác minh; không để tiến trình không tin cậy ghi vào thư mục được phép, ưu tiên cô lập, mount INPUT chỉ đọc và quyền tối thiểu.</p>
 </section>
 <section class="related-articles" aria-labelledby="related-mcp-articles">
 <h2 id="related-mcp-articles">Bài viết liên quan</h2>
