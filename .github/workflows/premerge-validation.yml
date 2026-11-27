@@ -86,8 +86,6 @@ jobs:
         if: steps.scope.outputs.scope == 'workflow-only'
         run: |
           node scripts/test_premerge_path_classifier.mjs
-          node scripts/test_premerge_path_classifier.mjs
-          node scripts/test_premerge_path_classifier.mjs
           node scripts/test_premerge_validation_workflow.mjs
           for file in \
             scripts/test_workers_builds_workflow_guard.mjs \
@@ -110,6 +108,7 @@ jobs:
           python3 scripts/test_community_schema.py
           python3 scripts/test_analytics_schema.py
           node scripts/test_d1_preview_config.cjs
+          node scripts/test_premerge_path_classifier.mjs
           node scripts/test_premerge_validation_workflow.mjs
           for file in \
             scripts/test_workers_builds_workflow_guard.mjs \
