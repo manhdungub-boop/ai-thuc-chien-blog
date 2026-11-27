@@ -84,6 +84,8 @@ jobs:
       - name: Validate workflow-only changes without deployment
         if: steps.scope.outputs.scope == 'workflow-only'
         run: |
+          node scripts/test_premerge_path_classifier.mjs
+          node scripts/test_premerge_path_classifier.mjs
           node scripts/test_premerge_validation_workflow.mjs
           for file in \
             scripts/test_workers_builds_workflow_guard.mjs \
