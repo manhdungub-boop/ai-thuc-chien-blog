@@ -2,6 +2,8 @@
 'use strict';
 
 import { execFileSync } from 'node:child_process';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const PATH_CLASSES = Object.freeze({
   docs: [
@@ -50,7 +52,7 @@ export function classifyChangedPaths(paths) {
   return classes.values().next().value + '-only';
 }
 
-if (import.meta.url === new URL(process.argv[1], 'file:').href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   const [base, head] = process.argv.slice(2);
   if (!base || !head) {
     console.error('Usage: node scripts/premerge-path-classifier.mjs <base-sha> <head-sha>');
