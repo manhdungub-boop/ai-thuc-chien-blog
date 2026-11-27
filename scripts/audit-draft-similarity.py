@@ -33,16 +33,19 @@ def words_from_text(source: str) -> list[str]:
 
 def published_words(path: Path) -> list[str]:
     source = path.read_text(encoding="utf-8")
+    main_match = re.search(
+        r'<main\b[^>]*id="main-content"[^>]*>([\s\S]*?)</main\s*>',
+        source,
+        flags=re.I,
+    )
+    if not main_match:
+        raise ValueError(f"published article has no #main-content region: {path}")
+    source = main_match.group(1)
     source = re.sub(r"<figure\b[\s\S]*?</figure>", " ", source, flags=re.I)
     source = re.sub(r"<script\b[\s\S]*?</script[^>]*>|<style\b[\s\S]*?</style[^>]*>", " ", source, flags=re.I)
     source = re.sub(r'<section\b[^>]*class=["\'][^"\']*(?:article-faq|related-articles|article-author-note)[^"\']*["\'][\s\S]*?</section>', " ", source, flags=re.I)
     source = re.sub(r"<h2\b[^>]*>\s*(?:Nguồn tham khảo chính thức|Tài liệu chính thức tham khảo|Nguồn tham khảo|Tài liệu tham khảo)\s*</h2>[\s\S]*$", " ", source, flags=re.I)
-    first_rule = re.search(r"<hr\b[^>]*>", source, flags=re.I)
-    if first_rule:
-        source = source[first_rule.end():]
     return words_from_text(unescape(re.sub(r"<[^>]+>", " ", source)))
-
-
 def draft_words(path: Path) -> list[str]:
     source = path.read_text(encoding="utf-8")
     frontmatter = re.match(r"^---\s*\n[\s\S]*?\n---\s*\n", source)
