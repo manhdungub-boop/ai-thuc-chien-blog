@@ -1,4 +1,5 @@
 name: Agent Runtime Preview Shell Validation
+# Keep the protected Preview workflow contract consistent across the stacked Agent Runtime PRs.
 
 on:
   pull_request:
