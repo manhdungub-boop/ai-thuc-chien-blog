@@ -102,7 +102,7 @@ for (const filePath of outputHtmlFiles) {
   const label = path.relative(distDir, filePath);
   if (/fonts\.googleapis\.com\/css2\?/.test(html)) {
     assert.match(html, /rel=[\"']preload[\"'][^>]*as=[\"']style[\"'][^>]*href=[\"']https:\/\/fonts\.googleapis\.com\/css2\?/i, label + ': Google Fonts should be preloaded asynchronously');
-    assert.match(html, /onload=[\"']this\.onload=null;this\.rel=\?['\"]stylesheet/i, label + ': Google Fonts preload must activate its stylesheet');
+    assert.match(html, /onload=["']this\.onload=null;this\.rel=\\?['"]stylesheet/i, label + ': Google Fonts preload must activate its stylesheet');
   }
   if (/<script\b[^>]*src=[\"'][^\"']*script\.js[\"']/i.test(html)) {
     assert.match(html, /<script\b[^>]*src=[\"'][^\"']*script\.js[\"'][^>]*\bdefer\b/i, label + ': site JavaScript must be deferred');
