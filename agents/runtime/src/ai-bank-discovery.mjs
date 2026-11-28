@@ -119,7 +119,7 @@ function buildCatalogCandidates(signals, discoveredAt) {
     .sort((a, b) => b[1].published_at.localeCompare(a[1].published_at))
     .slice(0, MAX_SIGNALS)
     .map(([repository, signal]) => ({
-      candidate_id: "github:" + repository,
+      candidate_id: "github:" + signal.repository,
       name: signal.product,
       provider: signal.vendor,
       repository,
