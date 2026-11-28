@@ -76,6 +76,28 @@ describe("Google reviewer OAuth session flow", () => {
     expect(rateLimitCalls).toBe(0);
   });
 
+  it("rejects cross-site login starts before consuming rate-limit or pending-login capacity", async () => {
+    let rateLimitCalls = 0;
+    let createCalls = 0;
+    const testEnv = {
+      ...env,
+      AGENT_REVIEWER_AUTH_STORE: {
+        getByName() {
+          return {
+            consumeStartRateLimit: async () => { rateLimitCalls += 1; return { allowed: true }; },
+            createTransaction: async () => { createCalls += 1; return { created: true }; }
+          };
+        }
+      }
+    };
+    const response = await handleGoogleReviewerAuth(new Request(origin + "/auth/google/start", {
+      headers: { "cf-connecting-ip": "203.0.113.9", "sec-fetch-site": "cross-site" }
+    }), testEnv, { now });
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ error: "login_start_cross_site_rejected" });
+    expect(rateLimitCalls).toBe(0);
+    expect(createCalls).toBe(0);
+  });
   it("starts a server-bound authorization-code flow with nonce and S256 PKCE", async () => {
     let stored;
     const testEnv = {
@@ -110,8 +132,8 @@ describe("Google reviewer OAuth session flow", () => {
     expect(location.searchParams.get("code_challenge")).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(response.headers.get("set-cookie")).toContain("HttpOnly");
     expect(response.headers.get("set-cookie")).toContain("SameSite=Lax");
-    expect(stored).toHaveLength(6);
-    expect(stored[5]).toBe("/");
+    expect(stored).toHaveLength(7);
+    expect(stored[5]).toBe("/");\n    expect(stored[6]).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(stored[0]).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(stored[1]).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(stored[2]).toMatch(/^[A-Za-z0-9_-]{43}$/);
