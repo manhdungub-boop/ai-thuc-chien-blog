@@ -89,7 +89,7 @@ jobs:
 
       - name: Run complete Agent Runtime test suite
         timeout-minutes: 8
-        run: timeout --signal=TERM --kill-after=10s 420s node --test agents/runtime/tests/*.test.mjs
+        run: timeout --signal=TERM --kill-after=10s 420s node --experimental-loader ./agents/runtime/tests/cloudflare-workers-loader.mjs --test agents/runtime/tests/*.test.mjs
 
       - name: Validate Preview types and Worker bundle without deployment
         working-directory: agents/runtime
