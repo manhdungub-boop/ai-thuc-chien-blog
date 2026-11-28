@@ -98,6 +98,35 @@ describe("reviewer and operator HTTP routes", () => {
     expect(await response.text()).toContain("same_origin_required");
   });
 
+  it("delegates authenticated operator mutations to the shared runtime control orchestration", async () => {
+    const token = await createReviewerSessionToken();
+    let received;
+    const response = await handleReviewerHttpRequest(new Request(base + "/api/operator/runtime-control", {
+      method: "POST",
+      headers: {
+        Origin: base,
+        "Content-Type": "application/json",
+        cookie: "__Host-ai_reviewer_session=" + token
+      },
+      body: JSON.stringify({ action: "resume", reason: "resume after approved maintenance" })
+    }), {
+      ...reviewerAuthEnv,
+      AGENT_OPERATOR_CONTROL_ENABLED: "true"
+    }, async (command) => {
+      received = command;
+      return new Response(JSON.stringify({ ok: true, changed: true, control: { paused: false, version: 8 } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    });
+    expect(response.status).toBe(200);
+    expect(received).toEqual({
+      action: "resume",
+      actor: "google:reviewer-test-subject",
+      reason: "resume after approved maintenance"
+    });
+    expect(await response.json()).toMatchObject({ ok: true, control: { paused: false, version: 8 } });
+  });
   it("rejects cross-origin reviewer authoring mutations", async () => {
     const response = await handleReviewerHttpRequest(new Request(`${base}/api/reviewer/drafts/12345678/authoring`, {
       method: "POST",
