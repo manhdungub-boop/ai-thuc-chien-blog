@@ -86,9 +86,9 @@ async function reviewerSession(request, env) {
 function parseLimit(url) {
   const raw = url.searchParams.get("limit");
   if (raw === null) return 20;
-  if (!/^[0-9]{1,3}$/.test(raw)) return null;
+  if (!/^[0-9]{1,2}$/.test(raw)) return null;
   const value = Number(raw);
-  return Number.isSafeInteger(value) && value >= 1 && value <= 50 ? value : null;
+  return Number.isSafeInteger(value) && value >= 1 && value <= 20 ? value : null;
 }
 function parseOffset(url) {
   const values = url.searchParams.getAll("offset");
