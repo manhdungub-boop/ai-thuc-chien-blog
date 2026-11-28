@@ -9,7 +9,8 @@ const configPath = fileURLToPath(new URL("../wrangler.preview.jsonc", import.met
 const config = JSON.parse(readFileSync(configPath, "utf8"));
 const faultTestConfigPath = fileURLToPath(new URL("../wrangler.fault-test.jsonc", import.meta.url));
 const faultTestConfig = JSON.parse(readFileSync(faultTestConfigPath, "utf8"));
-const faultTestWorkflowPath = fileURLToPath(new URL("../../../.github/workflows/agent-runtime-cloudflare-do-fault-test.yml", import.meta.url));\nconst previewPreflightPath = fileURLToPath(new URL("../../../.github/workflows/agent-runtime-preview-preflight.yml", import.meta.url));\nconst previewPreflightSource = readFileSync(previewPreflightPath, "utf8");
+const faultTestWorkflowPath = fileURLToPath(new URL("../../../.github/workflows/agent-runtime-cloudflare-do-fault-test.yml", import.meta.url));
+const previewPreflightPath = fileURLToPath(new URL("../../../.github/workflows/agent-runtime-preview-preflight.yml", import.meta.url));\nconst previewPreflightSource = readFileSync(previewPreflightPath, "utf8");
 const faultTestWorkflowSource = readFileSync(faultTestWorkflowPath, "utf8");
 
 test("dedicated Agent Runtime Preview config binds its isolated State Store and rate limiter and remains disabled", () => {
@@ -65,7 +66,10 @@ test("dedicated Agent Runtime Preview config binds its isolated State Store and 
 });
 
 
-test("Preview preflight loads the Cloudflare Workers module shim before running Worker tests", () => {\n  assert.ok(previewPreflightSource.includes("--experimental-loader ./agents/runtime/tests/cloudflare-workers-loader.mjs"));\n});\n\ntest("fault-test cleanup removes the one-run secret and disables public routes without deleting the Worker", () => {
+test("Preview preflight loads the Cloudflare Workers module shim before running Worker tests", () => {\n  assert.ok(previewPreflightSource.includes("--experimental-loader ./agents/runtime/tests/cloudflare-workers-loader.mjs"));
+});
+
+test("fault-test cleanup removes the one-run secret and disables public routes without deleting the Worker", () => {
   assert.ok(faultTestWorkflowSource.includes("$api/secrets/AGENT_FAULT_TEST_TOKEN"));
   assert.ok(faultTestWorkflowSource.includes("--request POST"));
   assert.ok(faultTestWorkflowSource.includes('{"enabled":false,"previews_enabled":false}'));
