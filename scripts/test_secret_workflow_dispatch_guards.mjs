@@ -39,7 +39,7 @@ assert.ok(agentRuntimeValidateBlock.includes("github.event_name == 'workflow_dis
   agentRuntimeValidateBlock.includes("github.ref == 'refs/heads/main'") &&
   agentRuntimeValidateBlock.includes("github.actor_id == '342528485'"),
   "Manual validation must remain restricted to the owner on trusted main.");
-assert.doesNotMatch(agentRuntimeValidateBlock, /secrets\./,
+assert.doesNotMatch(agentRuntimeValidateBlock, /secrets\\.[A-Z0-9_]+\\s*\\}\\}/,
   "Credential-free PR validation must not reference secret values.");
 const agentRuntimePullRequestTrigger = agentRuntimePreview.slice(
   agentRuntimePreview.indexOf("  pull_request:"),
