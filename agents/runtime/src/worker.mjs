@@ -642,7 +642,7 @@ const worker = {
         ref: env.AGENT_OIDC_RUN_REF,
         workflowRef: env.AGENT_OIDC_RUN_WORKFLOW_REF,
         actorId: env.AGENT_OIDC_RUN_ACTOR_ID,
-        eventName: "pull_request",
+        eventName: env.AGENT_OIDC_RUN_EVENT_NAME,
         environment: "agent-runtime-preview",
       };
       if (!Object.entries(expected).every(([key, value]) =>
