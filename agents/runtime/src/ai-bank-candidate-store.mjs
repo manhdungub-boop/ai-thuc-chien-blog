@@ -1,3 +1,4 @@
+import { DurableObject } from "cloudflare:workers";
 import { AI_BANK_RELEASE_SOURCES } from "./ai-bank-discovery.mjs";
 import { authorizeAIBankEvidenceWriter } from "./ai-bank-evidence-authorization.mjs";
 
@@ -154,10 +155,9 @@ function writeValidatedCandidateBatch(ctx, validated, now) {
   return { accepted: true, inserted, updated, unchanged, total, catalog_write_authorized: false };
 }
 
-export class AgentAIBankCandidateStore {
+export class AgentAIBankCandidateStore extends DurableObject {
   constructor(ctx, env) {
-    this.ctx = ctx;
-    this.env = env;
+    super(ctx, env);
     this.ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS ai_bank_candidates (" +
       "candidate_id TEXT PRIMARY KEY, repository TEXT NOT NULL UNIQUE, " +

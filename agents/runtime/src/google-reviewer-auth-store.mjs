@@ -1,10 +1,10 @@
+import { DurableObject } from "cloudflare:workers";
 
 const TX_TTL_SECONDS = 300;
 
-export class AgentReviewerAuthStore {
+export class AgentReviewerAuthStore extends DurableObject {
   constructor(ctx, env) {
-    this.ctx = ctx;
-    this.env = env;
+    super(ctx, env);
     this.ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS reviewer_auth_transactions (state_hash TEXT PRIMARY KEY, browser_hash TEXT NOT NULL, nonce TEXT NOT NULL, code_verifier TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, return_path TEXT NOT NULL DEFAULT '/')");
     const transactionColumns = this.ctx.storage.sql.exec("PRAGMA table_info(reviewer_auth_transactions)").toArray();
     if (!transactionColumns.some(column => column.name === "return_path")) {
