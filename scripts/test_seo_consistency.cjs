@@ -156,7 +156,23 @@ for (const item of rssItems) {
   assert.ok(publishedAt <= previousPublishedAt, 'RSS articles must be ordered by datePublished descending');
   previousPublishedAt = publishedAt;
 }
-assert.ok(rssItems.some((item) => item.pubDate), 'RSS must expose publication dates for articles with datePublished metadata');
+// Compare every RSS item against the exact datePublished metadata of its source article.
+const expectedPublicationByUrl = new Map();
+for (const file of articleFiles) {
+  const source = fs.readFileSync(path.join(articleDir, file), 'utf8');
+  const canonicalTag = (source.match(/<link\\b[^>]*rel=["']canonical["'][^>]*>/i) || [])[0] || '';
+  const canonicalMatch = canonicalTag.match(/\\bhref=["']([^"']+)["']/i);
+  assert.ok(canonicalMatch, file + ': missing canonical URL while building expected RSS dates');
+  const publication = getPublicationDate(source, file);
+  expectedPublicationByUrl.set(canonicalMatch[1], publication ? publication.pubDate : '');
+}
+assert.equal(expectedPublicationByUrl.size, articleFiles.length, 'Expected publication-date map must cover every source article');
+for (const item of rssItems) {
+  assert.ok(expectedPublicationByUrl.has(item.link), 'RSS item does not match a source article: ' + item.link);
+  assert.equal(item.pubDate, expectedPublicationByUrl.get(item.link),
+    item.link + ': RSS pubDate must exactly match datePublished; undated articles must not receive a fallback date');
+}
+assert.equal(rssItems.length, expectedPublicationByUrl.size, 'Every source article must have exactly one RSS item');
 const feedArticleUrls = feedUrls.filter((url) => url.startsWith(baseUrl + '/articles/'));
 assert.equal(sitemapArticleUrls.length, articleFiles.length, 'Generated sitemap article count differs from source article count');
 assert.equal(feedArticleUrls.length, articleFiles.length, 'Generated RSS article count differs from source article count');
