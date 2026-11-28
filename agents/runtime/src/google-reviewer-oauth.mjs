@@ -160,7 +160,14 @@ export async function handleGoogleReviewerAuth(request, env, { fetchImpl = fetch
     const stateHash = await digest(state);
     const browserHash = await digest(binding);
     const created = await store.createTransaction(stateHash, browserHash, nonce, verifier, nowSeconds, returnPath, clientRateLimitKey);
-    if (!created?.created) return json({ error: "login_transaction_create_failed" }, 503);
+    if (!created?.created) {
+      if (Number.isSafeInteger(created?.retry_after_seconds) && created.retry_after_seconds > 0) {
+        return json({ error: created.reason || "login_transaction_capacity_reached" }, 429, {
+          "retry-after": String(Math.min(TX_TTL_SECONDS, created.retry_after_seconds))
+        });
+      }
+      return json({ error: "login_transaction_create_failed" }, 503);
+    }
     const signedBinding = await signPayload(env.GOOGLE_REVIEWER_STATE_SECRET, { binding, exp: nowSeconds + TX_TTL_SECONDS });
     const auth = new URL(GOOGLE_AUTH_URL);
     auth.search = new URLSearchParams({
