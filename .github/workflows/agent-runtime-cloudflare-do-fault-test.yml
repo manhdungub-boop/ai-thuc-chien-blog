@@ -1,0 +1,300 @@
+name: Agent Runtime Cloudflare DO Fault Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact reviewed commit SHA on an allowlisted isolated fault-test branch
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-runtime-cloudflare-do-fault-test
+  cancel-in-progress: false
+
+jobs:
+  isolated-do-fault-test:
+    if: >-
+      github.repository == 'manhdungub-boop/ai-thuc-chien-blog' &&
+      (github.ref == 'refs/heads/fix/agent-runtime-fault-test-20261124' ||
+       github.ref == 'refs/heads/security/fence-leases-on-circuit-breaker-pause-20261123' ||
+       github.ref == 'refs/heads/feat/agent-runtime-v5-main-split-20261126') &&
+      github.event.inputs.expected_sha == github.sha
+    runs-on: ubuntu-latest
+    environment: agent-runtime-preview
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      CLOUDFLARE_ACCOUNT_ID: "92cf091bbac8b4879ec65feb30b4715b"
+      FAULT_TEST_URL: "https://ai-thuc-chien-agent-runtime-fault-test.manhdungub.workers.dev"
+      FAULT_TEST_CONFIG: "agents/runtime/wrangler.fault-test.jsonc"
+    steps:
+      - name: Check out the exact reviewed commit
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ inputs.expected_sha }}
+          persist-credentials: false
+
+      - name: Verify exact branch and commit pin
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "manhdungub-boop/ai-thuc-chien-blog"
+          test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
+          case "$GITHUB_REF" in
+            refs/heads/fix/agent-runtime-fault-test-20261124|refs/heads/security/fence-leases-on-circuit-breaker-pause-20261123|refs/heads/feat/agent-runtime-v5-main-split-20261126) ;;
+            *) echo "::error::Unapproved fault-test branch."; exit 1 ;;
+          esac
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test -f "$FAULT_TEST_CONFIG"
+          test -f agents/runtime/tests/state-store-test-worker.mjs
+
+      - name: Set up Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 22
+
+      - name: Verify Workers Free plan before any deployment
+        timeout-minutes: 2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+            echo "::error::Preview deployment credential unavailable; no deployment attempted."
+            exit 1
+          fi
+          response="$RUNNER_TEMP/cloudflare-subscriptions.json"
+          status="$(curl --silent --show-error --max-time 15 --output "$response" --write-out "%{http_code}" \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            --header "Accept: application/json" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/subscriptions")"
+          test "$status" = "200"
+          PLAN_RESPONSE="$response" node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFile } from 'node:fs/promises';
+          const payload = JSON.parse(await readFile(process.env.PLAN_RESPONSE, 'utf8'));
+          assert.equal(payload?.success, true);
+          assert.ok(Array.isArray(payload.result));
+          const info = payload.result_info;
+          assert.ok(info && info.page === 1 && Number.isSafeInteger(info.per_page));
+          const complete = info.next_page === false ||
+            (info.next_page === undefined && Number.isSafeInteger(info.count) &&
+             Number.isSafeInteger(info.total_count) &&
+             info.count === payload.result.length && info.total_count === payload.result.length);
+          assert.equal(complete, true, 'subscription listing must be complete');
+          const inactive = new Set(['Cancelled', 'Failed', 'Expired']);
+          for (const sub of payload.result) {
+            if (inactive.has(sub?.state)) continue;
+            assert.equal(sub?.price, 0, 'active non-zero price subscription blocks the test');
+            const label = [sub?.rate_plan?.id, sub?.rate_plan?.public_name, sub?.rate_plan?.name]
+              .filter(v => typeof v === 'string').join(' ').toLowerCase();
+            assert.match(label, /(^|[^a-z0-9])free([^a-z0-9]|$)/,
+              'every active subscription must be explicitly Free');
+          }
+          console.log(JSON.stringify({ workersPlan: payload.result.length === 0 ? 'free-default' : 'free', subscriptions: payload.result.length }));
+          NODE
+
+      - name: Validate isolated Worker configuration
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFile } from 'node:fs/promises';
+          const c = JSON.parse(await readFile(process.env.FAULT_TEST_CONFIG, 'utf8'));
+          assert.equal(c.name, 'ai-thuc-chien-agent-runtime-fault-test');
+          assert.equal(c.main, './tests/state-store-test-worker.mjs');
+          assert.equal(c.workers_dev, true);
+          assert.equal(c.preview_urls, false);
+          assert.deepEqual(c.durable_objects.bindings, [
+            { name: 'AGENT_STATE_STORE', class_name: 'TestAgentStateStore' }
+          ]);
+          assert.deepEqual(c.migrations, [
+            { tag: 'fault-test-v1', new_sqlite_classes: ['TestAgentStateStore'] }
+          ]);
+          assert.equal(c.vars.AGENT_ENABLED, 'false');
+          assert.equal(c.vars.AGENT_PAUSED, 'true');
+          assert.equal(c.vars.AGENT_SCHEDULER_ENABLED, 'false');
+          assert.equal(c.vars.AGENT_RECOVERY_ALARM_ENABLED, 'false');
+          assert.equal(c.vars.AGENT_OIDC_ENABLED, 'false');
+          assert.equal(c.vars.AGENT_REVIEWER_AUTH_ENABLED, 'false');
+          assert.equal(c.vars.AGENT_SCHEDULER_ENABLED, 'false');
+          assert.equal(c.vars.AGENT_RECOVERY_ALARM_ENABLED, 'false');
+          assert.equal('routes' in c, false);
+          assert.equal('d1_databases' in c, false);
+          assert.equal('queues' in c, false);
+          assert.equal('triggers' in c, false);
+          assert.equal('vars' in c && Object.keys(c.vars).some(k => /TOKEN|SECRET|KEY/i.test(k)), false);
+          NODE
+
+      - name: Deploy the isolated SQLite Durable Object test Worker
+        id: deploy_fault_worker
+        timeout-minutes: 4
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_WORKER_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then echo "::error::Scoped fault-test Worker credential unavailable; no deployment attempted."; exit 1; fi
+          echo "deployment_attempted=true" >> "$GITHUB_OUTPUT"
+          timeout --signal=TERM --kill-after=10s 180s npx --yes wrangler@4.166.0 deploy --config "$FAULT_TEST_CONFIG" \
+            --message "Isolated Cloudflare Durable Object fault test; no Production bindings"
+
+      - name: Install a one-run random internal credential
+        timeout-minutes: 2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_WORKER_TOKEN }}
+        run: |
+          set -euo pipefail
+          token="$(openssl rand -hex 32)"
+          echo "::add-mask::$token"
+          printf 'FAULT_TEST_TOKEN=%s\n' "$token" >> "$GITHUB_ENV"
+          printf '%s' "$token" | npx --yes wrangler@4.166.0 secret put AGENT_FAULT_TEST_TOKEN --config "$FAULT_TEST_CONFIG"
+
+      - name: Run real Cloudflare SQLite Durable Object fault suite
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          response="$RUNNER_TEMP/fault-suite-result.json"
+          status=000
+          for attempt in $(seq 1 12); do
+            status="$(curl --silent --show-error --max-time 120 --output "$response" --write-out "%{http_code}" \
+              --request POST "$FAULT_TEST_URL/__test/fault-suite" \
+              --header "Authorization: Bearer $FAULT_TEST_TOKEN" \
+              --header "Content-Type: application/json" \
+              --header "Accept: application/json" \
+              --data '{}')"
+            if [[ "$status" == "200" ]]; then break; fi
+            if [[ "$status" != "404" && "$status" != "503" && "$status" != "401" ]]; then
+              cat "$response"
+              echo "::error::Fault suite returned unexpected HTTP $status."
+              exit 1
+            fi
+            echo "Waiting for isolated Worker deployment and secret propagation ($attempt/12; HTTP $status)."
+            sleep 5
+          done
+          test "$status" = "200" || { cat "$response"; echo "::error::Fault suite did not return HTTP 200."; exit 1; }
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFile } from 'node:fs/promises';
+          const r = JSON.parse(await readFile(process.env.RUNNER_TEMP + '/fault-suite-result.json', 'utf8'));
+          assert.equal(r.ok, true);
+          for (const key of [
+            'pauseInFlightCancelled',
+            'staleOwnerAndGenerationRejected',
+            'leaseExpiryRequeued',
+            'currentGenerationCompleted',
+            'externalRequestBudgetExhausted',
+            'circuitBreakerCancelledRunningLease',
+            'sqliteTransactionRollback',
+            'recoveryAlarmDisabled',
+            'isolatedNamespace',
+          ]) assert.equal(r[key], true, key + ' must be verified');
+          assert.equal(r.circuitBreakerOpenedAtFailures, 5);
+          assert.equal(r.externalRequestBudgetLimit, 8);
+          console.log(JSON.stringify(r, null, 2));
+          NODE
+
+      - name: Remove one-run secret and disable public test routes
+        if: always() && steps.deploy_fault_worker.outputs.deployment_attempted == 'true'
+        timeout-minutes: 5
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_WORKER_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+            echo "::error::Cannot remove the one-run secret or disable public routes without the scoped Worker credential."
+            exit 1
+          fi
+          script="ai-thuc-chien-agent-runtime-fault-test"
+          api="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$script"
+          cleanup_failed=0
+          request_status() {
+            local output_file="$1"
+            shift
+            local status
+            if status="$(curl --silent --show-error --max-time 15 --output "$output_file" --write-out "%{http_code}" "$@")"; then
+              printf '%s' "$status"
+            else
+              printf '000'
+            fi
+          }
+
+          # Disable public URLs first. If this succeeds, a later secret-delete failure still leaves the test Worker unreachable.
+          disable_response="$RUNNER_TEMP/fault-worker-disable.json"
+          disable_ok=0
+          for attempt in 1 2 3; do
+            disable_status="$(request_status "$disable_response" \
+              --request POST --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              --header "Content-Type: application/json" --header "Accept: application/json" \
+              --data '{"enabled":false,"previews_enabled":false}' "$api/subdomain")"
+            if [[ "$disable_status" == "200" ]] && jq -e '.success == true and .result.enabled == false and .result.previews_enabled == false' "$disable_response" >/dev/null; then
+              disable_ok=1
+              break
+            fi
+            echo "Retrying disable of workers.dev and Preview URLs ($attempt/3; HTTP $disable_status)."
+            sleep 3
+          done
+          if [[ "$disable_ok" == "1" ]]; then
+            echo "PASS: workers.dev and Preview URLs disabled."
+          else
+            echo "::error::Could not disable public test Worker URLs after three attempts (HTTP $disable_status)."
+            cleanup_failed=1
+          fi
+
+          # Remove the ephemeral bearer. A 404 is acceptable only if the later list confirms absence.
+          delete_response="$RUNNER_TEMP/fault-secret-delete.json"
+          delete_ok=0
+          for attempt in 1 2 3; do
+            delete_status="$(request_status "$delete_response" \
+              --request DELETE --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              --header "Accept: application/json" "$api/secrets/AGENT_FAULT_TEST_TOKEN")"
+            if [[ "$delete_status" == "200" || "$delete_status" == "404" ]]; then
+              delete_ok=1
+              break
+            fi
+            echo "Retrying deletion of the one-run secret ($attempt/3; HTTP $delete_status)."
+            sleep 3
+          done
+          if [[ "$delete_ok" == "1" ]]; then
+            echo "Secret deletion request completed or secret was already absent (HTTP $delete_status)."
+          else
+            echo "::error::Could not delete the one-run secret after three attempts (HTTP $delete_status)."
+            cleanup_failed=1
+          fi
+
+          # Verify the one-run secret is absent without printing secret response contents.
+          secrets_response="$RUNNER_TEMP/fault-worker-secrets.json"
+          secrets_status="$(request_status "$secrets_response" \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            --header "Accept: application/json" "$api/secrets")"
+          if [[ "$secrets_status" != "200" ]] || ! jq -e '.success == true and (.result | type == "array")' "$secrets_response" >/dev/null; then
+            echo "::error::Could not verify the test Worker secret list (HTTP $secrets_status)."
+            cleanup_failed=1
+          elif jq -e '.result[]? | select(.name == "AGENT_FAULT_TEST_TOKEN")' "$secrets_response" >/dev/null; then
+            echo "::error::The one-run AGENT_FAULT_TEST_TOKEN secret still exists."
+            cleanup_failed=1
+          else
+            echo "PASS: one-run AGENT_FAULT_TEST_TOKEN is absent."
+          fi
+
+          # Verify both public URL switches remain disabled.
+          subdomain_response="$RUNNER_TEMP/fault-worker-subdomain.json"
+          subdomain_status="$(request_status "$subdomain_response" \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            --header "Accept: application/json" "$api/subdomain")"
+          if [[ "$subdomain_status" != "200" ]] || ! jq -e '.success == true and .result.enabled == false and .result.previews_enabled == false' "$subdomain_response" >/dev/null; then
+            echo "::error::Worker public URL disable verification failed (HTTP $subdomain_status)."
+            cleanup_failed=1
+          else
+            echo "PASS: the pre-created test Worker remains dormant for repeatable least-privilege runs."
+          fi
+
+          if [[ "$cleanup_failed" != "0" ]]; then
+            echo "::error::Fault-test cleanup did not fully complete."
+            exit 1
+          fi

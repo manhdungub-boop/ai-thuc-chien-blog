@@ -23,6 +23,76 @@ const googlePreview = await read("deploy-google-login-preview.yml");
 const previewD1 = await read("migrate-preview-d1.yml");
 const configureBuilds = await read("configure-cloudflare-worker-builds.yml");
 const stagingEmail = await read("staging-email-e2e.yml");
+const doFaultTest = await read("agent-runtime-cloudflare-do-fault-test.yml");
+const agentRuntimePreview = await read("agent-runtime-preview-validation.yml");
+const agentRuntimePreviewDeploy = await read("agent-runtime-preview-deploy.yml");
+const agentRuntimeLines = agentRuntimePreview.split("\n");
+const agentRuntimeValidateStart = agentRuntimeLines.indexOf("  validate:");
+const agentRuntimeE2EStart = agentRuntimeLines.indexOf("  one-shot-preview-e2e:");
+assert.notEqual(agentRuntimeValidateStart, -1, "Agent Runtime validation job must exist.");
+assert.ok(agentRuntimeE2EStart > agentRuntimeValidateStart, "Protected Preview E2E must remain a separate job.");
+const agentRuntimeValidateLines = agentRuntimeLines.slice(agentRuntimeValidateStart, agentRuntimeE2EStart);
+const agentRuntimeValidateBlock = agentRuntimeValidateLines.join("\n");
+assert.ok(agentRuntimeValidateBlock.includes("github.event_name == 'pull_request'"),
+  "Credential-free Agent Runtime validation must run for pull requests.");
+assert.ok(agentRuntimeValidateBlock.includes("github.event.pull_request.head.repo.full_name == 'manhdungub-boop/ai-thuc-chien-blog'"),
+  "PR validation must pin checkout to same-repository source.");
+assert.ok(agentRuntimeValidateBlock.includes("github.event_name == 'workflow_dispatch'") &&
+  agentRuntimeValidateBlock.includes("github.ref == 'refs/heads/main'") &&
+  agentRuntimeValidateBlock.includes("github.actor_id == '342528485'"),
+  "Manual validation must remain restricted to the owner on trusted main.");
+assert.doesNotMatch(agentRuntimeValidateBlock, /secrets\.[A-Z0-9_]+\s*\}\}/,
+  "Credential-free PR validation must not reference secret values.");
+const agentRuntimePullRequestTrigger = agentRuntimePreview.slice(
+  agentRuntimePreview.indexOf("  pull_request:"),
+  agentRuntimePreview.indexOf("  workflow_dispatch:")
+);
+assert.ok(agentRuntimePullRequestTrigger.includes('"feat/ai-bank-discovery-workflow-20261126"'),
+  "The stacked AI Bank discovery PR base branch must trigger validation.");
+assert.ok(agentRuntimePullRequestTrigger.includes('"agents/runtime/**"'),
+  "Runtime source changes must trigger exact-head validation.");
+assert.ok(!agentRuntimePullRequestTrigger.includes(".github/workflows/agent-runtime-preview-validation.yml"),
+  "Workflow-only changes must use Static CI guard tests rather than runtime tests without runtime source.");
+const agentRuntimeE2EBlock = agentRuntimeLines.slice(agentRuntimeE2EStart).join("\n");
+assert.ok(agentRuntimeE2EBlock.includes("environment: agent-runtime-preview") &&
+  agentRuntimeE2EBlock.includes("github.actor_id == '342528485'") &&
+  agentRuntimeE2EBlock.includes("inputs.expected_head_sha") &&
+  agentRuntimeE2EBlock.includes("id-token: write"),
+  "Protected Preview E2E must retain its owner pin, exact SHA, protected environment, and scoped OIDC permission.");
+
+const previewDeployJobStart = agentRuntimePreviewDeploy.indexOf("  deploy-preview:");
+const previewDeployStepsStart = agentRuntimePreviewDeploy.indexOf("    steps:", previewDeployJobStart);
+assert.ok(previewDeployJobStart >= 0 && previewDeployStepsStart > previewDeployJobStart,
+  "Agent Runtime Preview deploy job boundary must exist.");
+const previewDeployJobHeader = agentRuntimePreviewDeploy.slice(previewDeployJobStart, previewDeployStepsStart);
+assert.ok(!previewDeployJobHeader.includes("CLOUDFLARE_API_TOKEN") && !previewDeployJobHeader.includes("CLOUDFLARE_BILLING_READ_API_TOKEN") && !previewDeployJobHeader.includes("secrets."),
+  "Cloudflare credentials must not be inherited at the Preview deploy job scope.");
+const previewTokenRequireStart = agentRuntimePreviewDeploy.indexOf("      - name: Require Preview deployment token");
+const planGateStart = agentRuntimePreviewDeploy.indexOf("      - name: Verify Workers Free plan before any resource creation");
+assert.ok(previewTokenRequireStart >= 0 && planGateStart > previewTokenRequireStart,
+  "Preview deployment credential check must precede the Billing plan gate.");
+const previewTokenRequireBlock = agentRuntimePreviewDeploy.slice(previewTokenRequireStart, planGateStart);
+assert.ok(previewTokenRequireBlock.includes("CLOUDFLARE_API_TOKEN: " + "$" + "{{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}") &&
+  previewTokenRequireBlock.includes("${CLOUDFLARE_API_TOKEN:-}"),
+  "Preview deployment credential check must validate the Preview deployment token.");
+assert.ok(!previewTokenRequireBlock.includes("CLOUDFLARE_BILLING_READ_API_TOKEN"),
+  "The Preview token check must not depend on the Billing Read credential.");
+const previewDeployStart = agentRuntimePreviewDeploy.indexOf("      - name: Deploy only the isolated Preview Worker");
+assert.ok(planGateStart >= 0 && previewDeployStart > planGateStart,
+  "Preview Free-plan verification must precede the Preview deployment step.");
+const planGateBlock = agentRuntimePreviewDeploy.slice(planGateStart, previewDeployStart);
+assert.ok(planGateBlock.includes("CLOUDFLARE_BILLING_READ_API_TOKEN: " + "$" + "{{ secrets.CLOUDFLARE_BILLING_READ_API_TOKEN }}") &&
+  planGateBlock.includes("Authorization: Bearer $CLOUDFLARE_BILLING_READ_API_TOKEN"),
+  "Free-plan verification must use the dedicated Billing Read token.");
+assert.ok(!planGateBlock.includes("CLOUDFLARE_AGENT_PREVIEW_API_TOKEN") && !planGateBlock.includes("CLOUDFLARE_API_TOKEN"),
+  "The Preview deployment token must not be available to the Billing plan gate.");
+const previewHealthStart = agentRuntimePreviewDeploy.indexOf("      - name: Verify Preview health remains disabled and paused");
+const previewDeployBlock = agentRuntimePreviewDeploy.slice(previewDeployStart, previewHealthStart);
+assert.ok(previewDeployBlock.includes("CLOUDFLARE_API_TOKEN: " + "$" + "{{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}"),
+  "Only the isolated Preview deployment step must receive the Preview deployment token.");
+assert.ok(!previewDeployBlock.includes("CLOUDFLARE_BILLING_READ_API_TOKEN"),
+  "The Billing Read token must not be available to the Worker deployment step.");
+
 const stagingEmailLines = stagingEmail.split("\n");
 const stagingJobStart = stagingEmailLines.indexOf("  staging-email-e2e:");
 assert.notEqual(stagingJobStart, -1, "Staging email E2E job must exist.");
@@ -125,6 +195,22 @@ assert.ok(previewD1.includes("github.ref == 'refs/heads/main'"));
 assert.ok(previewD1.includes("ref: main"));
 assert.ok(previewD1.includes("51d814c8-a3fc-4481-a5f1-60bc67617f3c"));
 assert.ok(configureBuilds.includes("test_configure_cloudflare_worker_builds.py"));
+assert.ok(doFaultTest.includes("github.repository == 'manhdungub-boop/ai-thuc-chien-blog'"));
+assert.ok(doFaultTest.includes("github.ref == 'refs/heads/fix/agent-runtime-fault-test-20261124'"));
+assert.ok(doFaultTest.includes("github.ref == 'refs/heads/security/fence-leases-on-circuit-breaker-pause-20261123'"));
+assert.ok(doFaultTest.includes("github.ref == 'refs/heads/feat/agent-runtime-v5-main-split-20261126'"));
+assert.ok(doFaultTest.includes("github.event.inputs.expected_sha == github.sha"));
+assert.ok(doFaultTest.includes("environment: agent-runtime-preview"));
+assert.ok(doFaultTest.includes('FAULT_TEST_CONFIG: "agents/runtime/wrangler.fault-test.jsonc"'));
+assert.ok(doFaultTest.includes("ref: ${{ inputs.expected_sha }}"));
+assert.ok(doFaultTest.includes("persist-credentials: false"));
+assert.ok(doFaultTest.includes("id: deploy_fault_worker"));
+assert.ok(doFaultTest.includes("deployment_attempted=true"));
+assert.ok(doFaultTest.includes("if: always() && steps.deploy_fault_worker.outputs.deployment_attempted == 'true'"));
+assert.ok(doFaultTest.includes('test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"'));
+assert.ok(doFaultTest.includes("::error::Unapproved fault-test branch."));
+assert.ok(doFaultTest.includes("refs/heads/feat/agent-runtime-v5-main-split-20261126"));
+
 
 const checkoutWorkflows = [
   ["health-check.yml", health],

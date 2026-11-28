@@ -1,0 +1,217 @@
+name: Agent Runtime Preview Deploy (Free Plan Guarded)
+
+on:
+  push:
+    branches:
+      - reconcile/agent-runtime-pr339-schema-v7-20261121
+  workflow_dispatch:
+    inputs:
+      confirm_preview_deploy:
+        description: "Confirm deployment to the isolated Agent Runtime Preview Worker only"
+        required: true
+        type: boolean
+        default: false
+      confirm_free_workers_plan:
+        description: "Confirm Workers Free if no Workers subscription record is returned; API checks remain mandatory"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-runtime-preview-deploy
+  cancel-in-progress: false
+
+jobs:
+  validate-preview:
+    if: >-
+      github.repository == 'manhdungub-boop/ai-thuc-chien-blog' &&
+      (github.ref == 'refs/heads/reconcile/agent-runtime-pr339-schema-v7-20261121' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout the exact triggering commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+
+      - name: Validate isolated Worker configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          config="agents/runtime/wrangler.preview.jsonc"
+          test -f "$config"
+          node <<'NODE'
+          const fs = require("node:fs");
+          const c = JSON.parse(fs.readFileSync("agents/runtime/wrangler.preview.jsonc", "utf8"));
+          const fail = (m) => { console.error("::error::" + m); process.exit(1); };
+          if (c.name !== "ai-thuc-chien-agent-runtime-preview") fail("Unexpected Worker name.");
+          if (c.main !== "./src/worker.mjs" || c.workers_dev !== true || c.preview_urls !== false) fail("Unexpected Preview entrypoint or URL settings.");
+          if (c.vars?.AGENT_ENABLED !== "false" || c.vars?.AGENT_PAUSED !== "true") fail("Agent must remain disabled and paused.");
+          if (c.vars?.AGENT_REVIEWER_AUTH_ENABLED !== "false") fail("Reviewer authentication must remain disabled.");
+          if (c.vars?.AGENT_OIDC_ENABLED !== "true") fail("Only the pause-only GitHub OIDC operator may be enabled in this Preview deployment.");
+          for (const k of ["AGENT_SCHEDULER_ENABLED", "AGENT_RECOVERY_ALARM_ENABLED"]) {
+            if (c.vars?.[k] !== "false") fail(k + " must remain false.");
+          }
+          if (c.vars?.AGENT_RATE_LIMIT_REQUIRED !== "true") fail("Rate limiting must be required.");
+          if ((c.triggers?.crons ?? []).length !== 0) fail("Cron triggers are not permitted in this Preview deployment.");
+          for (const k of ["routes", "custom_domains", "d1_databases", "kv_namespaces", "r2_buckets", "queues", "services", "workflows"]) {
+            if (c[k] && (Array.isArray(c[k]) ? c[k].length : true)) fail("Unexpected binding or route configuration: " + k);
+          }
+          if (c.env) fail("Named Wrangler environments are not permitted.");
+          const doNames = (c.durable_objects?.bindings ?? []).map(x => x.name + ":" + x.class_name).sort();
+          const expectedDo = ["AGENT_AI_BANK_CANDIDATE_STORE:AgentAIBankCandidateStore", "AGENT_DRAFT_STORE:AgentDraftStore", "AGENT_REVIEWER_AUTH_STORE:AgentReviewerAuthStore", "AGENT_STATE_STORE:AgentStateStore"].sort();
+          if (JSON.stringify(doNames) !== JSON.stringify(expectedDo)) fail("Unexpected Durable Object bindings.");
+          const migrationNames = (c.migrations ?? []).flatMap(x => x.new_sqlite_classes ?? []).sort();
+          if (JSON.stringify(migrationNames) !== JSON.stringify(["AgentAIBankCandidateStore", "AgentDraftStore", "AgentReviewerAuthStore", "AgentStateStore"].sort())) fail("Only the four declared SQLite Durable Object classes are allowed.");
+          console.log("Preview-only config verified; no Production Worker, D1, DNS, Cron, or active agent path is configured.");
+          NODE
+
+      - name: Install pinned Wrangler CLI
+        run: npx --yes wrangler@4.166.0 --version
+
+      - name: Build and dry-run the isolated Preview Worker
+        working-directory: agents/runtime
+        run: npx --yes wrangler@4.166.0 deploy --dry-run --outdir "$RUNNER_TEMP/agent-runtime-preview-dry-run" --config wrangler.preview.jsonc
+
+  deploy-preview:
+    needs: validate-preview
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.repository == 'manhdungub-boop/ai-thuc-chien-blog' &&
+      (github.ref == 'refs/heads/reconcile/agent-runtime-pr339-schema-v7-20261121' || github.ref == 'refs/heads/main') &&
+      inputs.confirm_preview_deploy == true &&
+      inputs.confirm_free_workers_plan == true &&
+      needs.validate-preview.result == 'success'
+    runs-on: ubuntu-latest
+    environment: agent-runtime-preview
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_ACCOUNT_ID: "92cf091bbac8b4879ec65feb30b4715b"
+      CONFIRM_FREE_WORKERS_PLAN: ${{ inputs.confirm_free_workers_plan }}
+    steps:
+      - name: Checkout the exact triggering commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+
+      - name: Require Preview deployment token
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+            echo "::error::CLOUDFLARE_AGENT_PREVIEW_API_TOKEN is not configured in the agent-runtime-preview environment."
+            exit 1
+          fi
+
+      - name: Verify Workers Free plan before any resource creation
+        shell: bash
+        env:
+          CLOUDFLARE_BILLING_READ_API_TOKEN: ${{ secrets.CLOUDFLARE_BILLING_READ_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${CLOUDFLARE_BILLING_READ_API_TOKEN:-}" ]]; then
+            echo "::error::CLOUDFLARE_BILLING_READ_API_TOKEN is not configured in the agent-runtime-preview environment."
+            exit 1
+          fi
+          response="$RUNNER_TEMP/cloudflare-subscriptions.json"
+          status="$(curl --silent --show-error --output "$response" --write-out "%{http_code}" \
+            --header "Authorization: Bearer $CLOUDFLARE_BILLING_READ_API_TOKEN" \
+            --header "Accept: application/json" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/subscriptions")"
+          if [[ "$status" != "200" ]]; then
+            echo "::error::Cannot verify the Cloudflare account plan (HTTP $status). Billing Read access is required; deployment stopped before resource creation."
+            exit 1
+          fi
+          echo "Sanitized subscription plan metadata (no account secrets or identifiers):"
+          jq -c '
+            if .success == true then
+              [.result[]? | {
+                rate_plan_id: (.rate_plan.id // null),
+                rate_plan_public_name: (.rate_plan.public_name // null),
+                rate_plan_scope: (.rate_plan.scope // null),
+                rate_plan_sets: (.rate_plan.sets // []),
+                product_name: (if (.product | type) == "object" then (.product.name // .product.id // null) else (.product // null) end)
+              }]
+            else { success: false }
+            end
+          ' "$response"
+          plan_check="$(jq -r '
+            if .success != true then "invalid"
+            else
+              [.result[]? |
+                [
+                  (.rate_plan // {} | [.id // "", .public_name // "", .name // ""] | map(tostring) | join(" ")),
+                  (.product // "" | if type == "object" then (.name // .id // "") else . end | tostring)
+                ] |
+                map(ascii_downcase) | join(" ") |
+                select(test("worker"))
+              ] as $worker_plans |
+              if ($worker_plans | length) == 0 then "no-worker-subscription"
+              elif all($worker_plans[]; test("free")) then "free"
+              else "non-free"
+              end
+            end
+          ' "$response")"
+          case "$plan_check" in
+            free)
+              echo "Cloudflare subscription response positively identifies Workers Free."
+              ;;
+            no-worker-subscription)
+              # Workers Free is Cloudflare's default plan. Require the explicit
+              # workflow_dispatch confirmation when no Workers subscription is listed.
+              if [[ "${CONFIRM_FREE_WORKERS_PLAN:-false}" != "true" ]]; then
+                echo "::error::No Workers subscription record was returned. Explicit workflow_dispatch confirmation is required to accept the default Workers Free plan."
+                exit 1
+              fi
+              echo "No Workers subscription record exists; explicit workflow_dispatch confirmation accepts the default Workers Free plan."
+              ;;
+            *)
+              echo "::error::The subscription response did not prove that all Workers subscriptions are Free. Deployment stopped before resource creation."
+              exit 1
+              ;;
+          esac
+
+      - name: Deploy only the isolated Preview Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}
+        working-directory: agents/runtime
+        run: npx --yes wrangler@4.166.0 deploy --config wrangler.preview.jsonc
+
+      - name: Verify Preview health remains disabled and paused
+        shell: bash
+        run: |
+          set -euo pipefail
+          worker_url="https://ai-thuc-chien-agent-runtime-preview.manhdungub.workers.dev"
+          curl --fail --silent --show-error --max-time 20 "$worker_url/health" -o "$RUNNER_TEMP/agent-runtime-preview-health.json"
+          jq -e '
+            .ok == true and
+            .service == "ai-thuc-chien-agent-runtime-preview" and
+            .enabled == false and
+            .paused == true and
+            .scheduler == "manual_only_no_cron" and
+            .task_execution_enabled == false and
+            .quality_review_executor_enabled == false and
+            .reviewer_auth_enabled == false and
+            .publication_authorized == false and
+            .execution == "operator_triggered_read_only_analysis"
+          ' "$RUNNER_TEMP/agent-runtime-preview-health.json" >/dev/null
+          echo "Preview health confirms autonomous execution, reviewer authentication, and publication remain disabled."
