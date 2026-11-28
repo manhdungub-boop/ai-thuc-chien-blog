@@ -184,7 +184,7 @@ const reviewerAuthEnv = {
   GOOGLE_REVIEWER_CLIENT_ID: "preview-test-client-id-abcdefghijklmnopqrstuvwxyz0123456789.apps.googleusercontent.com",
   GOOGLE_REVIEWER_CLIENT_SECRET: "test-google-client-secret-value-abcdefghijklmnopqrstuvwxyz0123456789",
   GOOGLE_REVIEWER_REDIRECT_URI: base + "/auth/google/callback",
-  GOOGLE_REVIEWER_ALLOWED_EMAILS: "reviewer@gmail.com",
+  GOOGLE_REVIEWER_ALLOWED_EMAILS: "reviewer@gmail.com",\n  AGENT_OPERATOR_ALLOWED_EMAILS: "reviewer@gmail.com",
   GOOGLE_REVIEWER_STATE_SECRET: "state-secret-for-tests-only-abcdefghijklmnopqrstuvwxyz0123456789",
   GOOGLE_REVIEWER_SESSION_SECRET: "session-secret-for-tests-only-zyxwvutsrqponmlkjihgfedcba9876543210"
 };
