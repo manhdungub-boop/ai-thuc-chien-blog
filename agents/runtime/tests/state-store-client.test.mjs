@@ -143,5 +143,11 @@ test("State Store client rejects malformed lease identities, generations, states
   await assert.rejects(() => callStateStore(env, "complete", {
     taskId: "task_1", leaseOwner: LEASE_OWNER, leaseGeneration: 1, status: "failed", errorCode: "INVALID CODE",
   }), /state_store_request_invalid/);
+  await assert.rejects(() => callStateStore(env, "complete", {
+    taskId: "task_1", leaseOwner: LEASE_OWNER, leaseGeneration: 1, status: "failed", result: { status: "pass" },
+  }), /state_store_request_invalid/);
+  await assert.rejects(() => callStateStore(env, "complete", {
+    taskId: "task_1", leaseOwner: LEASE_OWNER, leaseGeneration: 1, status: "cancelled", result: { status: "pass" },
+  }), /state_store_request_invalid/);
   assert.equal(calls.length, 0);
 });
