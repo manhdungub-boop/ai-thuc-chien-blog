@@ -13,6 +13,7 @@ on:
     - "feat/agent-runtime-**"
     - "fix/agent-runtime-**"
     - "fix/ai-bank-discovery-ingestion-gate-20261127"
+    - "feat/ai-bank-discovery-workflow-20261126"
     - "test/agent-runtime-**"
     - "security/agent-runtime-**"
     - "security/fence-leases-on-circuit-breaker-pause-20261123"
@@ -20,7 +21,6 @@ on:
     - "chore/agent-runtime-**"
     paths:
       - "agents/runtime/**"
-      - ".github/workflows/agent-runtime-preview-validation.yml"
       - ".github/workflows/agent-runtime-operator.yml"
   workflow_dispatch:
     inputs:
@@ -41,7 +41,13 @@ concurrency:
 
 jobs:
   validate:
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.actor_id == '342528485'
+    # Pull requests run credential-free validation; protected Preview E2E remains separately gated.
+    if: >-
+      (github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == 'manhdungub-boop/ai-thuc-chien-blog') ||
+      (github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      github.actor_id == '342528485')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

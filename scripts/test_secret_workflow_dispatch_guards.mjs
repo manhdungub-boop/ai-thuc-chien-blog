@@ -23,6 +23,41 @@ const googlePreview = await read("deploy-google-login-preview.yml");
 const previewD1 = await read("migrate-preview-d1.yml");
 const configureBuilds = await read("configure-cloudflare-worker-builds.yml");
 const stagingEmail = await read("staging-email-e2e.yml");
+const agentRuntimePreview = await read("agent-runtime-preview-validation.yml");
+const agentRuntimeLines = agentRuntimePreview.split("\n");
+const agentRuntimeValidateStart = agentRuntimeLines.indexOf("  validate:");
+const agentRuntimeE2EStart = agentRuntimeLines.indexOf("  one-shot-preview-e2e:");
+assert.notEqual(agentRuntimeValidateStart, -1, "Agent Runtime validation job must exist.");
+assert.ok(agentRuntimeE2EStart > agentRuntimeValidateStart, "Protected Preview E2E must remain a separate job.");
+const agentRuntimeValidateLines = agentRuntimeLines.slice(agentRuntimeValidateStart, agentRuntimeE2EStart);
+const agentRuntimeValidateBlock = agentRuntimeValidateLines.join("\n");
+assert.ok(agentRuntimeValidateBlock.includes("github.event_name == 'pull_request'"),
+  "Credential-free Agent Runtime validation must run for pull requests.");
+assert.ok(agentRuntimeValidateBlock.includes("github.event.pull_request.head.repo.full_name == 'manhdungub-boop/ai-thuc-chien-blog'"),
+  "PR validation must pin checkout to same-repository source.");
+assert.ok(agentRuntimeValidateBlock.includes("github.event_name == 'workflow_dispatch'") &&
+  agentRuntimeValidateBlock.includes("github.ref == 'refs/heads/main'") &&
+  agentRuntimeValidateBlock.includes("github.actor_id == '342528485'"),
+  "Manual validation must remain restricted to the owner on trusted main.");
+assert.doesNotMatch(agentRuntimeValidateBlock, /secrets\.[A-Z0-9_]+\s*\}\}/,
+  "Credential-free PR validation must not reference secret values.");
+const agentRuntimePullRequestTrigger = agentRuntimePreview.slice(
+  agentRuntimePreview.indexOf("  pull_request:"),
+  agentRuntimePreview.indexOf("  workflow_dispatch:")
+);
+assert.ok(agentRuntimePullRequestTrigger.includes('"feat/ai-bank-discovery-workflow-20261126"'),
+  "The stacked AI Bank discovery PR base branch must trigger validation.");
+assert.ok(agentRuntimePullRequestTrigger.includes('"agents/runtime/**"'),
+  "Runtime source changes must trigger exact-head validation.");
+assert.ok(!agentRuntimePullRequestTrigger.includes(".github/workflows/agent-runtime-preview-validation.yml"),
+  "Workflow-only changes must use Static CI guard tests rather than runtime tests without runtime source.");
+const agentRuntimeE2EBlock = agentRuntimeLines.slice(agentRuntimeE2EStart).join("\n");
+assert.ok(agentRuntimeE2EBlock.includes("environment: agent-runtime-preview") &&
+  agentRuntimeE2EBlock.includes("github.actor_id == '342528485'") &&
+  agentRuntimeE2EBlock.includes("inputs.expected_head_sha") &&
+  agentRuntimeE2EBlock.includes("id-token: write"),
+  "Protected Preview E2E must retain its owner pin, exact SHA, protected environment, and scoped OIDC permission.");
+
 const stagingEmailLines = stagingEmail.split("\n");
 const stagingJobStart = stagingEmailLines.indexOf("  staging-email-e2e:");
 assert.notEqual(stagingJobStart, -1, "Staging email E2E job must exist.");
