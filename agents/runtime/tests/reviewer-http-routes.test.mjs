@@ -283,7 +283,7 @@ describe("authenticated reviewer draft read routes", () => {
 function aiBankStoreNamespace(stub) {
   return {
     idFromName(name) {
-      expect(name).toBe("agent-ai-bank-candidates-primary");
+      expect(name).toBe("ai-bank-discovery-global");
       return "agent-ai-bank-candidates-id";
     },
     get(id) {
