@@ -60,8 +60,8 @@ assert.ok(agentRuntimeE2EBlock.includes("environment: agent-runtime-preview") &&
   agentRuntimeE2EBlock.includes("id-token: write"),
   "Protected Preview E2E must retain its owner pin, exact SHA, protected environment, and scoped OIDC permission.");
 
-const previewDeployJobStart = agentRuntimePreviewDeploy.indexOf("  deploy-preview:\\n");
-const previewDeployStepsStart = agentRuntimePreviewDeploy.indexOf("    steps:\\n", previewDeployJobStart);
+const previewDeployJobStart = agentRuntimePreviewDeploy.indexOf("  deploy-preview:");
+const previewDeployStepsStart = agentRuntimePreviewDeploy.indexOf("    steps:", previewDeployJobStart);
 assert.ok(previewDeployJobStart >= 0 && previewDeployStepsStart > previewDeployJobStart,
   "Agent Runtime Preview deploy job boundary must exist.");
 const previewDeployJobHeader = agentRuntimePreviewDeploy.slice(previewDeployJobStart, previewDeployStepsStart);
