@@ -53,7 +53,9 @@ export const REVIEWER_CONSOLE_JS = `"use strict";
   const aiBankQueue = byId("ai-bank-queue");
   const aiBankDetail = byId("ai-bank-detail");
   const login = byId("login-link");
-  const logout = byId("logout-button");\n  let selectedDraftId = null;\n  let draftSelectionVersion = 0;
+  const logout = byId("logout-button");
+  let selectedDraftId = null;
+  let draftSelectionVersion = 0;
 
   function node(tag, value) {
     const element = document.createElement(tag);
