@@ -67,7 +67,16 @@ assert.ok(previewDeployJobStart >= 0 && previewDeployStepsStart > previewDeployJ
 const previewDeployJobHeader = agentRuntimePreviewDeploy.slice(previewDeployJobStart, previewDeployStepsStart);
 assert.ok(!previewDeployJobHeader.includes("CLOUDFLARE_API_TOKEN") && !previewDeployJobHeader.includes("CLOUDFLARE_BILLING_READ_API_TOKEN") && !previewDeployJobHeader.includes("secrets."),
   "Cloudflare credentials must not be inherited at the Preview deploy job scope.");
+const previewTokenRequireStart = agentRuntimePreviewDeploy.indexOf("      - name: Require Preview deployment token");
 const planGateStart = agentRuntimePreviewDeploy.indexOf("      - name: Verify Workers Free plan before any resource creation");
+assert.ok(previewTokenRequireStart >= 0 && planGateStart > previewTokenRequireStart,
+  "Preview deployment credential check must precede the Billing plan gate.");
+const previewTokenRequireBlock = agentRuntimePreviewDeploy.slice(previewTokenRequireStart, planGateStart);
+assert.ok(previewTokenRequireBlock.includes("CLOUDFLARE_API_TOKEN: " + "$" + "{{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}") &&
+  previewTokenRequireBlock.includes("${CLOUDFLARE_API_TOKEN:-}"),
+  "Preview deployment credential check must validate the Preview deployment token.");
+assert.ok(!previewTokenRequireBlock.includes("CLOUDFLARE_BILLING_READ_API_TOKEN"),
+  "The Preview token check must not depend on the Billing Read credential.");
 const previewDeployStart = agentRuntimePreviewDeploy.indexOf("      - name: Deploy only the isolated Preview Worker");
 assert.ok(planGateStart >= 0 && previewDeployStart > planGateStart,
   "Preview Free-plan verification must precede the Preview deployment step.");
