@@ -90,6 +90,14 @@ function parseLimit(url) {
   const value = Number(raw);
   return Number.isSafeInteger(value) && value >= 1 && value <= 50 ? value : null;
 }
+function parseOffset(url) {
+  const values = url.searchParams.getAll("offset");
+  if (values.length > 1) return null;
+  if (values.length === 0) return 0;
+  if (!/^(?:0|[1-9][0-9]{0,5})$/.test(values[0])) return null;
+  const value = Number(values[0]);
+  return Number.isSafeInteger(value) && value <= 100000 ? value : null;
+}
 function resultStatus(result, fallback = 200) {
   if (!result || typeof result !== "object") return 502;
   if (result.authorized === false) return result.reason === "reviewer_auth_not_configured" ? 503 : 401;
@@ -348,9 +356,11 @@ async function handleReviewerApi(request, env, url) {
   if (!store) return json({ ok: false, error: "draft_store_not_configured" }, 503);
   const limit = parseLimit(url);
   if (limit === null) return json({ ok: false, error: "review_queue_limit_invalid" }, 400);
+  const offset = url.pathname === "/api/reviewer/drafts" ? parseOffset(url) : 0;
+  if (offset === null) return json({ ok: false, error: "review_queue_offset_invalid" }, 400);
 
   if (url.pathname === "/api/reviewer/drafts" && request.method === "GET") {
-    const result = await store.listPendingReviewsForReviewer(limit, auth.token);
+    const result = await store.listPendingReviewsForReviewer(limit, auth.token, offset);
     return reviewerResultResponse(result);
   }
   if (url.pathname === "/api/reviewer/drafts-needing-authoring" && request.method === "GET") {
