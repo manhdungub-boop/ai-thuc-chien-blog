@@ -126,6 +126,8 @@ describe("read-only AI Bank release discovery", () => {
     expect(candidates).toHaveLength(5);
     expect(new Set(candidates.map(item => item.candidate_id)).size).toBe(candidates.length);
     const first = candidates.find(item => item.repository === AI_BANK_RELEASE_SOURCES[0].repo);
+    const mixedCaseCandidate = candidates.find(item => item.repository === "Comfy-Org/ComfyUI");
+    expect(mixedCaseCandidate?.candidate_id).toBe("github:Comfy-Org/ComfyUI");
     expect(first).toMatchObject({
       candidate_id: "github:" + AI_BANK_RELEASE_SOURCES[0].repo,
       name: "Ollama",
