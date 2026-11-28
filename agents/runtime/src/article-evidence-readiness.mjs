@@ -72,6 +72,7 @@ function splitProseAssertions(markdown) {
 
 function normalizeClaimText(value) {
   return removeInlineCodeSpans(String(value ?? ""))
+    .replace(/(^|[^\p{L}\p{N}])([+\-−])(?=\s*\d)/gu, (_, prefix, sign) => prefix + (sign === "+" ? " plus " : " minus "))
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
     .replace(/<[^>]*>/g, " ")
