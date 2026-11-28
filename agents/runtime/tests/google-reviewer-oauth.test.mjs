@@ -133,7 +133,8 @@ describe("Google reviewer OAuth session flow", () => {
     expect(response.headers.get("set-cookie")).toContain("HttpOnly");
     expect(response.headers.get("set-cookie")).toContain("SameSite=Lax");
     expect(stored).toHaveLength(7);
-    expect(stored[5]).toBe("/");\n    expect(stored[6]).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(stored[5]).toBe("/");
+    expect(stored[6]).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(stored[0]).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(stored[1]).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(stored[2]).toMatch(/^[A-Za-z0-9_-]{43}$/);
