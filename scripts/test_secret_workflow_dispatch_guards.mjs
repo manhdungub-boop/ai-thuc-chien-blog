@@ -65,7 +65,7 @@ const previewDeployStepsStart = agentRuntimePreviewDeploy.indexOf("    steps:", 
 assert.ok(previewDeployJobStart >= 0 && previewDeployStepsStart > previewDeployJobStart,
   "Agent Runtime Preview deploy job boundary must exist.");
 const previewDeployJobHeader = agentRuntimePreviewDeploy.slice(previewDeployJobStart, previewDeployStepsStart);
-assert.doesNotMatch(previewDeployJobHeader, /CLOUDFLARE_(?:API|BILLING_READ_API)_TOKEN|secrets\\./,
+assert.ok(!previewDeployJobHeader.includes("CLOUDFLARE_API_TOKEN") && !previewDeployJobHeader.includes("CLOUDFLARE_BILLING_READ_API_TOKEN") && !previewDeployJobHeader.includes("secrets."),
   "Cloudflare credentials must not be inherited at the Preview deploy job scope.");
 const planGateStart = agentRuntimePreviewDeploy.indexOf("      - name: Verify Workers Free plan before any resource creation");
 const previewDeployStart = agentRuntimePreviewDeploy.indexOf("      - name: Deploy only the isolated Preview Worker");
@@ -75,13 +75,13 @@ const planGateBlock = agentRuntimePreviewDeploy.slice(planGateStart, previewDepl
 assert.ok(planGateBlock.includes("CLOUDFLARE_BILLING_READ_API_TOKEN: " + "$" + "{{ secrets.CLOUDFLARE_BILLING_READ_API_TOKEN }}") &&
   planGateBlock.includes("Authorization: Bearer $CLOUDFLARE_BILLING_READ_API_TOKEN"),
   "Free-plan verification must use the dedicated Billing Read token.");
-assert.doesNotMatch(planGateBlock, /secrets\\.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN|CLOUDFLARE_API_TOKEN/,
+assert.ok(!planGateBlock.includes("CLOUDFLARE_AGENT_PREVIEW_API_TOKEN") && !planGateBlock.includes("CLOUDFLARE_API_TOKEN"),
   "The Preview deployment token must not be available to the Billing plan gate.");
 const previewHealthStart = agentRuntimePreviewDeploy.indexOf("      - name: Verify Preview health remains disabled and paused");
 const previewDeployBlock = agentRuntimePreviewDeploy.slice(previewDeployStart, previewHealthStart);
 assert.ok(previewDeployBlock.includes("CLOUDFLARE_API_TOKEN: " + "$" + "{{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}"),
   "Only the isolated Preview deployment step must receive the Preview deployment token.");
-assert.doesNotMatch(previewDeployBlock, /CLOUDFLARE_BILLING_READ_API_TOKEN|secrets\\.CLOUDFLARE_BILLING_READ_API_TOKEN/,
+assert.ok(!previewDeployBlock.includes("CLOUDFLARE_BILLING_READ_API_TOKEN"),
   "The Billing Read token must not be available to the Worker deployment step.");
 
 const stagingEmailLines = stagingEmail.split("\n");
