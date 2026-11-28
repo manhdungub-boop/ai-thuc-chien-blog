@@ -26,6 +26,45 @@ assert.throws(() => getPublicationDate('<script type="application/ld+json">{"@ty
 assert.throws(() => getPublicationDate('<script type="application/ld+json">{"@type":"BlogPosting","datePublished":"2025-02-29"}</script>', 'non-leap-day.html'),
   /Invalid calendar datePublished/, 'Invalid leap days must be rejected');
 
+
+const jsonLd = (value) => '<script type="application/ld+json">' + JSON.stringify(value) + '</script>';
+const expectedMetadataDate = "2026-02-28";
+for (const articleType of ["Article", "BlogPosting", "NewsArticle", "TechArticle", "AnalysisNewsArticle", "Report", "ScholarlyArticle"]) {
+  assert.equal(
+    getArticleDatePublished(jsonLd({ "@type": articleType, datePublished: expectedMetadataDate }), articleType + ".html"),
+    expectedMetadataDate,
+    "Article metadata extraction must support the explicit Schema.org type " + articleType
+  );
+}
+assert.equal(
+  getArticleDatePublished(jsonLd({ "@type": ["Article", "BlogPosting"], datePublished: expectedMetadataDate }), "article-type-array.html"),
+  expectedMetadataDate,
+  "Article metadata extraction must support @type arrays"
+);
+assert.equal(
+  getArticleDatePublished(jsonLd({ "@graph": [{ "@type": "WebPage", name: "Example" }, { "@type": "BlogPosting", datePublished: expectedMetadataDate }] }), "article-graph.html"),
+  expectedMetadataDate,
+  "Article metadata extraction must find Article nodes inside @graph"
+);
+assert.equal(
+  getArticleDatePublished(jsonLd([{ "@type": "WebPage" }, { "@type": "NewsArticle", datePublished: expectedMetadataDate }]), "article-array.html"),
+  expectedMetadataDate,
+  "Article metadata extraction must support top-level JSON-LD arrays"
+);
+assert.equal(
+  getArticleDatePublished(jsonLd({ "@type": "WebPage", datePublished: expectedMetadataDate }), "non-article.html"),
+  null,
+  "Non-Article structured data must not be treated as publication metadata"
+);
+assert.throws(
+  () => getArticleDatePublished(jsonLd({ "@graph": [
+    { "@type": "Article", datePublished: "2026-02-28" },
+    { "@type": "BlogPosting", datePublished: "2026-03-01" }
+  ] }), "conflicting-article-dates.html"),
+  /Conflicting datePublished/,
+  "Conflicting Article publication dates must be rejected"
+);
+
 const fs = require('node:fs');
 const path = require('node:path');
 
