@@ -285,7 +285,10 @@ export class AgentDraftStore extends DurableObject {
     if (!evidence.ok) return { accepted: false, reason: evidence.reason };
     const existing = this.ctx.storage.sql.exec("SELECT * FROM draft_artifacts WHERE id = ?", id).toArray()[0];
     if (existing) {
-      if (existing.draft_json !== validated.json) return { accepted: false, reason: "artifact_id_conflict" };
+      const existingEvidenceJson = existing.research_evidence_json || "[]";
+      if (existing.draft_json !== validated.json || existingEvidenceJson !== evidence.json) {
+        return { accepted: false, reason: "artifact_id_conflict" };
+      }
       return { accepted: true, duplicate: true, artifact: safeArtifact(existing) };
     }
     const review = runPolicyGatedQualityReview(draft);
