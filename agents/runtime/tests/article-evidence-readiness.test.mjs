@@ -397,6 +397,45 @@ describe("article evidence readiness", () => {
     expect(result.publication_authorized).toBe(false);
   });
 
+  it("preserves en-dash negative signs and percentage units in reviewed quantitative claims", async () => {
+    const cases = [
+      { claim: "Giá trị thay đổi –5 đơn vị.", article: "Giá trị thay đổi 5 đơn vị." },
+      { claim: "Tỷ lệ xử lý thành công đạt 5%.", article: "Tỷ lệ xử lý thành công đạt 5." }
+    ];
+    for (const item of cases) {
+      const numericLedger = structuredClone(ledger);
+      numericLedger.claims[0].claim = item.claim;
+      const numericReview = await recordHumanClaimReview(
+        numericLedger,
+        [{ ...decisions[0] }],
+        reviewer,
+        { now }
+      );
+      const draft = makeDraft([{
+        claim_id: "claim-1",
+        claim: item.claim,
+        evidence_urls: sources.map(source => source.url),
+        citation_indices: [1, 2]
+      }]);
+      draft.body_markdown = draft.body_markdown.replace(
+        ledger.claims[0].claim + " [1] [2] [3]. ",
+        item.article + " [1] [2] [3]. "
+      );
+      const result = await assessArticleEvidenceReadiness({
+        draft,
+        ledger: numericLedger,
+        reviewRecord: numericReview,
+        authenticatedReviewer: { authenticated: true, reviewer_ref: numericReview.reviewer_ref },
+        now
+      });
+      expect(result.status).toBe("article_claim_evidence_not_ready");
+      expect(result.issues).toContainEqual({
+        code: "reviewed_claim_missing_from_article_body",
+        claim_id: "claim-1"
+      });
+    }
+  });
+
   it("does not treat ordered-list numbering as an unreviewed quantitative claim", async () => {
     const reviewRecord = await makeReview();
     const draft = makeDraft();
