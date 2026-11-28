@@ -153,7 +153,7 @@ describe("reviewer and operator HTTP routes", () => {
     const token = await createReviewerSessionToken();
     const response = await handleReviewerHttpRequest(new Request(base + "/api/reviewer/drafts?offset=-1", {
       headers: { origin: base, cookie: "__Host-ai_reviewer_session=" + token }
-    }), reviewerAuthEnv);
+    }), { ...reviewerAuthEnv, AGENT_DRAFT_STORE: draftStoreNamespace({}) });
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({ error: "review_queue_offset_invalid" });
   });
@@ -184,7 +184,8 @@ const reviewerAuthEnv = {
   GOOGLE_REVIEWER_CLIENT_ID: "preview-test-client-id-abcdefghijklmnopqrstuvwxyz0123456789.apps.googleusercontent.com",
   GOOGLE_REVIEWER_CLIENT_SECRET: "test-google-client-secret-value-abcdefghijklmnopqrstuvwxyz0123456789",
   GOOGLE_REVIEWER_REDIRECT_URI: base + "/auth/google/callback",
-  GOOGLE_REVIEWER_ALLOWED_EMAILS: "reviewer@gmail.com",\n  AGENT_OPERATOR_ALLOWED_EMAILS: "reviewer@gmail.com",
+  GOOGLE_REVIEWER_ALLOWED_EMAILS: "reviewer@gmail.com",
+  AGENT_OPERATOR_ALLOWED_EMAILS: "reviewer@gmail.com",
   GOOGLE_REVIEWER_STATE_SECRET: "state-secret-for-tests-only-abcdefghijklmnopqrstuvwxyz0123456789",
   GOOGLE_REVIEWER_SESSION_SECRET: "session-secret-for-tests-only-zyxwvutsrqponmlkjihgfedcba9876543210"
 };
