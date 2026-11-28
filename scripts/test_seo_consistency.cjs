@@ -11,6 +11,9 @@ assert.equal(getPublicationDate('<script type="application/ld+json">{"datePublis
   '2024-02-29', 'Valid leap days must be accepted');
 assert.equal(getPublicationDate('<script type="application/ld+json">{"datePublished":"2026-11-28T10:30:00+07:00"}</script>', 'offset.html').timestamp,
   Date.parse('2026-11-28T10:30:00+07:00'), 'Explicit timezone offsets must be preserved');
+assert.equal(getPublicationDate('<script type="application/ld+json">{"datePublished":"2026-11-28T10:30:00+07:00"}</script>', 'offset.html').pubDate,
+  new Date(Date.parse('2026-11-28T10:30:00+07:00')).toUTCString(),
+  'RSS pubDate must use the exact UTC string derived independently from the declared offset');
 assert.throws(() => getPublicationDate('<script type="application/ld+json">{"datePublished":"2026-11-28T10:30:00"}</script>', 'no-zone.html'),
   /Invalid datePublished/, 'Timezone-less datetimes must be rejected');
 assert.throws(() => getPublicationDate('<script type="application/ld+json">{"datePublished":"2026-02-30"}</script>', 'impossible-date.html'),
@@ -156,23 +159,32 @@ for (const item of rssItems) {
   assert.ok(publishedAt <= previousPublishedAt, 'RSS articles must be ordered by datePublished descending');
   previousPublishedAt = publishedAt;
 }
-// Compare every RSS item against the exact datePublished metadata of its source article.
+// Independently derive expected RSS dates from each source article's raw datePublished value.
 const expectedPublicationByUrl = new Map();
 for (const file of articleFiles) {
   const source = fs.readFileSync(path.join(articleDir, file), 'utf8');
   const canonicalTag = (source.match(/<link\b[^>]*rel=["']canonical["'][^>]*>/i) || [])[0] || '';
   const canonicalMatch = canonicalTag.match(/\bhref=["']([^"']+)["']/i);
   assert.ok(canonicalMatch, file + ': missing canonical URL while building expected RSS dates');
-  const publication = getPublicationDate(source, file);
-  expectedPublicationByUrl.set(canonicalMatch[1], publication ? publication.pubDate : '');
+  const dateMatch = source.match(/"datePublished"\s*:\s*"([^"]+)"/i);
+  let expectedPubDate = '';
+  if (dateMatch) {
+    const rawDate = dateMatch[1];
+    const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(rawDate);
+    const timestamp = Date.parse(dateOnly ? rawDate + 'T00:00:00Z' : rawDate);
+    assert.ok(Number.isFinite(timestamp), file + ': datePublished must independently parse to a valid timestamp');
+    expectedPubDate = new Date(timestamp).toUTCString();
+  }
+  expectedPublicationByUrl.set(canonicalMatch[1], expectedPubDate);
 }
 assert.equal(expectedPublicationByUrl.size, articleFiles.length, 'Expected publication-date map must cover every source article');
 for (const item of rssItems) {
   assert.ok(expectedPublicationByUrl.has(item.link), 'RSS item does not match a source article: ' + item.link);
   assert.equal(item.pubDate, expectedPublicationByUrl.get(item.link),
-    item.link + ': RSS pubDate must exactly match datePublished; undated articles must not receive a fallback date');
+    item.link + ': RSS pubDate must match the independently derived datePublished value; undated articles must not receive a fallback date');
 }
 assert.equal(rssItems.length, expectedPublicationByUrl.size, 'Every source article must have exactly one RSS item');
+
 const feedArticleUrls = feedUrls.filter((url) => url.startsWith(baseUrl + '/articles/'));
 assert.equal(sitemapArticleUrls.length, articleFiles.length, 'Generated sitemap article count differs from source article count');
 assert.equal(feedArticleUrls.length, articleFiles.length, 'Generated RSS article count differs from source article count');
