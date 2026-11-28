@@ -64,7 +64,7 @@ jobs:
           }
           if (c.vars?.AGENT_RATE_LIMIT_REQUIRED !== "true") fail("Rate limiting must be required.");
           if ((c.triggers?.crons ?? []).length !== 0) fail("Cron triggers are not permitted in this Preview deployment.");
-          for (const k of ["routes", "custom_domains", "d1_databases", "kv_namespaces", "r2_buckets", "queues", "services", "workflows"]) {
+          for (const k of ["route", "routes", "custom_domains", "d1_databases", "kv_namespaces", "r2_buckets", "queues", "services", "workflows"]) {
             if (c[k] && (Array.isArray(c[k]) ? c[k].length : true)) fail("Unexpected binding or route configuration: " + k);
           }
           if (c.env) fail("Named Wrangler environments are not permitted.");
@@ -141,8 +141,16 @@ jobs:
             echo "::error::Cannot verify the Cloudflare account plan (HTTP $status). Billing Read access is required; deployment stopped before resource creation."
             exit 1
           fi
-          if jq -e '.result_info.next_page? | select(. != null and . != false and . != "")' "$response" >/dev/null; then
-            echo "::error::Cloudflare subscription listing is paginated. The plan cannot be verified from an incomplete first page; deployment stopped before resource creation."
+          # Cloudflare's subscription API documents count/page/per_page/total_count.
+          # Fail closed if metadata is absent or the first page does not prove completeness.
+          if ! jq -e '
+            (.result_info | type == "object") and
+            (.result_info.page | type == "number" and . == 1) and
+            (.result_info.per_page | type == "number" and . >= 1) and
+            (.result_info.total_count | type == "number" and . >= 0) and
+            (.result_info.page * .result_info.per_page >= .result_info.total_count)
+          ' "$response" >/dev/null; then
+            echo "::error::Cloudflare subscription listing is incomplete or its pagination metadata is unavailable. The plan cannot be proven Free; deployment stopped before resource creation."
             exit 1
           fi
           echo "Sanitized subscription plan metadata (no account secrets or identifiers):"
