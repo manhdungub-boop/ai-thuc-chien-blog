@@ -118,6 +118,29 @@ for (const file of articleFiles) {
 }
 
 const sitemapArticleUrls = sitemapUrls.filter((url) => url.startsWith(baseUrl + '/articles/'));
+const rssItems = [...feed.matchAll(/<item\\b[^>]*>([\\s\\S]*?)<\\/item>/gi)].map((match) => {
+  const block = match[1];
+  const link = block.match(/<link>\\s*(https?:\\/\\/[^<]+)\\s*<\\/link>/i);
+  const pubDate = block.match(/<pubDate>\\s*([^<]+)\\s*<\\/pubDate>/i);
+  assert.ok(link, 'RSS item is missing its canonical article link');
+  return { link: link[1].trim(), pubDate: pubDate ? pubDate[1].trim() : '' };
+});
+assert.equal(rssItems.length, articleFiles.length, 'RSS item count differs from published article count');
+assert.equal(new Set(rssItems.map((item) => item.link)).size, rssItems.length, 'RSS contains duplicate article links');
+let previousPublishedAt = Number.POSITIVE_INFINITY;
+let encounteredUndated = false;
+for (const item of rssItems) {
+  if (!item.pubDate) {
+    encounteredUndated = true;
+    continue;
+  }
+  assert.equal(encounteredUndated, false, 'Undated RSS items must follow all dated items');
+  const publishedAt = Date.parse(item.pubDate);
+  assert.ok(Number.isFinite(publishedAt), 'RSS pubDate must be a valid RFC-822/HTTP date');
+  assert.ok(publishedAt <= previousPublishedAt, 'RSS articles must be ordered by datePublished descending');
+  previousPublishedAt = publishedAt;
+}
+assert.ok(rssItems.some((item) => item.pubDate), 'RSS must expose publication dates for articles with datePublished metadata');
 const feedArticleUrls = feedUrls.filter((url) => url.startsWith(baseUrl + '/articles/'));
 assert.equal(sitemapArticleUrls.length, articleFiles.length, 'Generated sitemap article count differs from source article count');
 assert.equal(feedArticleUrls.length, articleFiles.length, 'Generated RSS article count differs from source article count');
