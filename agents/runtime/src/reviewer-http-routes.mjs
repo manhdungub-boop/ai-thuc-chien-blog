@@ -407,8 +407,8 @@ export async function handleReviewerHttpRequest(request, env, operatorControlAct
       const [body, contentType] = consoleAssets[url.pathname];
       return staticResponse(body, contentType);
     }
-    if (url.pathname === "/api/operator/runtime-control") return handleOperatorControl(request, env, url, operatorControlAction);
-    if (url.pathname.startsWith("/api/reviewer/")) return handleReviewerApi(request, env, url);
+    if (url.pathname === "/api/operator/runtime-control") return await handleOperatorControl(request, env, url, operatorControlAction);
+    if (url.pathname.startsWith("/api/reviewer/")) return await handleReviewerApi(request, env, url);
     return null;
   } catch {
     return json({ ok: false, error: "reviewer_route_unavailable" }, 503);
