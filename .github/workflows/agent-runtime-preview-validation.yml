@@ -933,6 +933,9 @@ jobs:
           NODE
           timeout --signal=TERM --kill-after=10s 120s npx --yes wrangler@4.166.0 deploy --config "$generated_config" \
             --message "Temporary disabled Preview rate-limit probe; restore follows"
+          # Wait for the uploaded version to receive traffic before the first probe request.
+          # The probe limit is one request per minute, so readiness polling would consume the test budget.
+          sleep 10
 
       - name: Verify live ingress rate limiting on one persistent Cloudflare connection
         timeout-minutes: 2
