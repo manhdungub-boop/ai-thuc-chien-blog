@@ -556,10 +556,10 @@ export class AgentDraftStore extends DurableObject {
   async listOwnerReleaseReviews(limit = 20) {
     const boundedLimit = Number.isInteger(limit) ? Math.min(20, Math.max(1, limit)) : 20;
     const rows = this.ctx.storage.sql.exec(
-      "SELECT * FROM draft_artifacts WHERE status = 'pending_human_review' AND evidence_readiness_json IS NOT NULL ORDER BY updated_at DESC LIMIT ?",
+      "SELECT * FROM draft_artifacts WHERE status = 'pending_human_review' AND json_extract(evidence_readiness_json, '$.status') = 'eligible_for_owner_release_review' ORDER BY updated_at DESC LIMIT ?",
       boundedLimit
     ).toArray();
-    return rows.map(queueItem).filter(item => item.release_review_status === "eligible_for_owner_release_review");
+    return rows.map(queueItem);
   }
 
   async stats() {
