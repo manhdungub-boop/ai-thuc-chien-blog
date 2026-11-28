@@ -38,11 +38,37 @@ function getPublicationDate(html, file) {
   const match = html.match(/"datePublished"\s*:\s*"([^"]+)"/i);
   if (!match) return null;
   const value = match[1];
-  const timestamp = Date.parse(value);
-  if (!/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:?\d{2})?)?$/.test(value) ||
-      Number.isNaN(timestamp)) {
-    throw new Error('Invalid datePublished metadata in ' + file + ': ' + value);
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  const dateTime = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?(Z|[+-]\d{2}:?\d{2})$/.exec(value);
+  const parts = dateOnly || dateTime;
+  if (!parts) throw new Error('Invalid datePublished metadata in ' + file + ': ' + value);
+
+  const year = Number(parts[1]);
+  const month = Number(parts[2]);
+  const day = Number(parts[3]);
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  if (month < 1 || month > 12 || day < 1 || day > daysInMonth) {
+    throw new Error('Invalid calendar datePublished metadata in ' + file + ': ' + value);
   }
+
+  if (dateTime) {
+    const hour = Number(parts[4]);
+    const minute = Number(parts[5]);
+    const second = Number(parts[6]);
+    const zone = parts[8];
+    if (hour > 23 || minute > 59 || second > 59) {
+      throw new Error('Invalid time datePublished metadata in ' + file + ': ' + value);
+    }
+    if (zone !== 'Z') {
+      const offset = zone.slice(1).replace(':', '');
+      if (Number(offset.slice(0, 2)) > 23 || Number(offset.slice(2, 4)) > 59) {
+        throw new Error('Invalid timezone datePublished metadata in ' + file + ': ' + value);
+      }
+    }
+  }
+
+  const timestamp = Date.parse(dateOnly ? value + 'T00:00:00Z' : value);
+  if (!Number.isFinite(timestamp)) throw new Error('Invalid datePublished metadata in ' + file + ': ' + value);
   return { value, timestamp, pubDate: new Date(timestamp).toUTCString() };
 }
 
@@ -215,3 +241,4 @@ function generate(outputDir) {
 }
 
 module.exports = generate;
+module.exports.getPublicationDate = getPublicationDate;
