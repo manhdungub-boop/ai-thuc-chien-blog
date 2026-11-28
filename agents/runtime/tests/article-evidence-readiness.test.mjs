@@ -400,7 +400,9 @@ describe("article evidence readiness", () => {
   it("preserves en-dash negative signs and percentage units in reviewed quantitative claims", async () => {
     const cases = [
       { claim: "Giá trị thay đổi –5 đơn vị.", article: "Giá trị thay đổi 5 đơn vị." },
-      { claim: "Tỷ lệ xử lý thành công đạt 5%.", article: "Tỷ lệ xử lý thành công đạt 5." }
+      { claim: "Tỷ lệ xử lý thành công đạt 5%.", article: "Tỷ lệ xử lý thành công đạt 5." },
+      { claim: "Tỷ lệ xử lý thành công đạt (5%).", article: "Tỷ lệ xử lý thành công đạt (5)." },
+      { claim: "Tỷ lệ xử lý thành công đạt 5 %/năm.", article: "Tỷ lệ xử lý thành công đạt 5/năm." }
     ];
     for (const item of cases) {
       const numericLedger = structuredClone(ledger);
