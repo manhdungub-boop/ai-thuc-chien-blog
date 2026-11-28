@@ -72,7 +72,9 @@ function splitProseAssertions(markdown) {
 
 function normalizeClaimText(value) {
   return removeInlineCodeSpans(String(value ?? ""))
-    .replace(/(^|[^\p{L}\p{N}])([+\-−])(?=\s*\d)/gu, (_, prefix, sign) => prefix + (sign === "+" ? " plus " : " minus "))
+    .replace(/(^|[^\p{L}\p{N}])([+\-−–])(?=\s*\d)/gu, (_, prefix, sign) => prefix + (sign === "+" ? " plus " : " minus "))
+    .replace(/(?<=\d)%(?=\s|$|[.,;:!?])/gu, " percent")
+    .replace(/(?<=\d)‰(?=\s|$|[.,;:!?])/gu, " per mille")
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
     .replace(/<[^>]*>/g, " ")
