@@ -81,6 +81,20 @@ test("accepts a valid GitHub Actions token bound to the exact repository, workfl
   assert.equal(result.identity.runId, "987654321");
 });
 
+test("accepts workflow_dispatch with the exact protected Preview environment subject", async () => {
+  const previewExpected = Object.freeze({
+    ...expected,
+    environment: "agent-runtime-preview",
+  });
+  const previewSubject = "repo:manhdungub-boop@342528485/ai-thuc-chien-blog@1423636651:environment:agent-runtime-preview";
+  const token = await signedToken({ sub: previewSubject });
+  const result = await verify(token, { expected: previewExpected });
+  assert.equal(result.ok, true);
+  assert.equal(result.identity.eventName, "workflow_dispatch");
+  assert.equal(result.identity.ref, expected.ref);
+  assert.equal(result.identity.workflowRef, expected.workflowRef);
+});
+
 test("accepts an owner-pinned pull_request workflow using the exact Preview environment subject", async () => {
   const pushExpected = Object.freeze({
     ...expected,

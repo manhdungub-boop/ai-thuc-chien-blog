@@ -48,7 +48,8 @@ function expectedConfigurationIsValid(expected) {
     isNonEmptyString(expected.ref, 256) &&
     isNonEmptyString(expected.workflowRef, 512) &&
     isNonEmptyString(expected.actorId, 32) &&
-    ((expected.eventName === "workflow_dispatch" && expected.environment === undefined) ||
+    ((expected.eventName === "workflow_dispatch" &&
+      (expected.environment === undefined || isNonEmptyString(expected.environment, 128))) ||
       (expected.eventName === "pull_request" && isNonEmptyString(expected.environment, 128)));
 }
 
