@@ -20,7 +20,6 @@ on:
     - "chore/agent-runtime-**"
     paths:
       - "agents/runtime/**"
-      - ".github/workflows/agent-runtime-preview-validation.yml"
       - ".github/workflows/agent-runtime-operator.yml"
   workflow_dispatch:
     inputs:
@@ -41,7 +40,13 @@ concurrency:
 
 jobs:
   validate:
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.actor_id == '342528485'
+    if: >-
+      (github.event_name == 'pull_request' &&
+      github.repository == 'manhdungub-boop/ai-thuc-chien-blog' &&
+      github.event.pull_request.head.repo.full_name == github.repository) ||
+      (github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      github.actor_id == '342528485')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
