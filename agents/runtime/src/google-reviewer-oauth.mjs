@@ -186,7 +186,7 @@ export async function handleGoogleReviewerAuth(request, env, { fetchImpl = fetch
       tokenResponse = await fetchImpl(GOOGLE_TOKEN_URL, {
       method: "POST",
       signal: AbortSignal.timeout(8000),
-      redirect: "error",
+      redirect: "manual",
       headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json" },
       body: new URLSearchParams({
         code,
