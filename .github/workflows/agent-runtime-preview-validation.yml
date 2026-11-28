@@ -326,7 +326,8 @@ jobs:
           assert.ok(e2eWorkflow.includes("github.event.pull_request.base.ref == 'integration/agent-runtime-v5-preview-20261120'"));
           assert.ok(!e2eWorkflow.includes("github.event.pull_request.head.ref == 'fix/agent-runtime-manual-e2e-dispatch-20261127'"), 'manual dispatch branch must not widen the automatic PR E2E allowlist');
           assert.ok(!e2eWorkflow.includes("github.event.pull_request.base.ref == 'fix/ai-bank-discovery-ingestion-gate-20261127'"), 'AI Bank branch must not widen the automatic PR E2E base allowlist');
-          assert.ok(workflow.includes("cancel-in-progress: ${{ github.event_name == 'pull_request' }}"), 'manual dispatches must not cancel an active E2E run');
+          const expectedConcurrency = "cancel-in-progress: " + dollar + "{{ github.event_name == 'pull_request' }}";
+          assert.ok(workflow.includes(expectedConcurrency), 'manual dispatches must not cancel an active E2E run');
           assert.ok(e2eWorkflow.includes('id-token: write'));
           assert.ok(e2eWorkflow.includes('Probe OIDC run gate readiness before requesting the token'));
           assert.ok(e2eWorkflow.includes('github_oidc_token_required'));
