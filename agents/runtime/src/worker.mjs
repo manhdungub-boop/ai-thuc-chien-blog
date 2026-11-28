@@ -490,6 +490,89 @@ async function pauseRuntimeControl(env, body) {
   }
   return { ...result, draftStoreSync };
 }
+async function performOperatorControlAction(env, action, actor, reason) {
+  const requestId = crypto.randomUUID();
+  const reasonField = reason === undefined ? {} : { reason };
+  try {
+    let result;
+    if (action === "pause") {
+      result = await pauseRuntimeControl(env, { actor, requestId, ...reasonField });
+    } else if (action === "resume") {
+      // Resume is conditional: a newer emergency Pause must win over an
+      // operator request that observed an older control version.
+      let expectedVersion;
+      try {
+        const observed = await readStateStore(env, "/control");
+        if (!Number.isSafeInteger(observed?.control?.version) || observed.control.version < 0) {
+          return json({ ok: false, error: "control_unavailable" }, 503);
+        }
+        expectedVersion = observed.control.version;
+      } catch {
+        return json({ ok: false, error: "control_unavailable" }, 503);
+      }
+      result = await writeStateStore(env, "/control/resume", {
+        actor, requestId, ...reasonField, expectedVersion
+      });
+      try {
+        await syncDraftStoreControl(env, result.control);
+      } catch {
+        // Resume is a two-store transition. If authoring cannot be unfenced,
+        // conditionally close runtime admission again at the exact Resume version.
+        let compensation = { attempted: true, ok: false, error: "runtime_control_compensation_failed" };
+        let currentControl = null;
+        try {
+          const paused = await pauseRuntimeControl(env, {
+            actor,
+            requestId: crypto.randomUUID(),
+            reason: "compensate_resume_after_draft_store_sync_failure",
+            expectedVersion: result.control.version,
+          });
+          currentControl = paused.control;
+          compensation = {
+            attempted: true,
+            ok: paused.control?.paused === true,
+            state_store_paused: paused.control?.paused === true,
+            draft_store_sync: paused.draftStoreSync,
+            ...(paused.draftStoreSync?.ok === true ? {} : { error: "draft_store_pause_sync_failed" }),
+          };
+        } catch (compensationError) {
+          compensation = {
+            attempted: true,
+            ok: false,
+            error: compensationError?.status === 409
+              ? "runtime_control_version_conflict"
+              : "runtime_control_compensation_failed",
+          };
+          try { currentControl = (await readStateStore(env, "/control")).control ?? null; } catch {}
+        }
+        return json({
+          ok: false,
+          error: "resume_draft_store_sync_failed",
+          resume_committed_control: result.control,
+          control: currentControl,
+          compensation,
+          draft_store_sync: { ok: false },
+        }, 503);
+      }
+    } else {
+      return json({ ok: false, error: "operator_control_action_invalid" }, 400);
+    }
+    return json({
+      ok: action === "pause" ? result.draftStoreSync?.ok === true : true,
+      ...(action === "pause" && result.draftStoreSync?.ok !== true ? { error: "draft_store_pause_sync_failed" } : {}),
+      changed: result.changed,
+      control: result.control,
+      ...(action === "pause" ? { draft_store_sync: result.draftStoreSync } : {})
+    }, action === "pause" && result.draftStoreSync?.ok !== true ? 503 : 200);
+  } catch (error) {
+    if (error?.status === 409) return json({ ok: false, error: "runtime_control_version_conflict" }, 409);
+    if ([400, 401, 429, 503].includes(error?.status)) {
+      return json({ ok: false, error: error.status === 429 ? "rate_limited" : "control_unavailable" }, error.status);
+    }
+    return json({ ok: false, error: "control_unavailable" }, 503);
+  }
+}
+
 function startAuthoringControlWatch(env, expectedVersion) {
   const controller = new AbortController();
   let stopped = false, timer = null;
@@ -578,7 +661,7 @@ const worker = {
       const limited = await enforceIngressRateLimit(request, env);
       if (limited) return limited;
     }
-    const reviewerResponse = await handleReviewerHttpRequest(request, env);
+    const reviewerResponse = await handleReviewerHttpRequest(request, env, ({ action, actor, reason }) =>\n      performOperatorControlAction(env, action, actor, reason));
     if (reviewerResponse) return reviewerResponse;
     const url = new URL(request.url);
     if (url.pathname === "/" && request.method === "GET") {
@@ -1309,84 +1392,7 @@ const worker = {
         return json({ ok: false, error: "request_invalid" }, 400);
       }
       const action = url.pathname.endsWith("/pause") ? "pause" : "resume";
-      let expectedVersion;
-      if (action === "resume") {
-        // Resume is conditional: a newer emergency Pause must win over an
-        // operator request that observed an older control version.
-        try {
-          const observed = await readStateStore(env, "/control");
-          if (!Number.isSafeInteger(observed?.control?.version) || observed.control.version < 0) {
-            return json({ ok: false, error: "control_unavailable" }, 503);
-          }
-          expectedVersion = observed.control.version;
-        } catch {
-          return json({ ok: false, error: "control_unavailable" }, 503);
-        }
-      }
-      try {
-        const result = action === "pause"
-          ? await pauseRuntimeControl(env, { actor, requestId: crypto.randomUUID(), ...(body.reason === undefined ? {} : { reason: body.reason }) })
-          : await writeStateStore(env, "/control/resume", { actor, requestId: crypto.randomUUID(), ...(body.reason === undefined ? {} : { reason: body.reason }), expectedVersion });
-        if (action === "resume") {
-          try {
-            await syncDraftStoreControl(env, result.control);
-          } catch {
-            // Resume is a two-store transition. If authoring cannot be unfenced,
-            // conditionally close runtime admission again at the exact version
-            // produced by this Resume. A newer operator decision must win.
-            let compensation = { attempted: true, ok: false, error: "runtime_control_compensation_failed" };
-            let currentControl = null;
-            try {
-              const paused = await pauseRuntimeControl(env, {
-                actor,
-                requestId: crypto.randomUUID(),
-                reason: "compensate_resume_after_draft_store_sync_failure",
-                expectedVersion: result.control.version,
-              });
-              currentControl = paused.control;
-              compensation = {
-                attempted: true,
-                ok: paused.control?.paused === true,
-                state_store_paused: paused.control?.paused === true,
-                draft_store_sync: paused.draftStoreSync,
-                ...(paused.draftStoreSync?.ok === true ? {} : { error: "draft_store_pause_sync_failed" }),
-              };
-            } catch (compensationError) {
-              compensation = {
-                attempted: true,
-                ok: false,
-                error: compensationError?.status === 409
-                  ? "runtime_control_version_conflict"
-                  : "runtime_control_compensation_failed",
-              };
-              try { currentControl = (await readStateStore(env, "/control")).control ?? null; } catch {}
-            }
-            return json({
-              ok: false,
-              error: "resume_draft_store_sync_failed",
-              resume_committed_control: result.control,
-              control: currentControl,
-              compensation,
-              draft_store_sync: { ok: false },
-            }, 503);
-          }
-        }
-        return json({
-          ok: action === "pause" ? result.draftStoreSync?.ok === true : true,
-          ...(action === "pause" && result.draftStoreSync?.ok !== true ? { error: "draft_store_pause_sync_failed" } : {}),
-          changed: result.changed,
-          control: result.control,
-          ...(action === "pause" ? { draft_store_sync: result.draftStoreSync } : {})
-        }, action === "pause" && result.draftStoreSync?.ok !== true ? 503 : 200);
-      } catch (error) {
-        if (error?.status === 409) {
-          return json({ ok: false, error: "runtime_control_version_conflict" }, 409);
-        }
-        if ([400, 401, 429, 503].includes(error?.status)) {
-          return json({ ok: false, error: error.status === 429 ? "rate_limited" : "control_unavailable" }, error.status);
-        }
-        return json({ ok: false, error: "control_unavailable" }, 503);
-      }
+      return performOperatorControlAction(env, action, actor, body.reason);
     }
     if (url.pathname === "/internal/recover") {
       if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
