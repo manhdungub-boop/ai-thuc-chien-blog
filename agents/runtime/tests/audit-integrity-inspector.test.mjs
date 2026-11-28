@@ -99,6 +99,20 @@ test("audit inspector checks lease generations and task lease fields", () => {
   assert.ok(result.findings.some(x => x.code === "audit_lease_generation_mismatch"));
 });
 
+test("audit inspector rejects partially cleared lease fields on terminal tasks", () => {
+  for (const partial of [
+    { leaseOwner: "worker-1234567890", leaseExpiresAt: null },
+    { leaseOwner: null, leaseExpiresAt: NOW + 1000 },
+  ]) {
+    const result = inspectAuditIntegrity({
+      tasks: [task({ ...partial })],
+      events: events(),
+    }, { nowMs: NOW });
+    assert.equal(result.status, "integrity_error");
+    assert.ok(result.findings.some(x => x.code === "task_lease_state_inconsistent"));
+  }
+});
+
 test("audit events older than task retention are warnings, not false corruption claims", () => {
   const old = NOW - 40 * 24 * 60 * 60 * 1000;
   const result = inspectAuditIntegrity({
