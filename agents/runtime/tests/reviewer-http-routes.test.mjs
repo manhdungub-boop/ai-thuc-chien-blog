@@ -41,6 +41,8 @@ describe("reviewer and operator HTTP routes", () => {
     expect(REVIEWER_CONSOLE_JS).toContain("reviewInputs.forEach(input => { input.disabled = true; })");
     expect(REVIEWER_CONSOLE_JS).toContain("logout_failed");
     expect(REVIEWER_CONSOLE_JS).toContain("logout.disabled = false");
+    expect(REVIEWER_CONSOLE_JS).toContain("selectionVersion !== draftSelectionVersion");
+    expect(REVIEWER_CONSOLE_JS).toContain("review-queue-next");
   });
 
   it("hides reviewer console assets until path-scoped Access is enabled", async () => {
@@ -126,6 +128,34 @@ describe("reviewer and operator HTTP routes", () => {
       reason: "resume after approved maintenance"
     });
     expect(await response.json()).toMatchObject({ ok: true, control: { paused: false, version: 8 } });
+  });
+  it("passes a validated queue offset to the reviewer store", async () => {
+    const token = await createReviewerSessionToken();
+    let received;
+    const env = {
+      ...reviewerAuthEnv,
+      AGENT_DRAFT_STORE: draftStoreNamespace({
+        async listPendingReviewsForReviewer(limit, sessionToken, offset) {
+          received = [limit, sessionToken, offset];
+          return { authorized: true, items: [], has_more: false };
+        }
+      })
+    };
+    const response = await handleReviewerHttpRequest(new Request(base + "/api/reviewer/drafts?limit=20&offset=40", {
+      headers: { origin: base, cookie: "__Host-ai_reviewer_session=" + token }
+    }), env);
+    expect(response.status).toBe(200);
+    expect(received).toEqual([20, token, 40]);
+    expect(await response.json()).toMatchObject({ items: [], count: 0, has_more: false });
+  });
+
+  it("rejects invalid reviewer queue offsets", async () => {
+    const token = await createReviewerSessionToken();
+    const response = await handleReviewerHttpRequest(new Request(base + "/api/reviewer/drafts?offset=-1", {
+      headers: { origin: base, cookie: "__Host-ai_reviewer_session=" + token }
+    }), reviewerAuthEnv);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: "review_queue_offset_invalid" });
   });
   it("rejects cross-origin reviewer authoring mutations", async () => {
     const response = await handleReviewerHttpRequest(new Request(`${base}/api/reviewer/drafts/12345678/authoring`, {
