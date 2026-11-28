@@ -53,7 +53,7 @@ export const REVIEWER_CONSOLE_JS = `"use strict";
   const aiBankQueue = byId("ai-bank-queue");
   const aiBankDetail = byId("ai-bank-detail");
   const login = byId("login-link");
-  const logout = byId("logout-button");
+  const logout = byId("logout-button");\n  let selectedDraftId = null;\n  let draftSelectionVersion = 0;
 
   function node(tag, value) {
     const element = document.createElement(tag);
@@ -142,17 +142,37 @@ export const REVIEWER_CONSOLE_JS = `"use strict";
     }
   }
 
-  async function loadQueue() {
+  async function loadQueue(offset = 0) {
     queueStatus.textContent = "Đang tải hàng chờ…";
     authoringQueueStatus.textContent = "Đang tải đề cương…";
     try {
       const [reviewResult, authoringResult] = await Promise.all([
-        getJson("/api/reviewer/drafts?limit=20"),
+        getJson("/api/reviewer/drafts?limit=20&offset=" + encodeURIComponent(offset)),
         getJson("/api/reviewer/drafts-needing-authoring?limit=20")
       ]);
       renderQueue(reviewResult.items || []);
       renderAuthoringQueue(authoringResult.items || []);
-      queueStatus.textContent = "Đã tải " + (reviewResult.count || 0) + " bài chờ duyệt. Chế độ chỉ đọc.";
+      const count = reviewResult.count || 0;
+      queueStatus.textContent = "Đã tải " + count + " bài chờ duyệt · trang từ " + (offset + 1) + ". Chế độ chỉ đọc.";
+      const previous = byId("review-queue-previous");
+      if (previous) previous.remove();
+      const next = byId("review-queue-next");
+      if (next) next.remove();
+      if (offset > 0) {
+        const button = node("button", "Trang trước");
+        button.id = "review-queue-previous";
+        button.type = "button";
+        button.addEventListener("click", () => loadQueue(Math.max(0, offset - 20)));
+        queue.after(button);
+      }
+      if (reviewResult.has_more === true) {
+        const button = node("button", "Trang tiếp theo");
+        button.id = "review-queue-next";
+        button.type = "button";
+        button.addEventListener("click", () => loadQueue(offset + 20));
+        const previousButton = byId("review-queue-previous");
+        (previousButton || queue).after(button);
+      }
       authoringQueueStatus.textContent = "Đã tải " + (authoringResult.count || 0) + " đề cương cần bổ sung. Không được chuyển thẳng sang xuất bản.";
     } catch (error) {
       showError(queueStatus, error);
@@ -235,10 +255,13 @@ export const REVIEWER_CONSOLE_JS = `"use strict";
   }
 
   async function loadDetail(id) {
+    selectedDraftId = id;
+    const selectionVersion = ++draftSelectionVersion;
     detail.replaceChildren();
     add(detail, "h2", "Đang tải chi tiết bài viết…");
     try {
       const result = await getJson("/api/reviewer/drafts/" + encodeURIComponent(id));
+      if (selectionVersion !== draftSelectionVersion || selectedDraftId !== id) return;
       const artifact = result.artifact;
       const draft = artifact.draft || {};
       detail.replaceChildren();
@@ -289,12 +312,13 @@ export const REVIEWER_CONSOLE_JS = `"use strict";
             expected_version: artifact.version,
             draft: updatedDraft
           });
+          if (selectionVersion !== draftSelectionVersion || selectedDraftId !== artifact.id) return;
           add(authoringSection, "p",
             "Đã lưu phiên bản " + result.artifact.version + ". Hồ sơ bằng chứng: " +
             (result.evidence_ledger.status || "chưa sẵn sàng") +
             ". Quyền xuất bản vẫn bị khóa.");
           await loadQueue();
-          await loadDetail(artifact.id);
+          if (selectionVersion === draftSelectionVersion && selectedDraftId === artifact.id) await loadDetail(artifact.id);
         } catch (error) {
           add(authoringSection, "p", error.message === "Unexpected end of JSON input"
             ? "JSON chưa hoàn chỉnh. Vui lòng kiểm tra lại nội dung."
@@ -380,6 +404,7 @@ export const REVIEWER_CONSOLE_JS = `"use strict";
               expected_version: artifact.version,
               decisions
             });
+            if (selectionVersion !== draftSelectionVersion || selectedDraftId !== artifact.id) return;
             add(reviewSection, "p", result.owner_release_review_eligible
               ? "Đã ghi nhận. Bài đủ điều kiện chuyển sang bước chủ sở hữu duyệt phát hành; chưa được phép xuất bản."
               : "Đã ghi nhận quyết định. Bài chưa đủ điều kiện duyệt phát hành.");
@@ -398,6 +423,7 @@ export const REVIEWER_CONSOLE_JS = `"use strict";
         add(detail, "p", "Quyết định đã được gắn với phiên Google đã xác thực. Bước chủ sở hữu duyệt phát hành vẫn riêng biệt; chưa có quyền xuất bản.");
       }
     } catch (error) {
+      if (selectionVersion !== draftSelectionVersion || selectedDraftId !== id) return;
       detail.replaceChildren();
       add(detail, "h2", "Không thể mở bài viết");
       add(detail, "p", error.status === 401 ? "Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại." : (error.message || "request_failed"));
