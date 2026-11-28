@@ -133,6 +133,14 @@ export async function handleGoogleReviewerAuth(request, env, { fetchImpl = fetch
 
   if (path === "/auth/google/start") {
     if (url.origin !== cfg.redirectOrigin) return json({ error: "preview_origin_mismatch" }, 400);
+    const fetchSite = request.headers.get("Sec-Fetch-Site");
+    if (fetchSite && !["same-origin", "none"].includes(fetchSite)) {
+      return json({ error: "login_start_cross_site_rejected" }, 403);
+    }
+    const requestOrigin = request.headers.get("Origin");
+    if (requestOrigin && requestOrigin !== cfg.redirectOrigin) {
+      return json({ error: "login_start_origin_rejected" }, 403);
+    }
     const returnToValues = url.searchParams.getAll("return_to");
     if (returnToValues.length > 1) return json({ error: "login_return_path_rejected" }, 400);
     const returnPath = returnToValues.length === 0 ? "/" : returnToValues[0];
