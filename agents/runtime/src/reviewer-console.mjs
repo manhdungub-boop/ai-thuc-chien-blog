@@ -147,19 +147,21 @@ export const REVIEWER_CONSOLE_JS = `"use strict";
   async function loadQueue(offset = 0) {
     queueStatus.textContent = "Đang tải hàng chờ…";
     authoringQueueStatus.textContent = "Đang tải đề cương…";
-    try {
-      const [reviewResult, authoringResult] = await Promise.all([
-        getJson("/api/reviewer/drafts?limit=20&offset=" + encodeURIComponent(offset)),
-        getJson("/api/reviewer/drafts-needing-authoring?limit=20")
-      ]);
+    const previous = byId("review-queue-previous");
+    if (previous) previous.remove();
+    const next = byId("review-queue-next");
+    if (next) next.remove();
+
+    const [reviewOutcome, authoringOutcome] = await Promise.allSettled([
+      getJson("/api/reviewer/drafts?limit=20&offset=" + encodeURIComponent(offset)),
+      getJson("/api/reviewer/drafts-needing-authoring?limit=20")
+    ]);
+
+    if (reviewOutcome.status === "fulfilled") {
+      const reviewResult = reviewOutcome.value;
       renderQueue(reviewResult.items || []);
-      renderAuthoringQueue(authoringResult.items || []);
       const count = reviewResult.count || 0;
       queueStatus.textContent = "Đã tải " + count + " bài chờ duyệt · trang từ " + (offset + 1) + ". Chế độ chỉ đọc.";
-      const previous = byId("review-queue-previous");
-      if (previous) previous.remove();
-      const next = byId("review-queue-next");
-      if (next) next.remove();
       if (offset > 0) {
         const button = node("button", "Trang trước");
         button.id = "review-queue-previous";
@@ -175,10 +177,16 @@ export const REVIEWER_CONSOLE_JS = `"use strict";
         const previousButton = byId("review-queue-previous");
         (previousButton || queue).after(button);
       }
+    } else {
+      showError(queueStatus, reviewOutcome.reason);
+    }
+
+    if (authoringOutcome.status === "fulfilled") {
+      const authoringResult = authoringOutcome.value;
+      renderAuthoringQueue(authoringResult.items || []);
       authoringQueueStatus.textContent = "Đã tải " + (authoringResult.count || 0) + " đề cương cần bổ sung. Không được chuyển thẳng sang xuất bản.";
-    } catch (error) {
-      showError(queueStatus, error);
-      showError(authoringQueueStatus, error);
+    } else {
+      showError(authoringQueueStatus, authoringOutcome.reason);
     }
   }
 
