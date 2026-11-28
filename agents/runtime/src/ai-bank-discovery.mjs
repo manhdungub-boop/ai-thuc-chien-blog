@@ -122,7 +122,7 @@ function buildCatalogCandidates(signals, discoveredAt) {
       candidate_id: "github:" + signal.repository,
       name: signal.product,
       provider: signal.vendor,
-      repository,
+      repository: signal.repository,
       latest_release: {
         title: signal.title,
         source_url: signal.source_url,
