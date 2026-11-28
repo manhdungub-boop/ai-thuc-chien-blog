@@ -160,8 +160,8 @@ for (const item of rssItems) {
 const expectedPublicationByUrl = new Map();
 for (const file of articleFiles) {
   const source = fs.readFileSync(path.join(articleDir, file), 'utf8');
-  const canonicalTag = (source.match(/<link\\b[^>]*rel=["']canonical["'][^>]*>/i) || [])[0] || '';
-  const canonicalMatch = canonicalTag.match(/\\bhref=["']([^"']+)["']/i);
+  const canonicalTag = (source.match(/<link\b[^>]*rel=["']canonical["'][^>]*>/i) || [])[0] || '';
+  const canonicalMatch = canonicalTag.match(/\bhref=["']([^"']+)["']/i);
   assert.ok(canonicalMatch, file + ': missing canonical URL while building expected RSS dates');
   const publication = getPublicationDate(source, file);
   expectedPublicationByUrl.set(canonicalMatch[1], publication ? publication.pubDate : '');
