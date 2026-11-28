@@ -54,6 +54,23 @@ function hasExactKeys(value, expected) {
     actual.every((key, index) => key === allowed[index]);
 }
 
+function validCompletionResult(value) {
+  if (!isPlainObject(value) || Object.keys(value).sort().join(",") !== "findingCount,findings,status,taskType" ||
+      !["content.review", "ai_bank.candidate_review", "seo.audit"].includes(value.taskType) ||
+      !["pass", "attention", "review_required"].includes(value.status) ||
+      !Number.isSafeInteger(value.findingCount) || value.findingCount < 0 || value.findingCount > 20 ||
+      !Array.isArray(value.findings) || value.findings.length > 20 ||
+      value.findings.length !== value.findingCount) return false;
+  for (const item of value.findings) {
+    if (!isPlainObject(item) || Object.keys(item).sort().join(",") !== "code,message,severity" ||
+        typeof item.code !== "string" || !/^[a-z][a-z0-9_]{1,79}$/.test(item.code) ||
+        !["error", "warning"].includes(item.severity) ||
+        typeof item.message !== "string" || item.message.length < 1 || item.message.length > 256 ||
+        item.message.trim() !== item.message || /[\\u0000-\\u001f\\u007f]/.test(item.message)) return false;
+  }
+  return new TextEncoder().encode(JSON.stringify(value)).byteLength <= 4096;
+}
+
 function operationUrl(operation, input) {
   const definition = OPERATIONS[operation];
   if (!definition) throw new TypeError("state_store_operation_not_allowed");
@@ -83,8 +100,15 @@ function operationUrl(operation, input) {
     }
     const validation = validateTaskRequest(input.task);
     if (!validation.ok) throw new TypeError("state_store_task_invalid:" + validation.error);
-  } else if (operation === "claim" || operation === "recover") {
+  } else if (operation === "claim") {
     if (!hasExactKeys(input, ["taskId"]) || !validTaskId(input.taskId)) {
+      throw new TypeError("state_store_request_invalid");
+    }
+  } else if (operation === "recover") {
+    if (!hasExactKeys(input, ["taskId", "actor", "requestId"]) ||
+        !validTaskId(input.taskId) ||
+        typeof input.actor !== "string" || !/^[a-zA-Z0-9._:-]{3,64}$/.test(input.actor) ||
+        typeof input.requestId !== "string" || !/^[a-zA-Z0-9-]{16,64}$/.test(input.requestId)) {
       throw new TypeError("state_store_request_invalid");
     }
   } else if (operation === "heartbeat") {
@@ -95,7 +119,7 @@ function operationUrl(operation, input) {
   } else if (operation === "complete") {
     const keys = isPlainObject(input) ? Object.keys(input) : [];
     if (!isPlainObject(input) ||
-        keys.some((key) => !["taskId", "leaseOwner", "leaseGeneration", "status", "errorCode"].includes(key)) ||
+        keys.some((key) => !["taskId", "leaseOwner", "leaseGeneration", "status", "errorCode", "result"].includes(key)) ||
         !["taskId", "leaseOwner", "leaseGeneration", "status"].every((key) => Object.hasOwn(input, key)) ||
         !validTaskId(input.taskId) ||
         !validLeaseIdentity(input.leaseOwner, input.leaseGeneration) ||
