@@ -145,9 +145,12 @@ jobs:
           # Fail closed if metadata is absent or the first page does not prove completeness.
           if ! jq -e '
             (.result_info | type == "object") and
-            (.result_info.page | type == "number" and . == 1) and
-            (.result_info.per_page | type == "number" and . >= 1) and
-            (.result_info.total_count | type == "number" and . >= 0) and
+            ((.result_info.page | type) == "number") and
+            (.result_info.page == 1) and
+            ((.result_info.per_page | type) == "number") and
+            (.result_info.per_page >= 1) and
+            ((.result_info.total_count | type) == "number") and
+            (.result_info.total_count >= 0) and
             (.result_info.page * .result_info.per_page >= .result_info.total_count)
           ' "$response" >/dev/null; then
             echo "::error::Cloudflare subscription listing is incomplete or its pagination metadata is unavailable. The plan cannot be proven Free; deployment stopped before resource creation."
