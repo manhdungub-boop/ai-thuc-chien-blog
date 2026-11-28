@@ -70,14 +70,30 @@ export class AgentReviewerAuthStore extends DurableObject {
       return { created: false, reason: "invalid_login_transaction" };
     }
     this.ctx.storage.sql.exec("DELETE FROM reviewer_auth_transactions WHERE expires_at <= ?", nowSeconds);
-    const active = this.ctx.storage.sql.exec("SELECT COUNT(*) AS total FROM reviewer_auth_transactions WHERE expires_at > ?", nowSeconds).toArray()[0]?.total || 0;
-    if (active >= 100) return { created: false, reason: "login_transaction_capacity_reached" };
+    const activeRow = this.ctx.storage.sql.exec(
+      "SELECT COUNT(*) AS total, MIN(expires_at) AS earliest_expiry FROM reviewer_auth_transactions WHERE expires_at > ?",
+      nowSeconds
+    ).toArray()[0] || {};
+    const active = activeRow.total || 0;
+    if (active >= 100) {
+      return {
+        created: false,
+        reason: "login_transaction_capacity_reached",
+        retry_after_seconds: Math.max(1, (activeRow.earliest_expiry || nowSeconds + TX_TTL_SECONDS) - nowSeconds)
+      };
+    }
     if (clientHash !== null) {
-      const activeForClient = this.ctx.storage.sql.exec(
-        "SELECT COUNT(*) AS total FROM reviewer_auth_transactions WHERE client_hash = ? AND expires_at > ?",
+      const clientRow = this.ctx.storage.sql.exec(
+        "SELECT COUNT(*) AS total, MIN(expires_at) AS earliest_expiry FROM reviewer_auth_transactions WHERE client_hash = ? AND expires_at > ?",
         clientHash, nowSeconds
-      ).toArray()[0]?.total || 0;
-      if (activeForClient >= 3) return { created: false, reason: "login_transaction_client_capacity_reached" };
+      ).toArray()[0] || {};
+      if ((clientRow.total || 0) >= 3) {
+        return {
+          created: false,
+          reason: "login_transaction_client_capacity_reached",
+          retry_after_seconds: Math.max(1, (clientRow.earliest_expiry || nowSeconds + TX_TTL_SECONDS) - nowSeconds)
+        };
+      }
     }
     this.ctx.storage.sql.exec("INSERT OR IGNORE INTO reviewer_auth_transactions (state_hash,browser_hash,nonce,code_verifier,created_at,expires_at,return_path,client_hash) VALUES (?,?,?,?,?,?,?,?)", stateHash, browserHash, nonce, codeVerifier, nowSeconds, nowSeconds + TX_TTL_SECONDS, returnPath, clientHash || "");
     const insertedRows = this.ctx.storage.sql.exec("SELECT changes() AS total").toArray()[0]?.total;
