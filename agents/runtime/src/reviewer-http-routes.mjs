@@ -145,7 +145,7 @@ async function stateStoreRequest(env, path, method = "GET", body) {
     return { ok: false, status: 503, body: { ok: false, error: "state_store_unavailable" } };
   }
 }
-async function handleOperatorControl(request, env, url) {
+async function handleOperatorControl(request, env, url, operatorControlAction) {
   if (request.method !== "GET" && request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
   if (request.method === "POST" && !sameOrigin(request, true)) return json({ ok: false, error: "same_origin_required" }, 403);
   if (!sameOrigin(request)) return json({ ok: false, error: "same_origin_required" }, 403);
@@ -198,12 +198,14 @@ async function handleOperatorControl(request, env, url) {
   }
   const actor = auth.reviewer?.reviewer_ref;
   if (typeof actor !== "string" || !/^[a-zA-Z0-9._:-]{3,64}$/.test(actor)) return json({ ok: false, error: "operator_actor_invalid" }, 403);
-  const result = await stateStoreRequest(env, `/control/${parsed.value.action}`, "POST", {
+  if (typeof operatorControlAction !== "function") {
+    return json({ ok: false, error: "operator_control_orchestration_unavailable" }, 503);
+  }
+  return operatorControlAction({
+    action: parsed.value.action,
     actor,
-    requestId: crypto.randomUUID(),
     reason: parsed.value.reason
   });
-  return json(result.body, result.status);
 }
 
 export function isValidReviewerDraftAuthoringRequest(value) {
@@ -386,7 +388,7 @@ async function handleReviewerApi(request, env, url) {
   return json({ ok: false, error: "not_found" }, 404);
 }
 
-export async function handleReviewerHttpRequest(request, env) {
+export async function handleReviewerHttpRequest(request, env, operatorControlAction) {
   try {
     const authResponse = await handleGoogleReviewerAuth(request, env);
     if (authResponse) return authResponse;
@@ -405,7 +407,7 @@ export async function handleReviewerHttpRequest(request, env) {
       const [body, contentType] = consoleAssets[url.pathname];
       return staticResponse(body, contentType);
     }
-    if (url.pathname === "/api/operator/runtime-control") return handleOperatorControl(request, env, url);
+    if (url.pathname === "/api/operator/runtime-control") return handleOperatorControl(request, env, url, operatorControlAction);
     if (url.pathname.startsWith("/api/reviewer/")) return handleReviewerApi(request, env, url);
     return null;
   } catch {
