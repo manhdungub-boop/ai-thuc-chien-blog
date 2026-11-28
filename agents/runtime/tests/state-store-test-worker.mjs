@@ -155,6 +155,11 @@ export class TestAgentStateStore extends AgentStateStore {
           return jsonResponse({ ok: false, error: "fault_suite_request_invalid" }, 400);
         }
 
+        if (this.faultSuiteMode.active) {
+          return jsonResponse({ ok: false, error: "fault_suite_already_running" }, 409);
+        }
+        // No await may occur between the active check and setting the lock:
+        // Durable Object requests can interleave after asynchronous yields.
         this.faultSuiteMode.active = true;
         const callStore = async (pathname, body, at) => {
           const headers = { Authorization: "Bearer " + this.env.AGENT_STATE_STORE_TOKEN };
