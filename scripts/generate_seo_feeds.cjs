@@ -13,41 +13,53 @@ function escapeXml(value) {
 }
 
 function getMetaContent(html, key) {
-  const tags = html.match(/<meta\b[^>]*>/gi) || [];
+  const tags = html.match(/<meta\\b[^>]*>/gi) || [];
   for (const tag of tags) {
-    const name = tag.match(/\bname\s*=\s*["']([^"']+)["']/i);
-    const property = tag.match(/\bproperty\s*=\s*["']([^"']+)["']/i);
+    const name = tag.match(/\\bname\\s*=\\s*["']([^"']+)["']/i);
+    const property = tag.match(/\\bproperty\\s*=\\s*["']([^"']+)["']/i);
     const matchesKey =
       (name && name[1].toLowerCase() === key.toLowerCase()) ||
       (property && property[1].toLowerCase() === key.toLowerCase());
     if (!matchesKey) continue;
-    const content = tag.match(/\bcontent\s*=\s*["']([^"']*)["']/i);
+    const content = tag.match(/\\bcontent\\s*=\\s*["']([^"']*)["']/i);
     if (content) return content[1].trim();
   }
   return '';
 }
 
 function getLastModified(html) {
-  const dates = [...html.matchAll(/"dateModified"\s*:\s*"(\d{4}-\d{2}-\d{2})(?:T[^"]*)?"/gi)]
+  const dates = [...html.matchAll(/"dateModified"\\s*:\\s*"([^"]+)"/gi)]
     .map((match) => match[1])
-    .filter((date) => !Number.isNaN(Date.parse(date + 'T00:00:00Z')));
+    .filter((date) => !Number.isNaN(Date.parse(date)));
   return dates.sort().pop() || '';
 }
 
+function getPublicationDate(html, file) {
+  const match = html.match(/"datePublished"\\s*:\\s*"([^"]+)"/i);
+  if (!match) return null;
+  const value = match[1];
+  const timestamp = Date.parse(value);
+  if (!/^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,3})?(?:Z|[+-]\\d{2}:?\\d{2})?)?$/.test(value) ||
+      Number.isNaN(timestamp)) {
+    throw new Error('Invalid datePublished metadata in ' + file + ': ' + value);
+  }
+  return { value, timestamp, pubDate: new Date(timestamp).toUTCString() };
+}
+
 function getTitle(html) {
-  const match = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  const match = html.match(/<title[^>]*>([\\s\\S]*?)<\\/title>/i);
   if (!match) return '';
   return match[1]
-    .replace(/<script\b[\s\S]*?(?:<\/script\s*>|$)/gi, ' ')
-    .replace(/<style\b[\s\S]*?(?:<\/style\s*>|$)/gi, ' ')
+    .replace(/<script\\b[\\s\\S]*?(?:<\\/script\\s*>|$)/gi, ' ')
+    .replace(/<style\\b[\\s\\S]*?(?:<\\/style\\s*>|$)/gi, ' ')
     .replace(/<[^<>]*>/g, ' ')
     .replace(/[<>]/g, ' ')
     .trim();
 }
 
 function getCanonical(html, file) {
-  const tag = (html.match(/<link\b[^>]*rel=["']canonical["'][^>]*>/i) || [])[0] || '';
-  const match = tag.match(/\bhref\s*=\s*["']([^"']+)["']/i);
+  const tag = (html.match(/<link\\b[^>]*rel=["']canonical["'][^>]*>/i) || [])[0] || '';
+  const match = tag.match(/\\bhref\\s*=\\s*["']([^"']+)["']/i);
   const canonical = match ? match[1].trim() : '';
   let parsed;
   try { parsed = new URL(canonical); } catch { parsed = null; }
@@ -63,7 +75,15 @@ function validatePageMetadata(html, file) {
   if (!title || !description) {
     throw new Error('Missing title or meta description in ' + file);
   }
-  return { canonical: getCanonical(html, file), title, description, lastmod: getLastModified(html) };
+  const publication = getPublicationDate(html, file);
+  return {
+    canonical: getCanonical(html, file),
+    title,
+    description,
+    lastmod: getLastModified(html),
+    publishedAt: publication ? publication.timestamp : null,
+    pubDate: publication ? publication.pubDate : ''
+  };
 }
 
 function getPublishedArticleFiles(outputDir) {
@@ -71,12 +91,12 @@ function getPublishedArticleFiles(outputDir) {
     .filter((name) => fs.existsSync(path.join(outputDir, name)))
     .map((name) => fs.readFileSync(path.join(outputDir, name), 'utf8'));
   const links = discoveryPages.flatMap((page) =>
-    [...page.matchAll(/\bhref=["'](?:\/|\.\/|\.\.\/|)?articles\/([^"'#?]+)["']/gi)]
-      .map((match) => match[1].replace(/\.html$/i, '') + '.html')
+    [...page.matchAll(/\\bhref=["'](?:\\/|\\.\\/|\\.\\.\\/|)?articles\\/([^"'#?]+)["']/gi)]
+      .map((match) => match[1].replace(/\\.html$/i, '') + '.html')
   );
   const unique = [...new Set(links)];
   for (const file of unique) {
-    if (file.includes('/') || file.includes('\\')) {
+    if (file.includes('/') || file.includes('\\\\')) {
       throw new Error('Invalid homepage article path: ' + file);
     }
     if (!fs.existsSync(path.join(outputDir, 'articles', file))) {
@@ -142,7 +162,7 @@ function generate(outputDir) {
     ];
     if (page.lastmod) lines.push('    <lastmod>' + escapeXml(page.lastmod) + '</lastmod>');
     lines.push('  </url>');
-    return lines.join('\n');
+    return lines.join('\\n');
   });
 
   const sitemap = [
@@ -151,16 +171,30 @@ function generate(outputDir) {
     ...sitemapEntries,
     '</urlset>',
     ''
-  ].join('\n');
+  ].join('\\n');
 
-  const rssItems = articles.slice().reverse().map((article) => [
-    '  <item>',
-    '    <title>' + escapeXml(article.title) + '</title>',
-    '    <link>' + escapeXml(article.canonical) + '</link>',
-    '    <guid isPermaLink="true">' + escapeXml(article.canonical) + '</guid>',
-    '    <description>' + escapeXml(article.description) + '</description>',
-    '  </item>'
-  ].join('\n'));
+  // RSS readers and the social draft workflow consume feed order. Sort by
+  // declared datePublished (never dateModified or file name); undated entries
+  // remain visible but follow dated articles and are not assigned invented dates.
+  const rssArticles = articles.slice().sort((a, b) => {
+    if (a.publishedAt === null && b.publishedAt === null) return a.canonical.localeCompare(b.canonical);
+    if (a.publishedAt === null) return 1;
+    if (b.publishedAt === null) return -1;
+    return b.publishedAt - a.publishedAt || a.canonical.localeCompare(b.canonical);
+  });
+
+  const rssItems = rssArticles.map((article) => {
+    const lines = [
+      '  <item>',
+      '    <title>' + escapeXml(article.title) + '</title>',
+      '    <link>' + escapeXml(article.canonical) + '</link>',
+      '    <guid isPermaLink="true">' + escapeXml(article.canonical) + '</guid>',
+      '    <description>' + escapeXml(article.description) + '</description>'
+    ];
+    if (article.pubDate) lines.push('    <pubDate>' + escapeXml(article.pubDate) + '</pubDate>');
+    lines.push('  </item>');
+    return lines.join('\\n');
+  });
 
   const feed = [
     '<?xml version="1.0" encoding="UTF-8"?>',
@@ -173,11 +207,11 @@ function generate(outputDir) {
     '  </channel>',
     '</rss>',
     ''
-  ].join('\n');
+  ].join('\\n');
 
   fs.writeFileSync(path.join(outputDir, 'sitemap.xml'), sitemap, 'utf8');
   fs.writeFileSync(path.join(outputDir, 'feed.xml'), feed, 'utf8');
-  console.log('SEO FEEDS GENERATED: ' + articles.length + ' homepage-linked articles + homepage + about + library + AI bank pages.');
+  console.log('SEO FEEDS GENERATED: ' + articles.length + ' homepage-linked articles; RSS ordered by datePublished, with undated entries retained at the end.');
 }
 
 module.exports = generate;
