@@ -289,3 +289,4 @@ function generate(outputDir) {
 
 module.exports = generate;
 module.exports.getPublicationDate = getPublicationDate;
+module.exports.getArticleDatePublished = getArticleDatePublished;

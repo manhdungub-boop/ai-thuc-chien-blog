@@ -2,35 +2,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
-const getPublicationDate = require('./generate_seo_feeds.cjs').getPublicationDate;
-
-function getArticleDatePublishedFromSource(html, file) {
-  const blocks = [...html.matchAll(/<script\b[^>]*\btype\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
-  const dates = [];
-  const visit = (value) => {
-    if (Array.isArray(value)) {
-      value.forEach(visit);
-      return;
-    }
-    if (!value || typeof value !== "object") return;
-    const types = Array.isArray(value["@type"]) ? value["@type"] : [value["@type"]];
-    const names = types.filter(type => typeof type === "string").map(type => type.split(/[\/#]/).pop());
-    if (names.some(name => ["Article", "BlogPosting", "NewsArticle", "TechArticle", "AnalysisNewsArticle", "Report", "ScholarlyArticle"].includes(name)) &&
-        Object.prototype.hasOwnProperty.call(value, "datePublished")) {
-      dates.push(value.datePublished);
-    }
-    if (Object.prototype.hasOwnProperty.call(value, "@graph")) visit(value["@graph"]);
-  };
-  for (const block of blocks) {
-    let parsed;
-    try { parsed = JSON.parse(block[1]); }
-    catch { throw new Error("Invalid source JSON-LD in " + file); }
-    visit(parsed);
-  }
-  if (dates.length === 0) return null;
-  if (dates.some(value => value !== dates[0])) throw new Error("Conflicting source publication dates in " + file);
-  return dates[0];
-}
+const { getPublicationDate, getArticleDatePublished } = require('./generate_seo_feeds.cjs');
 
 
 assert.equal(getPublicationDate('<html></html>', 'missing.html'), null, 'Missing publication date should remain undated');
@@ -199,7 +171,7 @@ for (const file of articleFiles) {
   const canonicalTag = (source.match(/<link\b[^>]*rel=["']canonical["'][^>]*>/i) || [])[0] || '';
   const canonicalMatch = canonicalTag.match(/\bhref=["']([^"']+)["']/i);
   assert.ok(canonicalMatch, file + ': missing canonical URL while building expected RSS dates');
-  const rawDate = getArticleDatePublishedFromSource(source, file);
+  const rawDate = getArticleDatePublished(source, file);
   let expectedPubDate = '';
   if (rawDate !== null) {
     const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(rawDate);
