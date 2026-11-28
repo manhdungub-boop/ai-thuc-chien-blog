@@ -28,9 +28,9 @@ function getMetaContent(html, key) {
 }
 
 function getLastModified(html) {
-  const dates = [...html.matchAll(/"dateModified"\s*:\s*"([^"]+)"/gi)]
+  const dates = [...html.matchAll(/"dateModified"\s*:\s*"(\d{4}-\d{2}-\d{2})(?:T[^"]*)?"/gi)]
     .map((match) => match[1])
-    .filter((date) => !Number.isNaN(Date.parse(date)));
+    .filter((date) => !Number.isNaN(Date.parse(date + 'T00:00:00Z')));
   return dates.sort().pop() || '';
 }
 
