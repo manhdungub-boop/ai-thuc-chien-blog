@@ -2,6 +2,22 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const getPublicationDate = require('./generate_seo_feeds.cjs').getPublicationDate;
+
+assert.equal(getPublicationDate('<html></html>', 'missing.html'), null, 'Missing publication date should remain undated');
+assert.equal(getPublicationDate('<script type="application/ld+json">{"datePublished":"2026-02-28"}</script>', 'valid-date.html').timestamp,
+  Date.parse('2026-02-28T00:00:00Z'), 'Date-only publication dates must be interpreted as UTC');
+assert.equal(getPublicationDate('<script type="application/ld+json">{"datePublished":"2024-02-29"}</script>', 'leap-day.html').value,
+  '2024-02-29', 'Valid leap days must be accepted');
+assert.equal(getPublicationDate('<script type="application/ld+json">{"datePublished":"2026-11-28T10:30:00+07:00"}</script>', 'offset.html').timestamp,
+  Date.parse('2026-11-28T10:30:00+07:00'), 'Explicit timezone offsets must be preserved');
+assert.throws(() => getPublicationDate('<script type="application/ld+json">{"datePublished":"2026-11-28T10:30:00"}</script>', 'no-zone.html'),
+  /Invalid datePublished/, 'Timezone-less datetimes must be rejected');
+assert.throws(() => getPublicationDate('<script type="application/ld+json">{"datePublished":"2026-02-30"}</script>', 'impossible-date.html'),
+  /Invalid calendar datePublished/, 'Impossible calendar dates must be rejected');
+assert.throws(() => getPublicationDate('<script type="application/ld+json">{"datePublished":"2025-02-29"}</script>', 'non-leap-day.html'),
+  /Invalid calendar datePublished/, 'Invalid leap days must be rejected');
+
 const fs = require('node:fs');
 const path = require('node:path');
 
