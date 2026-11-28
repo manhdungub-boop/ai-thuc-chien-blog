@@ -126,8 +126,6 @@ describe("read-only AI Bank release discovery", () => {
     expect(candidates).toHaveLength(5);
     expect(new Set(candidates.map(item => item.candidate_id)).size).toBe(candidates.length);
     const first = candidates.find(item => item.repository === AI_BANK_RELEASE_SOURCES[0].repo);
-    const mixedCaseCandidate = candidates.find(item => item.repository === "Comfy-Org/ComfyUI");
-    expect(mixedCaseCandidate?.candidate_id).toBe("github:Comfy-Org/ComfyUI");
     expect(first).toMatchObject({
       candidate_id: "github:" + AI_BANK_RELEASE_SOURCES[0].repo,
       name: "Ollama",
@@ -144,6 +142,20 @@ describe("read-only AI Bank release discovery", () => {
     expect(first.required_checks).toContain("privacy_and_data_handling");
   });
 
+  it("preserves configured repository casing in mixed-case catalog candidates", async () => {
+    const result = await discoverAiBankReleaseSignals({
+      now: NOW,
+      fetchImpl: async url => {
+        const source = AI_BANK_RELEASE_SOURCES.find(item => item.feed === url);
+        return new Response(source.repo === "Comfy-Org/ComfyUI" ? feedFor(source) : "<feed />", { status: 200 });
+      }
+    });
+    expect(result.catalog_candidates).toHaveLength(1);
+    expect(result.catalog_candidates[0]).toMatchObject({
+      repository: "Comfy-Org/ComfyUI",
+      candidate_id: "github:Comfy-Org/ComfyUI"
+    });
+  });
   it("returns no catalog candidates when all discovery sources fail", async () => {
     const result = await discoverAiBankReleaseSignals({
       now: NOW,
