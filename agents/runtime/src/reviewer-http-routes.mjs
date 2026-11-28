@@ -51,7 +51,7 @@ function isReviewedReleaseIdentity(value) {
 function aiBankCandidateStore(env) {
   const namespace = env.AGENT_AI_BANK_CANDIDATE_STORE;
   if (!namespace || typeof namespace.idFromName !== "function" || typeof namespace.get !== "function") return null;
-  return namespace.get(namespace.idFromName("agent-ai-bank-candidates-primary"));
+  return namespace.get(namespace.idFromName("ai-bank-discovery-global"));
 }
 
 async function aiBankCandidateStoreRequest(store, path) {
