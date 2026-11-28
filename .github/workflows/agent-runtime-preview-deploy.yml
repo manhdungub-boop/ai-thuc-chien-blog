@@ -97,7 +97,6 @@ jobs:
     timeout-minutes: 15
     env:
       CLOUDFLARE_ACCOUNT_ID: "92cf091bbac8b4879ec65feb30b4715b"
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}
       CONFIRM_FREE_WORKERS_PLAN: ${{ inputs.confirm_free_workers_plan }}
     steps:
       - name: Checkout the exact triggering commit
@@ -112,22 +111,26 @@ jobs:
           node-version: "22"
           package-manager-cache: false
 
-      - name: Require Cloudflare token
+      - name: Require Preview deployment token
         shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}
         run: |
           set -euo pipefail
-          if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
-            echo "::error::CLOUDFLARE_AGENT_PREVIEW_API_TOKEN is not configured in the agent-runtime-preview environment."
+          if [[ -z "${CLOUDFLARE_BILLING_READ_API_TOKEN:-}" ]]; then
+            echo "::error::CLOUDFLARE_BILLING_READ_API_TOKEN is not configured in the agent-runtime-preview environment."
             exit 1
           fi
 
       - name: Verify Workers Free plan before any resource creation
         shell: bash
+        env:
+          CLOUDFLARE_BILLING_READ_API_TOKEN: ${{ secrets.CLOUDFLARE_BILLING_READ_API_TOKEN }}
         run: |
           set -euo pipefail
           response="$RUNNER_TEMP/cloudflare-subscriptions.json"
           status="$(curl --silent --show-error --output "$response" --write-out "%{http_code}" \
-            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            --header "Authorization: Bearer $CLOUDFLARE_BILLING_READ_API_TOKEN" \
             --header "Accept: application/json" \
             "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/subscriptions")"
           if [[ "$status" != "200" ]]; then
@@ -184,6 +187,8 @@ jobs:
           esac
 
       - name: Deploy only the isolated Preview Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}
         working-directory: agents/runtime
         run: npx --yes wrangler@4.166.0 deploy --config wrangler.preview.jsonc
 
