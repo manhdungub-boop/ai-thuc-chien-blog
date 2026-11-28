@@ -104,8 +104,8 @@ test("State Store client exposes only validated lease operations on fixed intern
   const cases = [
     ["claim", { taskId: "task_123" }, "/claim"],
     ["heartbeat", { taskId: "task_123", leaseOwner: LEASE_OWNER, leaseGeneration: 2 }, "/heartbeat"],
-    ["complete", { taskId: "task_123", leaseOwner: LEASE_OWNER, leaseGeneration: 2, status: "succeeded" }, "/complete"],
-    ["recover", { taskId: "task_123" }, "/recover"],
+    ["complete", { taskId: "task_123", leaseOwner: LEASE_OWNER, leaseGeneration: 2, status: "succeeded", result: { taskType: "content.review", status: "pass", findingCount: 0, findings: [] } }, "/complete"],
+    ["recover", { taskId: "task_123", actor: "operator-01", requestId: "request-1234567890123456" }, "/recover"],
   ];
 
   for (const [operation, input, path] of cases) {
@@ -125,7 +125,9 @@ test("State Store client rejects malformed lease identities, generations, states
   const { namespace, calls } = mockNamespace();
   const env = { AGENT_STATE_STORE: namespace, AGENT_STATE_STORE_TOKEN: TOKEN };
   await assert.rejects(() => callStateStore(env, "claim", { taskId: "../task" }), /state_store_request_invalid/);
-  await assert.rejects(() => callStateStore(env, "recover", { taskId: "task_1", extra: true }), /state_store_request_invalid/);
+  await assert.rejects(() => callStateStore(env, "recover", { taskId: "task_1" }), /state_store_request_invalid/);
+  await assert.rejects(() => callStateStore(env, "recover", { taskId: "task_1", actor: "operator-01", requestId: "short" }), /state_store_request_invalid/);
+  await assert.rejects(() => callStateStore(env, "recover", { taskId: "task_1", actor: "operator-01", requestId: "request-1234567890123456", extra: true }), /state_store_request_invalid/);
   await assert.rejects(() => callStateStore(env, "heartbeat", {
     taskId: "task_1", leaseOwner: "not-a-lease-owner", leaseGeneration: 1,
   }), /state_store_request_invalid/);
