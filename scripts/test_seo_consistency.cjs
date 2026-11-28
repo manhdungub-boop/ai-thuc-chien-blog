@@ -2,6 +2,69 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const { getPublicationDate, getArticleDatePublished } = require('./generate_seo_feeds.cjs');
+
+
+assert.equal(getPublicationDate('<html></html>', 'missing.html'), null, 'Missing publication date should remain undated');
+assert.throws(() => getPublicationDate('<script type="application/ld+json">{"@type":"BlogPosting","datePublished":""}</script>', 'empty-date.html'),
+  /Invalid datePublished/, 'An explicitly empty publication date must be rejected rather than treated as missing');
+assert.equal(getPublicationDate('<pre>{"datePublished":""}</pre><script type="application/ld+json">{"@type":"BlogPosting","datePublished":"2026-02-28"}</script>', 'code-example.html').value,
+  '2026-02-28', 'Code examples outside Article JSON-LD must not override valid publication metadata');
+assert.equal(getPublicationDate('<script type="application/ld+json">{"@type":"BlogPosting","datePublished":"2026-02-28"}</script>', 'valid-date.html').timestamp,
+  Date.parse('2026-02-28T00:00:00Z'), 'Date-only publication dates must be interpreted as UTC');
+assert.equal(getPublicationDate('<script type="application/ld+json">{"@type":"BlogPosting","datePublished":"2024-02-29"}</script>', 'leap-day.html').value,
+  '2024-02-29', 'Valid leap days must be accepted');
+assert.equal(getPublicationDate('<script type="application/ld+json">{"@type":"BlogPosting","datePublished":"2026-11-28T10:30:00+07:00"}</script>', 'offset.html').timestamp,
+  Date.parse('2026-11-28T10:30:00+07:00'), 'Explicit timezone offsets must be preserved');
+assert.equal(getPublicationDate('<script type="application/ld+json">{"@type":"BlogPosting","datePublished":"2026-11-28T10:30:00+07:00"}</script>', 'offset.html').pubDate,
+  new Date(Date.parse('2026-11-28T10:30:00+07:00')).toUTCString(),
+  'RSS pubDate must use the exact UTC string derived independently from the declared offset');
+assert.throws(() => getPublicationDate('<script type="application/ld+json">{"@type":"BlogPosting","datePublished":"2026-11-28T10:30:00"}</script>', 'no-zone.html'),
+  /Invalid datePublished/, 'Timezone-less datetimes must be rejected');
+assert.throws(() => getPublicationDate('<script type="application/ld+json">{"@type":"BlogPosting","datePublished":"2026-02-30"}</script>', 'impossible-date.html'),
+  /Invalid calendar datePublished/, 'Impossible calendar dates must be rejected');
+assert.throws(() => getPublicationDate('<script type="application/ld+json">{"@type":"BlogPosting","datePublished":"2025-02-29"}</script>', 'non-leap-day.html'),
+  /Invalid calendar datePublished/, 'Invalid leap days must be rejected');
+
+
+const jsonLd = (value) => '<script type="application/ld+json">' + JSON.stringify(value) + '</script>';
+const expectedMetadataDate = "2026-02-28";
+for (const articleType of ["Article", "BlogPosting", "NewsArticle", "TechArticle", "AnalysisNewsArticle", "Report", "ScholarlyArticle"]) {
+  assert.equal(
+    getArticleDatePublished(jsonLd({ "@type": articleType, datePublished: expectedMetadataDate }), articleType + ".html"),
+    expectedMetadataDate,
+    "Article metadata extraction must support the explicit Schema.org type " + articleType
+  );
+}
+assert.equal(
+  getArticleDatePublished(jsonLd({ "@type": ["Article", "BlogPosting"], datePublished: expectedMetadataDate }), "article-type-array.html"),
+  expectedMetadataDate,
+  "Article metadata extraction must support @type arrays"
+);
+assert.equal(
+  getArticleDatePublished(jsonLd({ "@graph": [{ "@type": "WebPage", name: "Example" }, { "@type": "BlogPosting", datePublished: expectedMetadataDate }] }), "article-graph.html"),
+  expectedMetadataDate,
+  "Article metadata extraction must find Article nodes inside @graph"
+);
+assert.equal(
+  getArticleDatePublished(jsonLd([{ "@type": "WebPage" }, { "@type": "NewsArticle", datePublished: expectedMetadataDate }]), "article-array.html"),
+  expectedMetadataDate,
+  "Article metadata extraction must support top-level JSON-LD arrays"
+);
+assert.equal(
+  getArticleDatePublished(jsonLd({ "@type": "WebPage", datePublished: expectedMetadataDate }), "non-article.html"),
+  null,
+  "Non-Article structured data must not be treated as publication metadata"
+);
+assert.throws(
+  () => getArticleDatePublished(jsonLd({ "@graph": [
+    { "@type": "Article", datePublished: "2026-02-28" },
+    { "@type": "BlogPosting", datePublished: "2026-03-01" }
+  ] }), "conflicting-article-dates.html"),
+  /Conflicting datePublished/,
+  "Conflicting Article publication dates must be rejected"
+);
+
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -102,7 +165,7 @@ for (const filePath of outputHtmlFiles) {
   const label = path.relative(distDir, filePath);
   if (/fonts\.googleapis\.com\/css2\?/.test(html)) {
     assert.match(html, /rel=[\"']preload[\"'][^>]*as=[\"']style[\"'][^>]*href=[\"']https:\/\/fonts\.googleapis\.com\/css2\?/i, label + ': Google Fonts should be preloaded asynchronously');
-    assert.match(html, /onload=[\"']this\.onload=null;this\.rel=\\?['\"]stylesheet/i, label + ': Google Fonts preload must activate its stylesheet');
+    assert.match(html, /onload=["']this\.onload=null;this\.rel=\\?['"]stylesheet/i, label + ': Google Fonts preload must activate its stylesheet');
   }
   if (/<script\b[^>]*src=[\"'][^\"']*script\.js[\"']/i.test(html)) {
     assert.match(html, /<script\b[^>]*src=[\"'][^\"']*script\.js[\"'][^>]*\bdefer\b/i, label + ': site JavaScript must be deferred');
@@ -118,6 +181,53 @@ for (const file of articleFiles) {
 }
 
 const sitemapArticleUrls = sitemapUrls.filter((url) => url.startsWith(baseUrl + '/articles/'));
+const rssItems = [...feed.matchAll(/<item\b[^>]*>([\s\S]*?)<\/item>/gi)].map((match) => {
+  const block = match[1];
+  const link = block.match(/<link>\s*(https?:\/\/[^<]+)\s*<\/link>/i);
+  const pubDate = block.match(/<pubDate>\s*([^<]+)\s*<\/pubDate>/i);
+  assert.ok(link, 'RSS item is missing its canonical article link');
+  return { link: link[1].trim(), pubDate: pubDate ? pubDate[1].trim() : '' };
+});
+assert.equal(rssItems.length, articleFiles.length, 'RSS item count differs from published article count');
+assert.equal(new Set(rssItems.map((item) => item.link)).size, rssItems.length, 'RSS contains duplicate article links');
+let previousPublishedAt = Number.POSITIVE_INFINITY;
+let encounteredUndated = false;
+for (const item of rssItems) {
+  if (!item.pubDate) {
+    encounteredUndated = true;
+    continue;
+  }
+  assert.equal(encounteredUndated, false, 'Undated RSS items must follow all dated items');
+  const publishedAt = Date.parse(item.pubDate);
+  assert.ok(Number.isFinite(publishedAt), 'RSS pubDate must be a valid RFC-822/HTTP date');
+  assert.ok(publishedAt <= previousPublishedAt, 'RSS articles must be ordered by datePublished descending');
+  previousPublishedAt = publishedAt;
+}
+// Independently derive expected RSS dates from each source article's raw datePublished value.
+const expectedPublicationByUrl = new Map();
+for (const file of articleFiles) {
+  const source = fs.readFileSync(path.join(articleDir, file), 'utf8');
+  const canonicalTag = (source.match(/<link\b[^>]*rel=["']canonical["'][^>]*>/i) || [])[0] || '';
+  const canonicalMatch = canonicalTag.match(/\bhref=["']([^"']+)["']/i);
+  assert.ok(canonicalMatch, file + ': missing canonical URL while building expected RSS dates');
+  const rawDate = getArticleDatePublished(source, file);
+  let expectedPubDate = '';
+  if (rawDate !== null) {
+    const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(rawDate);
+    const timestamp = Date.parse(dateOnly ? rawDate + 'T00:00:00Z' : rawDate);
+    assert.ok(Number.isFinite(timestamp), file + ': datePublished must independently parse to a valid timestamp');
+    expectedPubDate = new Date(timestamp).toUTCString();
+  }
+  expectedPublicationByUrl.set(canonicalMatch[1], expectedPubDate);
+}
+assert.equal(expectedPublicationByUrl.size, articleFiles.length, 'Expected publication-date map must cover every source article');
+for (const item of rssItems) {
+  assert.ok(expectedPublicationByUrl.has(item.link), 'RSS item does not match a source article: ' + item.link);
+  assert.equal(item.pubDate, expectedPublicationByUrl.get(item.link),
+    item.link + ': RSS pubDate must match the independently derived datePublished value; undated articles must not receive a fallback date');
+}
+assert.equal(rssItems.length, expectedPublicationByUrl.size, 'Every source article must have exactly one RSS item');
+
 const feedArticleUrls = feedUrls.filter((url) => url.startsWith(baseUrl + '/articles/'));
 assert.equal(sitemapArticleUrls.length, articleFiles.length, 'Generated sitemap article count differs from source article count');
 assert.equal(feedArticleUrls.length, articleFiles.length, 'Generated RSS article count differs from source article count');

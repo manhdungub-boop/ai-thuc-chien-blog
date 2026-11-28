@@ -34,6 +34,91 @@ function getLastModified(html) {
   return dates.sort().pop() || '';
 }
 
+function getArticleDatePublished(html, file) {
+  const scripts = [...html.matchAll(/<script\b[^>]*\btype\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
+  const candidates = [];
+  const articleTypes = new Set([
+    "Article", "BlogPosting", "NewsArticle", "TechArticle",
+    "AnalysisNewsArticle", "Report", "ScholarlyArticle"
+  ]);
+  const collect = (value) => {
+    if (Array.isArray(value)) {
+      for (const item of value) collect(item);
+      return;
+    }
+    if (!value || typeof value !== "object") return;
+    const types = Array.isArray(value["@type"]) ? value["@type"] : [value["@type"]];
+    const isArticle = types.some((type) => {
+      if (typeof type !== "string") return false;
+      return articleTypes.has(type.split(/[\/#]/).pop());
+    });
+    if (isArticle && Object.prototype.hasOwnProperty.call(value, "datePublished")) {
+      candidates.push(value.datePublished);
+    }
+    if (Object.prototype.hasOwnProperty.call(value, "@graph")) collect(value["@graph"]);
+  };
+
+  for (const script of scripts) {
+    let parsed;
+    try {
+      parsed = JSON.parse(script[1]);
+    } catch {
+      throw new Error("Invalid JSON-LD metadata in " + file);
+    }
+    collect(parsed);
+  }
+
+  if (candidates.length === 0) return null;
+  const normalized = candidates.map((value) =>
+    typeof value === "string" ? "string:" + value : "other:" + JSON.stringify(value)
+  );
+  if (new Set(normalized).size !== 1) {
+    throw new Error("Conflicting datePublished metadata in " + file);
+  }
+  const value = candidates[0];
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error("Invalid datePublished metadata in " + file + ": " + String(value));
+  }
+  return value;
+}
+
+function getPublicationDate(html, file) {
+  const value = getArticleDatePublished(html, file);
+  if (value === null) return null;
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  const dateTime = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?(Z|[+-]\d{2}:?\d{2})$/.exec(value);
+  const parts = dateOnly || dateTime;
+  if (!parts) throw new Error('Invalid datePublished metadata in ' + file + ': ' + value);
+
+  const year = Number(parts[1]);
+  const month = Number(parts[2]);
+  const day = Number(parts[3]);
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  if (month < 1 || month > 12 || day < 1 || day > daysInMonth) {
+    throw new Error('Invalid calendar datePublished metadata in ' + file + ': ' + value);
+  }
+
+  if (dateTime) {
+    const hour = Number(parts[4]);
+    const minute = Number(parts[5]);
+    const second = Number(parts[6]);
+    const zone = parts[8];
+    if (hour > 23 || minute > 59 || second > 59) {
+      throw new Error('Invalid time datePublished metadata in ' + file + ': ' + value);
+    }
+    if (zone !== 'Z') {
+      const offset = zone.slice(1).replace(':', '');
+      if (Number(offset.slice(0, 2)) > 23 || Number(offset.slice(2, 4)) > 59) {
+        throw new Error('Invalid timezone datePublished metadata in ' + file + ': ' + value);
+      }
+    }
+  }
+
+  const timestamp = Date.parse(dateOnly ? value + 'T00:00:00Z' : value);
+  if (!Number.isFinite(timestamp)) throw new Error('Invalid datePublished metadata in ' + file + ': ' + value);
+  return { value, timestamp, pubDate: new Date(timestamp).toUTCString() };
+}
+
 function getTitle(html) {
   const match = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
   if (!match) return '';
@@ -63,7 +148,15 @@ function validatePageMetadata(html, file) {
   if (!title || !description) {
     throw new Error('Missing title or meta description in ' + file);
   }
-  return { canonical: getCanonical(html, file), title, description, lastmod: getLastModified(html) };
+  const publication = getPublicationDate(html, file);
+  return {
+    canonical: getCanonical(html, file),
+    title,
+    description,
+    lastmod: getLastModified(html),
+    publishedAt: publication ? publication.timestamp : null,
+    pubDate: publication ? publication.pubDate : ''
+  };
 }
 
 function getPublishedArticleFiles(outputDir) {
@@ -153,14 +246,28 @@ function generate(outputDir) {
     ''
   ].join('\n');
 
-  const rssItems = articles.slice().reverse().map((article) => [
-    '  <item>',
-    '    <title>' + escapeXml(article.title) + '</title>',
-    '    <link>' + escapeXml(article.canonical) + '</link>',
-    '    <guid isPermaLink="true">' + escapeXml(article.canonical) + '</guid>',
-    '    <description>' + escapeXml(article.description) + '</description>',
-    '  </item>'
-  ].join('\n'));
+  // RSS readers and the social draft workflow consume feed order. Sort by
+  // declared datePublished (never dateModified or file name); undated entries
+  // remain visible but follow dated articles and are not assigned invented dates.
+  const rssArticles = articles.slice().sort((a, b) => {
+    if (a.publishedAt === null && b.publishedAt === null) return a.canonical.localeCompare(b.canonical);
+    if (a.publishedAt === null) return 1;
+    if (b.publishedAt === null) return -1;
+    return b.publishedAt - a.publishedAt || a.canonical.localeCompare(b.canonical);
+  });
+
+  const rssItems = rssArticles.map((article) => {
+    const lines = [
+      '  <item>',
+      '    <title>' + escapeXml(article.title) + '</title>',
+      '    <link>' + escapeXml(article.canonical) + '</link>',
+      '    <guid isPermaLink="true">' + escapeXml(article.canonical) + '</guid>',
+      '    <description>' + escapeXml(article.description) + '</description>'
+    ];
+    if (article.pubDate) lines.push('    <pubDate>' + escapeXml(article.pubDate) + '</pubDate>');
+    lines.push('  </item>');
+    return lines.join('\n');
+  });
 
   const feed = [
     '<?xml version="1.0" encoding="UTF-8"?>',
@@ -177,7 +284,9 @@ function generate(outputDir) {
 
   fs.writeFileSync(path.join(outputDir, 'sitemap.xml'), sitemap, 'utf8');
   fs.writeFileSync(path.join(outputDir, 'feed.xml'), feed, 'utf8');
-  console.log('SEO FEEDS GENERATED: ' + articles.length + ' homepage-linked articles + homepage + about + library + AI bank pages.');
+  console.log('SEO FEEDS GENERATED: ' + articles.length + ' homepage-linked articles; RSS ordered by datePublished, with undated entries retained at the end.');
 }
 
 module.exports = generate;
+module.exports.getPublicationDate = getPublicationDate;
+module.exports.getArticleDatePublished = getArticleDatePublished;
