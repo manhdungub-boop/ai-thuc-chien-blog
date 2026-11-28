@@ -25,6 +25,7 @@ const configureBuilds = await read("configure-cloudflare-worker-builds.yml");
 const stagingEmail = await read("staging-email-e2e.yml");
 const doFaultTest = await read("agent-runtime-cloudflare-do-fault-test.yml");
 const agentRuntimePreview = await read("agent-runtime-preview-validation.yml");
+const agentRuntimePreviewDeploy = await read("agent-runtime-preview-deploy.yml");
 const agentRuntimeLines = agentRuntimePreview.split("\n");
 const agentRuntimeValidateStart = agentRuntimeLines.indexOf("  validate:");
 const agentRuntimeE2EStart = agentRuntimeLines.indexOf("  one-shot-preview-e2e:");
@@ -58,6 +59,30 @@ assert.ok(agentRuntimeE2EBlock.includes("environment: agent-runtime-preview") &&
   agentRuntimeE2EBlock.includes("inputs.expected_head_sha") &&
   agentRuntimeE2EBlock.includes("id-token: write"),
   "Protected Preview E2E must retain its owner pin, exact SHA, protected environment, and scoped OIDC permission.");
+
+const previewDeployJobStart = agentRuntimePreviewDeploy.indexOf("  deploy-preview:\\n");
+const previewDeployStepsStart = agentRuntimePreviewDeploy.indexOf("    steps:\\n", previewDeployJobStart);
+assert.ok(previewDeployJobStart >= 0 && previewDeployStepsStart > previewDeployJobStart,
+  "Agent Runtime Preview deploy job boundary must exist.");
+const previewDeployJobHeader = agentRuntimePreviewDeploy.slice(previewDeployJobStart, previewDeployStepsStart);
+assert.doesNotMatch(previewDeployJobHeader, /CLOUDFLARE_(?:API|BILLING_READ_API)_TOKEN|secrets\\./,
+  "Cloudflare credentials must not be inherited at the Preview deploy job scope.");
+const planGateStart = agentRuntimePreviewDeploy.indexOf("      - name: Verify Workers Free plan before any resource creation");
+const previewDeployStart = agentRuntimePreviewDeploy.indexOf("      - name: Deploy only the isolated Preview Worker");
+assert.ok(planGateStart >= 0 && previewDeployStart > planGateStart,
+  "Preview Free-plan verification must precede the Preview deployment step.");
+const planGateBlock = agentRuntimePreviewDeploy.slice(planGateStart, previewDeployStart);
+assert.ok(planGateBlock.includes("CLOUDFLARE_BILLING_READ_API_TOKEN: " + "$" + "{{ secrets.CLOUDFLARE_BILLING_READ_API_TOKEN }}") &&
+  planGateBlock.includes("Authorization: Bearer $CLOUDFLARE_BILLING_READ_API_TOKEN"),
+  "Free-plan verification must use the dedicated Billing Read token.");
+assert.doesNotMatch(planGateBlock, /secrets\\.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN|CLOUDFLARE_API_TOKEN/,
+  "The Preview deployment token must not be available to the Billing plan gate.");
+const previewHealthStart = agentRuntimePreviewDeploy.indexOf("      - name: Verify Preview health remains disabled and paused");
+const previewDeployBlock = agentRuntimePreviewDeploy.slice(previewDeployStart, previewHealthStart);
+assert.ok(previewDeployBlock.includes("CLOUDFLARE_API_TOKEN: " + "$" + "{{ secrets.CLOUDFLARE_AGENT_PREVIEW_API_TOKEN }}"),
+  "Only the isolated Preview deployment step must receive the Preview deployment token.");
+assert.doesNotMatch(previewDeployBlock, /CLOUDFLARE_BILLING_READ_API_TOKEN|secrets\\.CLOUDFLARE_BILLING_READ_API_TOKEN/,
+  "The Billing Read token must not be available to the Worker deployment step.");
 
 const stagingEmailLines = stagingEmail.split("\n");
 const stagingJobStart = stagingEmailLines.indexOf("  staging-email-e2e:");
