@@ -102,7 +102,7 @@ for (const filePath of outputHtmlFiles) {
   const label = path.relative(distDir, filePath);
   if (/fonts\.googleapis\.com\/css2\?/.test(html)) {
     assert.match(html, /rel=[\"']preload[\"'][^>]*as=[\"']style[\"'][^>]*href=[\"']https:\/\/fonts\.googleapis\.com\/css2\?/i, label + ': Google Fonts should be preloaded asynchronously');
-    assert.match(html, /onload=[\"']this\.onload=null;this\.rel=\\?['\"]stylesheet/i, label + ': Google Fonts preload must activate its stylesheet');
+    assert.match(html, /onload=[\"']this\.onload=null;this\.rel=\?['\"]stylesheet/i, label + ': Google Fonts preload must activate its stylesheet');
   }
   if (/<script\b[^>]*src=[\"'][^\"']*script\.js[\"']/i.test(html)) {
     assert.match(html, /<script\b[^>]*src=[\"'][^\"']*script\.js[\"'][^>]*\bdefer\b/i, label + ': site JavaScript must be deferred');
@@ -118,10 +118,10 @@ for (const file of articleFiles) {
 }
 
 const sitemapArticleUrls = sitemapUrls.filter((url) => url.startsWith(baseUrl + '/articles/'));
-const rssItems = [...feed.matchAll(/<item\\b[^>]*>([\\s\\S]*?)<\\/item>/gi)].map((match) => {
+const rssItems = [...feed.matchAll(/<item\b[^>]*>([\s\S]*?)<\/item>/gi)].map((match) => {
   const block = match[1];
-  const link = block.match(/<link>\\s*(https?:\\/\\/[^<]+)\\s*<\\/link>/i);
-  const pubDate = block.match(/<pubDate>\\s*([^<]+)\\s*<\\/pubDate>/i);
+  const link = block.match(/<link>\s*(https?:\/\/[^<]+)\s*<\/link>/i);
+  const pubDate = block.match(/<pubDate>\s*([^<]+)\s*<\/pubDate>/i);
   assert.ok(link, 'RSS item is missing its canonical article link');
   return { link: link[1].trim(), pubDate: pubDate ? pubDate[1].trim() : '' };
 });
