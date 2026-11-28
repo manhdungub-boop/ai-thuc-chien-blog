@@ -35,7 +35,7 @@ function getLastModified(html) {
 }
 
 function getPublicationDate(html, file) {
-  const match = html.match(/"datePublished"\s*:\s*"([^"]+)"/i);
+  const match = html.match(/"datePublished"\s*:\s*"([^"]*)"/i);
   if (!match) return null;
   const value = match[1];
   const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);

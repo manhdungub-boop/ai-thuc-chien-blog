@@ -5,6 +5,8 @@ const assert = require('node:assert/strict');
 const getPublicationDate = require('./generate_seo_feeds.cjs').getPublicationDate;
 
 assert.equal(getPublicationDate('<html></html>', 'missing.html'), null, 'Missing publication date should remain undated');
+assert.throws(() => getPublicationDate('<script type="application/ld+json">{"datePublished":""}</script>', 'empty-date.html'),
+  /Invalid datePublished/, 'An explicitly empty publication date must be rejected rather than treated as missing');
 assert.equal(getPublicationDate('<script type="application/ld+json">{"datePublished":"2026-02-28"}</script>', 'valid-date.html').timestamp,
   Date.parse('2026-02-28T00:00:00Z'), 'Date-only publication dates must be interpreted as UTC');
 assert.equal(getPublicationDate('<script type="application/ld+json">{"datePublished":"2024-02-29"}</script>', 'leap-day.html').value,
