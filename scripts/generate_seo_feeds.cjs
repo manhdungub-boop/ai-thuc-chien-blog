@@ -34,10 +34,57 @@ function getLastModified(html) {
   return dates.sort().pop() || '';
 }
 
+function getArticleDatePublished(html, file) {
+  const scripts = [...html.matchAll(/<script\b[^>]*\btype\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
+  const candidates = [];
+  const articleTypes = new Set([
+    "Article", "BlogPosting", "NewsArticle", "TechArticle",
+    "AnalysisNewsArticle", "Report", "ScholarlyArticle"
+  ]);
+  const collect = (value) => {
+    if (Array.isArray(value)) {
+      for (const item of value) collect(item);
+      return;
+    }
+    if (!value || typeof value !== "object") return;
+    const types = Array.isArray(value["@type"]) ? value["@type"] : [value["@type"]];
+    const isArticle = types.some((type) => {
+      if (typeof type !== "string") return false;
+      return articleTypes.has(type.split(/[\/#]/).pop());
+    });
+    if (isArticle && Object.prototype.hasOwnProperty.call(value, "datePublished")) {
+      candidates.push(value.datePublished);
+    }
+    if (Object.prototype.hasOwnProperty.call(value, "@graph")) collect(value["@graph"]);
+  };
+
+  for (const script of scripts) {
+    let parsed;
+    try {
+      parsed = JSON.parse(script[1]);
+    } catch {
+      throw new Error("Invalid JSON-LD metadata in " + file);
+    }
+    collect(parsed);
+  }
+
+  if (candidates.length === 0) return null;
+  const normalized = candidates.map((value) =>
+    typeof value === "string" ? "string:" + value : "other:" + JSON.stringify(value)
+  );
+  if (new Set(normalized).size !== 1) {
+    throw new Error("Conflicting datePublished metadata in " + file);
+  }
+  const value = candidates[0];
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error("Invalid datePublished metadata in " + file + ": " + String(value));
+  }
+  return value;
+}
+
 function getPublicationDate(html, file) {
-  const match = html.match(/"datePublished"\s*:\s*"([^"]*)"/i);
-  if (!match) return null;
-  const value = match[1];
+  const value = getArticleDatePublished(html, file);
+  if (value === null) return null;
   const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   const dateTime = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?(Z|[+-]\d{2}:?\d{2})$/.exec(value);
   const parts = dateOnly || dateTime;

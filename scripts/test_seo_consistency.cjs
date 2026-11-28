@@ -4,23 +4,54 @@
 const assert = require('node:assert/strict');
 const getPublicationDate = require('./generate_seo_feeds.cjs').getPublicationDate;
 
+function getArticleDatePublishedFromSource(html, file) {
+  const blocks = [...html.matchAll(/<script\b[^>]*\btype\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
+  const dates = [];
+  const visit = (value) => {
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+      return;
+    }
+    if (!value || typeof value !== "object") return;
+    const types = Array.isArray(value["@type"]) ? value["@type"] : [value["@type"]];
+    const names = types.filter(type => typeof type === "string").map(type => type.split(/[\/#]/).pop());
+    if (names.some(name => ["Article", "BlogPosting", "NewsArticle", "TechArticle", "AnalysisNewsArticle", "Report", "ScholarlyArticle"].includes(name)) &&
+        Object.prototype.hasOwnProperty.call(value, "datePublished")) {
+      dates.push(value.datePublished);
+    }
+    if (Object.prototype.hasOwnProperty.call(value, "@graph")) visit(value["@graph"]);
+  };
+  for (const block of blocks) {
+    let parsed;
+    try { parsed = JSON.parse(block[1]); }
+    catch { throw new Error("Invalid source JSON-LD in " + file); }
+    visit(parsed);
+  }
+  if (dates.length === 0) return null;
+  if (dates.some(value => value !== dates[0])) throw new Error("Conflicting source publication dates in " + file);
+  return dates[0];
+}
+
+
 assert.equal(getPublicationDate('<html></html>', 'missing.html'), null, 'Missing publication date should remain undated');
-assert.throws(() => getPublicationDate('<script type="application/ld+json">{"datePublished":""}</script>', 'empty-date.html'),
+assert.throws(() => getPublicationDate('<script type="application/ld+json">{"@type":"BlogPosting","datePublished":""}</script>', 'empty-date.html'),
   /Invalid datePublished/, 'An explicitly empty publication date must be rejected rather than treated as missing');
-assert.equal(getPublicationDate('<script type="application/ld+json">{"datePublished":"2026-02-28"}</script>', 'valid-date.html').timestamp,
+assert.equal(getPublicationDate('<pre>{"datePublished":""}</pre><script type="application/ld+json">{"@type":"BlogPosting","datePublished":"2026-02-28"}</script>', 'code-example.html').value,
+  '2026-02-28', 'Code examples outside Article JSON-LD must not override valid publication metadata');
+assert.equal(getPublicationDate('<script type="application/ld+json">{"@type":"BlogPosting","datePublished":"2026-02-28"}</script>', 'valid-date.html').timestamp,
   Date.parse('2026-02-28T00:00:00Z'), 'Date-only publication dates must be interpreted as UTC');
-assert.equal(getPublicationDate('<script type="application/ld+json">{"datePublished":"2024-02-29"}</script>', 'leap-day.html').value,
+assert.equal(getPublicationDate('<script type="application/ld+json">{"@type":"BlogPosting","datePublished":"2024-02-29"}</script>', 'leap-day.html').value,
   '2024-02-29', 'Valid leap days must be accepted');
-assert.equal(getPublicationDate('<script type="application/ld+json">{"datePublished":"2026-11-28T10:30:00+07:00"}</script>', 'offset.html').timestamp,
+assert.equal(getPublicationDate('<script type="application/ld+json">{"@type":"BlogPosting","datePublished":"2026-11-28T10:30:00+07:00"}</script>', 'offset.html').timestamp,
   Date.parse('2026-11-28T10:30:00+07:00'), 'Explicit timezone offsets must be preserved');
-assert.equal(getPublicationDate('<script type="application/ld+json">{"datePublished":"2026-11-28T10:30:00+07:00"}</script>', 'offset.html').pubDate,
+assert.equal(getPublicationDate('<script type="application/ld+json">{"@type":"BlogPosting","datePublished":"2026-11-28T10:30:00+07:00"}</script>', 'offset.html').pubDate,
   new Date(Date.parse('2026-11-28T10:30:00+07:00')).toUTCString(),
   'RSS pubDate must use the exact UTC string derived independently from the declared offset');
-assert.throws(() => getPublicationDate('<script type="application/ld+json">{"datePublished":"2026-11-28T10:30:00"}</script>', 'no-zone.html'),
+assert.throws(() => getPublicationDate('<script type="application/ld+json">{"@type":"BlogPosting","datePublished":"2026-11-28T10:30:00"}</script>', 'no-zone.html'),
   /Invalid datePublished/, 'Timezone-less datetimes must be rejected');
-assert.throws(() => getPublicationDate('<script type="application/ld+json">{"datePublished":"2026-02-30"}</script>', 'impossible-date.html'),
+assert.throws(() => getPublicationDate('<script type="application/ld+json">{"@type":"BlogPosting","datePublished":"2026-02-30"}</script>', 'impossible-date.html'),
   /Invalid calendar datePublished/, 'Impossible calendar dates must be rejected');
-assert.throws(() => getPublicationDate('<script type="application/ld+json">{"datePublished":"2025-02-29"}</script>', 'non-leap-day.html'),
+assert.throws(() => getPublicationDate('<script type="application/ld+json">{"@type":"BlogPosting","datePublished":"2025-02-29"}</script>', 'non-leap-day.html'),
   /Invalid calendar datePublished/, 'Invalid leap days must be rejected');
 
 const fs = require('node:fs');
@@ -168,10 +199,9 @@ for (const file of articleFiles) {
   const canonicalTag = (source.match(/<link\b[^>]*rel=["']canonical["'][^>]*>/i) || [])[0] || '';
   const canonicalMatch = canonicalTag.match(/\bhref=["']([^"']+)["']/i);
   assert.ok(canonicalMatch, file + ': missing canonical URL while building expected RSS dates');
-  const dateMatch = source.match(/"datePublished"\s*:\s*"([^"]+)"/i);
+  const rawDate = getArticleDatePublishedFromSource(source, file);
   let expectedPubDate = '';
-  if (dateMatch) {
-    const rawDate = dateMatch[1];
+  if (rawDate !== null) {
     const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(rawDate);
     const timestamp = Date.parse(dateOnly ? rawDate + 'T00:00:00Z' : rawDate);
     assert.ok(Number.isFinite(timestamp), file + ': datePublished must independently parse to a valid timestamp');
