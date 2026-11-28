@@ -318,6 +318,41 @@ describe("article evidence readiness", () => {
     });
   });
 
+  it("does not match opposite signed numeric values to a reviewed claim", async () => {
+    const signedClaim = "Giá trị thay đổi -5 đơn vị.";
+    const signedLedger = {
+      ...ledger,
+      claims: [{ ...ledger.claims[0], claim: signedClaim }]
+    };
+    const signedDecision = {
+      ...decisions[0],
+      claim_id: "claim-1",
+      reviewer_note: "Nguồn xác nhận chính xác giá trị âm đã nêu trong luận điểm.",
+      evidence_reviews: sources.map(source => ({
+        source_url: source.url,
+        decision: "supports",
+        reviewer_note: "Trích đoạn nguồn xác nhận giá trị âm và ngữ cảnh của luận điểm này."
+      }))
+    };
+    const reviewRecord = await recordHumanClaimReview(signedLedger, [signedDecision], reviewer, { now });
+    const draft = makeDraft([{
+      claim_id: "claim-1",
+      claim: signedClaim,
+      evidence_urls: sources.map(source => source.url),
+      citation_indices: [1, 2]
+    }]);
+    draft.body_markdown = draft.body_markdown.replace(ledger.claims[0].claim, "Giá trị thay đổi +5 đơn vị.");
+    const result = await assessArticleEvidenceReadiness({
+      draft,
+      ledger: signedLedger,
+      reviewRecord,
+      authenticatedReviewer: { authenticated: true, reviewer_ref: reviewRecord.reviewer_ref },
+      now
+    });
+    expect(result.status).toBe("article_claim_evidence_not_ready");
+    expect(result.issues.some(issue => issue.code === "reviewed_claim_missing_from_article_body")).toBe(true);
+    expect(result.issues.some(issue => issue.code === "unreviewed_quantitative_claim_candidate")).toBe(true);
+  });
   it("blocks numeric factual sentences that are absent from the reviewed claim manifest", async () => {
     const reviewRecord = await makeReview();
     const draft = makeDraft();
