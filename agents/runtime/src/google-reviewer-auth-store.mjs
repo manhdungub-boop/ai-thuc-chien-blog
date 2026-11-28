@@ -10,7 +10,11 @@ export class AgentReviewerAuthStore extends DurableObject {
     if (!transactionColumns.some(column => column.name === "return_path")) {
       this.ctx.storage.sql.exec("ALTER TABLE reviewer_auth_transactions ADD COLUMN return_path TEXT NOT NULL DEFAULT '/'");
     }
+    if (!transactionColumns.some(column => column.name === "client_hash")) {
+      this.ctx.storage.sql.exec("ALTER TABLE reviewer_auth_transactions ADD COLUMN client_hash TEXT NOT NULL DEFAULT ''");
+    }
     this.ctx.storage.sql.exec("CREATE INDEX IF NOT EXISTS reviewer_auth_transactions_expiry ON reviewer_auth_transactions(expires_at)");
+    this.ctx.storage.sql.exec("CREATE INDEX IF NOT EXISTS reviewer_auth_transactions_client_expiry ON reviewer_auth_transactions(client_hash, expires_at)");
     this.ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS reviewer_auth_start_rate_limit_by_client (client_hash TEXT PRIMARY KEY, window_started_at INTEGER NOT NULL, attempts INTEGER NOT NULL CHECK (attempts BETWEEN 1 AND 10))");
     this.ctx.storage.sql.exec("CREATE INDEX IF NOT EXISTS reviewer_auth_start_rate_limit_expiry ON reviewer_auth_start_rate_limit_by_client(window_started_at)");
   }
@@ -58,16 +62,24 @@ export class AgentReviewerAuthStore extends DurableObject {
       return { allowed: true, remaining: 9 - row.attempts };
     });
   }
-  createTransaction(stateHash, browserHash, nonce, codeVerifier, nowSeconds, returnPath = "/") {
+  createTransaction(stateHash, browserHash, nonce, codeVerifier, nowSeconds, returnPath = "/", clientHash = null) {
     if (![stateHash, browserHash, nonce, codeVerifier].every(x => typeof x === "string" && x.length >= 32 && x.length <= 128) ||
         !Number.isInteger(nowSeconds) || nowSeconds < 0 ||
-        !["/", "/reviewer-console", "/operator-console"].includes(returnPath)) {
+        !["/", "/reviewer-console", "/operator-console"].includes(returnPath) ||
+        (clientHash !== null && (typeof clientHash !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(clientHash)))) {
       return { created: false, reason: "invalid_login_transaction" };
     }
     this.ctx.storage.sql.exec("DELETE FROM reviewer_auth_transactions WHERE expires_at <= ?", nowSeconds);
     const active = this.ctx.storage.sql.exec("SELECT COUNT(*) AS total FROM reviewer_auth_transactions WHERE expires_at > ?", nowSeconds).toArray()[0]?.total || 0;
     if (active >= 100) return { created: false, reason: "login_transaction_capacity_reached" };
-    this.ctx.storage.sql.exec("INSERT OR IGNORE INTO reviewer_auth_transactions (state_hash,browser_hash,nonce,code_verifier,created_at,expires_at,return_path) VALUES (?,?,?,?,?,?,?)", stateHash, browserHash, nonce, codeVerifier, nowSeconds, nowSeconds + TX_TTL_SECONDS, returnPath);
+    if (clientHash !== null) {
+      const activeForClient = this.ctx.storage.sql.exec(
+        "SELECT COUNT(*) AS total FROM reviewer_auth_transactions WHERE client_hash = ? AND expires_at > ?",
+        clientHash, nowSeconds
+      ).toArray()[0]?.total || 0;
+      if (activeForClient >= 3) return { created: false, reason: "login_transaction_client_capacity_reached" };
+    }
+    this.ctx.storage.sql.exec("INSERT OR IGNORE INTO reviewer_auth_transactions (state_hash,browser_hash,nonce,code_verifier,created_at,expires_at,return_path,client_hash) VALUES (?,?,?,?,?,?,?,?)", stateHash, browserHash, nonce, codeVerifier, nowSeconds, nowSeconds + TX_TTL_SECONDS, returnPath, clientHash || "");
     const insertedRows = this.ctx.storage.sql.exec("SELECT changes() AS total").toArray()[0]?.total;
     return { created: Number(insertedRows) === 1 };
   }
