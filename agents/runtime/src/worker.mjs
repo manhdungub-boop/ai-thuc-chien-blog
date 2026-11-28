@@ -661,7 +661,8 @@ const worker = {
       const limited = await enforceIngressRateLimit(request, env);
       if (limited) return limited;
     }
-    const reviewerResponse = await handleReviewerHttpRequest(request, env, ({ action, actor, reason }) =>\n      performOperatorControlAction(env, action, actor, reason));
+    const reviewerResponse = await handleReviewerHttpRequest(request, env, ({ action, actor, reason }) =>
+      performOperatorControlAction(env, action, actor, reason));
     if (reviewerResponse) return reviewerResponse;
     const url = new URL(request.url);
     if (url.pathname === "/" && request.method === "GET") {
