@@ -11,7 +11,9 @@ const faultTestConfigPath = fileURLToPath(new URL("../wrangler.fault-test.jsonc"
 const faultTestConfig = JSON.parse(readFileSync(faultTestConfigPath, "utf8"));
 const faultTestWorkflowPath = fileURLToPath(new URL("../../../.github/workflows/agent-runtime-cloudflare-do-fault-test.yml", import.meta.url));
 const previewPreflightPath = fileURLToPath(new URL("../../../.github/workflows/agent-runtime-preview-preflight.yml", import.meta.url));
+const previewValidationPath = fileURLToPath(new URL("../../../.github/workflows/agent-runtime-preview-validation.yml", import.meta.url));
 const previewPreflightSource = readFileSync(previewPreflightPath, "utf8");
+const previewValidationSource = readFileSync(previewValidationPath, "utf8");
 const faultTestWorkflowSource = readFileSync(faultTestWorkflowPath, "utf8");
 
 test("dedicated Agent Runtime Preview config binds its isolated State Store and rate limiter and remains disabled", () => {
@@ -66,6 +68,13 @@ test("dedicated Agent Runtime Preview config binds its isolated State Store and 
   }
 });
 
+
+test("rate-limit E2E waits for the temporary disabled Preview version before probing", () => {
+  const deployIndex = previewValidationSource.indexOf("Temporary disabled Preview rate-limit probe; restore follows");
+  const waitIndex = previewValidationSource.indexOf("sleep 10", deployIndex);
+  const probeIndex = previewValidationSource.indexOf("Verify live ingress rate limiting on one persistent Cloudflare connection", deployIndex);
+  assert.ok(deployIndex >= 0 && waitIndex > deployIndex && probeIndex > waitIndex);
+});
 
 test("Preview preflight loads the Cloudflare Workers module shim before running Worker tests", () => {
   assert.ok(previewPreflightSource.includes("--experimental-loader ./agents/runtime/tests/cloudflare-workers-loader.mjs"));
