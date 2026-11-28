@@ -467,13 +467,16 @@ export class AgentDraftStore extends DurableObject {
     };
   }
 
-  async listPendingReviewsForReviewer(limit = 20, reviewerSessionToken) {
+  async listPendingReviewsForReviewer(limit = 20, reviewerSessionToken, offset = 0) {
     const session = await verifyGoogleReviewerSessionToken(reviewerSessionToken, this.env, Date.now());
     if (!session.authenticated) return { authorized: false, reason: session.status || "reviewer_session_invalid" };
+    const rows = await this.listPendingReviews(limit, offset);
+    const hasMore = rows.length > limit;
     return {
       authorized: true,
       reviewer_ref: session.reviewer.reviewer_ref,
-      items: await this.listPendingReviews(limit)
+      items: rows.slice(0, limit),
+      has_more: hasMore
     };
   }
 
@@ -535,11 +538,12 @@ export class AgentDraftStore extends DurableObject {
     };
   }
 
-  async listPendingReviews(limit = 20) {
+  async listPendingReviews(limit = 20, offset = 0) {
     const boundedLimit = Number.isInteger(limit) ? Math.min(20, Math.max(1, limit)) : 20;
+    const boundedOffset = Number.isSafeInteger(offset) ? Math.min(100000, Math.max(0, offset)) : 0;
     const rows = this.ctx.storage.sql.exec(
-      "SELECT * FROM draft_artifacts WHERE status = 'pending_human_review' ORDER BY updated_at DESC LIMIT ?",
-      boundedLimit
+      "SELECT * FROM draft_artifacts WHERE status = 'pending_human_review' ORDER BY updated_at DESC, id ASC LIMIT ? OFFSET ?",
+      boundedLimit + 1, boundedOffset
     ).toArray();
     return rows.map(queueItem);
   }
