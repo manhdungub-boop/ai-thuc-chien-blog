@@ -1,0 +1,31 @@
+{
+  "name": "ai-thuc-chien-agent-runtime-fault-test",
+  "main": "./tests/state-store-test-worker.mjs",
+  "compatibility_date": "2026-11-19",
+  "workers_dev": true,
+  "preview_urls": false,
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "AGENT_STATE_STORE",
+        "class_name": "TestAgentStateStore"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "fault-test-v1",
+      "new_sqlite_classes": [
+        "TestAgentStateStore"
+      ]
+    }
+  ],
+  "vars": {
+    "AGENT_ENABLED": "false",
+    "AGENT_PAUSED": "true",
+    "AGENT_SCHEDULER_ENABLED": "false",
+    "AGENT_RECOVERY_ALARM_ENABLED": "false",
+    "AGENT_OIDC_ENABLED": "false",
+    "AGENT_REVIEWER_AUTH_ENABLED": "false"
+  }
+}

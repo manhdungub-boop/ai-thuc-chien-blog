@@ -1,0 +1,180 @@
+import { validateTaskRequest } from "./task-contract.mjs";
+
+const INTERNAL_TOKEN_PATTERN = /^Bearer [A-Za-z0-9._~+/-]+=*$/;
+const MAX_TOKEN_LENGTH = 512;
+const MAX_BODY_BYTES = 16 * 1024;
+const STORE_IDENTITY = "agent-runtime-global";
+const STORE_ORIGIN = "https://agent-state-store.internal";
+
+const OPERATIONS = Object.freeze({
+  reserve: Object.freeze({ method: "POST", path: "/reserve" }),
+  claim: Object.freeze({ method: "POST", path: "/claim" }),
+  heartbeat: Object.freeze({ method: "POST", path: "/heartbeat" }),
+  complete: Object.freeze({ method: "POST", path: "/complete" }),
+  recover: Object.freeze({ method: "POST", path: "/recover" }),
+  transition: Object.freeze({ method: "POST", path: "/transition" }),
+  task: Object.freeze({ method: "GET", path: "/task" }),
+  usage: Object.freeze({ method: "GET", path: "/usage" }),
+  oidcReplayConsume: Object.freeze({ method: "POST", path: "/oidc/replay/consume" }),
+});
+
+function unavailable() {
+  const error = new Error("state_store_unavailable");
+  error.code = "state_store_unavailable";
+  return error;
+}
+
+function validToken(value) {
+  return typeof value === "string" &&
+    value.length >= 32 &&
+    value.length <= MAX_TOKEN_LENGTH &&
+    INTERNAL_TOKEN_PATTERN.test("Bearer " + value);
+}
+
+function isPlainObject(value) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function validTaskId(value) {
+  return typeof value === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(value);
+}
+
+function validLeaseIdentity(owner, generation) {
+  return typeof owner === "string" && /^[a-f0-9-]{16,64}$/i.test(owner) &&
+    Number.isSafeInteger(generation) && generation >= 1;
+}
+
+function hasExactKeys(value, expected) {
+  if (!isPlainObject(value)) return false;
+  const actual = Object.keys(value).sort();
+  const allowed = [...expected].sort();
+  return actual.length === allowed.length &&
+    actual.every((key, index) => key === allowed[index]);
+}
+
+function operationUrl(operation, input) {
+  const definition = OPERATIONS[operation];
+  if (!definition) throw new TypeError("state_store_operation_not_allowed");
+
+  const url = new URL(definition.path, STORE_ORIGIN);
+  if (operation === "task") {
+    if (!isPlainObject(input) || Object.keys(input).length !== 1 ||
+        !validTaskId(input.taskId)) {
+      throw new TypeError("state_store_task_id_invalid");
+    }
+    url.searchParams.set("id", input.taskId);
+  } else if (operation === "usage") {
+    if (!isPlainObject(input) || Object.keys(input).some((key) => key !== "day")) {
+      throw new TypeError("state_store_usage_query_invalid");
+    }
+    if (input.day !== undefined) {
+      if (typeof input.day !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(input.day) ||
+          !Number.isFinite(Date.parse(input.day + "T00:00:00Z")) ||
+          new Date(input.day + "T00:00:00Z").toISOString().slice(0, 10) !== input.day) {
+        throw new TypeError("state_store_usage_day_invalid");
+      }
+      url.searchParams.set("day", input.day);
+    }
+  } else if (operation === "reserve") {
+    if (!isPlainObject(input) || !hasExactKeys(input, ["task"]) || !isPlainObject(input.task)) {
+      throw new TypeError("state_store_request_invalid");
+    }
+    const validation = validateTaskRequest(input.task);
+    if (!validation.ok) throw new TypeError("state_store_task_invalid:" + validation.error);
+  } else if (operation === "claim") {
+    if (!hasExactKeys(input, ["taskId"]) || !validTaskId(input.taskId)) {
+      throw new TypeError("state_store_request_invalid");
+    }
+  } else if (operation === "recover") {
+    if (!hasExactKeys(input, ["taskId", "actor", "requestId"]) ||
+        !validTaskId(input.taskId) ||
+        typeof input.actor !== "string" || !/^[a-zA-Z0-9._:-]{3,64}$/.test(input.actor) ||
+        typeof input.requestId !== "string" || !/^[a-zA-Z0-9-]{16,64}$/.test(input.requestId)) {
+      throw new TypeError("state_store_request_invalid");
+    }
+  } else if (operation === "heartbeat") {
+    if (!hasExactKeys(input, ["taskId", "leaseOwner", "leaseGeneration"]) ||
+        !validTaskId(input.taskId) || !validLeaseIdentity(input.leaseOwner, input.leaseGeneration)) {
+      throw new TypeError("state_store_request_invalid");
+    }
+  } else if (operation === "complete") {
+    const keys = isPlainObject(input) ? Object.keys(input) : [];
+    if (!isPlainObject(input) ||
+        keys.some((key) => !["taskId", "leaseOwner", "leaseGeneration", "status", "errorCode", "result"].includes(key)) ||
+        !["taskId", "leaseOwner", "leaseGeneration", "status"].every((key) => Object.hasOwn(input, key)) ||
+        !validTaskId(input.taskId) ||
+        !validLeaseIdentity(input.leaseOwner, input.leaseGeneration) ||
+        !["succeeded", "failed", "cancelled"].includes(input.status) ||
+        (input.result !== undefined && input.status !== "succeeded") ||
+        (input.errorCode !== undefined &&
+          (input.status !== "failed" || typeof input.errorCode !== "string" ||
+           !/^[a-z0-9_.:-]{1,64}$/.test(input.errorCode)))) {
+      throw new TypeError("state_store_request_invalid");
+    }
+  } else if (operation === "transition") {
+    const keys = isPlainObject(input) ? Object.keys(input) : [];
+    if (!isPlainObject(input) || !Object.hasOwn(input, "taskId") ||
+        !Object.hasOwn(input, "status") ||
+        keys.some((key) => !["taskId", "status", "errorCode"].includes(key)) ||
+        !validTaskId(input.taskId) ||
+        !["running", "succeeded", "failed", "cancelled"].includes(input.status) ||
+        (input.errorCode !== undefined && (input.status !== "failed" ||
+          typeof input.errorCode !== "string" || !/^[a-z0-9_.:-]{1,64}$/.test(input.errorCode)))) {
+      throw new TypeError("state_store_request_invalid");
+    }
+  } else if (operation === "oidcReplayConsume") {
+    if (!isPlainObject(input) || Object.keys(input).length !== 2 ||
+        typeof input.jti !== "string" || !/^[a-zA-Z0-9._:-]{16,128}$/.test(input.jti) ||
+        typeof input.expiresAt !== "string" || !/^[0-9]{1,12}$/.test(input.expiresAt) ||
+        !Number.isSafeInteger(Number(input.expiresAt)) ||
+        String(Number(input.expiresAt)) !== input.expiresAt) {
+      throw new TypeError("state_store_oidc_replay_request_invalid");
+    }
+  }
+  return url;
+}
+
+/**
+ * Calls only fixed State Store operations through the dedicated internal token.
+ * Caller headers, cookies, Origin, and caller-supplied URLs are never forwarded.
+ * The OIDC Pause route uses the replay-consumption operation. All other exposed
+ * operations remain constrained to their fixed allowlist and runtime gates.
+ */
+export async function callStateStore(env = {}, operation, input = {}) {
+  const namespace = env.AGENT_STATE_STORE;
+  const token = env.AGENT_STATE_STORE_TOKEN;
+  if (!namespace || typeof namespace.idFromName !== "function" ||
+      typeof namespace.get !== "function" || !validToken(token)) {
+    throw unavailable();
+  }
+
+  const definition = OPERATIONS[operation];
+  if (!definition) throw new TypeError("state_store_operation_not_allowed");
+
+  const url = operationUrl(operation, input);
+  const init = {
+    method: definition.method,
+    headers: { Authorization: "Bearer " + token },
+  };
+
+  if (definition.method === "POST") {
+    const body = JSON.stringify(input);
+    if (new TextEncoder().encode(body).byteLength > MAX_BODY_BYTES) {
+      throw new TypeError("state_store_request_too_large");
+    }
+    init.headers["Content-Type"] = "application/json";
+    init.body = body;
+  }
+
+  try {
+    const id = namespace.idFromName(STORE_IDENTITY);
+    const stub = namespace.get(id);
+    if (!stub || typeof stub.fetch !== "function") throw unavailable();
+    return await stub.fetch(new Request(url, init));
+  } catch (error) {
+    if (error instanceof TypeError && error.message.startsWith("state_store_")) throw error;
+    throw unavailable();
+  }
+}

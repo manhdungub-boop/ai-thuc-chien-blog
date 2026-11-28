@@ -1,0 +1,619 @@
+import { DurableObject } from "cloudflare:workers";
+import { AI_BANK_RELEASE_SOURCES } from "./ai-bank-discovery.mjs";
+import { authorizeAIBankEvidenceWriter } from "./ai-bank-evidence-authorization.mjs";
+
+const ALLOWED_REPOSITORIES = new Set(AI_BANK_RELEASE_SOURCES.map(source => source.repo));
+const MAX_CANDIDATES_PER_BATCH = 10;
+const MAX_CANDIDATE_BYTES = 8192;
+const MAX_EVIDENCE_PER_CHECK = 5;
+const MAX_AUDIT_EVENTS_PER_UTC_DAY = 100;
+const MAX_AUDIT_EVENTS_TOTAL = 10000;
+const MAX_DISCOVERY_SCANS = 10000;
+const MAX_EVIDENCE_TITLE_CHARS = 180;
+const MAX_EVIDENCE_EXCERPT_CHARS = 1000;
+const REQUIRED_CHECKS = [
+  "official_product_domain",
+  "pricing_and_free_limits",
+  "license_scope",
+  "privacy_and_data_handling",
+  "platform_support",
+  "regional_availability"
+];
+
+function validateCandidate(candidate) {
+  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+    return { ok: false, reason: "candidate_must_be_object" };
+  }
+  const repository = candidate.repository;
+  if (typeof repository !== "string" || !ALLOWED_REPOSITORIES.has(repository)) {
+    return { ok: false, reason: "repository_not_allowlisted" };
+  }
+  if (candidate.candidate_id !== "github:" + repository) {
+    return { ok: false, reason: "candidate_id_mismatch" };
+  }
+  const source = AI_BANK_RELEASE_SOURCES.find(item => item.repo === repository);
+  if (candidate.name !== source.product || candidate.provider !== source.vendor) {
+    return { ok: false, reason: "product_identity_mismatch" };
+  }
+  if (!candidate.latest_release || typeof candidate.latest_release !== "object" ||
+      typeof candidate.latest_release.title !== "string" ||
+      candidate.latest_release.title.trim().length < 1 ||
+      candidate.latest_release.title.length > 240) {
+    return { ok: false, reason: "invalid_release_title" };
+  }
+  let releaseUrl;
+  try {
+    releaseUrl = new URL(candidate.latest_release.source_url);
+  } catch {
+    return { ok: false, reason: "invalid_release_url" };
+  }
+  if (releaseUrl.protocol !== "https:" || releaseUrl.hostname !== "github.com" ||
+      releaseUrl.username || releaseUrl.password || releaseUrl.search || releaseUrl.hash ||
+      releaseUrl.port && releaseUrl.port !== "443" ||
+      !releaseUrl.pathname.startsWith("/" + repository + "/releases/")) {
+    return { ok: false, reason: "invalid_release_url" };
+  }
+  const releaseAt = Date.parse(candidate.latest_release.published_at);
+  const discoveredAt = Date.parse(candidate.discovered_at);
+  if (!Number.isFinite(releaseAt) || !Number.isFinite(discoveredAt) ||
+      new Date(releaseAt).toISOString() !== candidate.latest_release.published_at ||
+      new Date(discoveredAt).toISOString() !== candidate.discovered_at ||
+      releaseAt > discoveredAt + 5 * 60 * 1000) {
+    return { ok: false, reason: "invalid_candidate_timestamps" };
+  }
+  if (candidate.evidence_type !== "github_release_activity_only" ||
+      candidate.review_status !== "needs_official_source_review" ||
+      candidate.pricing_status !== "unverified" ||
+      candidate.free_limits_status !== "unverified" ||
+      candidate.license_status !== "unverified" ||
+      candidate.privacy_status !== "unverified" ||
+      candidate.platform_support_status !== "unverified" ||
+      candidate.regional_availability_status !== "unverified" ||
+      candidate.catalog_write_authorized !== false ||
+      candidate.public_publication_authorized !== false ||
+      JSON.stringify(candidate.required_checks) !== JSON.stringify(REQUIRED_CHECKS)) {
+    return { ok: false, reason: "candidate_review_state_invalid" };
+  }
+  const json = JSON.stringify(candidate);
+  if (new TextEncoder().encode(json).byteLength > MAX_CANDIDATE_BYTES) {
+    return { ok: false, reason: "candidate_too_large" };
+  }
+  return { ok: true, json, releaseAt };
+}
+
+function candidateReleaseIdentity(candidate) {
+  return JSON.stringify([
+    candidate.latest_release.source_url,
+    candidate.latest_release.published_at
+  ]);
+}
+
+function safeCandidate(row) {
+  return {
+    candidate: JSON.parse(row.candidate_json),
+    first_seen_at: row.first_seen_at,
+    last_seen_at: row.last_seen_at,
+    stored_release_at: row.release_at
+  };
+}
+
+function validateCandidateBatch(candidates, now) {
+  if (!Array.isArray(candidates) || candidates.length > MAX_CANDIDATES_PER_BATCH ||
+      !Number.isSafeInteger(now) || now < 0 || !Number.isFinite(new Date(now).getTime())) {
+    return { ok: false, reason: "invalid_candidate_batch" };
+  }
+  const validated = [];
+  const seen = new Set();
+  for (const candidate of candidates) {
+    const result = validateCandidate(candidate);
+    if (!result.ok) return { ok: false, reason: result.reason };
+    if (seen.has(candidate.candidate_id)) return { ok: false, reason: "duplicate_candidate_in_batch" };
+    seen.add(candidate.candidate_id);
+    validated.push({ candidate, ...result });
+  }
+  return { ok: true, validated };
+}
+
+function stableJson(value) {
+  if (Array.isArray(value)) return "[" + value.map(stableJson).join(",") + "]";
+  if (value && typeof value === "object") {
+    return "{" + Object.keys(value).filter(key => value[key] !== undefined).sort()
+      .map(key => JSON.stringify(key) + ":" + stableJson(value[key])).join(",") + "}";
+  }
+  return JSON.stringify(value);
+}
+
+function writeValidatedCandidateBatch(ctx, validated, now) {
+  const timestamp = new Date(now).toISOString();
+  let inserted = 0;
+  let updated = 0;
+  let unchanged = 0;
+  for (const item of validated) {
+    const existing = ctx.storage.sql.exec(
+      "SELECT release_at FROM ai_bank_candidates WHERE candidate_id = ?",
+      item.candidate.candidate_id
+    ).toArray()[0];
+    if (!existing) {
+      ctx.storage.sql.exec(
+        "INSERT INTO ai_bank_candidates (candidate_id, repository, candidate_json, release_at, first_seen_at, last_seen_at) VALUES (?, ?, ?, ?, ?, ?)",
+        item.candidate.candidate_id, item.candidate.repository, item.json,
+        item.releaseAt, timestamp, timestamp
+      );
+      inserted += 1;
+    } else {
+      ctx.storage.sql.exec(
+        "UPDATE ai_bank_candidates SET candidate_json = CASE WHEN release_at < ? THEN ? ELSE candidate_json END, release_at = MAX(release_at, ?), last_seen_at = ? WHERE candidate_id = ?",
+        item.releaseAt, item.json, item.releaseAt, timestamp, item.candidate.candidate_id
+      );
+      if (item.releaseAt > existing.release_at) updated += 1;
+      else unchanged += 1;
+    }
+  }
+  const total = ctx.storage.sql.exec(
+    "SELECT COUNT(*) AS count FROM ai_bank_candidates"
+  ).one().count;
+  return { accepted: true, inserted, updated, unchanged, total, catalog_write_authorized: false };
+}
+
+export class AgentAIBankCandidateStore extends DurableObject {
+  constructor(ctx, env) {
+    super(ctx, env);
+    this.ctx.storage.sql.exec(
+      "CREATE TABLE IF NOT EXISTS ai_bank_candidates (" +
+      "candidate_id TEXT PRIMARY KEY, repository TEXT NOT NULL UNIQUE, " +
+      "candidate_json TEXT NOT NULL, release_at INTEGER NOT NULL, " +
+      "first_seen_at TEXT NOT NULL, last_seen_at TEXT NOT NULL)"
+    );
+    this.ctx.storage.sql.exec(
+      "CREATE INDEX IF NOT EXISTS ai_bank_candidates_last_seen ON ai_bank_candidates(last_seen_at)"
+    );
+    this.ctx.storage.sql.exec(
+      "CREATE TABLE IF NOT EXISTS ai_bank_discovery_cursor (" +
+      "singleton_id INTEGER PRIMARY KEY CHECK(singleton_id = 1), " +
+      "cursor TEXT NOT NULL, scan_id TEXT NOT NULL, updated_at TEXT NOT NULL, " +
+      "batch_sha256 TEXT NOT NULL DEFAULT '')"
+    );
+    this.ctx.storage.sql.exec(
+      "CREATE TABLE IF NOT EXISTS ai_bank_discovery_scans (" +
+      "scan_id TEXT PRIMARY KEY, cursor TEXT NOT NULL, batch_sha256 TEXT NOT NULL, committed_at TEXT NOT NULL)"
+    );
+    this.ctx.storage.sql.exec(
+      "CREATE INDEX IF NOT EXISTS ai_bank_discovery_scans_committed ON ai_bank_discovery_scans(committed_at)"
+    );
+    const cursorColumns = this.ctx.storage.sql.exec(
+      "PRAGMA table_info(ai_bank_discovery_cursor)"
+    ).toArray();
+    if (!cursorColumns.some(column => column.name === "batch_sha256")) {
+      this.ctx.storage.sql.exec(
+        "ALTER TABLE ai_bank_discovery_cursor ADD COLUMN batch_sha256 TEXT NOT NULL DEFAULT ''"
+      );
+    }
+    this.ctx.storage.sql.exec(
+      "INSERT OR IGNORE INTO ai_bank_discovery_scans (scan_id, cursor, batch_sha256, committed_at) " +
+      "SELECT scan_id, cursor, batch_sha256, updated_at FROM ai_bank_discovery_cursor " +
+      "WHERE batch_sha256 <> ''"
+    );
+    this.ctx.storage.sql.exec(
+      "CREATE TABLE IF NOT EXISTS ai_bank_review_evidence (" +
+      "evidence_id TEXT PRIMARY KEY, candidate_id TEXT NOT NULL, check_type TEXT NOT NULL, " +
+      "source_title TEXT NOT NULL, source_url TEXT NOT NULL, excerpt TEXT NOT NULL, " +
+      "source_status TEXT NOT NULL, review_status TEXT NOT NULL, submitted_at TEXT NOT NULL, " +
+      "UNIQUE(candidate_id, check_type, source_url))"
+    );
+    this.ctx.storage.sql.exec(
+      "CREATE INDEX IF NOT EXISTS ai_bank_review_evidence_candidate ON ai_bank_review_evidence(candidate_id, submitted_at)"
+    );
+    const evidenceColumns = this.ctx.storage.sql.exec(
+      "PRAGMA table_info(ai_bank_review_evidence)"
+    ).toArray();
+    if (!evidenceColumns.some(column => column.name === "candidate_release_url")) {
+      this.ctx.storage.sql.exec(
+        "ALTER TABLE ai_bank_review_evidence ADD COLUMN candidate_release_url TEXT NOT NULL DEFAULT ''"
+      );
+    }
+    this.ctx.storage.sql.exec(
+      "CREATE TABLE IF NOT EXISTS ai_bank_review_evidence_releases (" +
+      "evidence_id TEXT NOT NULL, candidate_release_url TEXT NOT NULL, associated_at TEXT NOT NULL, " +
+      "PRIMARY KEY(evidence_id, candidate_release_url))"
+    );
+    this.ctx.storage.sql.exec(
+      "INSERT OR IGNORE INTO ai_bank_review_evidence_releases (evidence_id, candidate_release_url, associated_at) " +
+      "SELECT evidence_id, candidate_release_url, submitted_at FROM ai_bank_review_evidence WHERE candidate_release_url <> ''"
+    );
+    // Evidence text is release-specific even when the publisher URL is mutable
+    // or reused. Keep the shared evidence identity/status, but preserve the
+    // exact title, excerpt, and submission time for each release association.
+    this.ctx.storage.sql.exec(
+      "CREATE TABLE IF NOT EXISTS ai_bank_review_evidence_release_details (" +
+      "evidence_id TEXT NOT NULL, candidate_release_url TEXT NOT NULL, " +
+      "source_title TEXT NOT NULL, excerpt TEXT NOT NULL, submitted_at TEXT NOT NULL, " +
+      "PRIMARY KEY(evidence_id, candidate_release_url))"
+    );
+    this.ctx.storage.sql.exec(
+      "INSERT OR IGNORE INTO ai_bank_review_evidence_release_details " +
+      "(evidence_id, candidate_release_url, source_title, excerpt, submitted_at) " +
+      "SELECT e.evidence_id, r.candidate_release_url, e.source_title, e.excerpt, e.submitted_at " +
+      "FROM ai_bank_review_evidence e JOIN ai_bank_review_evidence_releases r ON r.evidence_id = e.evidence_id"
+    );
+    this.ctx.storage.sql.exec(
+      "CREATE TABLE IF NOT EXISTS ai_bank_evidence_audit_events (" +
+      "event_id TEXT PRIMARY KEY, actor_subject TEXT NOT NULL, actor_email TEXT NOT NULL, " +
+      "request_sha256 TEXT NOT NULL, evidence_id TEXT NOT NULL, recorded_at TEXT NOT NULL)"
+    );
+    this.ctx.storage.sql.exec(
+      "CREATE INDEX IF NOT EXISTS ai_bank_evidence_audit_recorded_at ON ai_bank_evidence_audit_events(recorded_at)"
+    );
+  }
+
+  async fetch(request) {
+    const url = new URL(request.url);
+    const respond = (body, status = 200) => new Response(JSON.stringify(body), {
+      status,
+      headers: {
+        "Cache-Control": "no-store",
+        "Content-Type": "application/json; charset=utf-8",
+        "X-Content-Type-Options": "nosniff"
+      }
+    });
+    if (request.method !== "GET") return respond({ ok: false, error: "method_not_allowed" }, 405);
+    if (url.pathname === "/candidates") {
+      if ([...url.searchParams.keys()].some(key => key !== "limit") ||
+          url.searchParams.getAll("limit").length > 1) {
+        return respond({ ok: false, error: "candidate_query_invalid" }, 400);
+      }
+      const raw = url.searchParams.get("limit");
+      const limit = raw === null ? 20 : (/^[0-9]{1,2}$/.test(raw) ? Number(raw) : null);
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50) {
+        return respond({ ok: false, error: "candidate_limit_invalid" }, 400);
+      }
+      return respond({ ok: true, items: await this.listCandidates(limit) });
+    }
+    if (url.pathname === "/candidate") {
+      if ([...url.searchParams.keys()].some(key => key !== "id") ||
+          url.searchParams.getAll("id").length !== 1) {
+        return respond({ ok: false, error: "candidate_id_invalid" }, 400);
+      }
+      const candidateId = url.searchParams.get("id");
+      const packet = await this.getReviewPacket(candidateId);
+      if (!packet) return respond({ ok: false, error: "candidate_not_found" }, 404);
+      return respond({ ok: true, packet });
+    }
+    return respond({ ok: false, error: "not_found" }, 404);
+  }
+
+  upsertCandidates(candidates, now = Date.now()) {
+    const batch = validateCandidateBatch(candidates, now);
+    if (!batch.ok) return { accepted: false, reason: batch.reason };
+    return this.ctx.storage.transactionSync(() =>
+      writeValidatedCandidateBatch(this.ctx, batch.validated, now)
+    );
+  }
+
+  async getDiscoveryCursor() {
+    const row = this.ctx.storage.sql.exec(
+      "SELECT cursor, scan_id, updated_at FROM ai_bank_discovery_cursor WHERE singleton_id = 1"
+    ).toArray()[0];
+    return row ? { cursor: row.cursor, scan_id: row.scan_id, updated_at: row.updated_at } : null;
+  }
+
+  async upsertCandidatesAndAdvanceCursor(candidates, nextCursor, scanId, now = Date.now()) {
+    const batch = validateCandidateBatch(candidates, now);
+    if (!batch.ok) return { accepted: false, reason: batch.reason, cursor_advanced: false };
+    const cursorMs = typeof nextCursor === "string" ? Date.parse(nextCursor) : NaN;
+    if (!Number.isFinite(cursorMs) || new Date(cursorMs).toISOString() !== nextCursor ||
+        cursorMs > now + 60_000 || typeof scanId !== "string" ||
+        !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(scanId)) {
+      return { accepted: false, reason: "invalid_discovery_cursor", cursor_advanced: false };
+    }
+    const canonicalBatch = batch.validated.map(item => item.candidate)
+      .sort((a, b) => a.candidate_id.localeCompare(b.candidate_id));
+    const digest = await crypto.subtle.digest(
+      "SHA-256", new TextEncoder().encode(stableJson(canonicalBatch))
+    );
+    const batchSha256 = Array.from(new Uint8Array(digest),
+      byte => byte.toString(16).padStart(2, "0")).join("");
+
+    return this.ctx.storage.transactionSync(() => {
+      const current = this.ctx.storage.sql.exec(
+        "SELECT cursor, scan_id, updated_at, batch_sha256 FROM ai_bank_discovery_cursor WHERE singleton_id = 1"
+      ).toArray()[0];
+      const priorScan = this.ctx.storage.sql.exec(
+        "SELECT cursor, batch_sha256 FROM ai_bank_discovery_scans WHERE scan_id = ?",
+        scanId
+      ).toArray()[0];
+      if (priorScan) {
+        if (priorScan.cursor !== nextCursor || priorScan.batch_sha256 !== batchSha256) {
+          return { accepted: false, reason: "discovery_scan_id_reused", cursor_advanced: false };
+        }
+        const total = this.ctx.storage.sql.exec(
+          "SELECT COUNT(*) AS count FROM ai_bank_candidates"
+        ).one().count;
+        return { accepted: true, duplicate: true, inserted: 0, updated: 0, unchanged: 0,
+          total, cursor: current?.cursor ?? priorScan.cursor, scan_id: scanId, cursor_advanced: false,
+          catalog_write_authorized: false };
+      }
+      if (current?.scan_id === scanId) {
+        // A legacy cursor has no immutable batch digest. Candidate rows are
+        // mutable (last_seen_at and metadata can change), so fail closed.
+        const sameBatch = current.cursor === nextCursor &&
+          current.batch_sha256 !== "" && current.batch_sha256 === batchSha256;
+        if (!sameBatch) {
+          return { accepted: false, reason: "discovery_scan_id_reused", cursor_advanced: false };
+        }
+        const total = this.ctx.storage.sql.exec(
+          "SELECT COUNT(*) AS count FROM ai_bank_candidates"
+        ).one().count;
+        return { accepted: true, duplicate: true, inserted: 0, updated: 0, unchanged: 0,
+          total, cursor: current.cursor, scan_id: current.scan_id, cursor_advanced: false,
+          catalog_write_authorized: false };
+      }
+      if (current && cursorMs <= Date.parse(current.cursor)) {
+        return { accepted: false, reason: "discovery_cursor_not_monotonic", cursor_advanced: false };
+      }
+      const scanCount = this.ctx.storage.sql.exec(
+        "SELECT COUNT(*) AS count FROM ai_bank_discovery_scans"
+      ).one().count;
+      if (scanCount >= MAX_DISCOVERY_SCANS) {
+        return { accepted: false, reason: "discovery_scan_history_capacity_reached", cursor_advanced: false };
+      }
+
+      const result = writeValidatedCandidateBatch(this.ctx, batch.validated, now);
+      const timestamp = new Date(now).toISOString();
+      this.ctx.storage.sql.exec(
+        "INSERT INTO ai_bank_discovery_scans (scan_id, cursor, batch_sha256, committed_at) VALUES (?, ?, ?, ?)",
+        scanId, nextCursor, batchSha256, timestamp
+      );
+      this.ctx.storage.sql.exec(
+        "INSERT INTO ai_bank_discovery_cursor (singleton_id, cursor, scan_id, updated_at, batch_sha256) VALUES (1, ?, ?, ?, ?) " +
+        "ON CONFLICT(singleton_id) DO UPDATE SET cursor = excluded.cursor, scan_id = excluded.scan_id, updated_at = excluded.updated_at, batch_sha256 = excluded.batch_sha256",
+        nextCursor, scanId, timestamp, batchSha256
+      );
+      return { ...result, duplicate: false, cursor: nextCursor, scan_id: scanId, cursor_advanced: true };
+    });
+  }
+
+  async listCandidates(limit = 20) {
+    if (!Number.isInteger(limit) || limit < 1 || limit > 50) {
+      throw new TypeError("invalid_candidate_list_limit");
+    }
+    return this.ctx.storage.sql.exec(
+      "SELECT * FROM ai_bank_candidates ORDER BY last_seen_at DESC, repository ASC LIMIT ?",
+      limit
+    ).toArray().map(safeCandidate);
+  }
+
+  async getCandidate(candidateId) {
+    if (typeof candidateId !== "string" || !/^github:[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(candidateId)) {
+      return null;
+    }
+    const row = this.ctx.storage.sql.exec(
+      "SELECT * FROM ai_bank_candidates WHERE candidate_id = ?",
+      candidateId
+    ).toArray()[0];
+    return row ? safeCandidate(row) : null;
+  }
+
+  async submitAuthorizedReviewEvidence(candidateId, evidence, sessionToken, eventId, reviewedReleaseIdentity, authConfig, now = Date.now()) {
+    const authorization = await authorizeAIBankEvidenceWriter(sessionToken, authConfig, eventId, now);
+    if (!authorization.authorized) {
+      return { accepted: false, reason: authorization.reason || "evidence_writer_not_authorized" };
+    }
+    const auditEventId = authorization.audit_event_id;
+    if (!evidence || typeof evidence !== "object" || Array.isArray(evidence) ||
+        Object.keys(evidence).some(key => !["check_type", "source_title", "source_url", "excerpt"].includes(key)) ||
+        Object.keys(evidence).length !== 4) {
+      return { accepted: false, reason: "invalid_evidence" };
+    }
+    const fingerprintPayload = JSON.stringify({
+      candidate_id: candidateId,
+      reviewed_release_identity: reviewedReleaseIdentity,
+      check_type: evidence.check_type,
+      source_title: typeof evidence.source_title === "string" ? evidence.source_title.trim() : null,
+      source_url: evidence.source_url,
+      excerpt: typeof evidence.excerpt === "string" ? evidence.excerpt.trim() : null
+    });
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(fingerprintPayload));
+    const requestSha256 = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+    return this.ctx.storage.transactionSync(() => {
+      const priorRows = this.ctx.storage.sql.exec(
+        "SELECT actor_subject, request_sha256 FROM ai_bank_evidence_audit_events WHERE lower(event_id) = ?",
+        auditEventId
+      ).toArray();
+      if (priorRows.length) {
+        const sameRequest = priorRows.every(prior =>
+          prior.actor_subject === authorization.actor.subject &&
+          prior.request_sha256 === requestSha256
+        );
+        return { accepted: false, reason: sameRequest ? "duplicate_audit_event" : "audit_event_id_reused" };
+      }
+      const totalAuditCount = this.ctx.storage.sql.exec(
+        "SELECT COUNT(*) AS count FROM ai_bank_evidence_audit_events"
+      ).one().count;
+      if (totalAuditCount >= MAX_AUDIT_EVENTS_TOTAL) {
+        return { accepted: false, reason: "evidence_audit_capacity_reached" };
+      }
+      const utcDay = authorization.authorized_at.slice(0, 10);
+      const dailyAuditCount = this.ctx.storage.sql.exec(
+        "SELECT COUNT(*) AS count FROM ai_bank_evidence_audit_events WHERE recorded_at >= ? AND recorded_at < ?",
+        utcDay + "T00:00:00.000Z",
+        new Date(Date.parse(utcDay + "T00:00:00.000Z") + 24 * 60 * 60 * 1000).toISOString()
+      ).one().count;
+      if (dailyAuditCount >= MAX_AUDIT_EVENTS_PER_UTC_DAY) {
+        return { accepted: false, reason: "evidence_audit_daily_limit_reached" };
+      }
+      const result = this.#submitReviewEvidence(candidateId, evidence, reviewedReleaseIdentity, now);
+      if (!result.accepted) return result;
+      this.ctx.storage.sql.exec(
+        "INSERT INTO ai_bank_evidence_audit_events (event_id, actor_subject, actor_email, request_sha256, evidence_id, recorded_at) VALUES (?, ?, ?, ?, ?, ?)",
+        auditEventId, authorization.actor.subject, authorization.actor.email,
+        requestSha256, result.evidence_id, authorization.authorized_at
+      );
+      return {
+        ...result,
+        audit_event_id: auditEventId,
+        actor_ref: authorization.actor.reviewer_ref,
+        replay_protected: true
+      };
+    });
+  }
+
+  #submitReviewEvidence(candidateId, evidence, reviewedReleaseIdentity, now = Date.now()) {
+    const candidateRow = this.ctx.storage.sql.exec(
+      "SELECT * FROM ai_bank_candidates WHERE candidate_id = ?", candidateId
+    ).toArray()[0];
+    const candidate = candidateRow ? safeCandidate(candidateRow) : null;
+    if (!candidate) return { accepted: false, reason: "candidate_not_found" };
+    if (typeof reviewedReleaseIdentity !== "string" || !reviewedReleaseIdentity.trim() || reviewedReleaseIdentity.length > 1200) {
+      return { accepted: false, reason: "reviewed_release_identity_required" };
+    }
+    const releaseUrl = candidateReleaseIdentity(candidate.candidate);
+    if (reviewedReleaseIdentity !== releaseUrl) return { accepted: false, reason: "stale_candidate_release" };
+    if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) {
+      return { accepted: false, reason: "invalid_evidence" };
+    }
+    const checkType = evidence.check_type;
+    if (!REQUIRED_CHECKS.includes(checkType)) {
+      return { accepted: false, reason: "unsupported_check_type" };
+    }
+    if (typeof evidence.source_title !== "string" ||
+        evidence.source_title.trim().length < 1 ||
+        evidence.source_title.length > MAX_EVIDENCE_TITLE_CHARS ||
+        typeof evidence.excerpt !== "string" ||
+        evidence.excerpt.trim().length < 1 ||
+        evidence.excerpt.length > MAX_EVIDENCE_EXCERPT_CHARS) {
+      return { accepted: false, reason: "invalid_evidence_text" };
+    }
+    let sourceUrl;
+    try {
+      sourceUrl = new URL(evidence.source_url);
+    } catch {
+      return { accepted: false, reason: "invalid_evidence_url" };
+    }
+    const host = sourceUrl.hostname.toLowerCase();
+    if (sourceUrl.protocol !== "https:" || !host || sourceUrl.username ||
+        sourceUrl.password || sourceUrl.search || sourceUrl.hash ||
+        (sourceUrl.port && sourceUrl.port !== "443") ||
+        host === "localhost" || host.endsWith(".localhost") ||
+        host.endsWith(".local") || /^\d{1,3}(\.\d{1,3}){3}$/.test(host) ||
+        host.includes(":") || sourceUrl.href.length > 1000) {
+      return { accepted: false, reason: "invalid_evidence_url" };
+    }
+    if (!Number.isSafeInteger(now) || now < 0 || !Number.isFinite(new Date(now).getTime())) {
+      return { accepted: false, reason: "invalid_evidence_timestamp" };
+    }
+    const existing = this.ctx.storage.sql.exec(
+      "SELECT evidence_id FROM ai_bank_review_evidence WHERE candidate_id = ? AND check_type = ? AND source_url = ?",
+      candidateId, checkType, sourceUrl.href
+    ).toArray()[0];
+    if (existing) {
+      const association = this.ctx.storage.sql.exec(
+        "SELECT evidence_id FROM ai_bank_review_evidence_releases WHERE evidence_id = ? AND candidate_release_url = ?",
+        existing.evidence_id, releaseUrl
+      ).toArray()[0];
+      if (association) return { accepted: false, reason: "duplicate_evidence" };
+    }
+    const count = this.ctx.storage.sql.exec(
+      "SELECT COUNT(*) AS count FROM ai_bank_review_evidence e JOIN ai_bank_review_evidence_releases r ON r.evidence_id = e.evidence_id WHERE e.candidate_id = ? AND e.check_type = ? AND r.candidate_release_url = ?",
+      candidateId, checkType, releaseUrl
+    ).one().count;
+    if (count >= MAX_EVIDENCE_PER_CHECK) {
+      return { accepted: false, reason: "evidence_limit_reached" };
+    }
+    const submittedAt = new Date(now).toISOString();
+    const evidenceId = existing ? existing.evidence_id : crypto.randomUUID();
+    if (!existing) {
+      this.ctx.storage.sql.exec(
+        "INSERT INTO ai_bank_review_evidence (evidence_id, candidate_id, check_type, source_title, source_url, excerpt, source_status, review_status, submitted_at, candidate_release_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        evidenceId, candidateId, checkType, evidence.source_title.trim(),
+        sourceUrl.href, evidence.excerpt.trim(),
+        "submitted_source_not_verified", "pending_human_review", submittedAt,
+        releaseUrl
+      );
+    }
+    this.ctx.storage.sql.exec(
+      "INSERT INTO ai_bank_review_evidence_releases (evidence_id, candidate_release_url, associated_at) VALUES (?, ?, ?)",
+      evidenceId, releaseUrl, submittedAt
+    );
+    this.ctx.storage.sql.exec(
+      "INSERT INTO ai_bank_review_evidence_release_details " +
+      "(evidence_id, candidate_release_url, source_title, excerpt, submitted_at) VALUES (?, ?, ?, ?, ?)",
+      evidenceId, releaseUrl, evidence.source_title.trim(), evidence.excerpt.trim(), submittedAt
+    );
+    return {
+      accepted: true,
+      evidence_id: evidenceId,
+      source_status: "submitted_source_not_verified",
+      review_status: "pending_human_review",
+      verification_authorized: false,
+      catalog_write_authorized: false,
+      public_publication_authorized: false
+    };
+  }
+
+  async listReviewEvidence(candidateId, limit = 30) {
+    if (!(await this.getCandidate(candidateId))) return [];
+    if (!Number.isInteger(limit) || limit < 1 || limit > 30) {
+      throw new TypeError("invalid_evidence_list_limit");
+    }
+    return this.ctx.storage.sql.exec(
+      "SELECT e.evidence_id, e.candidate_id, e.check_type, d.source_title, e.source_url, d.excerpt, e.source_status, e.review_status, d.submitted_at, r.candidate_release_url AS candidate_release_identity, r.associated_at " +
+      "FROM ai_bank_review_evidence e " +
+      "JOIN ai_bank_review_evidence_releases r ON r.evidence_id = e.evidence_id " +
+      "JOIN ai_bank_review_evidence_release_details d ON d.evidence_id = r.evidence_id AND d.candidate_release_url = r.candidate_release_url " +
+      "WHERE e.candidate_id = ? ORDER BY d.submitted_at ASC, e.evidence_id ASC LIMIT ?",
+      candidateId, limit
+    ).toArray().map(row => ({ ...row }));
+  }
+
+  async getReviewPacket(candidateId) {
+    const stored = await this.getCandidate(candidateId);
+    if (!stored) return null;
+    const rows = this.ctx.storage.sql.exec(
+      "SELECT e.check_type, COUNT(*) AS evidence_count FROM ai_bank_review_evidence e JOIN ai_bank_review_evidence_releases r ON r.evidence_id = e.evidence_id WHERE e.candidate_id = ? AND r.candidate_release_url = ? GROUP BY e.check_type",
+      candidateId, candidateReleaseIdentity(stored.candidate)
+    ).toArray();
+    const counts = new Map(rows.map(row => [row.check_type, row.evidence_count]));
+    const checklist = REQUIRED_CHECKS.map(checkType => ({
+      check_type: checkType,
+      evidence_count: counts.get(checkType) || 0,
+      status: counts.has(checkType) ? "evidence_pending_human_review" : "evidence_missing",
+      verified: false
+    }));
+    const evidence = this.ctx.storage.sql.exec(
+      "SELECT e.evidence_id, e.check_type, d.source_title, e.source_url, d.excerpt, e.source_status, e.review_status, d.submitted_at " +
+      "FROM ai_bank_review_evidence e JOIN ai_bank_review_evidence_releases r ON r.evidence_id = e.evidence_id " +
+      "JOIN ai_bank_review_evidence_release_details d ON d.evidence_id = r.evidence_id AND d.candidate_release_url = r.candidate_release_url " +
+      "WHERE e.candidate_id = ? AND r.candidate_release_url = ? " +
+      "ORDER BY e.check_type ASC, d.submitted_at ASC, e.evidence_id ASC LIMIT 30",
+      candidateId, candidateReleaseIdentity(stored.candidate)
+    ).toArray().map(row => ({
+      ...row,
+      verified: false,
+      verification_authorized: false
+    }));
+    const totalEvidence = checklist.reduce((sum, item) => sum + item.evidence_count, 0);
+    return {
+      candidate: stored,
+      checklist,
+      evidence,
+      total_evidence: totalEvidence,
+      checks_with_evidence: checklist.filter(item => item.evidence_count > 0).length,
+      checks_missing_evidence: checklist.filter(item => item.evidence_count === 0).length,
+      verification_status: "not_verified",
+      human_review_required: true,
+      catalog_write_authorized: false,
+      public_publication_authorized: false
+    };
+  }
+
+  async stats() {
+    return {
+      total: this.ctx.storage.sql.exec("SELECT COUNT(*) AS count FROM ai_bank_candidates").one().count,
+      awaiting_official_review: this.ctx.storage.sql.exec(
+        "SELECT COUNT(*) AS count FROM ai_bank_candidates WHERE json_extract(candidate_json, '$.review_status') = 'needs_official_source_review'"
+      ).one().count,
+      catalog_write_authorized: false,
+      public_publication_authorized: false
+    };
+  }
+}
