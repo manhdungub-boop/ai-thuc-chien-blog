@@ -62,8 +62,10 @@ export function inspectAuditIntegrity(snapshot, { nowMs = Date.now(), findingOff
     if (tasks.has(task.taskId)) findings.push(finding("duplicate_task_id", "error", task.taskId));
     else tasks.set(task.taskId, task);
 
+    const hasLeaseOwner = typeof task.leaseOwner === "string" && task.leaseOwner.length > 0;
+    const hasLeaseExpiry = Number.isSafeInteger(task.leaseExpiresAt);
     const activeLease = task.state === "running";
-    if (activeLease !== (typeof task.leaseOwner === "string" && Number.isSafeInteger(task.leaseExpiresAt))) {
+    if (activeLease ? (!hasLeaseOwner || !hasLeaseExpiry) : (hasLeaseOwner || hasLeaseExpiry)) {
       findings.push(finding("task_lease_state_inconsistent", "error", task.taskId));
     }
     if (task.state === "running" && task.leaseExpiresAt <= nowMs) {
