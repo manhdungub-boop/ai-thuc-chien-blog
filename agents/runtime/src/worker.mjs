@@ -658,9 +658,6 @@ const worker = {
         if (authorized.error?.includes("unavailable") || authorized.error === "oidc_replay_response_invalid") {
           return json({ ok: false, error: "github_oidc_verification_unavailable" }, 503);
         }
-        if (env.AGENT_OIDC_RUN_DIAGNOSTICS === "true") {
-          return json({ ok: false, error: "github_oidc_token_invalid", diagnosticCode: authorized.error }, 401);
-        }
         return json({ ok: false, error: "github_oidc_token_invalid" }, 401);
       }
 
