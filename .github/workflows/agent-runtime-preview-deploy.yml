@@ -55,7 +55,7 @@ jobs:
           const c = JSON.parse(fs.readFileSync("agents/runtime/wrangler.preview.jsonc", "utf8"));
           const fail = (m) => { console.error("::error::" + m); process.exit(1); };
           if (c.name !== "ai-thuc-chien-agent-runtime-preview") fail("Unexpected Worker name.");
-          if (c.main !== "./src/worker.mjs" || c.workers_dev !== true || c.preview_urls !== false) fail("Unexpected Preview entrypoint or URL settings.");
+          if (c.main !== "./src/worker-preview-recovery.mjs" || c.workers_dev !== true || c.preview_urls !== false) fail("Unexpected Preview entrypoint or URL settings.");
           if (c.vars?.AGENT_ENABLED !== "false" || c.vars?.AGENT_PAUSED !== "true") fail("Agent must remain disabled and paused.");
           if (c.vars?.AGENT_REVIEWER_AUTH_ENABLED !== "false") fail("Reviewer authentication must remain disabled.");
           if (c.vars?.AGENT_OIDC_ENABLED !== "true") fail("Only the pause-only GitHub OIDC operator may be enabled in this Preview deployment.");
@@ -72,7 +72,7 @@ jobs:
           const expectedDo = ["AGENT_AI_BANK_CANDIDATE_STORE:AgentAIBankCandidateStore", "AGENT_DRAFT_STORE:AgentDraftStore", "AGENT_REVIEWER_AUTH_STORE:AgentReviewerAuthStore", "AGENT_STATE_STORE:AgentStateStore"].sort();
           if (JSON.stringify(doNames) !== JSON.stringify(expectedDo)) fail("Unexpected Durable Object bindings.");
           const migrationNames = (c.migrations ?? []).flatMap(x => x.new_sqlite_classes ?? []).sort();
-          if (JSON.stringify(migrationNames) !== JSON.stringify(["AgentAIBankCandidateStore", "AgentDraftStore", "AgentReviewerAuthStore", "AgentStateStore"].sort())) fail("Only the four declared SQLite Durable Object classes are allowed.");
+          if (JSON.stringify(migrationNames) !== JSON.stringify(["AgentAIBankCandidateStore", "AgentDraftStore", "AgentReviewerAuthStore", "AgentStateStore", "TestAgentStateStore"].sort())) fail("Only the four application SQLite Durable Object classes and the isolated Preview fault-test class are allowed.");
           console.log("Preview-only config verified; no Production Worker, D1, DNS, Cron, or active agent path is configured.");
           NODE
 
