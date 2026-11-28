@@ -141,6 +141,10 @@ jobs:
             echo "::error::Cannot verify the Cloudflare account plan (HTTP $status). Billing Read access is required; deployment stopped before resource creation."
             exit 1
           fi
+          if jq -e '.result_info.next_page? | select(. != null and . != false and . != "")' "$response" >/dev/null; then
+            echo "::error::Cloudflare subscription listing is paginated. The plan cannot be verified from an incomplete first page; deployment stopped before resource creation."
+            exit 1
+          fi
           echo "Sanitized subscription plan metadata (no account secrets or identifiers):"
           jq -c '
             if .success == true then
